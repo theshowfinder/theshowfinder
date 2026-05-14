@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import EventImage from '@/components/EventImage'
 import type { EventWithVenue } from '@/lib/types/database'
 
 const categoryConfig: Record<string, { label: string; colour: string }> = {
@@ -16,6 +15,10 @@ const statusConfig: Record<string, { label: string; colour: string }> = {
   sold_out:  { label: 'Sold Out',    colour: 'bg-red-600     text-white' },
   cancelled: { label: 'Cancelled',   colour: 'bg-red-600     text-white' },
   postponed: { label: 'Postponed',   colour: 'bg-orange-500  text-white' },
+}
+
+const categoryEmoji: Record<string, string> = {
+  concert: '🎵', theatre: '🎭', comedy: '😂', sports: '⚽', family: '🎠',
 }
 
 function formatDate(iso: string) {
@@ -36,8 +39,8 @@ interface Props {
 }
 
 export default function EventCard({ event }: Props) {
-  const cat      = categoryConfig[event.category] ?? categoryConfig.concert
-  const status   = statusConfig[event.status]     ?? statusConfig.upcoming
+  const cat        = categoryConfig[event.category] ?? categoryConfig.concert
+  const status     = statusConfig[event.status]     ?? statusConfig.upcoming
   const ticketHref = event.tickets_url ?? `/events/${event.slug}`
   const isExternal = !!event.tickets_url
   const isSoldOut  = event.status === 'sold_out' || event.status === 'cancelled'
@@ -45,9 +48,18 @@ export default function EventCard({ event }: Props) {
   return (
     <div className="group flex flex-col rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
 
-      {/* Image */}
+      {/* Image — CSS background-image avoids React hydration / onError race conditions */}
       <Link href={`/events/${event.slug}`} className="relative h-48 bg-slate-100 block overflow-hidden">
-        <EventImage src={event.image_url} alt={event.title} category={event.category} />
+        {event.image_url ? (
+          <div
+            className="absolute inset-0 bg-cover bg-center transition-transform duration-300 group-hover:scale-105"
+            style={{ backgroundImage: `url("${event.image_url}")` }}
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-5xl bg-slate-50">
+            {categoryEmoji[event.category] ?? '🎟️'}
+          </div>
+        )}
         <span className={`absolute top-3 right-3 text-xs font-bold px-2.5 py-1 rounded-full ${status.colour}`}>
           {status.label}
         </span>
@@ -76,7 +88,6 @@ export default function EventCard({ event }: Props) {
           </span>
         </div>
 
-        {/* Get Tickets button */}
         {isSoldOut ? (
           <div className="w-full bg-slate-200 text-slate-500 font-bold py-3 rounded-xl text-center text-sm cursor-not-allowed">
             {event.status === 'cancelled' ? 'Cancelled' : 'Sold Out'}
