@@ -31,7 +31,6 @@ export default function EventImage({ src, alt, category }: Props) {
       alt={alt}
       className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
       onError={() => setErrored(true)}
-      loading="lazy"
     />
   )
 }

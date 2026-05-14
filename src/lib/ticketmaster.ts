@@ -104,12 +104,33 @@ function slugify(str: string): string {
 
 function getBestImage(images: TMImage[] | undefined): string | null {
   if (!images?.length) return null
-  // Prefer non-fallback 16:9 at ≥1024px
-  const hd = images.find(i => i.ratio === '16_9' && (i.width ?? 0) >= 1024 && !i.fallback)
-  if (hd) return hd.url
-  const any169 = images.find(i => i.ratio === '16_9' && !i.fallback)
+  const ok = (i: TMImage) => !i.fallback
+
+  // Best: standard 1024×576 JPEG from Ticketmaster CDN (TABLET_LANDSCAPE_16_9)
+  // Explicitly avoid the 2048px LARGE variant and raw SOURCE files.
+  const standard = images.find(i =>
+    ok(i) && i.ratio === '16_9' &&
+    i.url.includes('TABLET_LANDSCAPE_16_9') && i.url.endsWith('.jpg')
+  )
+  if (standard) return standard.url
+
+  // Second: any 16:9 JPEG between 640-1400px (medium quality, fast loading)
+  const mid = images.find(i =>
+    ok(i) && i.ratio === '16_9' &&
+    (i.width ?? 0) >= 640 && (i.width ?? 9999) <= 1400 &&
+    i.url.endsWith('.jpg')
+  )
+  if (mid) return mid.url
+
+  // Third: any 16:9 JPEG at all
+  const anyJpg = images.find(i => ok(i) && i.ratio === '16_9' && i.url.endsWith('.jpg'))
+  if (anyJpg) return anyJpg.url
+
+  // Fallback: CDN-transformed URLs (Universe.com etc.) — valid but no .jpg extension
+  const any169 = images.find(i => ok(i) && i.ratio === '16_9')
   if (any169) return any169.url
-  return images.find(i => !i.fallback)?.url ?? images[0]?.url ?? null
+
+  return images.find(ok)?.url ?? images[0]?.url ?? null
 }
 
 function mapCategory(event: TMEvent, defaultCategory: EventCategory): EventCategory {
