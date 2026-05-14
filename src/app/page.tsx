@@ -10,13 +10,28 @@ import type { EventWithVenue } from '@/lib/types/database'
 
 async function FeaturedEvents() {
   const supabase = await createClient()
-  const { data: events } = await supabase
+  const now = new Date().toISOString()
+
+  let { data: events } = await supabase
     .from('events_with_venue')
     .select('*')
     .eq('is_featured', true)
-    .gte('start_date', new Date().toISOString())
+    .gte('start_date', now)
     .order('start_date', { ascending: true })
     .limit(6)
+
+  // Fall back to upcoming events with good images when no featured events are future-dated
+  if (!events?.length) {
+    const { data: fallback } = await supabase
+      .from('events_with_venue')
+      .select('*')
+      .gte('start_date', now)
+      .like('image_url', '%TABLET_LANDSCAPE_16_9%')
+      .not('image_url', 'like', '%LARGE%')
+      .order('start_date', { ascending: true })
+      .limit(6)
+    events = fallback
+  }
 
   if (!events?.length) {
     return (
