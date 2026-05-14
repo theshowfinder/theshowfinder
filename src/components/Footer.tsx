@@ -40,7 +40,17 @@ const socialLinks = [
 ]
 
 const discover = ['Concerts', 'Theatre', 'Comedy', 'Sports', 'Family']
-const cities   = ['London', 'Manchester', 'Birmingham', 'Glasgow', 'Leeds', 'Edinburgh']
+
+const cities = [
+  'London', 'Manchester', 'Birmingham', 'Glasgow', 'Edinburgh',
+  'Leeds', 'Liverpool', 'Bristol', 'Cardiff', 'Belfast',
+  'Nottingham', 'Newcastle', 'Leicester', 'Sheffield', 'Derby',
+  'Coventry', 'Southampton', 'Portsmouth', 'Norwich', 'Brighton',
+  'Oxford', 'Cambridge', 'Exeter', 'Plymouth', 'Hull',
+  'Middlesbrough', 'Sunderland', 'Bradford', 'Reading', 'Milton Keynes',
+  'Bournemouth', 'Ipswich', 'Stoke-on-Trent', 'Wolverhampton', 'Swansea',
+  'Aberdeen',
+]
 
 export default function Footer() {
   return (
@@ -48,7 +58,7 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-8">
 
         {/* Grid: logo + 4 columns */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-10 mb-14">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-10 mb-14">
 
           {/* Brand */}
           <div className="col-span-2 sm:col-span-3 lg:col-span-1">
@@ -77,13 +87,13 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Cities */}
-          <div>
+          {/* Cities — two columns */}
+          <div className="col-span-2">
             <h3 className="text-xs font-extrabold text-white uppercase tracking-widest mb-5">Cities</h3>
-            <ul className="space-y-3">
+            <ul className="grid grid-cols-2 gap-x-6 gap-y-2.5">
               {cities.map(city => (
                 <li key={city}>
-                  <Link href={`/events?city=${city}`} className="text-sm hover:text-white transition-colors">
+                  <Link href={`/events?city=${encodeURIComponent(city)}`} className="text-sm hover:text-white transition-colors">
                     {city}
                   </Link>
                 </li>
