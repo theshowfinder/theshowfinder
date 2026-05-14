@@ -28,7 +28,7 @@ function formatDate(iso: string) {
 }
 
 function formatPrice(from: number | null, to: number | null, currency: string) {
-  if (!from) return 'Free'
+  if (!from) return null
   const sym = currency === 'GBP' ? '£' : currency
   if (to && to !== from) return `${sym}${from} – ${sym}${to}`
   return `From ${sym}${from}`
@@ -60,9 +60,11 @@ export default function EventCard({ event }: Props) {
             {categoryEmoji[event.category] ?? '🎟️'}
           </div>
         )}
-        <span className={`absolute top-3 right-3 text-xs font-bold px-2.5 py-1 rounded-full ${status.colour}`}>
-          {status.label}
-        </span>
+        {status.label !== 'Coming Soon' && (
+          <span className={`absolute top-3 right-3 text-xs font-bold px-2.5 py-1 rounded-full ${status.colour}`}>
+            {status.label}
+          </span>
+        )}
       </Link>
 
       {/* Body */}
@@ -82,11 +84,13 @@ export default function EventCard({ event }: Props) {
           <span className="truncate">📍 {event.venue_name}, {event.venue_city}</span>
         </div>
 
-        <div className="flex items-center justify-between pt-2 border-t border-slate-100 mt-auto">
-          <span className="text-sm font-bold text-slate-800">
-            {formatPrice(event.price_from, event.price_to, event.currency)}
-          </span>
-        </div>
+        {formatPrice(event.price_from, event.price_to, event.currency) && (
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100 mt-auto">
+            <span className="text-sm font-bold text-slate-800">
+              {formatPrice(event.price_from, event.price_to, event.currency)}
+            </span>
+          </div>
+        )}
 
         {isSoldOut ? (
           <div className="w-full bg-slate-200 text-slate-500 font-bold py-3 rounded-xl text-center text-sm cursor-not-allowed">
