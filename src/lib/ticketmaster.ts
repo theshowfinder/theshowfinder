@@ -180,6 +180,11 @@ async function fetchTMPage(
   classificationName: string,
   page: number,
 ): Promise<{ events: TMEvent[]; totalPages: number }> {
+  const endDate = new Date()
+  endDate.setFullYear(endDate.getFullYear() + 1)
+  // Ticketmaster expects ISO 8601 without milliseconds: 2027-05-14T00:00:00Z
+  const endDateTime = endDate.toISOString().replace(/\.\d{3}Z$/, 'Z')
+
   const url = new URL(`${TM_BASE}/events.json`)
   url.searchParams.set('apikey',             process.env.TICKETMASTER_API_KEY!)
   url.searchParams.set('countryCode',        'GB')
@@ -188,6 +193,7 @@ async function fetchTMPage(
   url.searchParams.set('page',               String(page))
   url.searchParams.set('locale',             'en-us')
   url.searchParams.set('sort',               'date,asc')
+  url.searchParams.set('endDateTime',        endDateTime)
 
   let res: Response
   try {
