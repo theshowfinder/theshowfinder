@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 import { useState } from 'react'
 
 const categoryEmoji: Record<string, string> = {
@@ -25,13 +24,14 @@ export default function EventImage({ src, alt, category }: Props) {
   }
 
   return (
-    <Image
+    // Plain <img> so any CDN domain works without next.config remotePatterns changes.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
       src={src}
       alt={alt}
-      fill
-      className="object-cover group-hover:scale-105 transition-transform duration-300"
-      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
       onError={() => setErrored(true)}
+      loading="lazy"
     />
   )
 }
