@@ -79,10 +79,13 @@ function buildProviders(title: string, directUrl: string | null) {
     },
   ]
   const secondary = [
-    { name: 'Viagogo',     bg: '#00a650', href: `https://www.viagogo.co.uk/ww/SearchResults?q=${q}` },
-    { name: 'StubHub',     bg: '#cc0000', href: `https://www.stubhub.co.uk/srp/?q=${q}` },
-    { name: 'Gigsberg',    bg: '#6b21a8', href: `https://www.gigsberg.com/tickets?q=${q}` },
-    { name: 'Seat Unique', bg: '#1e3a5f', href: `https://www.seatunique.com/search?q=${q}` },
+    { name: 'Viagogo',      bg: '#00a650', href: `https://www.viagogo.co.uk/ww/SearchResults?q=${q}` },
+    { name: 'StubHub',      bg: '#cc0000', href: `https://www.stubhub.co.uk/srp/?q=${q}` },
+    { name: 'Gigsberg',     bg: '#6b21a8', href: `https://www.gigsberg.com/tickets?q=${q}` },
+    { name: 'Seat Unique',  bg: '#1e3a5f', href: `https://www.seatunique.com/search?q=${q}` },
+    { name: 'See Tickets',  bg: '#e4022d', href: 'https://www.seetickets.com' },
+    { name: 'Skiddle',      bg: '#ffcc00', color: '#111111', href: 'https://www.skiddle.com' },
+    { name: 'Eventim',      bg: '#00a4e0', href: 'https://www.eventim.co.uk' },
   ]
   return { primary, secondary }
 }
@@ -320,14 +323,14 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">More Options</h3>
               <p className="text-xs text-slate-400 mb-4">Compare prices across resale platforms</p>
               <div className="grid grid-cols-2 gap-3">
-                {secondary.map(({ name, bg, href }) => (
+                {secondary.map(({ name, bg, color, href }) => (
                   <a
                     key={name}
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center text-white font-bold text-sm rounded-xl py-3.5 hover:opacity-90 transition-opacity min-h-[48px]"
-                    style={{ backgroundColor: bg }}
+                    className="flex items-center justify-center font-bold text-sm rounded-xl py-3.5 hover:opacity-90 transition-opacity min-h-[48px]"
+                    style={{ backgroundColor: bg, color: color ?? '#ffffff' }}
                   >
                     {name}
                   </a>
