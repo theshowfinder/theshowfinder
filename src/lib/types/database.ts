@@ -43,6 +43,7 @@ export interface Database {
           lng: number | null
           website: string | null
           image_url: string | null
+          ticketmaster_id: string | null
           created_at: string
         }
         Insert: {
@@ -58,6 +59,7 @@ export interface Database {
           lng?: number | null
           website?: string | null
           image_url?: string | null
+          ticketmaster_id?: string | null
           created_at?: string
         }
         Update: {
@@ -72,6 +74,7 @@ export interface Database {
           lng?: number | null
           website?: string | null
           image_url?: string | null
+          ticketmaster_id?: string | null
         }
       }
       artists: {
@@ -84,6 +87,7 @@ export interface Database {
           image_url: string | null
           website: string | null
           spotify_id: string | null
+          ticketmaster_id: string | null
           created_at: string
         }
         Insert: {
@@ -95,6 +99,7 @@ export interface Database {
           image_url?: string | null
           website?: string | null
           spotify_id?: string | null
+          ticketmaster_id?: string | null
           created_at?: string
         }
         Update: {
@@ -105,6 +110,7 @@ export interface Database {
           image_url?: string | null
           website?: string | null
           spotify_id?: string | null
+          ticketmaster_id?: string | null
         }
       }
       events: {
@@ -126,6 +132,7 @@ export interface Database {
           status: EventStatus
           is_featured: boolean
           tags: string[] | null
+          ticketmaster_id: string | null
           created_at: string
           updated_at: string
         }
@@ -147,6 +154,7 @@ export interface Database {
           status?: EventStatus
           is_featured?: boolean
           tags?: string[] | null
+          ticketmaster_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -167,6 +175,7 @@ export interface Database {
           status?: EventStatus
           is_featured?: boolean
           tags?: string[] | null
+          ticketmaster_id?: string | null
           updated_at?: string
         }
       }
