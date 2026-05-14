@@ -65,19 +65,21 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
 function buildProviders(title: string, directUrl: string | null) {
   const q = encodeURIComponent(title)
   const primary = [
-    { name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF',              href: directUrl ?? `https://www.ticketmaster.co.uk/search?q=${q}` },
-    { name: 'Eventbrite',   tagline: 'Book direct',         bg: '#F05537',              href: `https://www.eventbrite.co.uk/d/united-kingdom/${q}/` },
-    { name: 'See Tickets',  tagline: 'Official tickets',    bg: '#e4022d',              href: 'https://www.seetickets.com' },
-    { name: 'Skiddle',      tagline: 'Discover & book',     bg: '#ffcc00', color: '#111111', href: 'https://www.skiddle.com' },
-    { name: 'Eventim',      tagline: 'Book direct',         bg: '#00a4e0',              href: 'https://www.eventim.co.uk' },
+    { name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: directUrl ?? `https://www.ticketmaster.co.uk/search?q=${q}` },
+    { name: 'See Tickets',  tagline: 'Official tickets',    bg: '#e4022d', href: 'https://www.seetickets.com' },
+    { name: 'Eventim',      tagline: 'Book direct',         bg: '#00a4e0', href: 'https://www.eventim.co.uk' },
   ]
-  const secondary = [
+  const resale = [
     { name: 'Viagogo',     bg: '#00a650', href: `https://www.viagogo.co.uk/ww/SearchResults?q=${q}` },
-    { name: 'StubHub',     bg: '#cc0000', href: `https://www.stubhub.co.uk/srp/?q=${q}` },
     { name: 'Gigsberg',    bg: '#6b21a8', href: `https://www.gigsberg.com/tickets?q=${q}` },
+    { name: 'StubHub',     bg: '#cc0000', href: `https://www.stubhub.co.uk/srp/?q=${q}` },
     { name: 'Seat Unique', bg: '#1e3a5f', href: `https://www.seatunique.com/search?q=${q}` },
   ]
-  return { primary, secondary }
+  const also = [
+    { name: 'Eventbrite', bg: '#f05537',              href: `https://www.eventbrite.co.uk/d/united-kingdom/${q}/` },
+    { name: 'Skiddle',    bg: '#ffcc00', color: '#111111', href: 'https://www.skiddle.com' },
+  ]
+  return { primary, resale, also }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -124,7 +126,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
   const isSoldOut  = event.status === 'sold_out' || event.status === 'cancelled'
   const priceLabel = fmtPrice(event.price_from, event.price_to, event.currency)
-  const { primary, secondary } = buildProviders(event.title, event.tickets_url)
+  const { primary, resale, also } = buildProviders(event.title, event.tickets_url)
   const headliners = event.artists
     .filter(a => a.is_headliner && a.artist)
     .sort((a, b) => a.order - b.order)
@@ -276,6 +278,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
           {/* Right: tickets ─────────────────────────────────────── */}
           <div id="tickets" className="space-y-5 lg:sticky lg:top-24 self-start">
+            {/* Primary tickets */}
             {isSoldOut ? (
               <div className="bg-slate-100 border border-slate-200 rounded-2xl p-6 text-center">
                 <p className="text-4xl mb-3">😔</p>
@@ -288,14 +291,14 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                 <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-4">Primary Tickets</h3>
                 <div className="flex flex-col gap-3">
-                  {primary.map(({ name, tagline, bg, color, href }) => (
+                  {primary.map(({ name, tagline, bg, href }) => (
                     <a
                       key={name}
                       href={href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between rounded-xl px-5 py-4 hover:opacity-90 transition-opacity min-h-[60px]"
-                      style={{ backgroundColor: bg, color: color ?? '#ffffff' }}
+                      className="flex items-center justify-between text-white rounded-xl px-5 py-4 hover:opacity-90 transition-opacity min-h-[60px]"
+                      style={{ backgroundColor: bg }}
                     >
                       <div>
                         <p className="font-extrabold text-base leading-none">{name}</p>
@@ -308,18 +311,18 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               </div>
             )}
 
-            {/* Secondary providers */}
+            {/* Resale */}
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">More Options</h3>
               <p className="text-xs text-slate-400 mb-4">Compare prices across resale platforms</p>
               <div className="grid grid-cols-2 gap-3">
-                {secondary.map(({ name, bg, href }) => (
+                {resale.map(({ name, bg, href }) => (
                   <a
                     key={name}
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center font-bold text-sm rounded-xl py-3.5 hover:opacity-90 transition-opacity min-h-[48px] text-white"
+                    className="flex items-center justify-center font-bold text-sm text-white rounded-xl py-3.5 hover:opacity-90 transition-opacity min-h-[48px]"
                     style={{ backgroundColor: bg }}
                   >
                     {name}
@@ -329,6 +332,25 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <p className="text-xs text-slate-400 mt-4 leading-relaxed">
                 Resale tickets may be priced above face value. Always check the seller&apos;s terms.
               </p>
+            </div>
+
+            {/* Also available */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-4">Also Available</h3>
+              <div className="grid grid-cols-2 gap-3">
+                {also.map(({ name, bg, color, href }) => (
+                  <a
+                    key={name}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center font-bold text-sm rounded-xl py-3.5 hover:opacity-90 transition-opacity min-h-[48px]"
+                    style={{ backgroundColor: bg, color: color ?? '#ffffff' }}
+                  >
+                    {name}
+                  </a>
+                ))}
+              </div>
             </div>
 
             {event.tags && event.tags.length > 0 && (
