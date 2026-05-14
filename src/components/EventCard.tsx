@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import Image from 'next/image'
+import EventImage from '@/components/EventImage'
 import type { EventWithVenue } from '@/lib/types/database'
 
 const categoryConfig: Record<string, { label: string; colour: string }> = {
@@ -16,10 +16,6 @@ const statusConfig: Record<string, { label: string; colour: string }> = {
   sold_out:  { label: 'Sold Out',    colour: 'bg-red-600     text-white' },
   cancelled: { label: 'Cancelled',   colour: 'bg-red-600     text-white' },
   postponed: { label: 'Postponed',   colour: 'bg-orange-500  text-white' },
-}
-
-const categoryEmoji: Record<string, string> = {
-  concert: '🎵', theatre: '🎭', comedy: '😂', sports: '⚽', family: '🎠',
 }
 
 function formatDate(iso: string) {
@@ -51,19 +47,7 @@ export default function EventCard({ event }: Props) {
 
       {/* Image */}
       <Link href={`/events/${event.slug}`} className="relative h-48 bg-slate-100 block overflow-hidden">
-        {event.image_url ? (
-          <Image
-            src={event.image_url}
-            alt={event.title}
-            fill
-            className="object-cover group-hover:scale-105 transition-transform duration-300"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-5xl bg-slate-50">
-            {categoryEmoji[event.category] ?? '🎟️'}
-          </div>
-        )}
+        <EventImage src={event.image_url} alt={event.title} category={event.category} />
         <span className={`absolute top-3 right-3 text-xs font-bold px-2.5 py-1 rounded-full ${status.colour}`}>
           {status.label}
         </span>
