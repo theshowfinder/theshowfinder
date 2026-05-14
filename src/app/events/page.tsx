@@ -1,0 +1,144 @@
+import { Suspense } from 'react'
+import { createClient } from '@/lib/supabase/server'
+import EventCard from '@/components/EventCard'
+import CategoryPills from '@/components/CategoryPills'
+import SearchBar from '@/components/SearchBar'
+import type { EventWithVenue } from '@/lib/types/database'
+import type { Metadata } from 'next'
+
+interface SearchParams {
+  category?: string
+  city?: string
+  q?: string
+  page?: string
+}
+
+export async function generateMetadata({ searchParams }: { searchParams: Promise<SearchParams> }): Promise<Metadata> {
+  const sp  = await searchParams
+  const cat  = sp.category
+  const city = sp.city
+  const title = [
+    cat  ? cat.charAt(0).toUpperCase() + cat.slice(1) : 'All Events',
+    city ? `in ${city}` : 'across the UK',
+  ].join(' ')
+  return { title }
+}
+
+const PAGE_SIZE = 12
+
+async function EventsList({ searchParams }: { searchParams: SearchParams }) {
+  const supabase = await createClient()
+  const page     = Number(searchParams.page ?? 1)
+  const from     = (page - 1) * PAGE_SIZE
+  const to       = from + PAGE_SIZE - 1
+
+  let query = supabase
+    .from('events_with_venue')
+    .select('*', { count: 'exact' })
+    .gte('start_date', new Date().toISOString())
+    .order('start_date', { ascending: true })
+    .range(from, to)
+
+  if (searchParams.category) query = query.eq('category', searchParams.category)
+  if (searchParams.city)     query = query.eq('venue_city', searchParams.city)
+  if (searchParams.q)        query = query.ilike('title', `%${searchParams.q}%`)
+
+  const { data: events, count } = await query
+
+  if (!events?.length) {
+    return (
+      <div className="text-center py-24">
+        <p className="text-6xl mb-4">🎭</p>
+        <h3 className="text-xl font-semibold text-slate-700 mb-2">No events found</h3>
+        <p className="text-slate-500">Try adjusting your filters or search term.</p>
+      </div>
+    )
+  }
+
+  const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE)
+
+  return (
+    <div>
+      <p className="text-sm text-slate-500 mb-6">
+        {count} event{count !== 1 ? 's' : ''} found
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {(events as EventWithVenue[]).map(event => (
+          <EventCard key={event.id} event={event} />
+        ))}
+      </div>
+
+      {totalPages > 1 && (
+        <div className="mt-12 flex justify-center gap-2 flex-wrap">
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => {
+            const params = new URLSearchParams()
+            if (searchParams.category) params.set('category', searchParams.category)
+            if (searchParams.city)     params.set('city',     searchParams.city)
+            if (searchParams.q)        params.set('q',        searchParams.q)
+            params.set('page', String(p))
+            return (
+              <a
+                key={p}
+                href={`/events?${params.toString()}`}
+                className="px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors min-h-[44px] flex items-center"
+                style={p === page
+                  ? { backgroundColor: '#E8003D', color: 'white' }
+                  : { backgroundColor: 'white', border: '1px solid #e2e8f0', color: '#374151' }
+                }
+              >
+                {p}
+              </a>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default async function EventsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const sp = await searchParams
+
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
+      {/* Top bar */}
+      <div className="py-10 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: '#1A1A2E' }}>
+        <div className="max-w-7xl mx-auto">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white mb-6">
+            {sp.category
+              ? sp.category.charAt(0).toUpperCase() + sp.category.slice(1)
+              : 'All Shows'}
+            {sp.city ? ` in ${sp.city}` : ''}
+            {sp.q    ? ` — "${sp.q}"` : ''}
+          </h1>
+          <Suspense>
+            <SearchBar />
+          </Suspense>
+        </div>
+      </div>
+
+      {/* Category pills */}
+      <div className="bg-white border-b border-slate-200 py-4 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <Suspense>
+            <CategoryPills />
+          </Suspense>
+        </div>
+      </div>
+
+      {/* Results */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <Suspense fallback={
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-80 rounded-2xl bg-slate-200 animate-pulse" />
+            ))}
+          </div>
+        }>
+          <EventsList searchParams={sp} />
+        </Suspense>
+      </div>
+    </div>
+  )
+}

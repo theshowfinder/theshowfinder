@@ -1,0 +1,189 @@
+import { Suspense } from 'react'
+import Link from 'next/link'
+import { createClient } from '@/lib/supabase/server'
+import EventCard from '@/components/EventCard'
+import SearchBar from '@/components/SearchBar'
+import CitiesGrid from '@/components/CitiesGrid'
+import CategoryStrip from '@/components/CategoryStrip'
+import NewsletterSignup from '@/components/NewsletterSignup'
+import type { EventWithVenue } from '@/lib/types/database'
+
+async function FeaturedEvents() {
+  const supabase = await createClient()
+  const { data: events } = await supabase
+    .from('events_with_venue')
+    .select('*')
+    .eq('is_featured', true)
+    .gte('start_date', new Date().toISOString())
+    .order('start_date', { ascending: true })
+    .limit(6)
+
+  if (!events?.length) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-5xl mb-4">🎭</p>
+        <p className="text-slate-500">Seeding the database — check back shortly!</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {(events as EventWithVenue[]).map(event => (
+        <EventCard key={event.id} event={event} />
+      ))}
+    </div>
+  )
+}
+
+const EventCardSkeleton = () => (
+  <div className="rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm">
+    <div className="h-48 bg-slate-200 animate-pulse" />
+    <div className="p-4 space-y-3">
+      <div className="h-3 w-16 bg-slate-200 rounded-full animate-pulse" />
+      <div className="h-5 w-4/5 bg-slate-200 rounded animate-pulse" />
+      <div className="h-4 w-3/5 bg-slate-200 rounded animate-pulse" />
+      <div className="h-10 bg-slate-200 rounded-xl animate-pulse mt-4" />
+    </div>
+  </div>
+)
+
+export default function HomePage() {
+  return (
+    <>
+      {/* ── HERO ────────────────────────────────────────────────── */}
+      <section
+        className="relative overflow-hidden flex flex-col items-center justify-center text-white min-h-[60vh] md:min-h-screen"
+        style={{ backgroundColor: '#1A1A2E' }}
+      >
+
+        {/* Decorative blobs */}
+        <div
+          className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none"
+          style={{ backgroundColor: 'rgba(232,0,61,0.15)' }}
+        />
+        <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full bg-white/5 translate-y-1/2 -translate-x-1/4 blur-3xl pointer-events-none" />
+
+        <div className="relative w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-0 text-center z-10">
+          {/* Pre-headline */}
+          <p className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest mb-6 bg-white/5 px-4 py-2 rounded-full border border-white/10"
+            style={{ color: '#FFD700' }}>
+            🎟️ The UK&apos;s events discovery platform
+          </p>
+
+          {/* Headline */}
+          <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight leading-[1.05] mb-6 text-white">
+            Find Your Next<br />
+            <span style={{ color: '#FFD700' }}>Unforgettable</span> Show
+          </h1>
+
+          <p className="text-xl text-white/70 mb-10 max-w-xl mx-auto leading-relaxed">
+            Concerts, theatre, comedy, sports and family events — all across the UK in one place.
+          </p>
+
+          {/* Search bar */}
+          <div className="flex justify-center">
+            <Suspense>
+              <SearchBar />
+            </Suspense>
+          </div>
+
+          {/* Trust row */}
+          <div className="mt-8 flex flex-wrap justify-center gap-6 text-sm text-white/50">
+            <span>✓ Free to use</span>
+            <span>✓ Updated daily</span>
+            <span>✓ 50+ UK cities</span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── UK CITIES ───────────────────────────────────────────── */}
+      <section className="bg-slate-900 py-14">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-end justify-between mb-7">
+            <div>
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFD700' }}>
+                Browse by location
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Events near you</h2>
+            </div>
+            <Link href="/events" className="text-sm font-semibold text-white/60 hover:text-white transition-colors hidden sm:block">
+              All cities →
+            </Link>
+          </div>
+          <Suspense fallback={
+            <div className="flex gap-4 overflow-x-auto pb-2 md:grid md:grid-cols-4 md:gap-5">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex-none w-44 md:w-auto h-36 md:h-48 rounded-2xl bg-white/10 animate-pulse" />
+              ))}
+            </div>
+          }>
+            <CitiesGrid />
+          </Suspense>
+        </div>
+      </section>
+
+      {/* ── CATEGORY STRIP ──────────────────────────────────────── */}
+      <section className="bg-[#F5F5F0] border-y border-slate-200 py-5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Suspense>
+            <CategoryStrip />
+          </Suspense>
+        </div>
+      </section>
+
+      {/* ── FEATURED EVENTS ─────────────────────────────────────── */}
+      <section className="bg-[#F5F5F0] py-14">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-end justify-between mb-7">
+            <div>
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+                Don&apos;t miss out
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Featured Shows</h2>
+            </div>
+            <Link href="/events" className="text-sm font-semibold hover:underline hidden sm:block" style={{ color: '#E8003D' }}>
+              View all →
+            </Link>
+          </div>
+
+          <Suspense fallback={
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 6 }).map((_, i) => <EventCardSkeleton key={i} />)}
+            </div>
+          }>
+            <FeaturedEvents />
+          </Suspense>
+
+          <div className="mt-8 text-center sm:hidden">
+            <Link href="/events" className="inline-block text-sm font-semibold hover:underline" style={{ color: '#E8003D' }}>
+              View all events →
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── NEWSLETTER ──────────────────────────────────────────── */}
+      <NewsletterSignup />
+
+      {/* ── STATS BAND ──────────────────────────────────────────── */}
+      <section className="py-14" style={{ backgroundColor: '#1A1A2E' }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+            {[
+              { value: '10,000+', label: 'Events listed'     },
+              { value: '500+',    label: 'Venues'            },
+              { value: '50+',     label: 'UK cities covered' },
+              { value: '1M+',     label: 'Tickets found'     },
+            ].map(({ value, label }) => (
+              <div key={label}>
+                <div className="text-3xl sm:text-4xl font-extrabold mb-1" style={{ color: '#FFD700' }}>{value}</div>
+                <div className="text-white/60 text-sm">{label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </>
+  )
+}
