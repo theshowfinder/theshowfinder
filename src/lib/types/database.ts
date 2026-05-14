@@ -213,6 +213,23 @@ export interface Database {
         }
         Update: never
       }
+      subscribers: {
+        Row: {
+          id: string
+          email: string
+          confirmed: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          email: string
+          confirmed?: boolean
+          created_at?: string
+        }
+        Update: {
+          confirmed?: boolean
+        }
+      }
     }
     Views: {
       events_with_venue: {

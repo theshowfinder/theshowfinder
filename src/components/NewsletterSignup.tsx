@@ -1,20 +1,26 @@
 'use client'
 
 import { useState, FormEvent } from 'react'
+import { subscribeNewsletter } from '@/app/actions/newsletter'
 
 export default function NewsletterSignup() {
   const [email,   setEmail]   = useState('')
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!email.trim()) return
     setLoading(true)
-    // TODO: wire to email provider (Resend / Mailchimp)
-    await new Promise(r => setTimeout(r, 700))
-    setSuccess(true)
+    setError(null)
+    const result = await subscribeNewsletter(email)
     setLoading(false)
+    if (result.error) {
+      setError(result.error)
+    } else {
+      setSuccess(true)
+    }
   }
 
   return (
@@ -34,25 +40,31 @@ export default function NewsletterSignup() {
             ✅ You&apos;re on the list! Watch your inbox.
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 justify-center max-w-lg mx-auto">
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="Enter your email address"
-              className="flex-1 px-5 py-4 rounded-xl bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 text-base min-h-[56px]"
-              style={{ '--tw-ring-color': '#FFD700' } as React.CSSProperties}
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-8 py-4 text-white font-extrabold rounded-xl transition-all duration-150 min-h-[56px] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap hover:opacity-90 active:scale-95"
-              style={{ backgroundColor: '#1A1A2E' }}
-            >
-              {loading ? 'Subscribing…' : 'Get Alerts Free'}
-            </button>
-          </form>
+          <>
+            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 justify-center max-w-lg mx-auto">
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={e => { setEmail(e.target.value); setError(null) }}
+                placeholder="Enter your email address"
+                className="flex-1 px-5 py-4 rounded-xl bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 text-base min-h-[56px]"
+                style={{ '--tw-ring-color': '#FFD700' } as React.CSSProperties}
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-8 py-4 text-white font-extrabold rounded-xl transition-all duration-150 min-h-[56px] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap hover:opacity-90 active:scale-95"
+                style={{ backgroundColor: '#1A1A2E' }}
+              >
+                {loading ? 'Subscribing…' : 'Get Alerts Free'}
+              </button>
+            </form>
+
+            {error && (
+              <p className="mt-3 text-white/90 text-sm font-semibold">{error}</p>
+            )}
+          </>
         )}
 
         <p className="mt-5 text-white/50 text-sm">No spam. Unsubscribe any time.</p>

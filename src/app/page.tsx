@@ -53,6 +53,45 @@ async function FeaturedEvents() {
   )
 }
 
+function fmtCount(n: number): string {
+  if (n >= 10000) return `${(Math.floor(n / 1000) * 1000).toLocaleString('en-GB')}+`
+  if (n >= 1000)  return `${(Math.floor(n / 100)  * 100 ).toLocaleString('en-GB')}+`
+  return `${n}+`
+}
+
+async function HomepageStats() {
+  const supabase = await createClient()
+  const now = new Date().toISOString()
+
+  const [{ count: eventCount }, { count: venueCount }] = await Promise.all([
+    supabase.from('events').select('*', { count: 'exact', head: true })
+      .gte('start_date', now)
+      .in('status', ['upcoming', 'on_sale']),
+    supabase.from('venues').select('*', { count: 'exact', head: true }),
+  ])
+
+  const venueResult = await supabase.from('venues').select('city') as unknown as { data: { city: string }[] | null }
+  const cityCount = new Set((venueResult.data ?? []).map(r => r.city)).size
+
+  const stats = [
+    { value: fmtCount(eventCount ?? 0), label: 'Events listed'     },
+    { value: fmtCount(venueCount ?? 0), label: 'Venues'            },
+    { value: `${cityCount}+`,           label: 'UK cities covered'  },
+    { value: '1M+',                     label: 'Tickets found'      },
+  ]
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+      {stats.map(({ value, label }) => (
+        <div key={label}>
+          <div className="text-3xl sm:text-4xl font-extrabold mb-1" style={{ color: '#FFD700' }}>{value}</div>
+          <div className="text-white/60 text-sm">{label}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 async function OnSaleThisWeek() {
   const supabase = await createClient()
   const now = new Date()
@@ -236,19 +275,18 @@ export default function HomePage() {
       {/* ── STATS BAND ──────────────────────────────────────────── */}
       <section className="py-14" style={{ backgroundColor: '#1A1A2E' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-            {[
-              { value: '10,000+', label: 'Events listed'     },
-              { value: '500+',    label: 'Venues'            },
-              { value: '50+',     label: 'UK cities covered' },
-              { value: '1M+',     label: 'Tickets found'     },
-            ].map(({ value, label }) => (
-              <div key={label}>
-                <div className="text-3xl sm:text-4xl font-extrabold mb-1" style={{ color: '#FFD700' }}>{value}</div>
-                <div className="text-white/60 text-sm">{label}</div>
-              </div>
-            ))}
-          </div>
+          <Suspense fallback={
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i}>
+                  <div className="h-10 w-24 mx-auto bg-white/10 rounded animate-pulse mb-1" />
+                  <div className="h-4 w-20 mx-auto bg-white/10 rounded animate-pulse" />
+                </div>
+              ))}
+            </div>
+          }>
+            <HomepageStats />
+          </Suspense>
         </div>
       </section>
     </>
