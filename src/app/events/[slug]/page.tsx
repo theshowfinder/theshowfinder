@@ -65,27 +65,17 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
 function buildProviders(title: string, directUrl: string | null) {
   const q = encodeURIComponent(title)
   const primary = [
-    {
-      name: 'Ticketmaster',
-      tagline: 'Official UK tickets',
-      bg: '#026CDF',
-      href: directUrl ?? `https://www.ticketmaster.co.uk/search?q=${q}`,
-    },
-    {
-      name: 'Eventbrite',
-      tagline: 'Book direct',
-      bg: '#F05537',
-      href: `https://www.eventbrite.co.uk/d/united-kingdom/${q}/`,
-    },
+    { name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF',              href: directUrl ?? `https://www.ticketmaster.co.uk/search?q=${q}` },
+    { name: 'Eventbrite',   tagline: 'Book direct',         bg: '#F05537',              href: `https://www.eventbrite.co.uk/d/united-kingdom/${q}/` },
+    { name: 'See Tickets',  tagline: 'Official tickets',    bg: '#e4022d',              href: 'https://www.seetickets.com' },
+    { name: 'Skiddle',      tagline: 'Discover & book',     bg: '#ffcc00', color: '#111111', href: 'https://www.skiddle.com' },
+    { name: 'Eventim',      tagline: 'Book direct',         bg: '#00a4e0',              href: 'https://www.eventim.co.uk' },
   ]
   const secondary = [
-    { name: 'Viagogo',      bg: '#00a650', href: `https://www.viagogo.co.uk/ww/SearchResults?q=${q}` },
-    { name: 'StubHub',      bg: '#cc0000', href: `https://www.stubhub.co.uk/srp/?q=${q}` },
-    { name: 'Gigsberg',     bg: '#6b21a8', href: `https://www.gigsberg.com/tickets?q=${q}` },
-    { name: 'Seat Unique',  bg: '#1e3a5f', href: `https://www.seatunique.com/search?q=${q}` },
-    { name: 'See Tickets',  bg: '#e4022d', href: 'https://www.seetickets.com' },
-    { name: 'Skiddle',      bg: '#ffcc00', color: '#111111', href: 'https://www.skiddle.com' },
-    { name: 'Eventim',      bg: '#00a4e0', href: 'https://www.eventim.co.uk' },
+    { name: 'Viagogo',     bg: '#00a650', href: `https://www.viagogo.co.uk/ww/SearchResults?q=${q}` },
+    { name: 'StubHub',     bg: '#cc0000', href: `https://www.stubhub.co.uk/srp/?q=${q}` },
+    { name: 'Gigsberg',    bg: '#6b21a8', href: `https://www.gigsberg.com/tickets?q=${q}` },
+    { name: 'Seat Unique', bg: '#1e3a5f', href: `https://www.seatunique.com/search?q=${q}` },
   ]
   return { primary, secondary }
 }
@@ -298,18 +288,18 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                 <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-4">Primary Tickets</h3>
                 <div className="flex flex-col gap-3">
-                  {primary.map(({ name, tagline, bg, href }) => (
+                  {primary.map(({ name, tagline, bg, color, href }) => (
                     <a
                       key={name}
                       href={href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between text-white rounded-xl px-5 py-4 hover:opacity-90 transition-opacity min-h-[60px]"
-                      style={{ backgroundColor: bg }}
+                      className="flex items-center justify-between rounded-xl px-5 py-4 hover:opacity-90 transition-opacity min-h-[60px]"
+                      style={{ backgroundColor: bg, color: color ?? '#ffffff' }}
                     >
                       <div>
                         <p className="font-extrabold text-base leading-none">{name}</p>
-                        <p className="text-white/70 text-xs mt-0.5">{tagline}</p>
+                        <p className="text-xs mt-0.5 opacity-70">{tagline}</p>
                       </div>
                       <span className="text-xl ml-3">→</span>
                     </a>
@@ -323,14 +313,14 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">More Options</h3>
               <p className="text-xs text-slate-400 mb-4">Compare prices across resale platforms</p>
               <div className="grid grid-cols-2 gap-3">
-                {secondary.map(({ name, bg, color, href }) => (
+                {secondary.map(({ name, bg, href }) => (
                   <a
                     key={name}
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center font-bold text-sm rounded-xl py-3.5 hover:opacity-90 transition-opacity min-h-[48px]"
-                    style={{ backgroundColor: bg, color: color ?? '#ffffff' }}
+                    className="flex items-center justify-center font-bold text-sm rounded-xl py-3.5 hover:opacity-90 transition-opacity min-h-[48px] text-white"
+                    style={{ backgroundColor: bg }}
                   >
                     {name}
                   </a>
