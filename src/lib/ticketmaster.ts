@@ -198,6 +198,7 @@ async function fetchTMPage(
 // ── Venue upsert ─────────────────────────────────────────────────────────────
 
 async function upsertVenue(db: DbClient, tmVenue: TMVenue): Promise<string | null> {
+  if (!tmVenue.name) return null  // some TM venues have no name; skip them
   const city = tmVenue.city?.name ?? 'Unknown'
   const baseSlug = slugify(`${tmVenue.name}-${city}`)
 
