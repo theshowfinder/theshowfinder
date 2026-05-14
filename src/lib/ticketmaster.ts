@@ -53,6 +53,9 @@ interface TMEvent {
     start?: { localDate?: string; localTime?: string; dateTime?: string }
     status?: { code: string }
   }
+  sales?: {
+    public?: { startDateTime?: string; endDateTime?: string }
+  }
   images?: TMImage[]
   priceRanges?: TMPriceRange[]
   classifications?: TMClassification[]
@@ -303,6 +306,7 @@ async function upsertEvent(
     category,
     venue_id:        venueId,
     start_date:      startDate,
+    onsale_date:     tmEvent.sales?.public?.startDateTime ?? null,
     image_url:       getBestImage(tmEvent.images),
     price_from:      price?.min  ?? null,
     price_to:        price?.max  ?? null,

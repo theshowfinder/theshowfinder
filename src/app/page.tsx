@@ -53,6 +53,51 @@ async function FeaturedEvents() {
   )
 }
 
+async function OnSaleThisWeek() {
+  const supabase = await createClient()
+  const now = new Date()
+  const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+  const { data: events } = await supabase
+    .from('events_with_venue')
+    .select('*')
+    .gte('onsale_date', now.toISOString())
+    .lte('onsale_date', weekAhead.toISOString())
+    .gte('start_date', now.toISOString())
+    .order('onsale_date', { ascending: true })
+    .limit(6)
+
+  if (!events?.length) return null
+
+  return (
+    <section className="bg-white py-14 border-t border-slate-100">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-end justify-between mb-7">
+          <div>
+            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
+              Tickets just released
+            </p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">On Sale This Week</h2>
+          </div>
+          <Link href="/events" className="text-sm font-semibold hover:underline hidden sm:block" style={{ color: '#026CDF' }}>
+            View all →
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {(events as EventWithVenue[]).map(event => (
+            <EventCard key={event.id} event={event} />
+          ))}
+        </div>
+        <div className="mt-8 text-center sm:hidden">
+          <Link href="/events" className="inline-block text-sm font-semibold hover:underline" style={{ color: '#026CDF' }}>
+            View all events →
+          </Link>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 const EventCardSkeleton = () => (
   <div className="rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm">
     <div className="h-48 bg-slate-200 animate-pulse" />
@@ -179,6 +224,11 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* ── ON SALE THIS WEEK ───────────────────────────────────── */}
+      <Suspense fallback={null}>
+        <OnSaleThisWeek />
+      </Suspense>
 
       {/* ── NEWSLETTER ──────────────────────────────────────────── */}
       <NewsletterSignup />

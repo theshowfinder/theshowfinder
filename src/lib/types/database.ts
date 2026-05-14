@@ -124,6 +124,7 @@ export interface Database {
           start_date: string
           end_date: string | null
           doors_time: string | null
+          onsale_date: string | null
           image_url: string | null
           price_from: number | null
           price_to: number | null
@@ -146,6 +147,7 @@ export interface Database {
           start_date: string
           end_date?: string | null
           doors_time?: string | null
+          onsale_date?: string | null
           image_url?: string | null
           price_from?: number | null
           price_to?: number | null
@@ -167,6 +169,7 @@ export interface Database {
           start_date?: string
           end_date?: string | null
           doors_time?: string | null
+          onsale_date?: string | null
           image_url?: string | null
           price_from?: number | null
           price_to?: number | null
@@ -228,6 +231,7 @@ export interface Database {
           tickets_url: string | null
           status: EventStatus
           is_featured: boolean
+          onsale_date: string | null
           venue_id: string
           venue_name: string
           venue_city: string
