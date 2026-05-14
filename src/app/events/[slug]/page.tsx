@@ -105,7 +105,7 @@ function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 }
 function fmtPrice(from: number | null, to: number | null, currency: string) {
-  if (!from) return 'Free'
+  if (!from) return null
   const sym = currency === 'GBP' ? '£' : currency
   return to && to !== from ? `${sym}${from} – ${sym}${to}` : `From ${sym}${from}`
 }
@@ -174,7 +174,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 text-white/80 text-sm mb-8">
             <span className="flex items-center gap-2">📅 <span>{fmtDate(event.start_date)}</span></span>
             {event.venue && <span className="flex items-center gap-2">📍 <span>{event.venue.name}, {event.venue.city}</span></span>}
-            <span className="flex items-center gap-2">💷 <span className="font-bold text-white">{priceLabel}</span></span>
+            {priceLabel && <span className="flex items-center gap-2">💷 <span className="font-bold text-white">{priceLabel}</span></span>}
           </div>
 
           {/* Desktop primary CTA */}
@@ -199,10 +199,12 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
       {/* ── MOBILE STICKY BAR ─────────────────────────────────── */}
       {!isSoldOut && (
         <div className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t-2 px-4 py-3 flex items-center gap-3 shadow-2xl" style={{ borderColor: '#E8003D' }}>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-slate-500 leading-none mb-0.5">Tickets from</p>
-            <p className="text-base font-extrabold text-slate-900 truncate">{priceLabel}</p>
-          </div>
+          {priceLabel && (
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-slate-500 leading-none mb-0.5">Tickets from</p>
+              <p className="text-base font-extrabold text-slate-900 truncate">{priceLabel}</p>
+            </div>
+          )}
           <a
             href={event.tickets_url ?? '#tickets'}
             target={event.tickets_url ? '_blank' : undefined}
