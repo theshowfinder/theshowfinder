@@ -39,11 +39,10 @@ interface Props {
 }
 
 export default function EventCard({ event }: Props) {
-  const cat        = categoryConfig[event.category] ?? categoryConfig.concert
-  const status     = statusConfig[event.status]     ?? statusConfig.upcoming
-  const ticketHref = event.tickets_url ?? `/events/${event.slug}`
-  const isExternal = !!event.tickets_url
-  const isSoldOut  = event.status === 'sold_out' || event.status === 'cancelled'
+  const cat       = categoryConfig[event.category] ?? categoryConfig.concert
+  const status    = statusConfig[event.status]     ?? statusConfig.upcoming
+  const eventHref = `/events/${event.slug}`
+  const isSoldOut = event.status === 'sold_out' || event.status === 'cancelled'
 
   return (
     <div className="group flex flex-col rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
@@ -97,15 +96,13 @@ export default function EventCard({ event }: Props) {
             {event.status === 'cancelled' ? 'Cancelled' : 'Sold Out'}
           </div>
         ) : (
-          <a
-            href={ticketHref}
-            target={isExternal ? '_blank' : undefined}
-            rel={isExternal ? 'noopener noreferrer' : undefined}
-            className="w-full text-white font-bold py-3 rounded-xl text-center text-sm hover:opacity-90 active:scale-95 transition-all duration-150 min-h-[48px] flex items-center justify-center gap-1"
+          <Link
+            href={eventHref}
+            className="w-full text-white font-bold py-3 rounded-xl text-center text-sm hover:opacity-90 active:scale-95 transition-all duration-150 min-h-[48px] flex items-center justify-center"
             style={{ backgroundColor: '#E8003D' }}
           >
-            Get Tickets{isExternal && <span className="text-xs opacity-70 ml-0.5">↗</span>}
-          </a>
+            Get Tickets
+          </Link>
         )}
       </div>
     </div>
