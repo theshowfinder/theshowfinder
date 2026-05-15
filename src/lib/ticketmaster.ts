@@ -335,6 +335,44 @@ async function upsertEvent(
   return 'inserted'
 }
 
+// ── On-sale-soon fetch ───────────────────────────────────────────────────────
+// Fetches up to 200 UK events whose public-sale period STARTS within the next
+// 7 days. These events have a future onsale_date, making them visible in the
+// "On Sale This Week" homepage section.
+
+async function fetchOnSaleSoon(startDT: string, endDT: string): Promise<TMEvent[]> {
+  const url = new URL(`${TM_BASE}/events.json`)
+  url.searchParams.set('apikey',              process.env.TICKETMASTER_API_KEY!)
+  url.searchParams.set('countryCode',         'GB')
+  url.searchParams.set('onsaleStartDateTime', startDT)
+  url.searchParams.set('onsaleEndDateTime',   endDT)
+  url.searchParams.set('size',               '200')
+  url.searchParams.set('page',               '0')
+  url.searchParams.set('locale',             'en-us')
+  url.searchParams.set('sort',               'date,asc')
+
+  try {
+    const res = await fetch(url.toString(), { cache: 'no-store' })
+    if (!res.ok) {
+      console.error(`[TM] HTTP ${res.status} for on-sale-soon fetch`)
+      return []
+    }
+    const json: TMResponse = await res.json()
+    if (json.fault) {
+      console.error(`[TM] API fault (on-sale-soon): ${json.fault.faultstring}`)
+      return []
+    }
+    if (json.errors?.length) {
+      console.error(`[TM] API error (on-sale-soon): ${json.errors[0].detail}`)
+      return []
+    }
+    return json._embedded?.events ?? []
+  } catch (err) {
+    console.error('[TM] Network error fetching on-sale-soon events:', err)
+    return []
+  }
+}
+
 // ── Public sync result type ──────────────────────────────────────────────────
 
 export interface SyncResult {
@@ -396,6 +434,37 @@ export async function syncTicketmasterEvents(): Promise<SyncResult> {
     }
 
     await sleep(RATE_LIMIT_MS)
+  }
+
+  // ── On-sale-soon pass ──────────────────────────────────────────────────────
+  await sleep(RATE_LIMIT_MS)
+  const onSaleNow  = new Date()
+  const onSaleEnd  = new Date(onSaleNow.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const onSaleStartDT = onSaleNow.toISOString().replace(/\.\d{3}Z$/, 'Z')
+  const onSaleEndDT   = onSaleEnd.toISOString().replace(/\.\d{3}Z$/, 'Z')
+
+  console.log(`\n[TM] ── Fetching on-sale-soon events (${onSaleStartDT} → ${onSaleEndDT}) ──`)
+  const onSaleEvents = await fetchOnSaleSoon(onSaleStartDT, onSaleEndDT)
+  console.log(`[TM]    found ${onSaleEvents.length} on-sale-soon events`)
+
+  for (const tmEvent of onSaleEvents) {
+    total++
+    const tmVenue = tmEvent._embedded?.venues?.[0]
+    if (!tmVenue) { skipped++; continue }
+
+    const venueId = await upsertVenue(db, tmVenue)
+    if (!venueId) { errors++; continue }
+
+    const category = mapCategory(tmEvent, 'concert')
+    const result   = await upsertEvent(db, tmEvent, venueId, category)
+    if (result === 'inserted') {
+      inserted++
+      byCategory[category] = (byCategory[category] ?? 0) + 1
+    } else if (result === 'skipped') {
+      skipped++
+    } else if (result === 'error') {
+      errors++
+    }
   }
 
   const durationMs = Date.now() - t0
