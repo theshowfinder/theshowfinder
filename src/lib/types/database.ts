@@ -99,6 +99,9 @@ export interface Database {
           stubhub_url: string | null
           vivid_seats_url: string | null
           see_tickets_url: string | null
+          eventim_url: string | null
+          axs_url: string | null
+          gigantic_url: string | null
           created_at: string
         }
         Insert: {
@@ -122,6 +125,9 @@ export interface Database {
           stubhub_url?: string | null
           vivid_seats_url?: string | null
           see_tickets_url?: string | null
+          eventim_url?: string | null
+          axs_url?: string | null
+          gigantic_url?: string | null
           created_at?: string
         }
         Update: {
@@ -144,6 +150,9 @@ export interface Database {
           stubhub_url?: string | null
           vivid_seats_url?: string | null
           see_tickets_url?: string | null
+          eventim_url?: string | null
+          axs_url?: string | null
+          gigantic_url?: string | null
         }
       }
       tours: {

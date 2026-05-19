@@ -9,13 +9,13 @@ import type { Artist, Tour, TourDate } from '@/lib/types/database'
 
 interface PageProps {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ saved?: string }>
+  searchParams: Promise<{ saved?: string; created?: string }>
 }
 
 export default async function EditArtistPage({ params, searchParams }: PageProps) {
   await requireAdmin()
   const { slug } = await params
-  const { saved } = await searchParams
+  const { saved, created } = await searchParams
   const db = createAdminClient()
 
   const { data: artist } = await db
@@ -63,7 +63,19 @@ export default async function EditArtistPage({ params, searchParams }: PageProps
       </header>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-8">
-        {saved && (
+        {created && (
+          <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-4">
+            <p className="text-sm font-bold mb-1">✓ Artist created successfully</p>
+            <Link
+              href={`/artists/${slug}`}
+              className="text-sm font-semibold text-green-700 underline hover:text-green-900"
+              target="_blank"
+            >
+              View /artists/{slug} →
+            </Link>
+          </div>
+        )}
+        {saved && !created && (
           <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">
             ✓ Artist saved successfully
           </div>
