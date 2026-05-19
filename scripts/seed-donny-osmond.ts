@@ -98,18 +98,20 @@ async function main() {
 
 async function seedDates(tourId: string) {
   const dates = [
-    { date: '2026-09-14T19:30:00Z', venue_name: 'O2 Apollo Manchester', city: 'Manchester' },
-    { date: '2026-09-15T19:30:00Z', venue_name: 'O2 Apollo Manchester', city: 'Manchester' },
-    { date: '2026-09-17T19:30:00Z', venue_name: 'Utilita Arena Birmingham', city: 'Birmingham' },
-    { date: '2026-09-19T19:30:00Z', venue_name: 'Motorpoint Arena Cardiff', city: 'Cardiff' },
-    { date: '2026-09-21T19:30:00Z', venue_name: 'P&J Live', city: 'Aberdeen' },
-    { date: '2026-09-22T19:30:00Z', venue_name: 'OVO Hydro', city: 'Glasgow' },
-    { date: '2026-09-24T19:30:00Z', venue_name: 'Utilita Arena Newcastle', city: 'Newcastle' },
-    { date: '2026-09-26T19:30:00Z', venue_name: 'First Direct Arena', city: 'Leeds' },
-    { date: '2026-09-28T19:30:00Z', venue_name: 'Nottingham Arena', city: 'Nottingham' },
-    { date: '2026-09-30T19:30:00Z', venue_name: 'Brighton Centre', city: 'Brighton' },
-    { date: '2026-10-02T19:30:00Z', venue_name: 'The O2 Arena', city: 'London' },
-    { date: '2026-10-03T19:30:00Z', venue_name: 'The O2 Arena', city: 'London' },
+    { date: '2027-01-20T18:30:00Z', venue_name: 'OVO Hydro',                                   city: 'Glasgow'     },
+    { date: '2027-01-21T18:00:00Z', venue_name: 'Utilita Arena Newcastle',                      city: 'Newcastle'   },
+    { date: '2027-01-23T18:30:00Z', venue_name: 'M&S Bank Arena Liverpool',                     city: 'Liverpool'   },
+    { date: '2027-01-24T19:30:00Z', venue_name: 'Co-op Live',                                   city: 'Manchester'  },
+    { date: '2027-01-26T17:30:00Z', venue_name: 'Connexin Live (Venue Premium)',                city: 'Hull'        },
+    { date: '2027-01-26T18:30:00Z', venue_name: 'Connexin Live',                                city: 'Hull'        },
+    { date: '2027-01-27T18:00:00Z', venue_name: 'Motorpoint Arena Nottingham',                  city: 'Nottingham'  },
+    { date: '2027-01-29T18:00:00Z', venue_name: 'Leeds First Direct Bank Arena (Venue Premium)', city: 'Leeds'      },
+    { date: '2027-01-29T18:30:00Z', venue_name: 'Leeds First Direct Bank Arena',                city: 'Leeds'       },
+    { date: '2027-01-30T18:00:00Z', venue_name: 'bp pulse LIVE',                                city: 'Birmingham'  },
+    { date: '2027-02-01T18:30:00Z', venue_name: 'Utilita Arena Cardiff',                        city: 'Cardiff'     },
+    { date: '2027-02-03T18:30:00Z', venue_name: 'Bournemouth International Centre',             city: 'Bournemouth' },
+    { date: '2027-02-05T18:30:00Z', venue_name: 'Eventim Apollo',                               city: 'London'      },
+    { date: '2027-02-06T18:30:00Z', venue_name: 'Eventim Apollo',                               city: 'London'      },
   ]
 
   // Delete existing dates for this tour to avoid duplicates on re-run
