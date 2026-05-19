@@ -36,8 +36,10 @@ export default function NewsletterSignup() {
         </p>
 
         {success ? (
-          <div className="inline-flex items-center gap-3 bg-white/20 text-white font-bold px-8 py-5 rounded-2xl text-lg">
-            ✅ You&apos;re on the list! Watch your inbox.
+          <div className="inline-flex flex-col items-center gap-2 bg-white/20 text-white px-8 py-6 rounded-2xl text-center max-w-sm mx-auto">
+            <span className="text-3xl">🎉</span>
+            <p className="font-extrabold text-lg">You&apos;re on the list!</p>
+            <p className="text-white/80 text-sm">Check your inbox — a welcome email is on its way.</p>
           </div>
         ) : (
           <>
