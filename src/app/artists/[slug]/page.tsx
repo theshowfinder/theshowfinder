@@ -191,10 +191,10 @@ export default async function ArtistPage({ params }: PageProps) {
                 <p className="text-xs text-slate-400 mb-4">Tickets available on secondary market</p>
                 <div className="space-y-2">
                   {[
-                    { name: 'Gigsberg',    bg: '#1a1f6e', href: `https://www.gigsberg.com/search?q=${encodeURIComponent(artist.name)}` },
-                    { name: 'Viagogo',     bg: '#e4002b', href: `https://www.viagogo.com/Concert-Tickets/search?q=${encodeURIComponent(artist.name)}` },
-                    { name: 'StubHub',     bg: '#400078', href: `https://www.stubhub.com/find/s/?q=${encodeURIComponent(artist.name)}` },
-                    { name: 'Vivid Seats', bg: '#01b569', href: `https://www.vividseats.com/search?searchTerm=${encodeURIComponent(artist.name)}` },
+                    { name: 'Gigsberg',    bg: '#1a1f6e', href: artist.gigsberg_url    ?? `https://www.gigsberg.com/search?q=${encodeURIComponent(artist.name)}` },
+                    { name: 'Viagogo',     bg: '#00a650', href: artist.viagogo_url     ?? `https://www.viagogo.co.uk/ww/SearchResults?q=${encodeURIComponent(artist.name)}` },
+                    { name: 'StubHub',     bg: '#400078', href: artist.stubhub_url     ?? `https://www.stubhub.co.uk/srp/?q=${encodeURIComponent(artist.name)}` },
+                    { name: 'Vivid Seats', bg: '#02044a', href: artist.vivid_seats_url ?? `https://www.vividseats.com/search?searchTerm=${encodeURIComponent(artist.name)}` },
                   ].map(({ name, bg, href }) => (
                     <a
                       key={name}

@@ -93,6 +93,10 @@ export interface Database {
           onsale_date: string | null
           tickets_url: string | null
           is_featured: boolean
+          gigsberg_url: string | null
+          viagogo_url: string | null
+          stubhub_url: string | null
+          vivid_seats_url: string | null
           created_at: string
         }
         Insert: {
@@ -110,6 +114,10 @@ export interface Database {
           onsale_date?: string | null
           tickets_url?: string | null
           is_featured?: boolean
+          gigsberg_url?: string | null
+          viagogo_url?: string | null
+          stubhub_url?: string | null
+          vivid_seats_url?: string | null
           created_at?: string
         }
         Update: {
@@ -126,6 +134,10 @@ export interface Database {
           onsale_date?: string | null
           tickets_url?: string | null
           is_featured?: boolean
+          gigsberg_url?: string | null
+          viagogo_url?: string | null
+          stubhub_url?: string | null
+          vivid_seats_url?: string | null
         }
       }
       tours: {
