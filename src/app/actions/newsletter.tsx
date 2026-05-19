@@ -11,23 +11,38 @@ export async function subscribeNewsletter(email: string): Promise<{ error?: stri
   }
 
   const db = createAdminClient()
-  const { error } = await db.from('subscribers').insert({ email: trimmed })
+  const { error: dbError } = await db.from('subscribers').insert({ email: trimmed })
 
-  if (error) {
-    if (error.code === '23505') return {}  // already subscribed — treat as success
-    console.error('[newsletter] insert failed:', error.message)
+  if (dbError) {
+    if (dbError.code === '23505') {
+      // Already subscribed — still try to return success, but skip the email
+      return {}
+    }
+    console.error('[newsletter] insert failed:', dbError.message)
     return { error: 'Something went wrong. Please try again.' }
   }
 
-  // Send welcome email (non-blocking — don't fail signup if email errors)
-  resend.emails.send({
-    from: FROM_EMAIL,
-    to: trimmed,
-    subject: 'Welcome to TheShowFinder 🎟️',
-    react: <WelcomeEmail email={trimmed} />,
-  }).catch(err => {
-    console.error('[newsletter] welcome email failed:', err)
-  })
+  // Await the send — fire-and-forget breaks in Vercel serverless because the
+  // function freezes the moment it returns, killing any non-awaited promise.
+  try {
+    const apiKey = process.env.RESEND_API_KEY
+    console.log('[newsletter] RESEND_API_KEY present:', !!apiKey, '— from:', FROM_EMAIL)
+
+    const { data, error: emailError } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: trimmed,
+      subject: 'Welcome to TheShowFinder 🎟️',
+      react: <WelcomeEmail email={trimmed} />,
+    })
+
+    if (emailError) {
+      console.error('[newsletter] resend returned error:', JSON.stringify(emailError))
+    } else {
+      console.log('[newsletter] welcome email sent — id:', data?.id, '— to:', trimmed)
+    }
+  } catch (err) {
+    console.error('[newsletter] resend threw exception:', err)
+  }
 
   return {}
 }
