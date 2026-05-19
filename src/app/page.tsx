@@ -95,16 +95,15 @@ async function HomepageStats() {
 async function OnSaleThisWeek() {
   const supabase = await createClient()
   const now = new Date()
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
   const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
 
   const { data: events } = await supabase
     .from('events_with_venue')
     .select('*')
-    .gte('onsale_date', sevenDaysAgo.toISOString())
+    .gte('onsale_date', now.toISOString())
     .lte('onsale_date', weekAhead.toISOString())
     .gte('start_date', now.toISOString())
-    .order('onsale_date', { ascending: false })
+    .order('onsale_date', { ascending: true })
     .limit(6)
 
   if (!events?.length) return null

@@ -74,9 +74,8 @@ interface TMResponse {
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
-const TM_BASE = 'https://app.ticketmaster.com/discovery/v2'
-const MAX_PAGES_PER_CATEGORY = 2   // 2 × 200 = 400 events per category
-const RATE_LIMIT_MS = 300          // ms between API calls
+const TM_BASE       = 'https://app.ticketmaster.com/discovery/v2'
+const RATE_LIMIT_MS = 300   // ms between API calls
 
 interface SegmentQuery {
   classificationName: string
@@ -179,10 +178,10 @@ function sleep(ms: number) {
 async function fetchTMPage(
   classificationName: string,
   page: number,
+  startDateTime?: string,
 ): Promise<{ events: TMEvent[]; totalPages: number }> {
   const endDate = new Date()
   endDate.setFullYear(endDate.getFullYear() + 1)
-  // Ticketmaster expects ISO 8601 without milliseconds: 2027-05-14T00:00:00Z
   const endDateTime = endDate.toISOString().replace(/\.\d{3}Z$/, 'Z')
 
   const url = new URL(`${TM_BASE}/events.json`)
@@ -194,6 +193,7 @@ async function fetchTMPage(
   url.searchParams.set('locale',             'en-us')
   url.searchParams.set('sort',               'date,asc')
   url.searchParams.set('endDateTime',        endDateTime)
+  if (startDateTime) url.searchParams.set('startDateTime', startDateTime)
 
   let res: Response
   try {
@@ -386,7 +386,7 @@ export interface SyncResult {
 
 // ── Main entry point ─────────────────────────────────────────────────────────
 
-export async function syncTicketmasterEvents(): Promise<SyncResult> {
+export async function syncTicketmasterEvents(opts?: { startDateTime?: string }): Promise<SyncResult> {
   const t0 = Date.now()
   const db = createAdminClient()
 
@@ -396,13 +396,15 @@ export async function syncTicketmasterEvents(): Promise<SyncResult> {
   for (const { classificationName, dbCategory } of SEGMENT_QUERIES) {
     console.log(`\n[TM] ── Fetching "${classificationName}" ──`)
 
-    for (let page = 0; page < MAX_PAGES_PER_CATEGORY; page++) {
-      const { events, totalPages } = await fetchTMPage(classificationName, page)
-      console.log(`[TM]    page ${page}: ${events.length} events (${totalPages} total pages)`)
+    let totalPages = 1
+    for (let page = 0; page < totalPages; page++) {
+      const result = await fetchTMPage(classificationName, page, opts?.startDateTime)
+      totalPages = result.totalPages || 1
+      console.log(`[TM]    page ${page}/${totalPages - 1}: ${result.events.length} events`)
 
-      if (!events.length) break
+      if (!result.events.length) break
 
-      for (const tmEvent of events) {
+      for (const tmEvent of result.events) {
         total++
         const tmVenue = tmEvent._embedded?.venues?.[0]
 
@@ -418,19 +420,18 @@ export async function syncTicketmasterEvents(): Promise<SyncResult> {
           continue
         }
 
-        const result = await upsertEvent(db, tmEvent, venueId, dbCategory)
-        if (result === 'inserted') {
+        const upserted = await upsertEvent(db, tmEvent, venueId, dbCategory)
+        if (upserted === 'inserted') {
           inserted++
           byCategory[dbCategory] = (byCategory[dbCategory] ?? 0) + 1
-        } else if (result === 'skipped') {
+        } else if (upserted === 'skipped') {
           skipped++
-        } else if (result === 'error') {
+        } else if (upserted === 'error') {
           errors++
         }
       }
 
-      if (page + 1 >= Math.min(totalPages, MAX_PAGES_PER_CATEGORY)) break
-      await sleep(RATE_LIMIT_MS)
+      if (page + 1 < totalPages) await sleep(RATE_LIMIT_MS)
     }
 
     await sleep(RATE_LIMIT_MS)
