@@ -97,16 +97,20 @@ async function OnSaleThisWeek() {
   const now = new Date()
   const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
 
-  const { data: events } = await supabase
+  const { data: raw } = await supabase
     .from('events_with_venue')
     .select('*')
     .gte('onsale_date', now.toISOString())
     .lte('onsale_date', weekAhead.toISOString())
     .gte('start_date', now.toISOString())
     .order('onsale_date', { ascending: true })
-    .limit(6)
+    .limit(6) as unknown as { data: EventWithVenue[] | null }
 
-  if (!events?.length) return null
+  // Deduplicate by id in case the view surfaces any duplicates
+  const seen = new Set<string>()
+  const unique = (raw ?? []).filter(e => !seen.has(e.id) && seen.add(e.id))
+
+  if (!unique.length) return null
 
   return (
     <section className="bg-white py-14 border-t border-slate-100">
@@ -118,18 +122,18 @@ async function OnSaleThisWeek() {
             </p>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">On Sale This Week</h2>
           </div>
-          <Link href="/events" className="text-sm font-semibold hover:underline hidden sm:block" style={{ color: '#026CDF' }}>
+          <Link href="/on-sale-this-week" className="text-sm font-semibold hover:underline hidden sm:block" style={{ color: '#026CDF' }}>
             View all →
           </Link>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {(events as EventWithVenue[]).map(event => (
+          {unique.map(event => (
             <EventCard key={event.id} event={event} />
           ))}
         </div>
         <div className="mt-8 text-center sm:hidden">
-          <Link href="/events" className="inline-block text-sm font-semibold hover:underline" style={{ color: '#026CDF' }}>
-            View all events →
+          <Link href="/on-sale-this-week" className="inline-block text-sm font-semibold hover:underline" style={{ color: '#026CDF' }}>
+            View all →
           </Link>
         </div>
       </div>
