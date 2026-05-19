@@ -73,9 +73,9 @@ function buildProviders(title: string, directUrl: string | null) {
   ]
   const resale = [
     { name: 'Viagogo',     bg: '#00a650', href: `https://www.viagogo.co.uk/ww/SearchResults?q=${q}` },
-    { name: 'StubHub',     bg: '#cc0000', href: `https://www.stubhub.co.uk/srp/?q=${q}` },
+    { name: 'StubHub',     bg: '#400078', href: `https://www.stubhub.co.uk/srp/?q=${q}` },
     { name: 'Gigsberg',    bg: '#1a1f6e', href: `https://www.gigsberg.com/tickets?q=${q}` },
-    { name: 'Vivid Seats', bg: '#003087', href: `https://www.vividseats.com/search?searchTerm=${q}` },
+    { name: 'Vivid Seats', bg: '#02044a', href: `https://www.vividseats.com/search?searchTerm=${q}` },
   ]
   const also = [
     { name: 'Eventbrite',  bg: '#f05537',              href: `https://www.eventbrite.co.uk/d/united-kingdom/${q}/` },
