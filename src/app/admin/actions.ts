@@ -43,6 +43,33 @@ function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 80)
 }
 
+const MONTHS: Record<string, string> = {
+  Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+  Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12',
+}
+
+// Parse bulk paste format: "06 Dec 2026, 19:30, Venue Name, City"
+function parseBulkDates(raw: string) {
+  return raw
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+    .flatMap(line => {
+      const parts = line.split(',').map(p => p.trim())
+      if (parts.length < 4) return []
+      const dateStr    = parts[0]                              // "06 Dec 2026"
+      const timeStr    = parts[1]                              // "19:30"
+      const city       = parts[parts.length - 1]              // last field
+      const venue_name = parts.slice(2, -1).join(', ')        // everything between time and city
+      if (!venue_name || !city) return []
+      const [day, mon, year] = dateStr.split(' ')
+      const month = MONTHS[mon]
+      if (!month || !day || !year) return []
+      const date = `${year}-${month}-${day.padStart(2, '0')}T${timeStr}:00.000Z`
+      return [{ date, venue_name, city }]
+    })
+}
+
 export async function createArtistAction(formData: FormData) {
   await checkAuth()
   const db = createAdminClient()
@@ -85,22 +112,30 @@ export async function createArtistAction(formData: FormData) {
       .single()
 
     if (tour) {
-      const count = parseInt(formData.get('tour_date_count') as string) || 0
-      const rows = []
-      for (let i = 0; i < count; i++) {
-        const dateStr  = formData.get(`tour_date_${i}_date`)  as string
-        const timeStr  = (formData.get(`tour_date_${i}_time`) as string) || '19:30'
-        const venue    = ((formData.get(`tour_date_${i}_venue`) as string) || '').trim()
-        const city     = ((formData.get(`tour_date_${i}_city`)  as string) || '').trim()
-        if (dateStr && venue && city) {
-          rows.push({
-            tour_id: tour.id,
-            date: new Date(`${dateStr}T${timeStr}:00`).toISOString(),
-            venue_name: venue,
-            city,
-          })
+      const mode = (formData.get('dates_mode') as string) || 'bulk'
+      let rows: { tour_id: string; date: string; venue_name: string; city: string }[] = []
+
+      if (mode === 'bulk') {
+        const raw = (formData.get('dates_bulk') as string) || ''
+        rows = parseBulkDates(raw).map(r => ({ ...r, tour_id: tour.id }))
+      } else {
+        const count = parseInt(formData.get('tour_date_count') as string) || 0
+        for (let i = 0; i < count; i++) {
+          const dateStr = formData.get(`tour_date_${i}_date`)  as string
+          const timeStr = (formData.get(`tour_date_${i}_time`) as string) || '19:30'
+          const venue   = ((formData.get(`tour_date_${i}_venue`) as string) || '').trim()
+          const city    = ((formData.get(`tour_date_${i}_city`)  as string) || '').trim()
+          if (dateStr && venue && city) {
+            rows.push({
+              tour_id: tour.id,
+              date: new Date(`${dateStr}T${timeStr}:00`).toISOString(),
+              venue_name: venue,
+              city,
+            })
+          }
         }
       }
+
       if (rows.length) await db.from('tour_dates').insert(rows)
     }
   }

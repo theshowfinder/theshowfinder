@@ -8,15 +8,25 @@ function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 80)
 }
 
-const INPUT  = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
-const LABEL  = 'block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1'
+const INPUT = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white'
+const LABEL = 'block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1'
 
-function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function Card({
+  title, subtitle, headerRight, children,
+}: {
+  title: string
+  subtitle?: string
+  headerRight?: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-      <div className="mb-5">
-        <h2 className="text-base font-extrabold text-slate-900">{title}</h2>
-        {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+      <div className="flex items-start justify-between mb-5">
+        <div>
+          <h2 className="text-base font-extrabold text-slate-900">{title}</h2>
+          {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+        </div>
+        {headerRight}
       </div>
       {children}
     </div>
@@ -25,11 +35,29 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
 
 interface DateRow { id: number }
 
+// Count valid lines from bulk text for live preview
+function countBulkDates(text: string) {
+  return text.split('\n').filter(line => {
+    const parts = line.trim().split(',').map(p => p.trim())
+    return parts.length >= 4 && parts[0] && parts[1] && parts[parts.length - 1]
+  }).length
+}
+
+const BULK_PLACEHOLDER = [
+  '06 Dec 2026, 19:30, Brighton Centre, Brighton',
+  '10 Dec 2026, 19:30, Utilita Arena, Cardiff',
+  '12 Dec 2026, 19:30, M&S Bank Arena, Liverpool',
+  '16 Dec 2026, 19:30, OVO Arena, Glasgow',
+  '19 Dec 2026, 19:30, First Direct Arena, Leeds',
+].join('\n')
+
 export default function NewArtistForm() {
-  const [name, setName]           = useState('')
-  const [slug, setSlug]           = useState('')
+  const [name, setName]             = useState('')
+  const [slug, setSlug]             = useState('')
   const [slugEdited, setSlugEdited] = useState(false)
-  const [dateRows, setDateRows]   = useState<DateRow[]>([{ id: 0 }])
+  const [dateMode, setDateMode]     = useState<'bulk' | 'individual'>('bulk')
+  const [bulkText, setBulkText]     = useState('')
+  const [dateRows, setDateRows]     = useState<DateRow[]>([{ id: 0 }])
 
   useEffect(() => {
     if (!slugEdited) setSlug(slugify(name))
@@ -38,10 +66,12 @@ export default function NewArtistForm() {
   const addRow    = () => setDateRows(r => [...r, { id: Date.now() }])
   const removeRow = (id: number) => setDateRows(r => r.filter(x => x.id !== id))
 
+  const detectedCount = countBulkDates(bulkText)
+
   return (
     <form action={createArtistAction} className="space-y-5">
 
-      {/* ── Basic Info ─────────────────────────────────── */}
+      {/* ── Basic Info ────────────────────────────────── */}
       <Card title="Basic Info">
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2 sm:col-span-1">
@@ -77,7 +107,7 @@ export default function NewArtistForm() {
         </div>
       </Card>
 
-      {/* ── Tour Info ──────────────────────────────────── */}
+      {/* ── Tour Info ─────────────────────────────────── */}
       <Card title="Tour Info">
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2">
@@ -104,7 +134,7 @@ export default function NewArtistForm() {
         </div>
       </Card>
 
-      {/* ── Primary Tickets ────────────────────────────── */}
+      {/* ── Primary Tickets ───────────────────────────── */}
       <Card title="Primary Tickets" subtitle="Official ticket sellers — shown as main CTA buttons on artist page">
         <div className="space-y-2.5">
           {([
@@ -123,7 +153,7 @@ export default function NewArtistForm() {
         </div>
       </Card>
 
-      {/* ── Secondary Market ───────────────────────────── */}
+      {/* ── Secondary Market ──────────────────────────── */}
       <Card title="Secondary Market" subtitle="Resale platforms — shown in Available Now section on artist page">
         <div className="space-y-2.5">
           {([
@@ -141,73 +171,115 @@ export default function NewArtistForm() {
         </div>
       </Card>
 
-      {/* ── Tour Dates ─────────────────────────────────── */}
-      <Card title="Tour Dates" subtitle="Leave blank if no dates to add yet">
-        <input type="hidden" name="tour_date_count" value={dateRows.length} />
+      {/* ── Tour Dates ────────────────────────────────── */}
+      <Card
+        title="Tour Dates"
+        subtitle="Leave blank if no dates to add yet — tour name required"
+        headerRight={
+          <button
+            type="button"
+            onClick={() => setDateMode(m => m === 'bulk' ? 'individual' : 'bulk')}
+            className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors whitespace-nowrap"
+          >
+            {dateMode === 'bulk' ? 'Add individually →' : '← Bulk paste'}
+          </button>
+        }
+      >
+        <input type="hidden" name="dates_mode" value={dateMode} />
 
-        {/* Column headers — desktop */}
-        <div className="hidden sm:grid grid-cols-12 gap-2 mb-2">
-          {[
-            { h: 'Date',  cls: 'col-span-3' },
-            { h: 'Time',  cls: 'col-span-2' },
-            { h: 'Venue', cls: 'col-span-4' },
-            { h: 'City',  cls: 'col-span-2' },
-            { h: '',      cls: 'col-span-1' },
-          ].map(({ h, cls }) => (
-            <div key={h} className={`${cls} text-xs font-semibold text-slate-400 uppercase tracking-wider`}>{h}</div>
-          ))}
-        </div>
-
-        <div className="space-y-2 mb-4">
-          {dateRows.map((row, i) => (
-            <div key={row.id} className="grid grid-cols-12 gap-2 items-center">
-              {/* Date */}
-              <div className="col-span-12 sm:col-span-3">
-                <label className={`${LABEL} sm:hidden`}>Date</label>
-                <input name={`tour_date_${i}_date`} type="date" className={INPUT} />
-              </div>
-              {/* Time */}
-              <div className="col-span-5 sm:col-span-2">
-                <label className={`${LABEL} sm:hidden`}>Time</label>
-                <input name={`tour_date_${i}_time`} type="time" defaultValue="19:30" className={INPUT} />
-              </div>
-              {/* Venue */}
-              <div className="col-span-12 sm:col-span-4">
-                <label className={`${LABEL} sm:hidden`}>Venue</label>
-                <input name={`tour_date_${i}_venue`} placeholder="Venue name" className={INPUT} />
-              </div>
-              {/* City */}
-              <div className="col-span-6 sm:col-span-2">
-                <label className={`${LABEL} sm:hidden`}>City</label>
-                <input name={`tour_date_${i}_city`} placeholder="City" className={INPUT} />
-              </div>
-              {/* Remove */}
-              <div className="col-span-1 flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => removeRow(row.id)}
-                  disabled={dateRows.length === 1}
-                  className="text-slate-300 hover:text-red-500 transition-colors disabled:opacity-20 text-xl leading-none font-light"
-                  title="Remove"
-                  aria-label="Remove date"
-                >
-                  ×
-                </button>
-              </div>
+        {dateMode === 'bulk' ? (
+          /* ── Bulk paste mode ── */
+          <div>
+            <label className={LABEL}>
+              Paste dates — one per line, format: DD Mon YYYY, HH:MM, Venue, City
+            </label>
+            <textarea
+              name="dates_bulk"
+              rows={8}
+              value={bulkText}
+              onChange={e => setBulkText(e.target.value)}
+              placeholder={BULK_PLACEHOLDER}
+              className={`${INPUT} resize-y font-mono leading-relaxed`}
+              spellCheck={false}
+            />
+            <div className="mt-2 h-5">
+              {bulkText.trim() && (
+                detectedCount > 0 ? (
+                  <p className="text-xs font-semibold text-green-600">
+                    ✓ {detectedCount} date{detectedCount !== 1 ? 's' : ''} detected
+                  </p>
+                ) : (
+                  <p className="text-xs font-semibold text-orange-500">
+                    No valid dates detected — check the format
+                  </p>
+                )
+              )}
             </div>
-          ))}
-        </div>
+          </div>
+        ) : (
+          /* ── Individual rows mode ── */
+          <div>
+            <input type="hidden" name="tour_date_count" value={dateRows.length} />
 
-        <button
-          type="button"
-          onClick={addRow}
-          className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-        >
-          + Add another date
-        </button>
+            {/* Column headers — desktop */}
+            <div className="hidden sm:grid grid-cols-12 gap-2 mb-2">
+              {[
+                { h: 'Date',  cls: 'col-span-3' },
+                { h: 'Time',  cls: 'col-span-2' },
+                { h: 'Venue', cls: 'col-span-4' },
+                { h: 'City',  cls: 'col-span-2' },
+                { h: '',      cls: 'col-span-1' },
+              ].map(({ h, cls }) => (
+                <div key={h} className={`${cls} text-xs font-semibold text-slate-400 uppercase tracking-wider`}>{h}</div>
+              ))}
+            </div>
+
+            <div className="space-y-2 mb-4">
+              {dateRows.map((row, i) => (
+                <div key={row.id} className="grid grid-cols-12 gap-2 items-center">
+                  <div className="col-span-12 sm:col-span-3">
+                    <label className={`${LABEL} sm:hidden`}>Date</label>
+                    <input name={`tour_date_${i}_date`} type="date" className={INPUT} />
+                  </div>
+                  <div className="col-span-5 sm:col-span-2">
+                    <label className={`${LABEL} sm:hidden`}>Time</label>
+                    <input name={`tour_date_${i}_time`} type="time" defaultValue="19:30" className={INPUT} />
+                  </div>
+                  <div className="col-span-12 sm:col-span-4">
+                    <label className={`${LABEL} sm:hidden`}>Venue</label>
+                    <input name={`tour_date_${i}_venue`} placeholder="Venue name" className={INPUT} />
+                  </div>
+                  <div className="col-span-6 sm:col-span-2">
+                    <label className={`${LABEL} sm:hidden`}>City</label>
+                    <input name={`tour_date_${i}_city`} placeholder="City" className={INPUT} />
+                  </div>
+                  <div className="col-span-1 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => removeRow(row.id)}
+                      disabled={dateRows.length === 1}
+                      className="text-slate-300 hover:text-red-500 transition-colors disabled:opacity-20 text-xl leading-none font-light"
+                      title="Remove"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={addRow}
+              className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+            >
+              + Add another date
+            </button>
+          </div>
+        )}
       </Card>
 
-      {/* ── Submit ─────────────────────────────────────── */}
+      {/* ── Submit ────────────────────────────────────── */}
       <div className="flex items-center gap-4 pb-12">
         <button
           type="submit"
