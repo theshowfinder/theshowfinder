@@ -73,13 +73,14 @@ function buildProviders(title: string, directUrl: string | null) {
   ]
   const resale = [
     { name: 'Viagogo',     bg: '#00a650', href: `https://www.viagogo.co.uk/ww/SearchResults?q=${q}` },
-    { name: 'Gigsberg',    bg: '#1a1f6e', href: `https://www.gigsberg.com/tickets?q=${q}` },
     { name: 'StubHub',     bg: '#cc0000', href: `https://www.stubhub.co.uk/srp/?q=${q}` },
-    { name: 'Seat Unique', bg: '#1e3a5f', href: `https://www.seatunique.com/search?q=${q}` },
+    { name: 'Gigsberg',    bg: '#6b21a8', href: `https://www.gigsberg.com/tickets?q=${q}` },
+    { name: 'Vivid Seats', bg: '#003087', href: `https://www.vividseats.com/search?searchTerm=${q}` },
   ]
   const also = [
-    { name: 'Eventbrite', bg: '#f05537',              href: `https://www.eventbrite.co.uk/d/united-kingdom/${q}/` },
-    { name: 'Skiddle',    bg: '#ffcc00', color: '#111111', href: 'https://www.skiddle.com' },
+    { name: 'Eventbrite',  bg: '#f05537',              href: `https://www.eventbrite.co.uk/d/united-kingdom/${q}/` },
+    { name: 'Skiddle',     bg: '#ffcc00', color: '#111111', href: 'https://www.skiddle.com' },
+    { name: 'Seat Unique', bg: '#1e3a5f', href: `https://www.seatunique.com/search?q=${q}` },
   ]
   return { primary, resale, also }
 }
