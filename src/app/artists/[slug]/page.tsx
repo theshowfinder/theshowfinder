@@ -162,6 +162,17 @@ export default async function ArtistPage({ params }: PageProps) {
                   Get Tickets
                 </a>
               )}
+              {artist.see_tickets_url && (
+                <a
+                  href={artist.see_tickets_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
+                  style={{ backgroundColor: '#e4022d' }}
+                >
+                  See Tickets
+                </a>
+              )}
 
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                 <h3 className="font-bold text-slate-900">Tour Info</h3>

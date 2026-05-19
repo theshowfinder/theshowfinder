@@ -98,6 +98,7 @@ export interface Database {
           viagogo_url: string | null
           stubhub_url: string | null
           vivid_seats_url: string | null
+          see_tickets_url: string | null
           created_at: string
         }
         Insert: {
@@ -120,6 +121,7 @@ export interface Database {
           viagogo_url?: string | null
           stubhub_url?: string | null
           vivid_seats_url?: string | null
+          see_tickets_url?: string | null
           created_at?: string
         }
         Update: {
@@ -141,6 +143,7 @@ export interface Database {
           viagogo_url?: string | null
           stubhub_url?: string | null
           vivid_seats_url?: string | null
+          see_tickets_url?: string | null
         }
       }
       tours: {
