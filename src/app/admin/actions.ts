@@ -119,6 +119,15 @@ export async function toggleFeaturedAction(id: string, is_featured: boolean) {
   revalidatePath('/')
 }
 
+export async function toggleFeaturedOnsaleAction(id: string, featured_onsale: boolean) {
+  await checkAuth()
+  const db = createAdminClient()
+  await db.from('artists').update({ featured_onsale }).eq('id', id)
+  revalidatePath('/admin')
+  revalidatePath('/')
+  revalidatePath('/on-sale-this-week')
+}
+
 // ── Tour dates ────────────────────────────────────────────────────────────────
 
 export async function addTourDateAction(tourId: string, artistSlug: string, formData: FormData) {

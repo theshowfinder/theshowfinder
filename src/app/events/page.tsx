@@ -1,9 +1,10 @@
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import EventCard from '@/components/EventCard'
+import ArtistOnSaleCard from '@/components/ArtistOnSaleCard'
 import CategoryPills from '@/components/CategoryPills'
 import SearchBar from '@/components/SearchBar'
-import type { EventWithVenue } from '@/lib/types/database'
+import type { EventWithVenue, Artist } from '@/lib/types/database'
 import type { Metadata } from 'next'
 
 interface SearchParams {
@@ -25,6 +26,69 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
 }
 
 const PAGE_SIZE = 12
+
+async function CityArtists({ city }: { city: string }) {
+  const supabase = await createClient()
+  const now = new Date().toISOString()
+
+  // Find featured_onsale artists that have upcoming tour dates in this city
+  const { data: allFeatured } = await supabase
+    .from('artists')
+    .select('id, name, slug, image_url, tour_name, onsale_date')
+    .eq('featured_onsale', true) as unknown as { data: Pick<Artist, 'id' | 'name' | 'slug' | 'image_url' | 'tour_name' | 'onsale_date'>[] | null }
+
+  if (!allFeatured?.length) return null
+
+  const { data: tours } = await supabase
+    .from('tours')
+    .select('id, artist_id')
+    .in('artist_id', allFeatured.map(a => a.id)) as unknown as { data: { id: string; artist_id: string }[] | null }
+
+  if (!tours?.length) return null
+
+  const { data: cityDates } = await supabase
+    .from('tour_dates')
+    .select('tour_id')
+    .in('tour_id', tours.map(t => t.id))
+    .eq('city', city)
+    .gte('date', now) as unknown as { data: { tour_id: string }[] | null }
+
+  if (!cityDates?.length) return null
+
+  const tourToArtist = Object.fromEntries(tours.map(t => [t.id, t.artist_id]))
+  const artistsWithDates = new Set(cityDates.map(d => tourToArtist[d.tour_id]).filter(Boolean))
+  const cityArtists = allFeatured.filter(a => artistsWithDates.has(a.id))
+
+  if (!cityArtists.length) return null
+
+  // Count upcoming city dates per artist
+  const dateCounts: Record<string, number> = {}
+  for (const d of cityDates) {
+    const aId = tourToArtist[d.tour_id]
+    if (aId) dateCounts[aId] = (dateCounts[aId] ?? 0) + 1
+  }
+
+  return (
+    <div className="mb-10">
+      <h2 className="text-lg font-extrabold text-slate-900 mb-4">
+        🎟 On Sale Soon in {city}
+      </h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {cityArtists.map(artist => (
+          <ArtistOnSaleCard
+            key={artist.id}
+            name={artist.name}
+            slug={artist.slug}
+            image_url={artist.image_url}
+            tour_name={artist.tour_name}
+            onsale_date={artist.onsale_date}
+            dates_count={dateCounts[artist.id] ?? 0}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
 
 async function EventsList({ searchParams }: { searchParams: SearchParams }) {
   const supabase = await createClient()
@@ -129,6 +193,11 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
 
       {/* Results */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        {sp.city && (
+          <Suspense fallback={null}>
+            <CityArtists city={sp.city} />
+          </Suspense>
+        )}
         <Suspense fallback={
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {Array.from({ length: 8 }).map((_, i) => (

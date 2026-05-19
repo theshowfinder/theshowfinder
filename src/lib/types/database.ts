@@ -93,6 +93,7 @@ export interface Database {
           onsale_date: string | null
           tickets_url: string | null
           is_featured: boolean
+          featured_onsale: boolean
           gigsberg_url: string | null
           viagogo_url: string | null
           stubhub_url: string | null
@@ -114,6 +115,7 @@ export interface Database {
           onsale_date?: string | null
           tickets_url?: string | null
           is_featured?: boolean
+          featured_onsale?: boolean
           gigsberg_url?: string | null
           viagogo_url?: string | null
           stubhub_url?: string | null
@@ -134,6 +136,7 @@ export interface Database {
           onsale_date?: string | null
           tickets_url?: string | null
           is_featured?: boolean
+          featured_onsale?: boolean
           gigsberg_url?: string | null
           viagogo_url?: string | null
           stubhub_url?: string | null

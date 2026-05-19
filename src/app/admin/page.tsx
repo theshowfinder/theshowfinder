@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { logoutAction, toggleFeaturedAction } from './actions'
+import { logoutAction, toggleFeaturedAction, toggleFeaturedOnsaleAction } from './actions'
 import type { Artist } from '@/lib/types/database'
 
 export default async function AdminPage() {
@@ -64,6 +64,7 @@ export default async function AdminPage() {
                   <th className="px-4 py-3 font-semibold text-slate-600">Tour</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">On Sale</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">Featured</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600">On Sale This Week</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -95,6 +96,16 @@ export default async function AdminPage() {
                           className={`text-xs font-bold px-3 py-1 rounded-full ${artist.is_featured ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}
                         >
                           {artist.is_featured ? '★ Featured' : '☆ Feature'}
+                        </button>
+                      </form>
+                    </td>
+                    <td className="px-4 py-3">
+                      <form action={toggleFeaturedOnsaleAction.bind(null, artist.id, !artist.featured_onsale)}>
+                        <button
+                          type="submit"
+                          className={`text-xs font-bold px-3 py-1 rounded-full ${artist.featured_onsale ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}
+                        >
+                          {artist.featured_onsale ? '🎟 On Sale' : '+ On Sale'}
                         </button>
                       </form>
                     </td>

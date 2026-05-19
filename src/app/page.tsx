@@ -110,7 +110,7 @@ async function OnSaleThisWeek() {
     supabase
       .from('artists')
       .select('*')
-      .eq('is_featured', true)
+      .eq('featured_onsale', true)
       .gte('onsale_date', now.toISOString())
       .lte('onsale_date', weekAhead.toISOString())
       .order('onsale_date', { ascending: true }) as unknown as Promise<{ data: Artist[] | null }>,

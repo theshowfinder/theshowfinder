@@ -62,6 +62,7 @@ async function main() {
       onsale_date: '2026-05-22T10:00:00Z',
       tickets_url:     'https://www.ticketmaster.co.uk/search?q=donny+osmond',
       is_featured:     true,
+      featured_onsale: true,
       gigsberg_url:    'https://www.gigsberg.com/concert-tickets/other-concerts/donny-osmond-tickets',
       viagogo_url:     'https://www.viagogo.co.uk/Concert-Tickets/Pop-Music/Donny-Osmond-Tickets',
       stubhub_url:     'https://www.stubhub.co.uk/donny-osmond-tickets/performer/45093/',
