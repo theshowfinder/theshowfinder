@@ -185,6 +185,31 @@ export default async function ArtistPage({ params }: PageProps) {
                 )}
               </div>
 
+              {/* Secondary market */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                <h3 className="font-bold text-slate-900 mb-0.5">Available Now</h3>
+                <p className="text-xs text-slate-400 mb-4">Tickets available on secondary market</p>
+                <div className="space-y-2">
+                  {[
+                    { name: 'Gigsberg',    bg: '#1a1f6e', href: `https://www.gigsberg.com/search?q=${encodeURIComponent(artist.name)}` },
+                    { name: 'Viagogo',     bg: '#e4002b', href: `https://www.viagogo.com/Concert-Tickets/search?q=${encodeURIComponent(artist.name)}` },
+                    { name: 'StubHub',     bg: '#400078', href: `https://www.stubhub.com/find/s/?q=${encodeURIComponent(artist.name)}` },
+                    { name: 'Vivid Seats', bg: '#01b569', href: `https://www.vividseats.com/search?searchTerm=${encodeURIComponent(artist.name)}` },
+                  ].map(({ name, bg, href }) => (
+                    <a
+                      key={name}
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full text-center font-bold text-white py-2.5 px-4 rounded-xl text-sm hover:opacity-90 transition-opacity"
+                      style={{ backgroundColor: bg }}
+                    >
+                      {name}
+                    </a>
+                  ))}
+                </div>
+              </div>
+
               <Link
                 href="/on-sale-this-week"
                 className="block text-center text-sm font-semibold py-3 px-5 rounded-xl border-2 border-slate-200 text-slate-600 hover:border-slate-400 transition-colors"
