@@ -34,8 +34,6 @@ export default async function OnSaleThisWeekPage() {
       .from('artists')
       .select('*')
       .eq('featured_onsale', true)
-      .gte('onsale_date', nowISO)
-      .lte('onsale_date', weekISO)
       .order('onsale_date', { ascending: true }) as unknown as Promise<{ data: Artist[] | null }>,
   ])
 
