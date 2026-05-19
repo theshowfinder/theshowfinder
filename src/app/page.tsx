@@ -4,11 +4,12 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import EventCard from '@/components/EventCard'
+import ArtistOnSaleCard from '@/components/ArtistOnSaleCard'
 import SearchBar from '@/components/SearchBar'
 import CitiesGrid from '@/components/CitiesGrid'
 import CategoryStrip from '@/components/CategoryStrip'
 import NewsletterSignup from '@/components/NewsletterSignup'
-import type { EventWithVenue } from '@/lib/types/database'
+import type { EventWithVenue, Artist } from '@/lib/types/database'
 
 async function FeaturedEvents() {
   const supabase = await createClient()
@@ -97,20 +98,52 @@ async function OnSaleThisWeek() {
   const now = new Date()
   const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
 
-  const { data: raw } = await supabase
-    .from('events_with_venue')
-    .select('*')
-    .gte('onsale_date', now.toISOString())
-    .lte('onsale_date', weekAhead.toISOString())
-    .gte('start_date', now.toISOString())
-    .order('onsale_date', { ascending: true })
-    .limit(6) as unknown as { data: EventWithVenue[] | null }
+  const [eventsResult, artistsResult] = await Promise.all([
+    supabase
+      .from('events_with_venue')
+      .select('*')
+      .gte('onsale_date', now.toISOString())
+      .lte('onsale_date', weekAhead.toISOString())
+      .gte('start_date', now.toISOString())
+      .order('onsale_date', { ascending: true })
+      .limit(6) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+    supabase
+      .from('artists')
+      .select('*')
+      .eq('is_featured', true)
+      .gte('onsale_date', now.toISOString())
+      .lte('onsale_date', weekAhead.toISOString())
+      .order('onsale_date', { ascending: true }) as unknown as Promise<{ data: Artist[] | null }>,
+  ])
 
-  // Deduplicate by id in case the view surfaces any duplicates
   const seen = new Set<string>()
-  const unique = (raw ?? []).filter(e => !seen.has(e.id) && seen.add(e.id))
+  const events = (eventsResult.data ?? []).filter(e => !seen.has(e.id) && seen.add(e.id))
+  const featuredArtists = artistsResult.data ?? []
 
-  if (!unique.length) return null
+  // Fetch tour date counts for featured artists
+  const artistDateCounts: Record<string, number> = {}
+  if (featuredArtists.length) {
+    const { data: tours } = await supabase
+      .from('tours')
+      .select('id, artist_id')
+      .in('artist_id', featuredArtists.map(a => a.id)) as unknown as { data: { id: string; artist_id: string }[] | null }
+
+    if (tours?.length) {
+      const { data: tourDates } = await supabase
+        .from('tour_dates')
+        .select('tour_id')
+        .in('tour_id', tours.map(t => t.id))
+        .gte('date', now.toISOString()) as unknown as { data: { tour_id: string }[] | null }
+
+      const tourToArtist = Object.fromEntries((tours ?? []).map(t => [t.id, t.artist_id]))
+      for (const d of tourDates ?? []) {
+        const aId = tourToArtist[d.tour_id]
+        if (aId) artistDateCounts[aId] = (artistDateCounts[aId] ?? 0) + 1
+      }
+    }
+  }
+
+  if (!events.length && !featuredArtists.length) return null
 
   return (
     <section className="bg-white py-14 border-t border-slate-100">
@@ -127,7 +160,18 @@ async function OnSaleThisWeek() {
           </Link>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {unique.map(event => (
+          {featuredArtists.map(artist => (
+            <ArtistOnSaleCard
+              key={artist.id}
+              name={artist.name}
+              slug={artist.slug}
+              image_url={artist.image_url}
+              tour_name={artist.tour_name}
+              onsale_date={artist.onsale_date}
+              dates_count={artistDateCounts[artist.id] ?? 0}
+            />
+          ))}
+          {events.map(event => (
             <EventCard key={event.id} event={event} />
           ))}
         </div>

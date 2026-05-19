@@ -88,6 +88,11 @@ export interface Database {
           website: string | null
           spotify_id: string | null
           ticketmaster_id: string | null
+          description: string | null
+          tour_name: string | null
+          onsale_date: string | null
+          tickets_url: string | null
+          is_featured: boolean
           created_at: string
         }
         Insert: {
@@ -100,6 +105,11 @@ export interface Database {
           website?: string | null
           spotify_id?: string | null
           ticketmaster_id?: string | null
+          description?: string | null
+          tour_name?: string | null
+          onsale_date?: string | null
+          tickets_url?: string | null
+          is_featured?: boolean
           created_at?: string
         }
         Update: {
@@ -111,6 +121,60 @@ export interface Database {
           website?: string | null
           spotify_id?: string | null
           ticketmaster_id?: string | null
+          description?: string | null
+          tour_name?: string | null
+          onsale_date?: string | null
+          tickets_url?: string | null
+          is_featured?: boolean
+        }
+      }
+      tours: {
+        Row: {
+          id: string
+          artist_id: string
+          tour_name: string
+          onsale_date: string | null
+          description: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          artist_id: string
+          tour_name: string
+          onsale_date?: string | null
+          description?: string | null
+          created_at?: string
+        }
+        Update: {
+          tour_name?: string
+          onsale_date?: string | null
+          description?: string | null
+        }
+      }
+      tour_dates: {
+        Row: {
+          id: string
+          tour_id: string
+          date: string
+          venue_name: string
+          city: string
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tour_id: string
+          date: string
+          venue_name: string
+          city: string
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          date?: string
+          venue_name?: string
+          city?: string
+          status?: string
         }
       }
       events: {
@@ -267,7 +331,9 @@ export interface Database {
 // Convenience row types
 export type Profile = Database['public']['Tables']['profiles']['Row']
 export type Venue = Database['public']['Tables']['venues']['Row']
-export type Artist = Database['public']['Tables']['artists']['Row']
+export type Artist   = Database['public']['Tables']['artists']['Row']
+export type Tour     = Database['public']['Tables']['tours']['Row']
+export type TourDate = Database['public']['Tables']['tour_dates']['Row']
 export type Event = Database['public']['Tables']['events']['Row']
 export type EventArtist = Database['public']['Tables']['event_artists']['Row']
 export type UserFavorite = Database['public']['Tables']['user_favorites']['Row']
