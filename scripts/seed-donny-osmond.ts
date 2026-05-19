@@ -59,7 +59,7 @@ async function main() {
       image_url: imageUrl,
       description: 'Music icon Donny Osmond brings his acclaimed live show to the UK, spanning six decades of hits including Puppy Love, This Is the Moment, and more.',
       tour_name: 'The Great Aloha Tour',
-      onsale_date: '2026-05-30T09:00:00Z',
+      onsale_date: '2026-05-22T10:00:00Z',
       tickets_url: 'https://www.ticketmaster.co.uk/search?q=donny+osmond',
       is_featured: true,
     }, { onConflict: 'slug' })
