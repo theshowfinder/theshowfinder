@@ -33,6 +33,24 @@ export async function subscribeNewsletter(email: string): Promise<{ error?: stri
       to: trimmed,
       subject: 'Welcome to TheShowFinder 🎟️',
       react: <WelcomeEmail email={trimmed} />,
+      text: [
+        'Welcome to TheShowFinder!',
+        '',
+        "You're on the list! You'll now receive alerts when tickets go on sale for",
+        'concerts, theatre, comedy, sports, and family shows across the UK.',
+        '',
+        'WHAT YOU\'LL GET',
+        '- On-sale alerts — know the moment tickets are released',
+        '- Weekly digests — the best upcoming shows near you',
+        '- Venue & artist picks — curated events across 36 UK cities',
+        '',
+        'Browse events: https://www.theshowfinder.com',
+        '',
+        '---',
+        `You received this because you signed up at theshowfinder.com with ${trimmed}.`,
+        `Unsubscribe: https://www.theshowfinder.com/unsubscribe?email=${encodeURIComponent(trimmed)}`,
+        '© 2026 TheShowFinder · Part of Chamieville LLC',
+      ].join('\n'),
     })
 
     if (emailError) {
