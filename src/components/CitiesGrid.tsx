@@ -62,7 +62,7 @@ export default async function CitiesGrid() {
         return (
           <Link
             key={name}
-            href={`/events?city=${encodeURIComponent(name)}`}
+            href={`/cities/${encodeURIComponent(name)}`}
             className="flex-none w-40 md:w-auto relative flex flex-col justify-end p-4 rounded-2xl overflow-hidden h-32 md:h-36 hover:scale-[1.02] hover:shadow-xl transition-all duration-200 group"
             style={{ background: gradient }}
           >
