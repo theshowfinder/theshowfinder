@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 
 type SyncState = {
   current_city_index:  number
@@ -20,6 +21,11 @@ type SyncResult = {
   error?:        string
 }
 
+interface Props {
+  initialSyncState: SyncState | null
+  totalCities:      number
+}
+
 function fmtDate(iso: string | null) {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('en-GB', {
@@ -33,45 +39,31 @@ function statusPill(status: string) {
   return 'text-slate-600 bg-slate-100 border border-slate-200'
 }
 
-export default function SyncPanel() {
-  const [syncState,  setSyncState]  = useState<SyncState | null>(null)
-  const [totalCities, setTotalCities] = useState(36)
-  const [statusErr,  setStatusErr]  = useState<string | null>(null)
-  const [loading,    setLoading]    = useState(false)
-  const [result,     setResult]     = useState<SyncResult | null>(null)
-  const [errorMsg,   setErrorMsg]   = useState<string | null>(null)
+export default function SyncPanel({ initialSyncState, totalCities }: Props) {
+  const router = useRouter()
+  const [syncState, setSyncState] = useState<SyncState | null>(initialSyncState)
+  const [loading,   setLoading]   = useState(false)
+  const [result,    setResult]    = useState<SyncResult | null>(null)
+  const [errorMsg,  setErrorMsg]  = useState<string | null>(null)
 
-  // ── Polling ───────────────────────────────────────────────────────────────
-
-  const fetchStatus = useCallback(async () => {
-    try {
-      const res = await fetch('/api/sync-status', { credentials: 'include' })
-      if (res.status === 401) { setStatusErr('Session expired — reload the page'); return }
-      if (!res.ok) { setStatusErr('Could not load sync state'); return }
-      const data = await res.json() as { syncState: SyncState | null; totalCities: number }
-      setSyncState(data.syncState)
-      setTotalCities(data.totalCities)
-      setStatusErr(null)
-    } catch {
-      setStatusErr('Could not reach /api/sync-status')
-    }
-  }, [])
-
+  // Auto-refresh server data every 10 s
   useEffect(() => {
-    fetchStatus()
-    const id = setInterval(fetchStatus, 10_000)
+    const id = setInterval(() => router.refresh(), 10_000)
     return () => clearInterval(id)
-  }, [fetchStatus])
+  }, [router])
+
+  // Sync state when server re-renders with fresh props
+  useEffect(() => {
+    setSyncState(initialSyncState)
+  }, [initialSyncState])
 
   // ── Trigger sync ──────────────────────────────────────────────────────────
 
-  async function runSync() {
+  const runSync = useCallback(async () => {
     setLoading(true)
     setResult(null)
     setErrorMsg(null)
 
-    // Use NEXT_PUBLIC_CRON_SECRET if the admin has set it, otherwise fall back
-    // to the httpOnly admin_token cookie (sent automatically via credentials:'include')
     const headers: HeadersInit = {}
     const secret = process.env.NEXT_PUBLIC_CRON_SECRET
     if (secret) headers['Authorization'] = `Bearer ${secret}`
@@ -83,14 +75,14 @@ export default function SyncPanel() {
         setErrorMsg(data.error ?? `HTTP ${res.status} — check Vercel logs`)
       } else {
         setResult(data)
-        fetchStatus()
+        router.refresh()
       }
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : 'Unknown error')
     } finally {
       setLoading(false)
     }
-  }
+  }, [router])
 
   // ── Derived values ────────────────────────────────────────────────────────
 
@@ -120,63 +112,49 @@ export default function SyncPanel() {
         </button>
       </div>
 
-      {/* Error fetching status */}
-      {statusErr ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
-          <p className="text-sm font-semibold text-amber-800">⚠ {statusErr}</p>
-          {statusErr.includes('reach') && (
-            <p className="text-xs text-amber-700 mt-1">
-              Run <code className="font-mono bg-amber-100 px-1 rounded">migration_012_sync_state.sql</code> in Supabase first.
-            </p>
-          )}
+      {/* Status tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div className="bg-slate-50 rounded-xl p-3">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Status</p>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full capitalize ${statusPill(syncState?.status ?? 'idle')}`}>
+            {syncState?.status ?? 'idle'}
+          </span>
         </div>
-      ) : (
-        <>
-          {/* Status tiles */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Status</p>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full capitalize ${statusPill(syncState?.status ?? 'idle')}`}>
-                {syncState?.status ?? 'idle'}
-              </span>
-            </div>
 
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Progress</p>
-              <p className="font-bold text-slate-900 text-sm">{currentIndex} / {totalCities} cities</p>
-              <div className="mt-2 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{ width: `${pct}%`, backgroundColor: '#026CDF' }}
-                />
-              </div>
-            </div>
-
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Events synced</p>
-              <p className="font-bold text-slate-900">{(syncState?.total_events_synced ?? 0).toLocaleString()}</p>
-            </div>
-
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Last completed</p>
-              <p className="font-bold text-slate-900 text-xs leading-snug">
-                {fmtDate(syncState?.last_completed_at ?? null)}
-              </p>
-            </div>
+        <div className="bg-slate-50 rounded-xl p-3">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Progress</p>
+          <p className="font-bold text-slate-900 text-sm">{currentIndex} / {totalCities} cities</p>
+          <div className="mt-2 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${pct}%`, backgroundColor: '#026CDF' }}
+            />
           </div>
+        </div>
 
-          {/* Next chunk hint */}
-          {syncState && currentIndex < totalCities && (
-            <p className="text-xs text-slate-400 mb-1">
-              Next run will process cities {currentIndex + 1}–{Math.min(currentIndex + 3, totalCities)} of {totalCities}
-            </p>
-          )}
-          {!syncState && (
-            <p className="text-xs text-slate-400 mb-1">
-              Run <code className="font-mono bg-slate-100 px-1 rounded">migration_012_sync_state.sql</code> in Supabase to enable sync tracking.
-            </p>
-          )}
-        </>
+        <div className="bg-slate-50 rounded-xl p-3">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Events synced</p>
+          <p className="font-bold text-slate-900">{(syncState?.total_events_synced ?? 0).toLocaleString()}</p>
+        </div>
+
+        <div className="bg-slate-50 rounded-xl p-3">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Last completed</p>
+          <p className="font-bold text-slate-900 text-xs leading-snug">
+            {fmtDate(syncState?.last_completed_at ?? null)}
+          </p>
+        </div>
+      </div>
+
+      {/* Next chunk hint */}
+      {syncState && currentIndex < totalCities && (
+        <p className="text-xs text-slate-400 mb-1">
+          Next run will process cities {currentIndex + 1}–{Math.min(currentIndex + 3, totalCities)} of {totalCities}
+        </p>
+      )}
+      {!syncState && (
+        <p className="text-xs text-slate-400 mb-1">
+          Run <code className="font-mono bg-slate-100 px-1 rounded">migration_012_sync_state.sql</code> in Supabase to enable sync tracking.
+        </p>
       )}
 
       {/* Run result */}
