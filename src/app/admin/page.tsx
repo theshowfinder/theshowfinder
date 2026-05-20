@@ -4,16 +4,29 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logoutAction, toggleFeaturedAction, toggleFeaturedOnsaleAction } from './actions'
+import { SYNC_CITIES } from '@/lib/sync-cities'
+import SyncPanel from './SyncPanel'
 import type { Artist } from '@/lib/types/database'
+
+type SyncStateRow = {
+  current_city_index:  number
+  status:              string
+  last_started_at:     string | null
+  last_completed_at:   string | null
+  total_events_synced: number
+}
 
 export default async function AdminPage() {
   await requireAdmin()
   const db = createAdminClient()
 
-  const { data: artists } = await db
-    .from('artists')
-    .select('*')
-    .order('name', { ascending: true }) as unknown as { data: Artist[] | null }
+  const [artistsResult, syncResult] = await Promise.all([
+    db.from('artists').select('*').order('name', { ascending: true }) as unknown as Promise<{ data: Artist[] | null }>,
+    db.from('sync_state').select('*').eq('id', 1).maybeSingle() as unknown as Promise<{ data: SyncStateRow | null }>,
+  ])
+
+  const artists  = artistsResult.data
+  const syncState = syncResult.data
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -35,8 +48,10 @@ export default async function AdminPage() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
-        <div className="flex items-center justify-between mb-8">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-8">
+        <SyncPanel syncState={syncState} totalCities={SYNC_CITIES.length} />
+
+        <div className="flex items-center justify-between">
           <h2 className="text-2xl font-extrabold text-slate-900">Artists</h2>
           <Link
             href="/admin/artists/new"
