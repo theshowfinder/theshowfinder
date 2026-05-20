@@ -10,12 +10,13 @@ export type OnSaleGroup = {
 }
 
 // Strip tour/venue suffix from Ticketmaster-style titles:
-// "Taylor Swift | The Eras Tour" → "Taylor Swift"
-// "Coldplay: Music of the Spheres" → "Coldplay"
-// "Lewis Capaldi - Broken By Desire" → "Lewis Capaldi"
-// "Harry Styles" → "Harry Styles"
+// "Taylor Swift | The Eras Tour"               → "Taylor Swift"
+// "Coldplay: Music of the Spheres"             → "Coldplay"
+// "Lewis Capaldi - Broken By Desire"           → "Lewis Capaldi"
+// "Theory of a Deadman "The Barricade Tour""   → "Theory of a Deadman"
+// "Harry Styles"                               → "Harry Styles"
 export function extractArtistName(title: string): string {
-  return title.split(/\s+\|\s+|\s*:\s+|\s+[-–—]\s+/)[0].trim()
+  return title.split(/\s+\|\s+|\s*:\s+|\s+[-–—]\s+|\s+"[^"]+"/)[0].trim()
 }
 
 export function toSlug(name: string): string {

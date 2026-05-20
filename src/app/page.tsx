@@ -101,7 +101,7 @@ async function OnSaleThisWeek() {
       .gte('onsale_date', nowISO)
       .lte('onsale_date', weekISO)
       .order('onsale_date', { ascending: true })
-      .limit(200) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+      .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
     supabase
       .from('artists')
       .select('*') as unknown as Promise<{ data: Artist[] | null }>,
