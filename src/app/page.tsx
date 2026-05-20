@@ -107,7 +107,9 @@ async function OnSaleThisWeek() {
       .select('*') as unknown as Promise<{ data: Artist[] | null }>,
   ])
 
-  const groups = groupEventsByArtist(evResult.data ?? [], arResult.data ?? []).slice(0, 6)
+  const allGroups = groupEventsByArtist(evResult.data ?? [], arResult.data ?? [])
+  const groups    = allGroups.slice(0, 12)
+  const overflow  = allGroups.length > 12 ? allGroups.length : 0
 
   if (!groups.length) return null
 
@@ -121,9 +123,11 @@ async function OnSaleThisWeek() {
             </p>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">On Sale This Week</h2>
           </div>
-          <Link href="/on-sale-this-week" className="text-sm font-semibold hover:underline hidden sm:block" style={{ color: '#026CDF' }}>
-            View all →
-          </Link>
+          {overflow > 0 && (
+            <Link href="/on-sale-this-week" className="text-sm font-semibold hover:underline hidden sm:block" style={{ color: '#026CDF' }}>
+              View all {allGroups.length} →
+            </Link>
+          )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {groups.map(group => (
@@ -170,11 +174,17 @@ async function OnSaleThisWeek() {
             </Link>
           ))}
         </div>
-        <div className="mt-8 text-center sm:hidden">
-          <Link href="/on-sale-this-week" className="inline-block text-sm font-semibold hover:underline" style={{ color: '#026CDF' }}>
-            View all →
-          </Link>
-        </div>
+        {overflow > 0 && (
+          <div className="mt-10 text-center">
+            <Link
+              href="/on-sale-this-week"
+              className="inline-block font-bold px-8 py-3.5 rounded-xl text-sm hover:opacity-90 transition-opacity text-white"
+              style={{ backgroundColor: '#026CDF' }}
+            >
+              View all {allGroups.length} artists on sale this week →
+            </Link>
+          </div>
+        )}
       </div>
     </section>
   )
