@@ -6,10 +6,10 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import EventCard from '@/components/EventCard'
-import ArtistOnSaleCard from '@/components/ArtistOnSaleCard'
 import SearchBar from '@/components/SearchBar'
 import { Suspense } from 'react'
-import type { EventWithVenue } from '@/lib/types/database'
+import type { EventWithVenue, Artist } from '@/lib/types/database'
+import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
 
 const CITIES = [
   { name: 'London',         emoji: '🎡' },
@@ -99,7 +99,7 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
   const now = new Date().toISOString()
   const weekAhead = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  const [featuredPoolResult, onsaleResult, allEventsResult] = await Promise.all([
+  const [featuredPoolResult, onsalePoolResult, allEventsResult, artistsResult] = await Promise.all([
     // Pool for featured section: upcoming events with images, limit 50
     supabase
       .from('events_with_venue')
@@ -118,7 +118,7 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
       .gte('onsale_date', now)
       .lte('onsale_date', weekAhead)
       .order('onsale_date', { ascending: true })
-      .limit(6) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+      .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>,
 
     // All events for listing section
     supabase
@@ -128,12 +128,20 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
       .gte('start_date', now)
       .order('start_date', { ascending: true })
       .limit(24) as unknown as Promise<{ data: EventWithVenue[] | null; count: number | null }>,
+
+    // Artists for name matching
+    supabase
+      .from('artists')
+      .select('*') as unknown as Promise<{ data: Artist[] | null }>,
   ])
 
   const featuredPool = featuredPoolResult.data ?? []
-  const onsaleEvents = onsaleResult.data ?? []
+  const onsalePool   = onsalePoolResult.data ?? []
   const allEvents    = allEventsResult.data ?? []
   const totalCount   = allEventsResult.count ?? allEvents.length
+
+  // Group on-sale events by artist, limit 6 cards
+  const onsaleGroups = groupEventsByArtist(onsalePool, artistsResult.data ?? []).slice(0, 6)
 
   // Fetch venue capacities for the featured pool
   let topEvents: EventWithVenue[] = []
@@ -206,7 +214,7 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
         )}
 
         {/* ── ON SALE THIS WEEK ── */}
-        {onsaleEvents.length > 0 && (
+        {onsaleGroups.length > 0 && (
           <section>
             <div className="flex items-end justify-between mb-7">
               <div>
@@ -226,17 +234,43 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
               </Link>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {onsaleEvents.map(event => (
-                <ArtistOnSaleCard
-                  key={event.id}
-                  name={event.title}
-                  slug=""
-                  href={`/events/${event.slug}`}
-                  image_url={event.image_url}
-                  tour_name={null}
-                  onsale_date={event.onsale_date}
-                  dates_count={0}
-                />
+              {onsaleGroups.map(group => (
+                <Link
+                  key={group.slug}
+                  href={`/on-sale-this-week/${group.slug}`}
+                  className="group block rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5"
+                >
+                  <div className="relative h-48 overflow-hidden bg-slate-900">
+                    {group.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={group.image_url} alt={group.artistName}
+                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A1A2E, #E8003D)' }}>
+                        <span className="text-5xl">🎤</span>
+                      </div>
+                    )}
+                    <div className="absolute top-3 left-3">
+                      <span className="text-xs font-bold uppercase tracking-wider text-white px-2.5 py-1 rounded-full" style={{ backgroundColor: '#026CDF' }}>
+                        On Sale This Week
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
+                      {group.dbArtist?.tour_name ?? 'Live Tour'}
+                    </p>
+                    <h3 className="font-extrabold text-slate-900 text-lg leading-tight mb-2 group-hover:text-red-600 transition-colors">
+                      {group.artistName}
+                    </h3>
+                    <p className="text-sm text-slate-500 mb-3">
+                      🗓 {group.events.length} UK date{group.events.length !== 1 ? 's' : ''}
+                    </p>
+                    <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
+                      🎟️ On sale {fmtOnSaleLabel(group.onsale_date)}
+                    </div>
+                  </div>
+                </Link>
               ))}
             </div>
           </section>

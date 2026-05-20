@@ -4,24 +4,12 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import EventCard from '@/components/EventCard'
-import ArtistOnSaleCard from '@/components/ArtistOnSaleCard'
 import SearchBar from '@/components/SearchBar'
 import CitiesGrid from '@/components/CitiesGrid'
 import CategoryStrip from '@/components/CategoryStrip'
 import NewsletterSignup from '@/components/NewsletterSignup'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
-
-type EventRow = {
-  id: string; title: string; onsale_date: string | null
-  tickets_url: string | null; slug: string; start_date: string
-  image_url: string | null
-}
-type ArtistLookup = { id: string; name: string; slug: string; image_url: string | null; tour_name: string | null }
-type EventGroup = {
-  title: string; count: number; earliest_onsale: string | null
-  tickets_url: string | null; image_url: string | null
-  artist: ArtistLookup | null
-}
+import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
 
 async function FeaturedEvents() {
   const supabase = await createClient()
@@ -100,101 +88,28 @@ async function HomepageStats() {
 }
 
 async function OnSaleThisWeek() {
-  const supabase = await createClient()
-  const now = new Date()
+  const supabase  = await createClient()
+  const now       = new Date()
   const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const nowISO = now.toISOString()
-  const weekISO = weekAhead.toISOString()
+  const nowISO    = now.toISOString()
+  const weekISO   = weekAhead.toISOString()
 
-  // Manual featured artists (featured_onsale=true AND onsale_date in 7-day window)
-  // plus all artists for name→slug lookup
-  const [manualResult, allArtistsResult] = await Promise.all([
+  const [evResult, arResult] = await Promise.all([
     supabase
-      .from('artists')
+      .from('events_with_venue')
       .select('*')
-      .eq('featured_onsale', true)
       .gte('onsale_date', nowISO)
       .lte('onsale_date', weekISO)
-      .order('onsale_date', { ascending: true }) as unknown as Promise<{ data: Artist[] | null }>,
+      .order('onsale_date', { ascending: true })
+      .limit(200) as unknown as Promise<{ data: EventWithVenue[] | null }>,
     supabase
       .from('artists')
-      .select('id, name, slug, image_url, tour_name') as unknown as Promise<{ data: ArtistLookup[] | null }>,
+      .select('*') as unknown as Promise<{ data: Artist[] | null }>,
   ])
 
-  const manualArtists = manualResult.data ?? []
-  const allArtists = allArtistsResult.data ?? []
-  const artistByName = new Map(allArtists.map(a => [a.name.toLowerCase(), a]))
+  const groups = groupEventsByArtist(evResult.data ?? [], arResult.data ?? []).slice(0, 6)
 
-  // Tour date counts for manual artists
-  const artistDateCounts: Record<string, number> = {}
-  if (manualArtists.length) {
-    const { data: tours } = await supabase
-      .from('tours')
-      .select('id, artist_id')
-      .in('artist_id', manualArtists.map(a => a.id)) as unknown as { data: { id: string; artist_id: string }[] | null }
-
-    if (tours?.length) {
-      const { data: tourDates } = await supabase
-        .from('tour_dates')
-        .select('tour_id')
-        .in('tour_id', tours.map(t => t.id))
-        .gte('date', nowISO) as unknown as { data: { tour_id: string }[] | null }
-
-      const tourToArtist = Object.fromEntries((tours ?? []).map(t => [t.id, t.artist_id]))
-      for (const d of tourDates ?? []) {
-        const aId = tourToArtist[d.tour_id]
-        if (aId) artistDateCounts[aId] = (artistDateCounts[aId] ?? 0) + 1
-      }
-    }
-  }
-
-  // Events with onsale_date in the next 7 days
-  const evResult = await supabase
-    .from('events')
-    .select('id, title, onsale_date, tickets_url, slug, start_date, image_url')
-    .gte('onsale_date', nowISO)
-    .lte('onsale_date', weekISO)
-    .order('onsale_date', { ascending: true })
-    .limit(200) as unknown as { data: EventRow[] | null }
-
-  let rawEvents: EventRow[] = evResult.data ?? []
-
-  // Fall back to 8 most recently created events if none have onsale_date in range
-  if (!rawEvents.length) {
-    const fbResult = await supabase
-      .from('events')
-      .select('id, title, onsale_date, tickets_url, slug, start_date, image_url')
-      .order('created_at', { ascending: false })
-      .limit(80) as unknown as { data: EventRow[] | null }
-    rawEvents = fbResult.data ?? []
-  }
-
-  // Group by title — one card per artist
-  const groupMap = new Map<string, EventGroup>()
-  for (const ev of rawEvents) {
-    const key = ev.title.toLowerCase()
-    if (!groupMap.has(key)) {
-      groupMap.set(key, {
-        title: ev.title, count: 1, earliest_onsale: ev.onsale_date,
-        tickets_url: ev.tickets_url, image_url: ev.image_url,
-        artist: artistByName.get(key) ?? null,
-      })
-    } else {
-      const g = groupMap.get(key)!
-      g.count++
-      if (ev.onsale_date && (!g.earliest_onsale || ev.onsale_date < g.earliest_onsale)) {
-        g.earliest_onsale = ev.onsale_date
-      }
-    }
-  }
-
-  // Remove groups already covered by a manual artist card; cap at 6 total
-  const manualNames = new Set(manualArtists.map(a => a.name.toLowerCase()))
-  const eventGroups = [...groupMap.values()]
-    .filter(g => !manualNames.has(g.title.toLowerCase()))
-    .slice(0, Math.max(0, 6 - manualArtists.length))
-
-  if (!manualArtists.length && !eventGroups.length) return null
+  if (!groups.length) return null
 
   return (
     <section className="bg-white py-14 border-t border-slate-100">
@@ -211,28 +126,48 @@ async function OnSaleThisWeek() {
           </Link>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {manualArtists.map(artist => (
-            <ArtistOnSaleCard
-              key={artist.id}
-              name={artist.name}
-              slug={artist.slug}
-              image_url={artist.image_url}
-              tour_name={artist.tour_name}
-              onsale_date={artist.onsale_date}
-              dates_count={artistDateCounts[artist.id] ?? 0}
-            />
-          ))}
-          {eventGroups.map(g => (
-            <ArtistOnSaleCard
-              key={g.title}
-              name={g.title}
-              slug={g.artist?.slug ?? ''}
-              href={g.artist ? undefined : (g.tickets_url ?? undefined)}
-              image_url={g.artist?.image_url ?? g.image_url}
-              tour_name={g.artist?.tour_name ?? null}
-              onsale_date={g.earliest_onsale}
-              dates_count={g.count}
-            />
+          {groups.map(group => (
+            <Link
+              key={group.slug}
+              href={`/on-sale-this-week/${group.slug}`}
+              className="group block rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5"
+            >
+              <div className="relative h-48 overflow-hidden bg-slate-900">
+                {group.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={group.image_url}
+                    alt={group.artistName}
+                    className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A1A2E, #E8003D)' }}>
+                    <span className="text-5xl">🎤</span>
+                  </div>
+                )}
+                <div className="absolute top-3 left-3">
+                  <span className="text-xs font-bold uppercase tracking-wider text-white px-2.5 py-1 rounded-full" style={{ backgroundColor: '#026CDF' }}>
+                    On Sale This Week
+                  </span>
+                </div>
+              </div>
+              <div className="p-4">
+                <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
+                  {group.dbArtist?.tour_name ?? 'Live Tour'}
+                </p>
+                <h3 className="font-extrabold text-slate-900 text-lg leading-tight mb-2 group-hover:text-red-600 transition-colors">
+                  {group.artistName}
+                </h3>
+                {group.events.length > 0 && (
+                  <p className="text-sm text-slate-500 mb-3">
+                    🗓 {group.events.length} UK date{group.events.length !== 1 ? 's' : ''}
+                  </p>
+                )}
+                <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
+                  🎟️ On sale {fmtOnSaleLabel(group.onsale_date)}
+                </div>
+              </div>
+            </Link>
           ))}
         </div>
         <div className="mt-8 text-center sm:hidden">
