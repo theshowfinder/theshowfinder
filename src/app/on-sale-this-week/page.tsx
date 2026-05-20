@@ -1,53 +1,61 @@
-export const dynamic = 'force-dynamic'
+export const revalidate = 3600
 
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import EventCard from '@/components/EventCard'
 import ArtistOnSaleCard from '@/components/ArtistOnSaleCard'
-import type { EventWithVenue, Artist } from '@/lib/types/database'
+import type { Artist } from '@/lib/types/database'
 
 export const metadata: Metadata = {
   title: 'On Sale This Week',
   description: 'Events whose tickets go on sale in the next 7 days across the UK.',
 }
 
-const MAX_RESULTS = 50
+type EventRow = {
+  id: string; title: string; onsale_date: string | null
+  tickets_url: string | null; slug: string; start_date: string
+  image_url: string | null
+}
+type ArtistLookup = { id: string; name: string; slug: string; image_url: string | null; tour_name: string | null }
+type EventGroup = {
+  title: string; count: number; earliest_onsale: string | null
+  tickets_url: string | null; image_url: string | null
+  artist: ArtistLookup | null
+}
 
 export default async function OnSaleThisWeekPage() {
-  const supabase   = await createClient()
-  const now        = new Date()
-  const weekAhead  = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const nowISO     = now.toISOString()
-  const weekISO    = weekAhead.toISOString()
+  const supabase = await createClient()
+  const now = new Date()
+  const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const nowISO = now.toISOString()
+  const weekISO = weekAhead.toISOString()
 
-  const [eventsResult, artistsResult] = await Promise.all([
-    supabase
-      .from('events_with_venue')
-      .select('*')
-      .gte('onsale_date', nowISO)
-      .lte('onsale_date', weekISO)
-      .gte('start_date',  nowISO)
-      .order('onsale_date', { ascending: true })
-      .limit(MAX_RESULTS) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+  // Manual featured artists (featured_onsale=true AND onsale_date in 7-day window)
+  // plus all artists for name→slug lookup
+  const [manualResult, allArtistsResult] = await Promise.all([
     supabase
       .from('artists')
       .select('*')
       .eq('featured_onsale', true)
+      .gte('onsale_date', nowISO)
+      .lte('onsale_date', weekISO)
       .order('onsale_date', { ascending: true }) as unknown as Promise<{ data: Artist[] | null }>,
+    supabase
+      .from('artists')
+      .select('id, name, slug, image_url, tour_name') as unknown as Promise<{ data: ArtistLookup[] | null }>,
   ])
 
-  const seen   = new Set<string>()
-  const events = (eventsResult.data ?? []).filter(e => !seen.has(e.id) && seen.add(e.id))
-  const featuredArtists = artistsResult.data ?? []
+  const manualArtists = manualResult.data ?? []
+  const allArtists = allArtistsResult.data ?? []
+  const artistByName = new Map(allArtists.map(a => [a.name.toLowerCase(), a]))
 
-  // Fetch upcoming UK date counts for featured artists
+  // Tour date counts for manual artists
   const artistDateCounts: Record<string, number> = {}
-  if (featuredArtists.length) {
+  if (manualArtists.length) {
     const { data: tours } = await supabase
       .from('tours')
       .select('id, artist_id')
-      .in('artist_id', featuredArtists.map(a => a.id)) as unknown as { data: { id: string; artist_id: string }[] | null }
+      .in('artist_id', manualArtists.map(a => a.id)) as unknown as { data: { id: string; artist_id: string }[] | null }
 
     if (tours?.length) {
       const { data: tourDates } = await supabase
@@ -64,7 +72,52 @@ export default async function OnSaleThisWeekPage() {
     }
   }
 
-  const totalCount = featuredArtists.length + events.length
+  // Events with onsale_date in the next 7 days
+  const evResult = await supabase
+    .from('events')
+    .select('id, title, onsale_date, tickets_url, slug, start_date, image_url')
+    .gte('onsale_date', nowISO)
+    .lte('onsale_date', weekISO)
+    .gte('start_date', nowISO)
+    .order('onsale_date', { ascending: true })
+    .limit(500) as unknown as { data: EventRow[] | null }
+
+  let rawEvents: EventRow[] = evResult.data ?? []
+
+  // Fall back to 8 most recently created events if none have onsale_date in range
+  if (!rawEvents.length) {
+    const fbResult = await supabase
+      .from('events')
+      .select('id, title, onsale_date, tickets_url, slug, start_date, image_url')
+      .order('created_at', { ascending: false })
+      .limit(80) as unknown as { data: EventRow[] | null }
+    rawEvents = fbResult.data ?? []
+  }
+
+  // Group by title — one card per artist
+  const groupMap = new Map<string, EventGroup>()
+  for (const ev of rawEvents) {
+    const key = ev.title.toLowerCase()
+    if (!groupMap.has(key)) {
+      groupMap.set(key, {
+        title: ev.title, count: 1, earliest_onsale: ev.onsale_date,
+        tickets_url: ev.tickets_url, image_url: ev.image_url,
+        artist: artistByName.get(key) ?? null,
+      })
+    } else {
+      const g = groupMap.get(key)!
+      g.count++
+      if (ev.onsale_date && (!g.earliest_onsale || ev.onsale_date < g.earliest_onsale)) {
+        g.earliest_onsale = ev.onsale_date
+      }
+    }
+  }
+
+  // Remove groups covered by a manual artist card
+  const manualNames = new Set(manualArtists.map(a => a.name.toLowerCase()))
+  const eventGroups = [...groupMap.values()].filter(g => !manualNames.has(g.title.toLowerCase()))
+
+  const totalCount = manualArtists.length + eventGroups.length
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
@@ -106,7 +159,7 @@ export default async function OnSaleThisWeekPage() {
               {totalCount} {totalCount !== 1 ? 'acts' : 'act'} going on sale this week
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {featuredArtists.map(artist => (
+              {manualArtists.map(artist => (
                 <ArtistOnSaleCard
                   key={artist.id}
                   name={artist.name}
@@ -117,8 +170,17 @@ export default async function OnSaleThisWeekPage() {
                   dates_count={artistDateCounts[artist.id] ?? 0}
                 />
               ))}
-              {events.map(event => (
-                <EventCard key={event.id} event={event} />
+              {eventGroups.map(g => (
+                <ArtistOnSaleCard
+                  key={g.title}
+                  name={g.title}
+                  slug={g.artist?.slug ?? ''}
+                  href={g.artist ? undefined : (g.tickets_url ?? undefined)}
+                  image_url={g.artist?.image_url ?? g.image_url}
+                  tour_name={g.artist?.tour_name ?? null}
+                  onsale_date={g.earliest_onsale}
+                  dates_count={g.count}
+                />
               ))}
             </div>
           </>

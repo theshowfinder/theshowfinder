@@ -3,25 +3,24 @@ import Link from 'next/link'
 interface Props {
   name: string
   slug: string
+  href?: string
   image_url: string | null
   tour_name: string | null
   onsale_date: string | null
   dates_count: number
 }
 
-export default function ArtistOnSaleCard({ name, slug, image_url, tour_name, onsale_date, dates_count }: Props) {
+export default function ArtistOnSaleCard({ name, slug, href, image_url, tour_name, onsale_date, dates_count }: Props) {
   const onSaleLabel = onsale_date
     ? new Date(onsale_date).toLocaleDateString('en-GB', {
         weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
       }).replace(',', '') + ' GMT'
     : null
 
-  return (
-    <Link
-      href={`/artists/${slug}`}
-      className="group block rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5"
-    >
-      {/* Image */}
+  const cardClass = 'group block rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5'
+
+  const inner = (
+    <>
       <div className="relative h-48 overflow-hidden bg-slate-900">
         {image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -35,15 +34,12 @@ export default function ArtistOnSaleCard({ name, slug, image_url, tour_name, ons
             <span className="text-5xl">🎤</span>
           </div>
         )}
-        {/* On sale badge */}
         <div className="absolute top-3 left-3">
           <span className="text-xs font-bold uppercase tracking-wider text-white px-2.5 py-1 rounded-full" style={{ backgroundColor: '#026CDF' }}>
             On Sale This Week
           </span>
         </div>
       </div>
-
-      {/* Content */}
       <div className="p-4">
         <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
           {tour_name ?? 'Live Tour'}
@@ -62,6 +58,19 @@ export default function ArtistOnSaleCard({ name, slug, image_url, tour_name, ons
           </div>
         )}
       </div>
-    </Link>
+    </>
   )
+
+  if (href) {
+    const isExternal = !href.startsWith('/')
+    return (
+      <a href={href} className={cardClass} {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
+        {inner}
+      </a>
+    )
+  }
+  if (slug) {
+    return <Link href={`/artists/${slug}`} className={cardClass}>{inner}</Link>
+  }
+  return <div className={cardClass}>{inner}</div>
 }
