@@ -79,7 +79,7 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
     supabase
       .from('events_with_venue')
       .select('*')
-      .eq('venue_city', cityName)
+      .ilike('venue_city', cityName)
       .eq('is_featured', true)
       .gte('start_date', now)
       .order('start_date', { ascending: true })
@@ -88,7 +88,7 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
     supabase
       .from('events_with_venue')
       .select('*')
-      .eq('venue_city', cityName)
+      .ilike('venue_city', cityName)
       .gte('onsale_date', now)
       .lte('onsale_date', weekAhead)
       .gte('start_date', now)
@@ -98,7 +98,7 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
     supabase
       .from('events_with_venue')
       .select('*', { count: 'exact' })
-      .eq('venue_city', cityName)
+      .ilike('venue_city', cityName)
       .gte('start_date', now)
       .order('start_date', { ascending: true })
       .limit(24) as unknown as Promise<{ data: EventWithVenue[] | null; count: number | null }>,
@@ -108,6 +108,10 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
   const onsaleEvents   = onsaleResult.data ?? []
   const allEvents      = allEventsResult.data ?? []
   const totalCount     = allEventsResult.count ?? allEvents.length
+
+  // Fall back to first 6 upcoming events if no featured events exist for this city
+  const topEvents     = featuredEvents.length > 0 ? featuredEvents : allEvents.slice(0, 6)
+  const topIsFeatured = featuredEvents.length > 0
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
@@ -132,16 +136,16 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-14">
 
-        {/* ── FEATURED EVENTS ── */}
-        {featuredEvents.length > 0 && (
+        {/* ── FEATURED / UPCOMING EVENTS ── */}
+        {topEvents.length > 0 && (
           <section>
             <div className="flex items-end justify-between mb-7">
               <div>
                 <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
-                  Don&apos;t miss out
+                  {topIsFeatured ? "Don't miss out" : 'Coming up'}
                 </p>
                 <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                  Featured Events in {cityName}
+                  {topIsFeatured ? `Featured Events in ${cityName}` : `Upcoming Shows in ${cityName}`}
                 </h2>
               </div>
               <Link
@@ -153,7 +157,7 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
               </Link>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {featuredEvents.map(event => (
+              {topEvents.map(event => (
                 <EventCard key={event.id} event={event} />
               ))}
             </div>
