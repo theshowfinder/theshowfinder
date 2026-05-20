@@ -154,7 +154,6 @@ async function OnSaleThisWeek() {
     .select('id, title, onsale_date, tickets_url, slug, start_date, image_url')
     .gte('onsale_date', nowISO)
     .lte('onsale_date', weekISO)
-    .gte('start_date', nowISO)
     .order('onsale_date', { ascending: true })
     .limit(200) as unknown as { data: EventRow[] | null }
 

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import EventCard from '@/components/EventCard'
 import ArtistOnSaleCard from '@/components/ArtistOnSaleCard'
 import SearchBar from '@/components/SearchBar'
@@ -64,6 +65,29 @@ export async function generateMetadata(
   }
 }
 
+// Pick up to 6 events with venue-capacity priority and category variety
+function pickFeaturedEvents(
+  pool: EventWithVenue[],
+  capacityMap: Record<string, number>,
+): EventWithVenue[] {
+  const sorted = [...pool].sort((a, b) => {
+    const aLarge = (capacityMap[a.venue_id] ?? 0) > 5000 ? 1 : 0
+    const bLarge = (capacityMap[b.venue_id] ?? 0) > 5000 ? 1 : 0
+    if (aLarge !== bLarge) return bLarge - aLarge
+    return a.start_date.localeCompare(b.start_date)
+  })
+
+  const catCount: Record<string, number> = {}
+  const picked: EventWithVenue[] = []
+  for (const ev of sorted) {
+    if ((catCount[ev.category] ?? 0) >= 2) continue
+    catCount[ev.category] = (catCount[ev.category] ?? 0) + 1
+    picked.push(ev)
+    if (picked.length >= 6) break
+  }
+  return picked
+}
+
 export default async function CityPage({ params }: { params: Promise<{ city: string }> }) {
   const { city } = await params
   const cityName = decodeURIComponent(city)
@@ -75,26 +99,28 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
   const now = new Date().toISOString()
   const weekAhead = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  const [featuredResult, onsaleResult, allEventsResult] = await Promise.all([
+  const [featuredPoolResult, onsaleResult, allEventsResult] = await Promise.all([
+    // Pool for featured section: upcoming events with images, limit 50
     supabase
       .from('events_with_venue')
       .select('*')
       .ilike('venue_city', cityName)
-      .eq('is_featured', true)
       .gte('start_date', now)
+      .not('image_url', 'is', null)
       .order('start_date', { ascending: true })
-      .limit(6) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+      .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>,
 
+    // On sale this week — onsale_date in range only, no start_date restriction
     supabase
       .from('events_with_venue')
       .select('*')
       .ilike('venue_city', cityName)
       .gte('onsale_date', now)
       .lte('onsale_date', weekAhead)
-      .gte('start_date', now)
       .order('onsale_date', { ascending: true })
       .limit(6) as unknown as Promise<{ data: EventWithVenue[] | null }>,
 
+    // All events for listing section
     supabase
       .from('events_with_venue')
       .select('*', { count: 'exact' })
@@ -104,14 +130,29 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
       .limit(24) as unknown as Promise<{ data: EventWithVenue[] | null; count: number | null }>,
   ])
 
-  const featuredEvents = featuredResult.data ?? []
-  const onsaleEvents   = onsaleResult.data ?? []
-  const allEvents      = allEventsResult.data ?? []
-  const totalCount     = allEventsResult.count ?? allEvents.length
+  const featuredPool = featuredPoolResult.data ?? []
+  const onsaleEvents = onsaleResult.data ?? []
+  const allEvents    = allEventsResult.data ?? []
+  const totalCount   = allEventsResult.count ?? allEvents.length
 
-  // Fall back to first 6 upcoming events if no featured events exist for this city
-  const topEvents     = featuredEvents.length > 0 ? featuredEvents : allEvents.slice(0, 6)
-  const topIsFeatured = featuredEvents.length > 0
+  // Fetch venue capacities for the featured pool
+  let topEvents: EventWithVenue[] = []
+  if (featuredPool.length > 0) {
+    const venueIds = [...new Set(featuredPool.map(e => e.venue_id))]
+    const db = createAdminClient()
+    const { data: venues } = await db
+      .from('venues')
+      .select('id, capacity')
+      .in('id', venueIds) as unknown as { data: { id: string; capacity: number | null }[] | null }
+
+    const capacityMap: Record<string, number> = {}
+    for (const v of venues ?? []) {
+      if (v.capacity) capacityMap[v.id] = v.capacity
+    }
+    topEvents = pickFeaturedEvents(featuredPool, capacityMap)
+  }
+
+  const topIsFeatured = topEvents.some(e => e.is_featured)
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
