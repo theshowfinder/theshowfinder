@@ -8,21 +8,22 @@ import type { EventWithVenue, Artist } from '@/lib/types/database'
 
 export const metadata: Metadata = {
   title: 'On Sale This Week | TheShowFinder',
-  description: 'Events whose tickets go on sale in the next 7 days across the UK.',
+  description: 'Events whose tickets recently went on sale or go on sale in the next 7 days across the UK.',
 }
 
 export default async function OnSaleThisWeekPage() {
-  const supabase  = await createClient()
-  const now       = new Date()
-  const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const nowISO    = now.toISOString()
-  const weekISO   = weekAhead.toISOString()
+  const supabase      = await createClient()
+  const now           = new Date()
+  const threeDaysAgo  = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
+  const weekAhead     = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const windowISO     = threeDaysAgo.toISOString()
+  const weekISO       = weekAhead.toISOString()
 
   const [eventsResult, artistsResult] = await Promise.all([
     supabase
       .from('events_with_venue')
       .select('*')
-      .gte('onsale_date', nowISO)
+      .gte('onsale_date', windowISO)
       .lte('onsale_date', weekISO)
       .order('onsale_date', { ascending: true })
       .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,

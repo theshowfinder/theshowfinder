@@ -95,9 +95,11 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
   const cityConfig = CITIES.find(c => c.name === cityName)
   if (!cityConfig) notFound()
 
-  const supabase = await createClient()
-  const now = new Date().toISOString()
-  const weekAhead = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  const supabase     = await createClient()
+  const now          = new Date()
+  const nowISO       = now.toISOString()
+  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
+  const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
   const [featuredPoolResult, onsalePoolResult, allEventsResult, artistsResult] = await Promise.all([
     // Pool for featured section: upcoming events with images, limit 50
@@ -105,17 +107,17 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
       .from('events_with_venue')
       .select('*')
       .ilike('venue_city', cityName)
-      .gte('start_date', now)
+      .gte('start_date', nowISO)
       .not('image_url', 'is', null)
       .order('start_date', { ascending: true })
       .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>,
 
-    // On sale this week — onsale_date in range only, no start_date restriction
+    // On sale this week — include recently-went-on-sale (3 days back) + next 7 days
     supabase
       .from('events_with_venue')
       .select('*')
       .ilike('venue_city', cityName)
-      .gte('onsale_date', now)
+      .gte('onsale_date', threeDaysAgo)
       .lte('onsale_date', weekAhead)
       .order('onsale_date', { ascending: true })
       .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>,
@@ -125,7 +127,7 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
       .from('events_with_venue')
       .select('*', { count: 'exact' })
       .ilike('venue_city', cityName)
-      .gte('start_date', now)
+      .gte('start_date', nowISO)
       .order('start_date', { ascending: true })
       .limit(24) as unknown as Promise<{ data: EventWithVenue[] | null; count: number | null }>,
 

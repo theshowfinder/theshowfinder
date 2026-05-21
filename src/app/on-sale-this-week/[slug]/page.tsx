@@ -13,13 +13,14 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params
-  const supabase  = await createClient()
-  const now       = new Date()
-  const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const supabase     = await createClient()
+  const now          = new Date()
+  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
+  const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
 
   const [evResult, arResult] = await Promise.all([
     supabase.from('events_with_venue').select('*')
-      .gte('onsale_date', now.toISOString()).lte('onsale_date', weekAhead.toISOString())
+      .gte('onsale_date', threeDaysAgo.toISOString()).lte('onsale_date', weekAhead.toISOString())
       .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
     supabase.from('artists').select('*') as unknown as Promise<{ data: Artist[] | null }>,
   ])
@@ -34,16 +35,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function OnSaleArtistPage({ params }: PageProps) {
   const { slug } = await params
-  const supabase  = await createClient()
-  const now       = new Date()
-  const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const nowISO    = now.toISOString()
+  const supabase     = await createClient()
+  const now          = new Date()
+  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
+  const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const nowISO       = now.toISOString()
 
   const [evResult, arResult] = await Promise.all([
     supabase
       .from('events_with_venue')
       .select('*')
-      .gte('onsale_date', now.toISOString())
+      .gte('onsale_date', threeDaysAgo.toISOString())
       .lte('onsale_date', weekAhead.toISOString())
       .order('start_date', { ascending: true })
       .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,

@@ -54,7 +54,8 @@ interface TMEvent {
     status?: { code: string }
   }
   sales?: {
-    public?: { startDateTime?: string; endDateTime?: string }
+    public?:   { startDateTime?: string; endDateTime?: string }
+    presales?: Array<{ name?: string; startDateTime?: string; endDateTime?: string }>
   }
   images?: TMImage[]
   priceRanges?: TMPriceRange[]
@@ -289,6 +290,17 @@ async function upsertVenue(db: DbClient, tmVenue: TMVenue): Promise<string | nul
 
 // ── Event upsert ─────────────────────────────────────────────────────────────
 
+function earliestOnSaleDate(tmEvent: TMEvent): string | null {
+  const dates: string[] = []
+  const pub = tmEvent.sales?.public?.startDateTime
+  if (pub) dates.push(pub)
+  for (const p of tmEvent.sales?.presales ?? []) {
+    if (p.startDateTime) dates.push(p.startDateTime)
+  }
+  if (!dates.length) return null
+  return dates.reduce((a, b) => (a < b ? a : b))
+}
+
 type UpsertResult = 'inserted' | 'updated' | 'skipped' | 'error'
 
 async function upsertEvent(
@@ -312,7 +324,7 @@ async function upsertEvent(
     category,
     venue_id:        venueId,
     start_date:      startDate,
-    onsale_date:     tmEvent.sales?.public?.startDateTime ?? null,
+    onsale_date:     earliestOnSaleDate(tmEvent),
     image_url:       getBestImage(tmEvent.images),
     price_from:      price?.min  ?? null,
     price_to:        price?.max  ?? null,
@@ -336,40 +348,53 @@ async function upsertEvent(
 }
 
 // ── On-sale-soon fetch ───────────────────────────────────────────────────────
-// Fetches up to 200 UK events whose public-sale period STARTS within the next
-// 7 days. These events have a future onsale_date, making them visible in the
-// "On Sale This Week" homepage section.
+// Fetches one page of UK events whose public-sale period STARTS within the
+// given date range, filtered to a single classification. Paginated via the
+// same pattern as fetchTMPage so the caller can walk all pages.
 
-async function fetchOnSaleSoon(startDT: string, endDT: string): Promise<TMEvent[]> {
+async function fetchOnSaleSoonPage(
+  startDT: string,
+  endDT: string,
+  classificationName: string,
+  page: number,
+  eventStartDT: string,   // lower bound on event show date (required for banding)
+  eventEndDT: string,     // upper bound on event show date (keeps each band < 1200 events)
+): Promise<{ events: TMEvent[]; totalPages: number }> {
   const url = new URL(`${TM_BASE}/events.json`)
   url.searchParams.set('apikey',              process.env.TICKETMASTER_API_KEY!)
   url.searchParams.set('countryCode',         'GB')
   url.searchParams.set('onsaleStartDateTime', startDT)
   url.searchParams.set('onsaleEndDateTime',   endDT)
+  url.searchParams.set('classificationName',  classificationName)
   url.searchParams.set('size',               '200')
-  url.searchParams.set('page',               '0')
+  url.searchParams.set('page',               String(page))
   url.searchParams.set('locale',             'en-us')
   url.searchParams.set('sort',               'date,asc')
+  url.searchParams.set('startDateTime',       eventStartDT)
+  url.searchParams.set('endDateTime',         eventEndDT)
 
   try {
     const res = await fetch(url.toString(), { cache: 'no-store' })
     if (!res.ok) {
-      console.error(`[TM] HTTP ${res.status} for on-sale-soon fetch`)
-      return []
+      console.error(`[TM] HTTP ${res.status} for on-sale-soon "${classificationName}" page ${page}`)
+      return { events: [], totalPages: 0 }
     }
     const json: TMResponse = await res.json()
     if (json.fault) {
       console.error(`[TM] API fault (on-sale-soon): ${json.fault.faultstring}`)
-      return []
+      return { events: [], totalPages: 0 }
     }
     if (json.errors?.length) {
       console.error(`[TM] API error (on-sale-soon): ${json.errors[0].detail}`)
-      return []
+      return { events: [], totalPages: 0 }
     }
-    return json._embedded?.events ?? []
+    return {
+      events:     json._embedded?.events ?? [],
+      totalPages: json.page?.totalPages  ?? 0,
+    }
   } catch (err) {
-    console.error('[TM] Network error fetching on-sale-soon events:', err)
-    return []
+    console.error(`[TM] Network error fetching on-sale-soon "${classificationName}" page ${page}:`, err)
+    return { events: [], totalPages: 0 }
   }
 }
 
@@ -399,7 +424,7 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
     let totalPages = 1
     for (let page = 0; page < totalPages; page++) {
       const result = await fetchTMPage(classificationName, page, opts?.startDateTime)
-      totalPages = result.totalPages || 1
+      totalPages = Math.min(result.totalPages || 1, 6)  // TM API hard-caps at page 5 (0-indexed)
       console.log(`[TM]    page ${page}/${totalPages - 1}: ${result.events.length} events`)
 
       if (!result.events.length) break
@@ -438,33 +463,61 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
   }
 
   // ── On-sale-soon pass ──────────────────────────────────────────────────────
+  // Uses 3-week (21-day) show-date bands with both startDateTime and endDateTime
+  // so each band stays under TM's 1200-event / 6-page hard cap. Without the
+  // endDateTime bound, a single classification can return 6000+ events in one
+  // band, burying far-future events past page 6. 18 bands × 21 days ≈ 12.5 months.
   await sleep(RATE_LIMIT_MS)
-  const onSaleNow  = new Date()
-  const onSaleEnd  = new Date(onSaleNow.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const onSaleStartDT = onSaleNow.toISOString().replace(/\.\d{3}Z$/, 'Z')
+  const onSaleNow     = new Date()
+  const onSaleStart   = new Date(onSaleNow.getTime() - 3  * 24 * 60 * 60 * 1000)  // 3 days back
+  const onSaleEnd     = new Date(onSaleNow.getTime() + 14 * 24 * 60 * 60 * 1000)  // 14 days ahead
+  const onSaleStartDT = onSaleStart.toISOString().replace(/\.\d{3}Z$/, 'Z')
   const onSaleEndDT   = onSaleEnd.toISOString().replace(/\.\d{3}Z$/, 'Z')
 
-  console.log(`\n[TM] ── Fetching on-sale-soon events (${onSaleStartDT} → ${onSaleEndDT}) ──`)
-  const onSaleEvents = await fetchOnSaleSoon(onSaleStartDT, onSaleEndDT)
-  console.log(`[TM]    found ${onSaleEvents.length} on-sale-soon events`)
+  const BAND_DAYS = 21
+  const BAND_COUNT = 18  // 18 × 21 days ≈ 12.5 months
+  const fmt = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, 'Z')
+  const bands = Array.from({ length: BAND_COUNT }, (_, i) => ({
+    label: `+${i * BAND_DAYS}d–+${(i + 1) * BAND_DAYS}d`,
+    start: fmt(new Date(onSaleNow.getTime() + i       * BAND_DAYS * 86400000)),
+    end:   fmt(new Date(onSaleNow.getTime() + (i + 1) * BAND_DAYS * 86400000)),
+  }))
 
-  for (const tmEvent of onSaleEvents) {
-    total++
-    const tmVenue = tmEvent._embedded?.venues?.[0]
-    if (!tmVenue) { skipped++; continue }
+  console.log(`\n[TM] ── On-sale-soon pass (${onSaleStartDT} → ${onSaleEndDT}) ──`)
 
-    const venueId = await upsertVenue(db, tmVenue)
-    if (!venueId) { errors++; continue }
+  for (const { classificationName, dbCategory } of SEGMENT_QUERIES) {
+    for (const { label, start, end } of bands) {
+      console.log(`[TM]    "${classificationName}" ${label}`)
+      let osTotal = 1
+      for (let page = 0; page < osTotal; page++) {
+        const result = await fetchOnSaleSoonPage(onSaleStartDT, onSaleEndDT, classificationName, page, start, end)
+        osTotal = Math.min(result.totalPages || 1, 6)  // TM API hard-caps at page 5 (0-indexed)
+        console.log(`[TM]      page ${page}/${osTotal - 1}: ${result.events.length} events`)
+        if (!result.events.length) break
 
-    const category = mapCategory(tmEvent, 'concert')
-    const result   = await upsertEvent(db, tmEvent, venueId, category)
-    if (result === 'inserted') {
-      inserted++
-      byCategory[category] = (byCategory[category] ?? 0) + 1
-    } else if (result === 'skipped') {
-      skipped++
-    } else if (result === 'error') {
-      errors++
+        for (const tmEvent of result.events) {
+          total++
+          const tmVenue = tmEvent._embedded?.venues?.[0]
+          if (!tmVenue) { skipped++; continue }
+
+          const venueId = await upsertVenue(db, tmVenue)
+          if (!venueId) { errors++; continue }
+
+          const category = mapCategory(tmEvent, dbCategory)
+          const upserted = await upsertEvent(db, tmEvent, venueId, category)
+          if (upserted === 'inserted') {
+            inserted++
+            byCategory[category] = (byCategory[category] ?? 0) + 1
+          } else if (upserted === 'skipped') {
+            skipped++
+          } else if (upserted === 'error') {
+            errors++
+          }
+        }
+
+        if (page + 1 < osTotal) await sleep(RATE_LIMIT_MS)
+      }
+      await sleep(RATE_LIMIT_MS)
     }
   }
 
