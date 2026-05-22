@@ -21,6 +21,9 @@ export const metadata: Metadata = {
     type:        'website',
     locale:      'en_GB',
   },
+  other: {
+    'impact-site-verification': 'c168f3c5-519c-42fa-a56a-61a670276ba4',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
