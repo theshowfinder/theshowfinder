@@ -216,6 +216,16 @@ export interface Database {
           end_date: string | null
           doors_time: string | null
           onsale_date: string | null
+          public_onsale_start: string | null
+          public_onsale_end: string | null
+          presale_start: string | null
+          presale_end: string | null
+          presale_name: string | null
+          on_sale_this_week: boolean
+          presale_this_week: boolean
+          upcoming_presale: boolean
+          newly_announced: boolean
+          last_synced_at: string | null
           image_url: string | null
           price_from: number | null
           price_to: number | null
@@ -239,6 +249,16 @@ export interface Database {
           end_date?: string | null
           doors_time?: string | null
           onsale_date?: string | null
+          public_onsale_start?: string | null
+          public_onsale_end?: string | null
+          presale_start?: string | null
+          presale_end?: string | null
+          presale_name?: string | null
+          on_sale_this_week?: boolean
+          presale_this_week?: boolean
+          upcoming_presale?: boolean
+          newly_announced?: boolean
+          last_synced_at?: string | null
           image_url?: string | null
           price_from?: number | null
           price_to?: number | null
@@ -261,6 +281,16 @@ export interface Database {
           end_date?: string | null
           doors_time?: string | null
           onsale_date?: string | null
+          public_onsale_start?: string | null
+          public_onsale_end?: string | null
+          presale_start?: string | null
+          presale_end?: string | null
+          presale_name?: string | null
+          on_sale_this_week?: boolean
+          presale_this_week?: boolean
+          upcoming_presale?: boolean
+          newly_announced?: boolean
+          last_synced_at?: string | null
           image_url?: string | null
           price_from?: number | null
           price_to?: number | null
@@ -340,10 +370,21 @@ export interface Database {
           status: EventStatus
           is_featured: boolean
           onsale_date: string | null
+          public_onsale_start: string | null
+          public_onsale_end: string | null
+          presale_start: string | null
+          presale_end: string | null
+          presale_name: string | null
+          on_sale_this_week: boolean
+          presale_this_week: boolean
+          upcoming_presale: boolean
+          newly_announced: boolean
+          last_synced_at: string | null
           venue_id: string
           venue_name: string
           venue_city: string
           venue_postcode: string
+          venue_capacity: number | null
         }
       }
     }

@@ -288,13 +288,34 @@ async function upsertVenue(db: DbClient, tmVenue: TMVenue): Promise<string | nul
   return data?.id ?? null
 }
 
-// ── Event upsert ─────────────────────────────────────────────────────────────
+// ── Sale data helpers ────────────────────────────────────────────────────────
 
-// Use only the PUBLIC sale start date so onsale_date reflects when tickets
-// become available to the general public, not old presale windows.
-function earliestOnSaleDate(tmEvent: TMEvent): string | null {
-  return tmEvent.sales?.public?.startDateTime ?? null
+interface PresaleInfo {
+  presale_start: string | null
+  presale_end:   string | null
+  presale_name:  string | null
 }
+
+function buildPresaleInfo(tmEvent: TMEvent): PresaleInfo {
+  const presales = tmEvent.sales?.presales ?? []
+  if (!presales.length) return { presale_start: null, presale_end: null, presale_name: null }
+
+  // Find the earliest presale by startDateTime
+  let earliest = presales[0]
+  for (const p of presales) {
+    if (p.startDateTime && (!earliest.startDateTime || p.startDateTime < earliest.startDateTime)) {
+      earliest = p
+    }
+  }
+
+  return {
+    presale_start: earliest.startDateTime ?? null,
+    presale_end:   earliest.endDateTime   ?? null,
+    presale_name:  earliest.name          ?? null,
+  }
+}
+
+// ── Event upsert ─────────────────────────────────────────────────────────────
 
 type UpsertResult = 'inserted' | 'updated' | 'skipped' | 'error'
 
@@ -307,27 +328,36 @@ async function upsertEvent(
   const startDate = buildStartDate(tmEvent)
   if (!startDate) return 'skipped'
 
-  const category = mapCategory(tmEvent, defaultCategory)
-  const price    = tmEvent.priceRanges?.find(p => p.type === 'standard') ?? tmEvent.priceRanges?.[0]
+  const category    = mapCategory(tmEvent, defaultCategory)
+  const price       = tmEvent.priceRanges?.find(p => p.type === 'standard') ?? tmEvent.priceRanges?.[0]
+  const presaleInfo = buildPresaleInfo(tmEvent)
+  const pubStart    = tmEvent.sales?.public?.startDateTime ?? null
+  const pubEnd      = tmEvent.sales?.public?.endDateTime   ?? null
 
   // Slug uses TM event ID suffix → guaranteed unique
   const slug = `${slugify(tmEvent.name)}-${tmEvent.id.slice(-8)}`
 
   const eventData = {
-    title:           tmEvent.name,
+    title:               tmEvent.name,
     slug,
     category,
-    venue_id:        venueId,
-    start_date:      startDate,
-    onsale_date:     earliestOnSaleDate(tmEvent),
-    image_url:       getBestImage(tmEvent.images),
-    price_from:      price?.min  ?? null,
-    price_to:        price?.max  ?? null,
-    currency:        price?.currency ?? 'GBP',
-    tickets_url:     tmEvent.url ?? null,
-    status:          mapStatus(tmEvent),
-    is_featured:     false,
-    ticketmaster_id: tmEvent.id,
+    venue_id:            venueId,
+    start_date:          startDate,
+    onsale_date:         pubStart,           // backwards-compat alias
+    public_onsale_start: pubStart,
+    public_onsale_end:   pubEnd,
+    presale_start:       presaleInfo.presale_start,
+    presale_end:         presaleInfo.presale_end,
+    presale_name:        presaleInfo.presale_name,
+    last_synced_at:      new Date().toISOString(),
+    image_url:           getBestImage(tmEvent.images),
+    price_from:          price?.min      ?? null,
+    price_to:            price?.max      ?? null,
+    currency:            price?.currency ?? 'GBP',
+    tickets_url:         tmEvent.url     ?? null,
+    status:              mapStatus(tmEvent),
+    is_featured:         false,
+    ticketmaster_id:     tmEvent.id,
   }
 
   const { error } = await db
@@ -402,6 +432,7 @@ export interface SyncResult {
   errors:         number
   byCategory:     Record<string, number>
   durationMs:     number
+  flagsUpdated:   boolean
 }
 
 // ── Main entry point ─────────────────────────────────────────────────────────
@@ -516,10 +547,29 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
     }
   }
 
+  // ── Flag calculation pass ─────────────────────────────────────────────────
+  // Reset all boolean flags to false, then re-set based on current date.
+  // Running this after every sync ensures stale flags are never left behind.
+  console.log('\n[TM] ── Calculating event flags ──')
+  let flagsUpdated = false
+  try {
+    const { error: flagErr } = await (db as unknown as { rpc: (fn: string) => Promise<{ error: unknown }> })
+      .rpc('calculate_event_flags')
+    if (flagErr) {
+      console.error('[TM] Flag calculation failed (migration_014 may not be applied yet):', flagErr)
+    } else {
+      flagsUpdated = true
+      console.log('[TM] Event flags updated successfully')
+    }
+  } catch (err) {
+    console.error('[TM] Flag calculation threw:', err)
+  }
+
   const durationMs = Date.now() - t0
   console.log(`\n[TM] ── Sync complete in ${(durationMs / 1000).toFixed(1)}s ──`)
   console.log(`[TM]    total=${total} inserted=${inserted} skipped=${skipped} errors=${errors}`)
   console.log(`[TM]    by category:`, byCategory)
+  console.log(`[TM]    flags updated: ${flagsUpdated}`)
 
-  return { total, inserted, skipped, errors, byCategory, durationMs }
+  return { total, inserted, skipped, errors, byCategory, durationMs, flagsUpdated }
 }

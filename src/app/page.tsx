@@ -93,32 +93,46 @@ async function HomepageStats() {
 }
 
 async function OnSaleThisWeek() {
-  const supabase  = await createClient()
-  const now       = new Date()
-  const nowISO    = now.toISOString()
-  const sevenISO  = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  const supabase = await createClient()
 
-  // public_onsale_start does not exist in this DB; onsale_date is the public sale date
-  const dateField = 'onsale_date'
-  console.log(`[OnSaleThisWeek] date field: ${dateField} | range: ${nowISO} → ${sevenISO}`)
+  // After migration_014: query the pre-calculated on_sale_this_week flag.
+  // Falls back to the onsale_date range query if the new columns aren't live yet.
+  const now      = new Date()
+  const nowISO   = now.toISOString()
+  const sevenISO = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  const [evResult, arResult] = await Promise.all([
-    supabase
+  // Try flag-based query first
+  const flagResult = await supabase
+    .from('events_with_venue')
+    .select('*')
+    .eq('on_sale_this_week', true)
+    .order('public_onsale_start', { ascending: true })
+    .order('venue_capacity', { ascending: false, nullsFirst: false })
+    .limit(200) as unknown as { data: EventWithVenue[] | null }
+
+  // If the column doesn't exist yet (pre-migration) fall back to date range
+  const usedField = flagResult.data !== null ? 'on_sale_this_week' : 'onsale_date'
+  let rawEvents: EventWithVenue[]
+
+  if (flagResult.data !== null) {
+    rawEvents = flagResult.data
+    console.log(`[OnSaleThisWeek] flag field: on_sale_this_week | ${rawEvents.length} qualifying events`)
+  } else {
+    const fallback = await supabase
       .from('events_with_venue')
       .select('*')
       .gte('onsale_date', nowISO)
       .lte('onsale_date', sevenISO)
       .order('onsale_date', { ascending: true })
-      .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
-    supabase
-      .from('artists')
-      .select('*') as unknown as Promise<{ data: Artist[] | null }>,
-  ])
+      .limit(200) as unknown as { data: EventWithVenue[] | null }
+    rawEvents = fallback.data ?? []
+    console.log(`[OnSaleThisWeek] fallback field: onsale_date | range: ${nowISO} → ${sevenISO} | ${rawEvents.length} events`)
+  }
 
-  const rawCount = (evResult.data ?? []).length
+  const rawCount = rawEvents.length
 
   // Deduplicate by title, keep earliest start_date
-  const sorted = (evResult.data ?? []).slice().sort((a, b) => a.start_date.localeCompare(b.start_date))
+  const sorted = rawEvents.slice().sort((a, b) => a.start_date.localeCompare(b.start_date))
   const seen = new Set<string>()
   const deduped: EventWithVenue[] = []
   for (const event of sorted) {
@@ -128,8 +142,9 @@ async function OnSaleThisWeek() {
     }
   }
 
-  const allGroups = groupEventsByArtist(deduped, arResult.data ?? [])
-  console.log(`[OnSaleThisWeek] ${rawCount} raw events → ${deduped.length} unique titles → ${allGroups.length} artist groups`)
+  const { data: artists } = await supabase.from('artists').select('*') as unknown as { data: Artist[] | null }
+  const allGroups = groupEventsByArtist(deduped, artists ?? [])
+  console.log(`[OnSaleThisWeek] field=${usedField} | ${rawCount} raw → ${deduped.length} unique titles → ${allGroups.length} groups`)
 
   const groups   = allGroups.slice(0, 12)
   const overflow = allGroups.length > 12 ? allGroups.length : 0
