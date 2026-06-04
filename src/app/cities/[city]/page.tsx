@@ -99,7 +99,7 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
   const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  const [featuredPoolResult, onsalePoolResult, allEventsResult, artistsResult] = await Promise.all([
+  const [featuredPoolResult, onsalePoolResult, allEventsResult, artistsResult, venuesResult, venueCountResult] = await Promise.all([
     // Pool for featured section: upcoming events with images, limit 50
     supabase
       .from('events_with_venue')
@@ -133,6 +133,22 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
     supabase
       .from('artists')
       .select('*') as unknown as Promise<{ data: Artist[] | null }>,
+
+    // Venues in this city sorted by capacity
+    supabase
+      .from('venues')
+      .select('id, name, slug, capacity, address')
+      .ilike('city', cityName)
+      .order('capacity', { ascending: false, nullsFirst: false })
+      .limit(20) as unknown as Promise<{ data: { id: string; name: string; slug: string; capacity: number | null; address: string }[] | null }>,
+
+    // Upcoming event venue_ids for this city — to count events per venue
+    supabase
+      .from('events_with_venue')
+      .select('venue_id')
+      .ilike('venue_city', cityName)
+      .gte('start_date', nowISO)
+      .limit(2000) as unknown as Promise<{ data: { venue_id: string }[] | null }>,
   ])
 
   const featuredPool = featuredPoolResult.data ?? []
@@ -145,8 +161,14 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
 
   // venue_capacity comes directly from the events_with_venue view (migration_014)
   const topEvents = pickFeaturedEvents(featuredPool)
-
   const topIsFeatured = topEvents.some(e => e.is_featured)
+
+  // Build venue event count map and filter to venues with upcoming events
+  const countByVenue: Record<string, number> = {}
+  for (const { venue_id } of (venueCountResult.data ?? [])) {
+    countByVenue[venue_id] = (countByVenue[venue_id] ?? 0) + 1
+  }
+  const cityVenues = (venuesResult.data ?? []).filter(v => countByVenue[v.id] > 0)
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
@@ -306,6 +328,47 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
             </>
           )}
         </section>
+
+        {/* ── VENUES ── */}
+        {cityVenues.length > 0 && (
+          <section>
+            <div className="flex items-end justify-between mb-7">
+              <div>
+                <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
+                  Where to go
+                </p>
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                  Venues in {cityName}
+                </h2>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              {cityVenues.map(venue => (
+                <Link
+                  key={venue.id}
+                  href={`/venues/${venue.slug}`}
+                  className="block bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-5"
+                >
+                  <h3 className="font-bold text-slate-900 text-base leading-snug mb-1 hover:text-red-600 transition-colors">
+                    {venue.name}
+                  </h3>
+                  <p className="text-sm text-slate-500 mb-3 truncate">{venue.address}</p>
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    {venue.capacity ? (
+                      <span>🎪 {venue.capacity.toLocaleString('en-GB')} capacity</span>
+                    ) : (
+                      <span />
+                    )}
+                    <span className="font-semibold text-slate-600">
+                      {countByVenue[venue.id] ?? 0} event{(countByVenue[venue.id] ?? 0) !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
       </div>
     </div>
   )

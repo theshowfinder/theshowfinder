@@ -33,7 +33,7 @@ interface EventDetail {
   status: EventStatus
   tags: string[] | null
   venue: {
-    id: string; name: string; address: string; city: string; postcode: string; website: string | null
+    id: string; name: string; slug: string | null; address: string; city: string; postcode: string; website: string | null
   } | null
   artists: ArtistRow[]
 }
@@ -49,7 +49,7 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
       start_date, end_date, doors_time,
       image_url, price_from, price_to, currency,
       tickets_url, status, tags,
-      venue:venues(id, name, address, city, postcode, website),
+      venue:venues(id, name, slug, address, city, postcode, website),
       artists:event_artists(
         is_headliner, order,
         artist:artists(id, name, genre, image_url)
@@ -290,7 +290,13 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 {event.venue && (
                   <div className="bg-white border border-slate-200 rounded-xl p-4 sm:col-span-2">
                     <dt className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Venue</dt>
-                    <dd className="font-semibold text-slate-800">{event.venue.name}</dd>
+                    <dd className="font-semibold text-slate-800">
+                      {event.venue.slug ? (
+                        <Link href={`/venues/${event.venue.slug}`} className="hover:underline" style={{ color: '#1A1A2E' }}>
+                          {event.venue.name}
+                        </Link>
+                      ) : event.venue.name}
+                    </dd>
                     <dd className="text-sm text-slate-500 mt-0.5">
                       {event.venue.address}, {event.venue.city}, {event.venue.postcode}
                     </dd>

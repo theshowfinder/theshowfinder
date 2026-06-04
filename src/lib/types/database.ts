@@ -382,6 +382,7 @@ export interface Database {
           last_synced_at: string | null
           venue_id: string
           venue_name: string
+          venue_slug: string | null
           venue_city: string
           venue_postcode: string
           venue_capacity: number | null

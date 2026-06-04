@@ -80,7 +80,17 @@ export default function EventCard({ event }: Props) {
 
         <div className="flex flex-col gap-1 text-sm text-slate-500">
           <span>📅 {formatDate(event.start_date)}</span>
-          <span className="truncate">📍 {event.venue_name}, {event.venue_city}</span>
+          {event.venue_slug ? (
+            <Link
+              href={`/venues/${event.venue_slug}`}
+              className="truncate hover:underline hover:text-slate-700 transition-colors"
+              onClick={e => e.stopPropagation()}
+            >
+              📍 {event.venue_name}, {event.venue_city}
+            </Link>
+          ) : (
+            <span className="truncate">📍 {event.venue_name}, {event.venue_city}</span>
+          )}
         </div>
 
         {formatPrice(event.price_from, event.price_to, event.currency) && (
