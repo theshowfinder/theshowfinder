@@ -114,9 +114,30 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params
   const event    = await getEvent(slug)
   if (!event) return { title: 'Event Not Found' }
+
+  const description = event.description ?? `${event.title} — find tickets on TheShowFinder`
+  const ogImage     = event.image_url ?? 'https://www.theshowfinder.com/og-image.png'
+
   return {
-    title: event.title,
-    description: event.description ?? `${event.title} — find tickets on TheShowFinder`,
+    title:       event.title,
+    description,
+    openGraph: {
+      title:       `${event.title} | TheShowFinder`,
+      description,
+      type:        'website',
+      images: [{
+        url:    ogImage,
+        width:  1200,
+        height: 630,
+        alt:    event.title,
+      }],
+    },
+    twitter: {
+      card:        'summary_large_image',
+      title:       `${event.title} | TheShowFinder`,
+      description,
+      images:      [ogImage],
+    },
   }
 }
 

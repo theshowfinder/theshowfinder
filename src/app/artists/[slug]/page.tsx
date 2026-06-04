@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import type { Artist, Tour, TourDate } from '@/lib/types/database'
 
@@ -7,6 +8,43 @@ export const dynamic = 'force-dynamic'
 
 interface PageProps {
   params: Promise<{ slug: string }>
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { slug } = await params
+  const supabase  = await createClient()
+  const { data: artist } = await supabase
+    .from('artists')
+    .select('name, bio, image_url')
+    .eq('slug', slug)
+    .single() as unknown as { data: Pick<Artist, 'name' | 'bio' | 'image_url'> | null }
+
+  if (!artist) return { title: 'Artist Not Found' }
+
+  const description = artist.bio ?? `${artist.name} — tour dates and tickets on TheShowFinder`
+  const ogImage     = artist.image_url ?? 'https://www.theshowfinder.com/og-image.png'
+
+  return {
+    title:       artist.name,
+    description,
+    openGraph: {
+      title:       `${artist.name} | TheShowFinder`,
+      description,
+      type:        'website',
+      images: [{
+        url:    ogImage,
+        width:  1200,
+        height: 630,
+        alt:    artist.name,
+      }],
+    },
+    twitter: {
+      card:        'summary_large_image',
+      title:       `${artist.name} | TheShowFinder`,
+      description,
+      images:      [ogImage],
+    },
+  }
 }
 
 export default async function ArtistPage({ params }: PageProps) {
