@@ -14,29 +14,27 @@ async function FeaturedEvents() {
   const supabase = await createClient()
   const now = new Date().toISOString()
 
+  // Fetch more than needed to absorb title deduplication; primary sort is
+  // venue_capacity desc so the biggest venues surface first, onsale_date desc
+  // as a tiebreaker for venues with unknown capacity (nulls last).
   const result = await supabase
     .from('events_with_venue')
     .select('*')
     .gte('start_date', now)
     .not('image_url', 'is', null)
-    .order('start_date', { ascending: true })
-    .limit(50) as unknown as { data: EventWithVenue[] | null }
+    .order('venue_capacity', { ascending: false, nullsFirst: false })
+    .order('onsale_date',    { ascending: false, nullsFirst: true  })
+    .limit(100) as unknown as { data: EventWithVenue[] | null }
 
   const seen = new Set<string>()
-  const deduped: EventWithVenue[] = []
+  const events: EventWithVenue[] = []
   for (const event of (result.data ?? [])) {
     if (!seen.has(event.title)) {
       seen.add(event.title)
-      deduped.push(event)
+      events.push(event)
     }
+    if (events.length >= 6) break
   }
-
-  const pool = [...deduped]
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[pool[i], pool[j]] = [pool[j], pool[i]]
-  }
-  const events = pool.slice(0, 8)
 
   if (!events.length) {
     return (

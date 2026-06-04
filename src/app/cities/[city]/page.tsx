@@ -4,7 +4,6 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import EventCard from '@/components/EventCard'
 import SearchBar from '@/components/SearchBar'
 import { Suspense } from 'react'
@@ -65,25 +64,24 @@ export async function generateMetadata(
   }
 }
 
-// Pick up to 6 events with venue-capacity priority and category variety
-function pickFeaturedEvents(
-  pool: EventWithVenue[],
-  capacityMap: Record<string, number>,
-): EventWithVenue[] {
+// Pick up to 4 events sorted by venue capacity descending (biggest venues first).
+// Uses venue_capacity from the events_with_venue view (populated by migration_014).
+// Falls back to onsale_date descending for events at venues with no capacity set.
+function pickFeaturedEvents(pool: EventWithVenue[]): EventWithVenue[] {
   const sorted = [...pool].sort((a, b) => {
-    const aLarge = (capacityMap[a.venue_id] ?? 0) > 5000 ? 1 : 0
-    const bLarge = (capacityMap[b.venue_id] ?? 0) > 5000 ? 1 : 0
-    if (aLarge !== bLarge) return bLarge - aLarge
-    return a.start_date.localeCompare(b.start_date)
+    const aCap = a.venue_capacity ?? 0
+    const bCap = b.venue_capacity ?? 0
+    if (bCap !== aCap) return bCap - aCap
+    return (b.onsale_date ?? '').localeCompare(a.onsale_date ?? '')
   })
 
-  const catCount: Record<string, number> = {}
+  const seen = new Set<string>()
   const picked: EventWithVenue[] = []
   for (const ev of sorted) {
-    if ((catCount[ev.category] ?? 0) >= 2) continue
-    catCount[ev.category] = (catCount[ev.category] ?? 0) + 1
+    if (seen.has(ev.title)) continue
+    seen.add(ev.title)
     picked.push(ev)
-    if (picked.length >= 6) break
+    if (picked.length >= 4) break
   }
   return picked
 }
@@ -145,22 +143,8 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
   // Group on-sale events by artist, limit 6 cards
   const onsaleGroups = groupEventsByArtist(onsalePool, artistsResult.data ?? []).slice(0, 6)
 
-  // Fetch venue capacities for the featured pool
-  let topEvents: EventWithVenue[] = []
-  if (featuredPool.length > 0) {
-    const venueIds = [...new Set(featuredPool.map(e => e.venue_id))]
-    const db = createAdminClient()
-    const { data: venues } = await db
-      .from('venues')
-      .select('id, capacity')
-      .in('id', venueIds) as unknown as { data: { id: string; capacity: number | null }[] | null }
-
-    const capacityMap: Record<string, number> = {}
-    for (const v of venues ?? []) {
-      if (v.capacity) capacityMap[v.id] = v.capacity
-    }
-    topEvents = pickFeaturedEvents(featuredPool, capacityMap)
-  }
+  // venue_capacity comes directly from the events_with_venue view (migration_014)
+  const topEvents = pickFeaturedEvents(featuredPool)
 
   const topIsFeatured = topEvents.some(e => e.is_featured)
 
