@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase/server'
 import EventCard from '@/components/EventCard'
 import SearchBar from '@/components/SearchBar'
 import CitiesGrid from '@/components/CitiesGrid'
-import CategoryStrip from '@/components/CategoryStrip'
 import NewsletterSignup from '@/components/NewsletterSignup'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
@@ -23,7 +22,16 @@ async function FeaturedEvents() {
     .order('start_date', { ascending: true })
     .limit(50) as unknown as { data: EventWithVenue[] | null }
 
-  const pool = [...(result.data ?? [])]
+  const seen = new Set<string>()
+  const deduped: EventWithVenue[] = []
+  for (const event of (result.data ?? [])) {
+    if (!seen.has(event.title)) {
+      seen.add(event.title)
+      deduped.push(event)
+    }
+  }
+
+  const pool = [...deduped]
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
     ;[pool[i], pool[j]] = [pool[j], pool[i]]
@@ -65,14 +73,11 @@ async function HomepageStats() {
     supabase.from('venues').select('*', { count: 'exact', head: true }),
   ])
 
-  const venueResult = await supabase.from('venues').select('city') as unknown as { data: { city: string }[] | null }
-  const cityCount = new Set((venueResult.data ?? []).map(r => r.city)).size
-
   const stats = [
-    { value: fmtCount(eventCount ?? 0), label: 'Events listed'     },
-    { value: fmtCount(venueCount ?? 0), label: 'Venues'            },
-    { value: `${cityCount}+`,           label: 'UK cities covered'  },
-    { value: '1M+',                     label: 'Tickets found'      },
+    { value: fmtCount(eventCount ?? 0), label: 'Events listed' },
+    { value: fmtCount(venueCount ?? 0), label: 'Venues'        },
+    { value: '36',                       label: 'UK cities'     },
+    { value: '1M+',                      label: 'Tickets found' },
   ]
 
   return (
@@ -88,19 +93,18 @@ async function HomepageStats() {
 }
 
 async function OnSaleThisWeek() {
-  const supabase   = await createClient()
-  const now        = new Date()
-  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
-  const weekAhead  = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const windowISO  = threeDaysAgo.toISOString()
-  const weekISO    = weekAhead.toISOString()
+  const supabase        = await createClient()
+  const now             = new Date()
+  const fourteenDaysOut = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
+  const nowISO          = now.toISOString()
+  const fourteenISO     = fourteenDaysOut.toISOString()
 
   const [evResult, arResult] = await Promise.all([
     supabase
       .from('events_with_venue')
       .select('*')
-      .gte('onsale_date', windowISO)
-      .lte('onsale_date', weekISO)
+      .gte('onsale_date', nowISO)
+      .lte('onsale_date', fourteenISO)
       .order('onsale_date', { ascending: true })
       .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
     supabase
@@ -108,7 +112,17 @@ async function OnSaleThisWeek() {
       .select('*') as unknown as Promise<{ data: Artist[] | null }>,
   ])
 
-  const allGroups = groupEventsByArtist(evResult.data ?? [], arResult.data ?? [])
+  const byStartDate = (evResult.data ?? []).slice().sort((a, b) => a.start_date.localeCompare(b.start_date))
+  const seen = new Set<string>()
+  const deduped: EventWithVenue[] = []
+  for (const event of byStartDate) {
+    if (!seen.has(event.title)) {
+      seen.add(event.title)
+      deduped.push(event)
+    }
+  }
+
+  const allGroups = groupEventsByArtist(deduped, arResult.data ?? [])
   const groups    = allGroups.slice(0, 12)
   const overflow  = allGroups.length > 12 ? allGroups.length : 0
 
@@ -211,6 +225,15 @@ export default function HomePage() {
         className="relative overflow-hidden flex flex-col items-center justify-center text-white min-h-[60vh] md:min-h-screen"
         style={{ backgroundColor: '#1A1A2E' }}
       >
+        {/* Background image */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/heroshowfinder.png"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none select-none"
+        />
+        {/* Dark overlay */}
+        <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }} />
 
         {/* Decorative blobs */}
         <div
@@ -252,40 +275,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── UK CITIES ───────────────────────────────────────────── */}
-      <section className="bg-slate-900 py-14">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-end justify-between mb-7">
-            <div>
-              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFD700' }}>
-                Browse by location
-              </p>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Events near you</h2>
-            </div>
-            <Link href="/events" className="text-sm font-semibold text-white/60 hover:text-white transition-colors hidden sm:block">
-              All cities →
-            </Link>
-          </div>
-          <Suspense fallback={
-            <div className="flex gap-4 overflow-x-auto pb-2 md:grid md:grid-cols-4 md:gap-5">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="flex-none w-44 md:w-auto h-36 md:h-48 rounded-2xl bg-white/10 animate-pulse" />
-              ))}
-            </div>
-          }>
-            <CitiesGrid />
-          </Suspense>
-        </div>
-      </section>
-
-      {/* ── CATEGORY STRIP ──────────────────────────────────────── */}
-      <section className="bg-[#F5F5F0] border-y border-slate-200 py-5">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Suspense>
-            <CategoryStrip />
-          </Suspense>
-        </div>
-      </section>
+      {/* ── ON SALE THIS WEEK ───────────────────────────────────── */}
+      <Suspense fallback={null}>
+        <OnSaleThisWeek />
+      </Suspense>
 
       {/* ── FEATURED EVENTS ─────────────────────────────────────── */}
       <section className="bg-[#F5F5F0] py-14">
@@ -318,10 +311,31 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── ON SALE THIS WEEK ───────────────────────────────────── */}
-      <Suspense fallback={null}>
-        <OnSaleThisWeek />
-      </Suspense>
+      {/* ── UK CITIES ───────────────────────────────────────────── */}
+      <section className="bg-slate-900 py-14">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-end justify-between mb-7">
+            <div>
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFD700' }}>
+                Browse by location
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Events near you</h2>
+            </div>
+            <Link href="/events" className="text-sm font-semibold text-white/60 hover:text-white transition-colors hidden sm:block">
+              All cities →
+            </Link>
+          </div>
+          <Suspense fallback={
+            <div className="flex gap-4 overflow-x-auto pb-2 md:grid md:grid-cols-4 md:gap-5">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex-none w-44 md:w-auto h-36 md:h-48 rounded-2xl bg-white/10 animate-pulse" />
+              ))}
+            </div>
+          }>
+            <CitiesGrid />
+          </Suspense>
+        </div>
+      </section>
 
       {/* ── NEWSLETTER ──────────────────────────────────────────── */}
       <NewsletterSignup />
