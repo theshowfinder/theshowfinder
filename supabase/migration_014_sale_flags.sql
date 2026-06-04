@@ -4,6 +4,10 @@
 --
 -- Run in the Supabase SQL Editor:  Dashboard → SQL Editor → New query → Run
 
+-- ─── 0. Drop existing view first (required before adding columns that change ─
+--         column positions — CREATE OR REPLACE VIEW cannot reorder columns)   ─
+DROP VIEW IF EXISTS public.events_with_venue CASCADE;
+
 -- ─── 1. New columns on events ────────────────────────────────────────────────
 ALTER TABLE public.events
   ADD COLUMN IF NOT EXISTS public_onsale_start  timestamptz,
