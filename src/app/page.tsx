@@ -93,38 +93,64 @@ async function HomepageStats() {
 }
 
 async function OnSaleThisWeek() {
-  const supabase        = await createClient()
-  const now             = new Date()
-  const fourteenDaysOut = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
-  const nowISO          = now.toISOString()
-  const fourteenISO     = fourteenDaysOut.toISOString()
+  const supabase    = await createClient()
+  const now         = new Date()
+  const nowISO      = now.toISOString()
+  const fourteenISO = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString()
+  const sixtyISO    = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString()
 
-  const [evResult, arResult] = await Promise.all([
-    supabase
+  const { data: artists } = await supabase.from('artists').select('*') as unknown as { data: Artist[] | null }
+
+  function dedupAndGroup(events: EventWithVenue[]) {
+    const sorted = events.slice().sort((a, b) => a.start_date.localeCompare(b.start_date))
+    const seen = new Set<string>()
+    const deduped: EventWithVenue[] = []
+    for (const event of sorted) {
+      if (!seen.has(event.title)) {
+        seen.add(event.title)
+        deduped.push(event)
+      }
+    }
+    return groupEventsByArtist(deduped, artists ?? [])
+  }
+
+  // Tier 1: onsale_date today → +14 days
+  const t1 = await supabase
+    .from('events_with_venue')
+    .select('*')
+    .gte('onsale_date', nowISO)
+    .lte('onsale_date', fourteenISO)
+    .order('onsale_date', { ascending: true })
+    .limit(500) as unknown as { data: EventWithVenue[] | null }
+
+  let allGroups = dedupAndGroup(t1.data ?? [])
+
+  // Tier 2: onsale_date today → +60 days
+  if (allGroups.length < 6) {
+    const t2 = await supabase
       .from('events_with_venue')
       .select('*')
       .gte('onsale_date', nowISO)
-      .lte('onsale_date', fourteenISO)
+      .lte('onsale_date', sixtyISO)
       .order('onsale_date', { ascending: true })
-      .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
-    supabase
-      .from('artists')
-      .select('*') as unknown as Promise<{ data: Artist[] | null }>,
-  ])
-
-  const byStartDate = (evResult.data ?? []).slice().sort((a, b) => a.start_date.localeCompare(b.start_date))
-  const seen = new Set<string>()
-  const deduped: EventWithVenue[] = []
-  for (const event of byStartDate) {
-    if (!seen.has(event.title)) {
-      seen.add(event.title)
-      deduped.push(event)
-    }
+      .limit(500) as unknown as { data: EventWithVenue[] | null }
+    allGroups = dedupAndGroup(t2.data ?? [])
   }
 
-  const allGroups = groupEventsByArtist(deduped, arResult.data ?? [])
-  const groups    = allGroups.slice(0, 12)
-  const overflow  = allGroups.length > 12 ? allGroups.length : 0
+  // Tier 3: any non-null onsale_date, upcoming events only
+  if (allGroups.length < 6) {
+    const t3 = await supabase
+      .from('events_with_venue')
+      .select('*')
+      .not('onsale_date', 'is', null)
+      .gte('start_date', nowISO)
+      .order('onsale_date', { ascending: true })
+      .limit(500) as unknown as { data: EventWithVenue[] | null }
+    allGroups = dedupAndGroup(t3.data ?? [])
+  }
+
+  const groups   = allGroups.slice(0, 12)
+  const overflow = allGroups.length > 12 ? allGroups.length : 0
 
   if (!groups.length) return null
 

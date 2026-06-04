@@ -290,15 +290,10 @@ async function upsertVenue(db: DbClient, tmVenue: TMVenue): Promise<string | nul
 
 // ── Event upsert ─────────────────────────────────────────────────────────────
 
+// Use only the PUBLIC sale start date so onsale_date reflects when tickets
+// become available to the general public, not old presale windows.
 function earliestOnSaleDate(tmEvent: TMEvent): string | null {
-  const dates: string[] = []
-  const pub = tmEvent.sales?.public?.startDateTime
-  if (pub) dates.push(pub)
-  for (const p of tmEvent.sales?.presales ?? []) {
-    if (p.startDateTime) dates.push(p.startDateTime)
-  }
-  if (!dates.length) return null
-  return dates.reduce((a, b) => (a < b ? a : b))
+  return tmEvent.sales?.public?.startDateTime ?? null
 }
 
 type UpsertResult = 'inserted' | 'updated' | 'skipped' | 'error'
