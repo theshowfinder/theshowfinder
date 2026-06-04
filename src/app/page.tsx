@@ -8,7 +8,7 @@ import SearchBar from '@/components/SearchBar'
 import CitiesGrid from '@/components/CitiesGrid'
 import NewsletterSignup from '@/components/NewsletterSignup'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
-import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
+import { groupEventsByArtist, fmtOnSaleLabel, extractArtistName, toSlug } from '@/lib/on-sale'
 
 async function FeaturedEvents() {
   const supabase = await createClient()
@@ -100,7 +100,7 @@ async function OnSaleThisWeek() {
 
   console.log(`[OnSaleThisWeek] querying onsale_date ${nowISO} → ${sevenISO}`)
 
-  const [evResult, arResult] = await Promise.all([
+  const [evResult, arResult, allUpcomingResult] = await Promise.all([
     supabase
       .from('events_with_venue')
       .select('*')
@@ -111,7 +111,21 @@ async function OnSaleThisWeek() {
     supabase
       .from('artists')
       .select('*') as unknown as Promise<{ data: Artist[] | null }>,
+    // Fetch all upcoming event titles so we can show the full tour date count per artist,
+    // not just the count of events within the onsale_date window.
+    supabase
+      .from('events_with_venue')
+      .select('title')
+      .gte('start_date', nowISO)
+      .limit(5000) as unknown as Promise<{ data: { title: string }[] | null }>,
   ])
+
+  // Build slug → total upcoming event count across all future dates
+  const upcomingCount = new Map<string, number>()
+  for (const { title } of (allUpcomingResult.data ?? [])) {
+    const slug = toSlug(extractArtistName(title))
+    upcomingCount.set(slug, (upcomingCount.get(slug) ?? 0) + 1)
+  }
 
   const rawCount = (evResult.data ?? []).length
 
@@ -188,11 +202,14 @@ async function OnSaleThisWeek() {
                     <h3 className="font-extrabold text-slate-900 text-lg leading-tight mb-2 group-hover:text-red-600 transition-colors">
                       {group.artistName}
                     </h3>
-                    {group.events.length > 0 && (
-                      <p className="text-sm text-slate-500 mb-3">
-                        🗓 {group.events.length} UK date{group.events.length !== 1 ? 's' : ''}
-                      </p>
-                    )}
+                    {(() => {
+                      const total = upcomingCount.get(group.slug) ?? group.events.length
+                      return total > 0 ? (
+                        <p className="text-sm text-slate-500 mb-3">
+                          🗓 {total} UK date{total !== 1 ? 's' : ''}
+                        </p>
+                      ) : null
+                    })()}
                     <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
                       🎟️ On sale {fmtOnSaleLabel(group.onsale_date)}
                     </div>
