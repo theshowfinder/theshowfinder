@@ -17,20 +17,40 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const now          = new Date()
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
   const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const titlePrefix  = slug.replace(/-/g, ' ')
 
-  const [evResult, arResult] = await Promise.all([
+  const [broadResult, targetedResult, arResult] = await Promise.all([
     supabase.from('events_with_venue').select('*')
       .gte('onsale_date', threeDaysAgo.toISOString()).lte('onsale_date', weekAhead.toISOString())
       .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+    supabase.from('events_with_venue').select('*')
+      .gte('onsale_date', threeDaysAgo.toISOString()).lte('onsale_date', weekAhead.toISOString())
+      .ilike('title', `${titlePrefix}%`)
+      .order('start_date', { ascending: true })
+      .limit(200) as unknown as Promise<{ data: EventWithVenue[] | null }>,
     supabase.from('artists').select('*') as unknown as Promise<{ data: Artist[] | null }>,
   ])
 
-  const group = groupEventsByArtist(evResult.data ?? [], arResult.data ?? []).find(g => g.slug === slug)
+  const merged = mergeEventResults(broadResult.data, targetedResult.data)
+  const group  = groupEventsByArtist(merged, arResult.data ?? []).find(g => g.slug === slug)
   if (!group) return { title: 'On Sale This Week' }
   return {
     title: `${group.artistName} — On Sale This Week | TheShowFinder`,
     description: `${group.events.length} UK date${group.events.length !== 1 ? 's' : ''} going on sale ${fmtOnSaleLabel(group.onsale_date)}`,
   }
+}
+
+// Merge two event result arrays, deduplicating by id and sorting by start_date.
+// The broad query catches near-future shows; the targeted query catches far-future
+// shows that fall beyond PostgREST's row limit when ordered by start_date.
+function mergeEventResults(
+  broad:    EventWithVenue[] | null,
+  targeted: EventWithVenue[] | null,
+): EventWithVenue[] {
+  const map = new Map<string, EventWithVenue>()
+  for (const e of (broad    ?? [])) map.set(e.id, e)
+  for (const e of (targeted ?? [])) map.set(e.id, e)
+  return [...map.values()].sort((a, b) => a.start_date.localeCompare(b.start_date))
 }
 
 export default async function OnSaleArtistPage({ params }: PageProps) {
@@ -40,8 +60,12 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
   const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
   const nowISO       = now.toISOString()
+  // Convert slug to an approximate title prefix for ILIKE matching.
+  // "gracie-abrams" → "gracie abrams" → matches "Gracie Abrams: The Look at My Life Tour"
+  const titlePrefix  = slug.replace(/-/g, ' ')
 
-  const [evResult, arResult] = await Promise.all([
+  const [broadResult, targetedResult, arResult] = await Promise.all([
+    // Broad query: catches artists with near-future shows (within the row limit)
     supabase
       .from('events_with_venue')
       .select('*')
@@ -49,12 +73,22 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
       .lte('onsale_date', weekAhead.toISOString())
       .order('start_date', { ascending: true })
       .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+    // Targeted query: catches artists with far-future shows (e.g. 2027 tours)
+    // that fall beyond the row limit when the broad query orders by start_date.
+    supabase
+      .from('events_with_venue')
+      .select('*')
+      .gte('onsale_date', threeDaysAgo.toISOString())
+      .lte('onsale_date', weekAhead.toISOString())
+      .ilike('title', `${titlePrefix}%`)
+      .order('start_date', { ascending: true })
+      .limit(200) as unknown as Promise<{ data: EventWithVenue[] | null }>,
     supabase
       .from('artists')
       .select('*') as unknown as Promise<{ data: Artist[] | null }>,
   ])
 
-  const groups   = groupEventsByArtist(evResult.data ?? [], arResult.data ?? [])
+  const groups   = groupEventsByArtist(mergeEventResults(broadResult.data, targetedResult.data), arResult.data ?? [])
   const group    = groups.find(g => g.slug === slug)
   if (!group) notFound()
 
