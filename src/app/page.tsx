@@ -93,66 +93,46 @@ async function HomepageStats() {
 }
 
 async function OnSaleThisWeek() {
-  const supabase    = await createClient()
-  const now         = new Date()
-  const nowISO      = now.toISOString()
-  const fourteenISO = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString()
-  const sixtyISO    = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString()
+  const supabase  = await createClient()
+  const now       = new Date()
+  const nowISO    = now.toISOString()
+  const sevenISO  = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  const { data: artists } = await supabase.from('artists').select('*') as unknown as { data: Artist[] | null }
+  // public_onsale_start does not exist in this DB; onsale_date is the public sale date
+  const dateField = 'onsale_date'
+  console.log(`[OnSaleThisWeek] date field: ${dateField} | range: ${nowISO} → ${sevenISO}`)
 
-  function dedupAndGroup(events: EventWithVenue[]) {
-    const sorted = events.slice().sort((a, b) => a.start_date.localeCompare(b.start_date))
-    const seen = new Set<string>()
-    const deduped: EventWithVenue[] = []
-    for (const event of sorted) {
-      if (!seen.has(event.title)) {
-        seen.add(event.title)
-        deduped.push(event)
-      }
-    }
-    return groupEventsByArtist(deduped, artists ?? [])
-  }
-
-  // Tier 1: onsale_date today → +14 days
-  const t1 = await supabase
-    .from('events_with_venue')
-    .select('*')
-    .gte('onsale_date', nowISO)
-    .lte('onsale_date', fourteenISO)
-    .order('onsale_date', { ascending: true })
-    .limit(500) as unknown as { data: EventWithVenue[] | null }
-
-  let allGroups = dedupAndGroup(t1.data ?? [])
-
-  // Tier 2: onsale_date today → +60 days
-  if (allGroups.length < 6) {
-    const t2 = await supabase
+  const [evResult, arResult] = await Promise.all([
+    supabase
       .from('events_with_venue')
       .select('*')
       .gte('onsale_date', nowISO)
-      .lte('onsale_date', sixtyISO)
+      .lte('onsale_date', sevenISO)
       .order('onsale_date', { ascending: true })
-      .limit(500) as unknown as { data: EventWithVenue[] | null }
-    allGroups = dedupAndGroup(t2.data ?? [])
+      .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+    supabase
+      .from('artists')
+      .select('*') as unknown as Promise<{ data: Artist[] | null }>,
+  ])
+
+  const rawCount = (evResult.data ?? []).length
+
+  // Deduplicate by title, keep earliest start_date
+  const sorted = (evResult.data ?? []).slice().sort((a, b) => a.start_date.localeCompare(b.start_date))
+  const seen = new Set<string>()
+  const deduped: EventWithVenue[] = []
+  for (const event of sorted) {
+    if (!seen.has(event.title)) {
+      seen.add(event.title)
+      deduped.push(event)
+    }
   }
 
-  // Tier 3: any non-null onsale_date, upcoming events only
-  if (allGroups.length < 6) {
-    const t3 = await supabase
-      .from('events_with_venue')
-      .select('*')
-      .not('onsale_date', 'is', null)
-      .gte('start_date', nowISO)
-      .order('onsale_date', { ascending: true })
-      .limit(500) as unknown as { data: EventWithVenue[] | null }
-    allGroups = dedupAndGroup(t3.data ?? [])
-  }
+  const allGroups = groupEventsByArtist(deduped, arResult.data ?? [])
+  console.log(`[OnSaleThisWeek] ${rawCount} raw events → ${deduped.length} unique titles → ${allGroups.length} artist groups`)
 
   const groups   = allGroups.slice(0, 12)
   const overflow = allGroups.length > 12 ? allGroups.length : 0
-
-  if (!groups.length) return null
 
   return (
     <section className="bg-white py-14 border-t border-slate-100">
@@ -170,61 +150,70 @@ async function OnSaleThisWeek() {
             </Link>
           )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {groups.map(group => (
-            <Link
-              key={group.slug}
-              href={`/on-sale-this-week/${group.slug}`}
-              className="group block rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5"
-            >
-              <div className="relative h-48 overflow-hidden bg-slate-900">
-                {group.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={group.image_url}
-                    alt={group.artistName}
-                    className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A1A2E, #E8003D)' }}>
-                    <span className="text-5xl">🎤</span>
+
+        {groups.length === 0 ? (
+          <p className="text-slate-500 text-sm py-4">
+            No major tickets going on sale this week — check back soon.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {groups.map(group => (
+                <Link
+                  key={group.slug}
+                  href={`/on-sale-this-week/${group.slug}`}
+                  className="group block rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5"
+                >
+                  <div className="relative h-48 overflow-hidden bg-slate-900">
+                    {group.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={group.image_url}
+                        alt={group.artistName}
+                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A1A2E, #E8003D)' }}>
+                        <span className="text-5xl">🎤</span>
+                      </div>
+                    )}
+                    <div className="absolute top-3 left-3">
+                      <span className="text-xs font-bold uppercase tracking-wider text-white px-2.5 py-1 rounded-full" style={{ backgroundColor: '#026CDF' }}>
+                        On Sale This Week
+                      </span>
+                    </div>
                   </div>
-                )}
-                <div className="absolute top-3 left-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-white px-2.5 py-1 rounded-full" style={{ backgroundColor: '#026CDF' }}>
-                    On Sale This Week
-                  </span>
-                </div>
+                  <div className="p-4">
+                    <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
+                      {group.dbArtist?.tour_name ?? 'Live Tour'}
+                    </p>
+                    <h3 className="font-extrabold text-slate-900 text-lg leading-tight mb-2 group-hover:text-red-600 transition-colors">
+                      {group.artistName}
+                    </h3>
+                    {group.events.length > 0 && (
+                      <p className="text-sm text-slate-500 mb-3">
+                        🗓 {group.events.length} UK date{group.events.length !== 1 ? 's' : ''}
+                      </p>
+                    )}
+                    <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
+                      🎟️ On sale {fmtOnSaleLabel(group.onsale_date)}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+            {overflow > 0 && (
+              <div className="mt-10 text-center">
+                <Link
+                  href="/on-sale-this-week"
+                  className="inline-block font-bold px-8 py-3.5 rounded-xl text-sm hover:opacity-90 transition-opacity text-white"
+                  style={{ backgroundColor: '#026CDF' }}
+                >
+                  View all {allGroups.length} artists on sale this week →
+                </Link>
               </div>
-              <div className="p-4">
-                <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
-                  {group.dbArtist?.tour_name ?? 'Live Tour'}
-                </p>
-                <h3 className="font-extrabold text-slate-900 text-lg leading-tight mb-2 group-hover:text-red-600 transition-colors">
-                  {group.artistName}
-                </h3>
-                {group.events.length > 0 && (
-                  <p className="text-sm text-slate-500 mb-3">
-                    🗓 {group.events.length} UK date{group.events.length !== 1 ? 's' : ''}
-                  </p>
-                )}
-                <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
-                  🎟️ On sale {fmtOnSaleLabel(group.onsale_date)}
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-        {overflow > 0 && (
-          <div className="mt-10 text-center">
-            <Link
-              href="/on-sale-this-week"
-              className="inline-block font-bold px-8 py-3.5 rounded-xl text-sm hover:opacity-90 transition-opacity text-white"
-              style={{ backgroundColor: '#026CDF' }}
-            >
-              View all {allGroups.length} artists on sale this week →
-            </Link>
-          </div>
+            )}
+          </>
         )}
       </div>
     </section>
