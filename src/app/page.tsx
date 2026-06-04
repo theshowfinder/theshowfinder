@@ -100,7 +100,7 @@ async function OnSaleThisWeek() {
 
   console.log(`[OnSaleThisWeek] querying onsale_date ${nowISO} → ${sevenISO}`)
 
-  const [evResult, arResult, allUpcomingResult] = await Promise.all([
+  const [evResult, arResult] = await Promise.all([
     supabase
       .from('events_with_venue')
       .select('*')
@@ -111,25 +111,12 @@ async function OnSaleThisWeek() {
     supabase
       .from('artists')
       .select('*') as unknown as Promise<{ data: Artist[] | null }>,
-    // Fetch all upcoming event titles so we can show the full tour date count per artist,
-    // not just the count of events within the onsale_date window.
-    supabase
-      .from('events_with_venue')
-      .select('title')
-      .gte('start_date', nowISO)
-      .limit(5000) as unknown as Promise<{ data: { title: string }[] | null }>,
   ])
-
-  // Build slug → total upcoming event count across all future dates
-  const upcomingCount = new Map<string, number>()
-  for (const { title } of (allUpcomingResult.data ?? [])) {
-    const slug = toSlug(extractArtistName(title))
-    upcomingCount.set(slug, (upcomingCount.get(slug) ?? 0) + 1)
-  }
 
   const rawCount = (evResult.data ?? []).length
 
-  // Deduplicate by title, keep earliest start_date
+  // Deduplicate by title (keep earliest start_date) so each tour announcement
+  // produces one group rather than one card per venue.
   const sorted = (evResult.data ?? []).slice().sort((a, b) => a.start_date.localeCompare(b.start_date))
   const seen = new Set<string>()
   const deduped: EventWithVenue[] = []
@@ -141,10 +128,33 @@ async function OnSaleThisWeek() {
   }
 
   const allGroups = groupEventsByArtist(deduped, arResult.data ?? [])
-  console.log(`[OnSaleThisWeek] ${rawCount} raw events → ${deduped.length} unique titles → ${allGroups.length} groups`)
+  const groups    = allGroups.slice(0, 12)
+  const overflow  = allGroups.length > 12 ? allGroups.length : 0
 
-  const groups   = allGroups.slice(0, 12)
-  const overflow = allGroups.length > 12 ? allGroups.length : 0
+  // For each qualifying artist, count ALL upcoming events (not just those in
+  // the onsale window). We build a single OR-filtered query using ILIKE
+  // 'ArtistName%' so we only fetch the ~10-100 events per artist we need,
+  // staying well within PostgREST's row limits.
+  const upcomingCount = new Map<string, number>()
+  if (groups.length > 0) {
+    const orFilter = groups
+      .map(g => `title.ilike.${g.artistName.replace(/[%_\\]/g, '\\$&')}%`)
+      .join(',')
+
+    const { data: upcomingTitles } = await supabase
+      .from('events_with_venue')
+      .select('title')
+      .gte('start_date', nowISO)
+      .or(orFilter)
+      .limit(2000) as unknown as { data: { title: string }[] | null }
+
+    for (const { title } of (upcomingTitles ?? [])) {
+      const slug = toSlug(extractArtistName(title))
+      upcomingCount.set(slug, (upcomingCount.get(slug) ?? 0) + 1)
+    }
+  }
+
+  console.log(`[OnSaleThisWeek] ${rawCount} raw → ${deduped.length} unique titles → ${allGroups.length} groups | counts: ${JSON.stringify(Object.fromEntries(upcomingCount))}`)
 
   return (
     <section className="bg-white py-14 border-t border-slate-100">
