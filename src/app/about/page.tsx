@@ -34,18 +34,6 @@ export default function AboutPage() {
             of upcoming events updated daily.
           </p>
 
-          <hr className="border-slate-200" />
-
-          <div>
-            <h2 className="text-xl font-extrabold text-slate-900 mb-4">Company</h2>
-            <address className="not-italic space-y-1 text-slate-600">
-              <p className="font-semibold text-slate-800">Chamieville LLC</p>
-              <p>1309 Coffeen Avenue STE 1200</p>
-              <p>Sheridan, Wyoming 82801</p>
-              <p>USA</p>
-            </address>
-          </div>
-
           <div className="flex flex-wrap gap-4 pt-2">
             <Link
               href="/contact"

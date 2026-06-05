@@ -19,7 +19,7 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-xl font-extrabold text-slate-900 mb-3">1. Who we are</h2>
             <p className="text-slate-600 leading-relaxed">
-              TheShowFinder is operated by <strong>Chamieville LLC</strong>. When we say &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;, we mean Chamieville LLC and the TheShowFinder platform. For any privacy-related questions, contact us at{' '}
+              TheShowFinder is a UK events discovery and ticket comparison platform. When we say &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;, we mean TheShowFinder. For any privacy-related questions, contact us at{' '}
               <a href="mailto:hello@theshowfinder.com" className="font-semibold hover:underline" style={{ color: '#E8003D' }}>
                 hello@theshowfinder.com
               </a>.

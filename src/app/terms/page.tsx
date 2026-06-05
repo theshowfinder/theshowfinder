@@ -19,7 +19,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-extrabold text-slate-900 mb-3">1. About these terms</h2>
             <p className="text-slate-600 leading-relaxed">
-              These Terms of Service govern your use of TheShowFinder, operated by <strong>Chamieville LLC</strong> (&ldquo;we&rdquo;, &ldquo;us&rdquo;, &ldquo;our&rdquo;). By using TheShowFinder you agree to these terms. If you do not agree, please do not use the site.
+              These Terms of Service govern your use of TheShowFinder (&ldquo;we&rdquo;, &ldquo;us&rdquo;, &ldquo;our&rdquo;). By using TheShowFinder you agree to these terms. If you do not agree, please do not use the site.
             </p>
             <p className="text-slate-600 leading-relaxed mt-3">
               For questions about these terms, contact us at{' '}
@@ -130,7 +130,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-extrabold text-slate-900 mb-3">7. Intellectual property</h2>
             <p className="text-slate-600 leading-relaxed">
-              All content on TheShowFinder that is our own — including the site design, branding, copy, and code — is the property of Chamieville LLC and is protected by applicable intellectual property law. Event data, images, and descriptions sourced from Ticketmaster remain the property of their respective owners and are used under licence.
+              All content on TheShowFinder that is our own — including the site design, branding, copy, and code — is the property of TheShowFinder and is protected by applicable intellectual property law. Event data, images, and descriptions sourced from Ticketmaster remain the property of their respective owners and are used under licence.
             </p>
           </section>
 
@@ -144,7 +144,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-extrabold text-slate-900 mb-3">9. Limitation of liability</h2>
             <p className="text-slate-600 leading-relaxed">
-              To the fullest extent permitted by law, Chamieville LLC shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of TheShowFinder, even if we have been advised of the possibility of such damages. Our total liability to you for any claims arising out of or related to these terms or the site shall not exceed £100.
+              To the fullest extent permitted by law, TheShowFinder shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of TheShowFinder, even if we have been advised of the possibility of such damages. Our total liability to you for any claims arising out of or related to these terms or the site shall not exceed £100.
             </p>
           </section>
 
