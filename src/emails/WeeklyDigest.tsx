@@ -216,7 +216,7 @@ export default function WeeklyDigest({ events, weekOf }: Props) {
                     <tr>
                       <td style={{ backgroundColor: '#F5F5F0', padding: '24px 40px', borderTop: '1px solid #e2e8f0', textAlign: 'center' }}>
                         <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#94a3b8' }}>
-                          © 2026 TheShowFinder · Part of Chamieville LLC
+                          © 2026 TheShowFinder
                         </p>
                         <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>
                           You&apos;re receiving this because you subscribed at theshowfinder.com. &nbsp;

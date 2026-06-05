@@ -49,7 +49,7 @@ export async function subscribeNewsletter(email: string): Promise<{ error?: stri
         '---',
         `You received this because you signed up at theshowfinder.com with ${trimmed}.`,
         `Unsubscribe: https://www.theshowfinder.com/unsubscribe?email=${encodeURIComponent(trimmed)}`,
-        '© 2026 TheShowFinder · Part of Chamieville LLC',
+        '© 2026 TheShowFinder',
       ].join('\n'),
     })
 

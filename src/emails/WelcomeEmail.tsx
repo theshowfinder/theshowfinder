@@ -106,7 +106,7 @@ export default function WelcomeEmail({ email }: Props) {
                     <tr>
                       <td style={{ backgroundColor: '#F5F5F0', padding: '24px 40px', borderTop: '1px solid #e2e8f0', textAlign: 'center' }}>
                         <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#94a3b8' }}>
-                          © 2026 TheShowFinder · Part of Chamieville LLC
+                          © 2026 TheShowFinder
                         </p>
                         <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#94a3b8' }}>
                           <a href="https://www.theshowfinder.com/privacy-policy" style={{ color: '#94a3b8' }}>Privacy Policy</a>

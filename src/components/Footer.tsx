@@ -125,7 +125,7 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-5">
           <p className="text-sm text-white/40 text-center sm:text-left">
-            © 2026 TheShowFinder. Part of Chamieville LLC
+            © 2026 TheShowFinder
           </p>
 
           {/* Social icons */}
