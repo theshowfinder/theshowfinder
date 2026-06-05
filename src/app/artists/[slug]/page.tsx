@@ -21,16 +21,20 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!artist) return { title: 'Artist Not Found' }
 
-  const description = artist.bio ?? `${artist.name} — tour dates and tickets on TheShowFinder`
+  const title       = `${artist.name} UK Tour Dates & Tickets`
+  const description = `Find all ${artist.name} UK tour dates and compare ticket prices from all major providers including Ticketmaster, See Tickets and resale sites.`
   const ogImage     = artist.image_url ?? 'https://www.theshowfinder.com/og-image.png'
+  const canonical   = `https://www.theshowfinder.com/artists/${slug}`
 
   return {
-    title:       artist.name,
+    title,
     description,
+    alternates: { canonical },
     openGraph: {
-      title:       `${artist.name} | TheShowFinder`,
+      title:       `${title} | TheShowFinder`,
       description,
       type:        'website',
+      url:         canonical,
       images: [{
         url:    ogImage,
         width:  1200,
@@ -40,7 +44,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     },
     twitter: {
       card:        'summary_large_image',
-      title:       `${artist.name} | TheShowFinder`,
+      title:       `${title} | TheShowFinder`,
       description,
       images:      [ogImage],
     },

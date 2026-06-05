@@ -7,8 +7,14 @@ import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 
 export const metadata: Metadata = {
-  title: 'On Sale This Week | TheShowFinder',
-  description: 'Events whose tickets recently went on sale or go on sale in the next 7 days across the UK.',
+  title:       'Tickets On Sale This Week',
+  description: 'See which concerts and live events just went on sale this week in the UK. Be first to grab tickets before they sell out.',
+  alternates:  { canonical: 'https://www.theshowfinder.com/on-sale-this-week' },
+  openGraph: {
+    title:       'Tickets On Sale This Week | TheShowFinder',
+    description: 'See which concerts and live events just went on sale this week in the UK. Be first to grab tickets before they sell out.',
+    url:         'https://www.theshowfinder.com/on-sale-this-week',
+  },
 }
 
 export default async function OnSaleThisWeekPage() {

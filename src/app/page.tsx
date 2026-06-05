@@ -1,8 +1,21 @@
 export const revalidate = 3600
 
+import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+
+export const metadata: Metadata = {
+  title: { absolute: 'TheShowFinder | Find Concerts & Live Events in the UK' },
+  description:
+    'Discover and compare tickets for concerts, theatre, comedy and live events across the UK. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.',
+  alternates: { canonical: 'https://www.theshowfinder.com' },
+  openGraph: {
+    title:       'TheShowFinder | Find Concerts & Live Events in the UK',
+    description: 'Discover and compare tickets for concerts, theatre, comedy and live events across the UK. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.',
+    url:         'https://www.theshowfinder.com',
+  },
+}
 import EventCard from '@/components/EventCard'
 import SearchBar from '@/components/SearchBar'
 import CitiesGrid from '@/components/CitiesGrid'

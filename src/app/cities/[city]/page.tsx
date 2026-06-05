@@ -57,10 +57,15 @@ export async function generateMetadata(
   { params }: { params: Promise<{ city: string }> }
 ): Promise<Metadata> {
   const { city } = await params
-  const cityName = decodeURIComponent(city)
+  const cityName  = decodeURIComponent(city)
+  const canonical = `https://www.theshowfinder.com/cities/${encodeURIComponent(cityName)}`
+  const title     = `Concerts & Live Events in ${cityName}`
+  const desc      = `Find upcoming concerts, theatre, comedy and live events in ${cityName}. Compare ticket prices from all major providers.`
   return {
-    title: `Events in ${cityName} | TheShowFinder`,
-    description: `Find concerts, theatre, comedy, sports and family events in ${cityName}. Browse tickets for upcoming shows.`,
+    title,
+    description: desc,
+    alternates:  { canonical },
+    openGraph:   { title, description: desc, url: canonical },
   }
 }
 

@@ -115,16 +115,32 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const event    = await getEvent(slug)
   if (!event) return { title: 'Event Not Found' }
 
-  const description = event.description ?? `${event.title} — find tickets on TheShowFinder`
-  const ogImage     = event.image_url ?? 'https://www.theshowfinder.com/og-image.png'
+  const venue     = event.venue
+  const venueStr  = venue ? `${venue.name}, ${venue.city}` : null
+  const dateStr   = new Date(event.start_date).toLocaleDateString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  })
+
+  const title = venueStr
+    ? `${event.title} at ${venueStr}`
+    : event.title
+
+  const description = venue
+    ? `Get tickets for ${event.title} at ${venue.name} in ${venue.city} on ${dateStr}. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.`
+    : event.description ?? `${event.title} — find tickets on TheShowFinder`
+
+  const ogImage   = event.image_url ?? 'https://www.theshowfinder.com/og-image.png'
+  const canonical = `https://www.theshowfinder.com/events/${slug}`
 
   return {
-    title:       event.title,
+    title,
     description,
+    alternates: { canonical },
     openGraph: {
-      title:       `${event.title} | TheShowFinder`,
+      title:       `${title} | TheShowFinder`,
       description,
       type:        'website',
+      url:         canonical,
       images: [{
         url:    ogImage,
         width:  1200,
@@ -134,7 +150,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     },
     twitter: {
       card:        'summary_large_image',
-      title:       `${event.title} | TheShowFinder`,
+      title:       `${title} | TheShowFinder`,
       description,
       images:      [ogImage],
     },

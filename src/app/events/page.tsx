@@ -14,15 +14,29 @@ interface SearchParams {
   page?: string
 }
 
+const BASE_DESCRIPTION = 'Browse thousands of upcoming concerts, theatre shows, comedy and live events across the UK. Compare ticket prices from all major providers.'
+
 export async function generateMetadata({ searchParams }: { searchParams: Promise<SearchParams> }): Promise<Metadata> {
-  const sp  = await searchParams
+  const sp   = await searchParams
   const cat  = sp.category
   const city = sp.city
-  const title = [
-    cat  ? cat.charAt(0).toUpperCase() + cat.slice(1) : 'All Events',
-    city ? `in ${city}` : 'across the UK',
-  ].join(' ')
-  return { title }
+
+  const titleParts = [
+    cat  ? cat.charAt(0).toUpperCase() + cat.slice(1) : 'All Live Events & Concerts',
+    city ? `in ${city}` : 'in the UK',
+  ]
+  const title = titleParts.join(' ')
+
+  const canonical = city
+    ? `https://www.theshowfinder.com/events?city=${encodeURIComponent(city)}`
+    : `https://www.theshowfinder.com/events`
+
+  return {
+    title,
+    description: BASE_DESCRIPTION,
+    alternates:  { canonical },
+    openGraph:   { title, description: BASE_DESCRIPTION, url: canonical },
+  }
 }
 
 const PAGE_SIZE = 12

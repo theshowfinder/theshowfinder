@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import Script from 'next/script'
 import './globals.css'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
@@ -12,16 +13,17 @@ const OG_IMAGE  = `${BASE_URL}/og-image.png`
 
 export const metadata: Metadata = {
   title: {
-    default:  'TheShowFinder — UK Events & Ticket Comparison',
+    default:  'TheShowFinder | Find Concerts & Live Events in the UK',
     template: '%s | TheShowFinder',
   },
   description:
-    'Discover the best UK events and compare tickets from Ticketmaster, See Tickets, Viagogo and more.',
-  keywords: ['UK events', 'concerts', 'theatre', 'comedy', 'sports', 'family shows', 'tickets'],
+    'Discover and compare tickets for concerts, theatre, comedy and live events across the UK. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.',
+  keywords: ['UK events', 'concerts', 'theatre', 'comedy', 'sports', 'tickets', 'live events'],
   metadataBase: new URL(BASE_URL),
+  alternates: { canonical: BASE_URL },
   openGraph: {
-    title:       'TheShowFinder — UK Events & Ticket Comparison',
-    description: 'Discover the best UK events and compare tickets from Ticketmaster, See Tickets, Viagogo and more.',
+    title:       'TheShowFinder | Find Concerts & Live Events in the UK',
+    description: 'Discover and compare tickets for concerts, theatre, comedy and live events across the UK. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.',
     type:        'website',
     locale:      'en_GB',
     url:         BASE_URL,
@@ -35,8 +37,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card:        'summary_large_image',
-    title:       'TheShowFinder — UK Events & Ticket Comparison',
-    description: 'Discover the best UK events and compare tickets from Ticketmaster, See Tickets, Viagogo and more.',
+    title:       'TheShowFinder | Find Concerts & Live Events in the UK',
+    description: 'Discover and compare tickets for concerts, theatre, comedy and live events across the UK.',
     images:      [OG_IMAGE],
   },
   other: {
@@ -51,6 +53,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Header />
         <main className="flex-1">{children}</main>
         <Footer />
+
+        {/* Google Analytics 4 */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-8HE8E2HF4Q"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-8HE8E2HF4Q');
+          `}
+        </Script>
       </body>
     </html>
   )
