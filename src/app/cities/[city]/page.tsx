@@ -5,7 +5,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import EventCard from '@/components/EventCard'
-import SearchBar from '@/components/SearchBar'
+import SearchBarWrapper from '@/components/SearchBarWrapper'
 import Pagination from '@/components/Pagination'
 import { Suspense } from 'react'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
@@ -219,7 +219,7 @@ export default async function CityPage({
               : 'Browse upcoming shows'}
           </p>
           <Suspense>
-            <SearchBar />
+            <SearchBarWrapper />
           </Suspense>
         </div>
       </div>

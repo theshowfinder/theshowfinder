@@ -4,12 +4,24 @@ import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { MagnifyingGlassIcon, MapPinIcon } from '@heroicons/react/24/outline'
 
-const cities = [
-  'All UK', 'London', 'Manchester', 'Birmingham', 'Glasgow',
-  'Edinburgh', 'Cardiff', 'Bristol', 'Leeds', 'Liverpool',
+// Canonical fallback — used when no server-fetched list is passed in (e.g. homepage)
+const FALLBACK_CITIES = [
+  'All UK',
+  'Aberdeen', 'Belfast', 'Birmingham', 'Bournemouth', 'Bradford',
+  'Brighton', 'Bristol', 'Cambridge', 'Cardiff', 'Coventry',
+  'Derby', 'Edinburgh', 'Exeter', 'Glasgow', 'Hull',
+  'Ipswich', 'Leeds', 'Leicester', 'Liverpool', 'London',
+  'Manchester', 'Middlesbrough', 'Milton Keynes', 'Newcastle', 'Norwich',
+  'Nottingham', 'Oxford', 'Plymouth', 'Portsmouth', 'Reading',
+  'Sheffield', 'Southampton', 'Stoke-on-Trent', 'Sunderland', 'Swansea',
+  'Wolverhampton',
 ]
 
-export default function SearchBar() {
+interface SearchBarProps {
+  cities?: string[]
+}
+
+export default function SearchBar({ cities = FALLBACK_CITIES }: SearchBarProps) {
   const [query, setQuery] = useState('')
   const [city,  setCity]  = useState('All UK')
   const router = useRouter()

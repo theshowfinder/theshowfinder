@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import EventCard from '@/components/EventCard'
 import ArtistOnSaleCard from '@/components/ArtistOnSaleCard'
 import CategoryPills from '@/components/CategoryPills'
-import SearchBar from '@/components/SearchBar'
+import SearchBarWrapper from '@/components/SearchBarWrapper'
 import Pagination from '@/components/Pagination'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 import type { Metadata } from 'next'
@@ -185,7 +185,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
             {sp.q    ? ` — "${sp.q}"` : ''}
           </h1>
           <Suspense>
-            <SearchBar />
+            <SearchBarWrapper />
           </Suspense>
         </div>
       </div>
