@@ -1,9 +1,11 @@
 import { Suspense } from 'react'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import EventCard from '@/components/EventCard'
 import ArtistOnSaleCard from '@/components/ArtistOnSaleCard'
 import CategoryPills from '@/components/CategoryPills'
 import SearchBar from '@/components/SearchBar'
+import Pagination from '@/components/Pagination'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 import type { Metadata } from 'next'
 
@@ -135,6 +137,16 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
 
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE)
 
+  function buildHref(p: number) {
+    const params = new URLSearchParams()
+    if (searchParams.category) params.set('category', searchParams.category)
+    if (searchParams.city)     params.set('city',     searchParams.city)
+    if (searchParams.q)        params.set('q',        searchParams.q)
+    if (p !== 1) params.set('page', String(p))
+    const qs = params.toString()
+    return qs ? `/events?${qs}` : '/events'
+  }
+
   return (
     <div>
       <p className="text-sm text-slate-500 mb-6">
@@ -147,36 +159,18 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
         ))}
       </div>
 
-      {totalPages > 1 && (
-        <div className="mt-12 flex justify-center gap-2 flex-wrap">
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => {
-            const params = new URLSearchParams()
-            if (searchParams.category) params.set('category', searchParams.category)
-            if (searchParams.city)     params.set('city',     searchParams.city)
-            if (searchParams.q)        params.set('q',        searchParams.q)
-            params.set('page', String(p))
-            return (
-              <a
-                key={p}
-                href={`/events?${params.toString()}`}
-                className="px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors min-h-[44px] flex items-center"
-                style={p === page
-                  ? { backgroundColor: '#E8003D', color: 'white' }
-                  : { backgroundColor: 'white', border: '1px solid #e2e8f0', color: '#374151' }
-                }
-              >
-                {p}
-              </a>
-            )
-          })}
-        </div>
-      )}
+      <Pagination currentPage={page} totalPages={totalPages} buildHref={buildHref} />
     </div>
   )
 }
 
 export default async function EventsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams
+
+  // Redirect pure city browsing to the dedicated city page (unified layout)
+  if (sp.city && !sp.category && !sp.q) {
+    redirect(`/cities/${encodeURIComponent(sp.city)}`)
+  }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>

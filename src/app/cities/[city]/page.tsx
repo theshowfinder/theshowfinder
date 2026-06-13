@@ -6,6 +6,7 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import EventCard from '@/components/EventCard'
 import SearchBar from '@/components/SearchBar'
+import Pagination from '@/components/Pagination'
 import { Suspense } from 'react'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
@@ -91,9 +92,19 @@ function pickFeaturedEvents(pool: EventWithVenue[]): EventWithVenue[] {
   return picked
 }
 
-export default async function CityPage({ params }: { params: Promise<{ city: string }> }) {
+const PAGE_SIZE = 24
+
+export default async function CityPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ city: string }>
+  searchParams: Promise<{ page?: string }>
+}) {
   const { city } = await params
+  const { page: pageParam } = await searchParams
   const cityName = decodeURIComponent(city)
+  const page     = Math.max(1, Number(pageParam ?? 1))
 
   const cityConfig = CITIES.find(c => c.name === cityName)
   if (!cityConfig) notFound()
@@ -104,62 +115,79 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
   const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
+  const from = (page - 1) * PAGE_SIZE
+  const to   = from + PAGE_SIZE - 1
+
   const [featuredPoolResult, onsalePoolResult, allEventsResult, artistsResult, venuesResult, venueCountResult] = await Promise.all([
-    // Pool for featured section: upcoming events with images, limit 50
-    supabase
-      .from('events_with_venue')
-      .select('*')
-      .ilike('venue_city', cityName)
-      .gte('start_date', nowISO)
-      .not('image_url', 'is', null)
-      .order('start_date', { ascending: true })
-      .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+    // Pool for featured section: upcoming events with images, limit 50 (page 1 only)
+    page === 1
+      ? supabase
+          .from('events_with_venue')
+          .select('*')
+          .ilike('venue_city', cityName)
+          .gte('start_date', nowISO)
+          .not('image_url', 'is', null)
+          .order('start_date', { ascending: true })
+          .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>
+      : Promise.resolve({ data: [] as EventWithVenue[] }),
 
-    // On sale this week — include recently-went-on-sale (3 days back) + next 7 days
-    supabase
-      .from('events_with_venue')
-      .select('*')
-      .ilike('venue_city', cityName)
-      .gte('onsale_date', threeDaysAgo)
-      .lte('onsale_date', weekAhead)
-      .order('onsale_date', { ascending: true })
-      .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+    // On sale this week (page 1 only)
+    page === 1
+      ? supabase
+          .from('events_with_venue')
+          .select('*')
+          .ilike('venue_city', cityName)
+          .gte('onsale_date', threeDaysAgo)
+          .lte('onsale_date', weekAhead)
+          .order('onsale_date', { ascending: true })
+          .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>
+      : Promise.resolve({ data: [] as EventWithVenue[] }),
 
-    // All events for listing section
+    // All events for listing section — paginated
     supabase
       .from('events_with_venue')
       .select('*', { count: 'exact' })
       .ilike('venue_city', cityName)
       .gte('start_date', nowISO)
       .order('start_date', { ascending: true })
-      .limit(24) as unknown as Promise<{ data: EventWithVenue[] | null; count: number | null }>,
+      .range(from, to) as unknown as Promise<{ data: EventWithVenue[] | null; count: number | null }>,
 
-    // Artists for name matching
-    supabase
-      .from('artists')
-      .select('*') as unknown as Promise<{ data: Artist[] | null }>,
+    // Artists for name matching (page 1 only)
+    page === 1
+      ? supabase.from('artists').select('*') as unknown as Promise<{ data: Artist[] | null }>
+      : Promise.resolve({ data: [] as Artist[] }),
 
-    // Venues in this city sorted by capacity
-    supabase
-      .from('venues')
-      .select('id, name, slug, capacity, address')
-      .ilike('city', cityName)
-      .order('capacity', { ascending: false, nullsFirst: false })
-      .limit(20) as unknown as Promise<{ data: { id: string; name: string; slug: string; capacity: number | null; address: string }[] | null }>,
+    // Venues in this city sorted by capacity (page 1 only)
+    page === 1
+      ? supabase
+          .from('venues')
+          .select('id, name, slug, capacity, address')
+          .ilike('city', cityName)
+          .order('capacity', { ascending: false, nullsFirst: false })
+          .limit(20) as unknown as Promise<{ data: { id: string; name: string; slug: string; capacity: number | null; address: string }[] | null }>
+      : Promise.resolve({ data: [] as { id: string; name: string; slug: string; capacity: number | null; address: string }[] }),
 
-    // Upcoming event venue_ids for this city — to count events per venue
-    supabase
-      .from('events_with_venue')
-      .select('venue_id')
-      .ilike('venue_city', cityName)
-      .gte('start_date', nowISO)
-      .limit(2000) as unknown as Promise<{ data: { venue_id: string }[] | null }>,
+    // Upcoming event venue_ids for this city — to count events per venue (page 1 only)
+    page === 1
+      ? supabase
+          .from('events_with_venue')
+          .select('venue_id')
+          .ilike('venue_city', cityName)
+          .gte('start_date', nowISO)
+          .limit(2000) as unknown as Promise<{ data: { venue_id: string }[] | null }>
+      : Promise.resolve({ data: [] as { venue_id: string }[] }),
   ])
 
   const featuredPool = featuredPoolResult.data ?? []
   const onsalePool   = onsalePoolResult.data ?? []
   const allEvents    = allEventsResult.data ?? []
   const totalCount   = allEventsResult.count ?? allEvents.length
+  const totalPages   = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+
+  function buildHref(p: number) {
+    if (p === 1) return `/cities/${encodeURIComponent(cityName)}`
+    return `/cities/${encodeURIComponent(cityName)}?page=${p}`
+  }
 
   // Group on-sale events by artist, limit 6 cards
   const onsaleGroups = groupEventsByArtist(onsalePool, artistsResult.data ?? []).slice(0, 6)
@@ -198,8 +226,8 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-14">
 
-        {/* ── FEATURED / UPCOMING EVENTS ── */}
-        {topEvents.length > 0 && (
+        {/* ── FEATURED / UPCOMING EVENTS (page 1 only) ── */}
+        {page === 1 && topEvents.length > 0 && (
           <section>
             <div className="flex items-end justify-between mb-7">
               <div>
@@ -210,13 +238,6 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
                   {topIsFeatured ? `Featured Events in ${cityName}` : `Upcoming Shows in ${cityName}`}
                 </h2>
               </div>
-              <Link
-                href={`/events?city=${encodeURIComponent(cityName)}`}
-                className="text-sm font-semibold hover:underline hidden sm:block"
-                style={{ color: '#E8003D' }}
-              >
-                View all →
-              </Link>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {topEvents.map(event => (
@@ -226,8 +247,8 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
           </section>
         )}
 
-        {/* ── ON SALE THIS WEEK ── */}
-        {onsaleGroups.length > 0 && (
+        {/* ── ON SALE THIS WEEK (page 1 only) ── */}
+        {page === 1 && onsaleGroups.length > 0 && (
           <section>
             <div className="flex items-end justify-between mb-7">
               <div>
@@ -292,15 +313,17 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
         {/* ── ALL EVENTS ── */}
         <section>
           <div className="flex items-end justify-between mb-7">
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-              All Events in {cityName}
-            </h2>
-            <Link
-              href={`/events?city=${encodeURIComponent(cityName)}`}
-              className="text-sm font-semibold hover:underline hidden sm:block text-slate-500 hover:text-slate-700"
-            >
-              View all →
-            </Link>
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                All Events in {cityName}
+              </h2>
+              {totalCount > 0 && (
+                <p className="text-sm text-slate-500 mt-1">
+                  {totalCount} upcoming show{totalCount !== 1 ? 's' : ''}
+                  {totalPages > 1 && ` — page ${page} of ${totalPages}`}
+                </p>
+              )}
+            </div>
           </div>
 
           {allEvents.length === 0 ? (
@@ -319,23 +342,13 @@ export default async function CityPage({ params }: { params: Promise<{ city: str
                   <EventCard key={event.id} event={event} />
                 ))}
               </div>
-              {totalCount > 24 && (
-                <div className="mt-10 text-center">
-                  <Link
-                    href={`/events?city=${encodeURIComponent(cityName)}`}
-                    className="inline-block font-bold text-white px-8 py-3.5 rounded-xl hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: '#E8003D' }}
-                  >
-                    View all {totalCount}+ events in {cityName}
-                  </Link>
-                </div>
-              )}
+              <Pagination currentPage={page} totalPages={totalPages} buildHref={buildHref} />
             </>
           )}
         </section>
 
-        {/* ── VENUES ── */}
-        {cityVenues.length > 0 && (
+        {/* ── VENUES (page 1 only) ── */}
+        {page === 1 && cityVenues.length > 0 && (
           <section>
             <div className="flex items-end justify-between mb-7">
               <div>

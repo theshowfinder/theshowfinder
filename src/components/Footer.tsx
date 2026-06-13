@@ -93,7 +93,7 @@ export default function Footer() {
             <ul className="grid grid-cols-2 gap-x-6 gap-y-2.5">
               {cities.map(city => (
                 <li key={city}>
-                  <Link href={`/events?city=${encodeURIComponent(city)}`} className="text-sm hover:text-white transition-colors">
+                  <Link href={`/cities/${encodeURIComponent(city)}`} className="text-sm hover:text-white transition-colors">
                     {city}
                   </Link>
                 </li>
