@@ -176,11 +176,77 @@ function sleep(ms: number) {
 
 // ── Ticketmaster API fetch ───────────────────────────────────────────────────
 
+// Every TM fetch reports back what actually happened, not just the events —
+// this is what lets the sync tell "Ticketmaster genuinely has nothing here"
+// apart from "we got rate-limited and silently came back empty", which used
+// to be indistinguishable and made real coverage gaps impossible to diagnose.
+type FetchStatus = 'ok' | 'rate_limited' | 'http_error' | 'api_fault' | 'network_error'
+
+interface FetchResult {
+  events:      TMEvent[]
+  totalPages:  number
+  status:      FetchStatus
+  detail?:     string   // present when status !== 'ok'
+}
+
+// Shared fetch + retry logic for both fetchTMPage and fetchOnSaleSoonPage.
+// TM's Discovery API enforces a daily request quota; when it's exhausted,
+// requests return 429s that previously were treated identically to "no
+// events found", silently dropping whatever that request would have found.
+// One retry after a short backoff absorbs a transient per-second rate-limit
+// bump; a 429 that persists past the retry is reported as 'rate_limited' so
+// the caller can log it distinctly instead of it vanishing into "0 events".
+async function fetchWithRetry(url: URL, label: string): Promise<FetchResult> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let res: Response
+    try {
+      res = await fetch(url.toString(), { cache: 'no-store' })
+    } catch (err) {
+      console.error(`[TM] Network error fetching ${label}:`, err)
+      return { events: [], totalPages: 0, status: 'network_error', detail: String(err) }
+    }
+
+    if (res.status === 429) {
+      if (attempt === 0) {
+        console.warn(`[TM] 429 rate-limited on ${label} — retrying once after backoff`)
+        await sleep(2000)
+        continue
+      }
+      console.error(`[TM] 429 rate-limited on ${label} — still limited after retry`)
+      return { events: [], totalPages: 0, status: 'rate_limited', detail: 'HTTP 429 after retry' }
+    }
+
+    if (!res.ok) {
+      console.error(`[TM] HTTP ${res.status} for ${label}`)
+      return { events: [], totalPages: 0, status: 'http_error', detail: `HTTP ${res.status}` }
+    }
+
+    const json: TMResponse = await res.json()
+
+    if (json.fault) {
+      console.error(`[TM] API fault for ${label}: ${json.fault.faultstring}`)
+      return { events: [], totalPages: 0, status: 'api_fault', detail: json.fault.faultstring }
+    }
+    if (json.errors?.length) {
+      console.error(`[TM] API error for ${label}: ${json.errors[0].detail}`)
+      return { events: [], totalPages: 0, status: 'api_fault', detail: json.errors[0].detail }
+    }
+
+    return {
+      events:     json._embedded?.events ?? [],
+      totalPages: json.page?.totalPages  ?? 0,
+      status:     'ok',
+    }
+  }
+  // Unreachable, but keeps TS satisfied
+  return { events: [], totalPages: 0, status: 'network_error', detail: 'unreachable' }
+}
+
 async function fetchTMPage(
   classificationName: string,
   page: number,
   startDateTime?: string,
-): Promise<{ events: TMEvent[]; totalPages: number }> {
+): Promise<FetchResult> {
   const endDate = new Date()
   endDate.setFullYear(endDate.getFullYear() + 1)
   const endDateTime = endDate.toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -196,34 +262,7 @@ async function fetchTMPage(
   url.searchParams.set('endDateTime',        endDateTime)
   if (startDateTime) url.searchParams.set('startDateTime', startDateTime)
 
-  let res: Response
-  try {
-    res = await fetch(url.toString(), { cache: 'no-store' })
-  } catch (err) {
-    console.error(`[TM] Network error fetching "${classificationName}" page ${page}:`, err)
-    return { events: [], totalPages: 0 }
-  }
-
-  if (!res.ok) {
-    console.error(`[TM] HTTP ${res.status} for "${classificationName}" page ${page}`)
-    return { events: [], totalPages: 0 }
-  }
-
-  const json: TMResponse = await res.json()
-
-  if (json.fault) {
-    console.error(`[TM] API fault: ${json.fault.faultstring}`)
-    return { events: [], totalPages: 0 }
-  }
-  if (json.errors?.length) {
-    console.error(`[TM] API error: ${json.errors[0].detail}`)
-    return { events: [], totalPages: 0 }
-  }
-
-  return {
-    events:     json._embedded?.events ?? [],
-    totalPages: json.page?.totalPages  ?? 0,
-  }
+  return fetchWithRetry(url, `"${classificationName}" page ${page}`)
 }
 
 // ── Venue upsert ─────────────────────────────────────────────────────────────
@@ -384,7 +423,7 @@ async function fetchOnSaleSoonPage(
   page: number,
   eventStartDT: string,   // lower bound on event show date (required for banding)
   eventEndDT: string,     // upper bound on event show date (keeps each band < 1200 events)
-): Promise<{ events: TMEvent[]; totalPages: number }> {
+): Promise<FetchResult> {
   const url = new URL(`${TM_BASE}/events.json`)
   url.searchParams.set('apikey',              process.env.TICKETMASTER_API_KEY!)
   url.searchParams.set('countryCode',         'GB')
@@ -398,29 +437,7 @@ async function fetchOnSaleSoonPage(
   url.searchParams.set('startDateTime',       eventStartDT)
   url.searchParams.set('endDateTime',         eventEndDT)
 
-  try {
-    const res = await fetch(url.toString(), { cache: 'no-store' })
-    if (!res.ok) {
-      console.error(`[TM] HTTP ${res.status} for on-sale-soon "${classificationName}" page ${page}`)
-      return { events: [], totalPages: 0 }
-    }
-    const json: TMResponse = await res.json()
-    if (json.fault) {
-      console.error(`[TM] API fault (on-sale-soon): ${json.fault.faultstring}`)
-      return { events: [], totalPages: 0 }
-    }
-    if (json.errors?.length) {
-      console.error(`[TM] API error (on-sale-soon): ${json.errors[0].detail}`)
-      return { events: [], totalPages: 0 }
-    }
-    return {
-      events:     json._embedded?.events ?? [],
-      totalPages: json.page?.totalPages  ?? 0,
-    }
-  } catch (err) {
-    console.error(`[TM] Network error fetching on-sale-soon "${classificationName}" page ${page}:`, err)
-    return { events: [], totalPages: 0 }
-  }
+  return fetchWithRetry(url, `on-sale-soon "${classificationName}" page ${page}`)
 }
 
 // ── Public sync result type ──────────────────────────────────────────────────
@@ -433,6 +450,62 @@ export interface SyncResult {
   byCategory:     Record<string, number>
   durationMs:     number
   flagsUpdated:   boolean
+  rateLimited:    number   // count of classification/band segments that hit a
+                            // 429 even after retry — the smoking gun for "TM
+                            // quota exhausted mid-sync" as opposed to a
+                            // genuine "no matching events" result
+}
+
+// Best-effort log of one classification (or classification+band) segment's
+// outcome, reusing the existing sync_log table (its columns predate this
+// classification/band-based sync design, hence the slightly generic names —
+// `city` holds the segment label, not an actual city). Never throws: a
+// logging failure must not take down the sync itself.
+async function logSegment(
+  db: DbClient,
+  segment: {
+    label:        string   // e.g. "music" or "music:+21d–+42d"
+    startedAt:    string
+    eventsFound:  number
+    status:       'ok' | 'rate_limited' | 'error'
+    error?:       string
+  },
+): Promise<void> {
+  try {
+    await db.from('sync_log').insert({
+      city:          segment.label,
+      started_at:    segment.startedAt,
+      completed_at:  new Date().toISOString(),
+      events_synced: segment.eventsFound,
+      status:        segment.status,
+      error:         segment.error ?? null,
+    })
+  } catch (err) {
+    console.error(`[TM] sync_log write failed for "${segment.label}" (non-fatal):`, err)
+  }
+}
+
+// Best-effort sync_state update (single row, id=1) — never throws.
+async function updateSyncState(
+  db: DbClient,
+  fields: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await db.from('sync_state').update(fields).eq('id', 1)
+  } catch (err) {
+    console.error('[TM] sync_state update failed (non-fatal):', err)
+  }
+}
+
+// Reduces a run of FetchResults (one per page within a segment) down to the
+// single worst status seen, so a segment that succeeded on pages 1-2 but got
+// rate-limited on page 3 is correctly logged as 'rate_limited', not 'ok'.
+function worstStatus(results: FetchResult[]): { status: 'ok' | 'rate_limited' | 'error'; detail?: string } {
+  const rateLimited = results.find(r => r.status === 'rate_limited')
+  if (rateLimited) return { status: 'rate_limited', detail: rateLimited.detail }
+  const errored = results.find(r => r.status !== 'ok')
+  if (errored) return { status: 'error', detail: errored.detail }
+  return { status: 'ok' }
 }
 
 // ── Main entry point ─────────────────────────────────────────────────────────
@@ -441,19 +514,26 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
   const t0 = Date.now()
   const db = createAdminClient()
 
-  let total = 0, inserted = 0, skipped = 0, errors = 0
+  await updateSyncState(db, { status: 'running', last_started_at: new Date().toISOString() })
+
+  let total = 0, inserted = 0, skipped = 0, errors = 0, rateLimited = 0
   const byCategory: Record<string, number> = {}
 
   for (const { classificationName, dbCategory } of SEGMENT_QUERIES) {
     console.log(`\n[TM] ── Fetching "${classificationName}" ──`)
+    const segmentStarted = new Date().toISOString()
+    const segmentResults: FetchResult[] = []
+    let segmentEventsFound = 0
 
     let totalPages = 1
     for (let page = 0; page < totalPages; page++) {
       const result = await fetchTMPage(classificationName, page, opts?.startDateTime)
+      segmentResults.push(result)
       totalPages = Math.min(result.totalPages || 1, 6)  // TM API hard-caps at page 5 (0-indexed)
-      console.log(`[TM]    page ${page}/${totalPages - 1}: ${result.events.length} events`)
+      console.log(`[TM]    page ${page}/${totalPages - 1}: ${result.events.length} events (${result.status})`)
 
       if (!result.events.length) break
+      segmentEventsFound += result.events.length
 
       for (const tmEvent of result.events) {
         total++
@@ -485,6 +565,16 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
       if (page + 1 < totalPages) await sleep(RATE_LIMIT_MS)
     }
 
+    const segmentOutcome = worstStatus(segmentResults)
+    if (segmentOutcome.status === 'rate_limited') rateLimited++
+    await logSegment(db, {
+      label:       classificationName,
+      startedAt:   segmentStarted,
+      eventsFound: segmentEventsFound,
+      status:      segmentOutcome.status,
+      error:       segmentOutcome.detail,
+    })
+
     await sleep(RATE_LIMIT_MS)
   }
 
@@ -514,12 +604,18 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
   for (const { classificationName, dbCategory } of SEGMENT_QUERIES) {
     for (const { label, start, end } of bands) {
       console.log(`[TM]    "${classificationName}" ${label}`)
+      const segmentStarted = new Date().toISOString()
+      const segmentResults: FetchResult[] = []
+      let segmentEventsFound = 0
+
       let osTotal = 1
       for (let page = 0; page < osTotal; page++) {
         const result = await fetchOnSaleSoonPage(onSaleStartDT, onSaleEndDT, classificationName, page, start, end)
+        segmentResults.push(result)
         osTotal = Math.min(result.totalPages || 1, 6)  // TM API hard-caps at page 5 (0-indexed)
-        console.log(`[TM]      page ${page}/${osTotal - 1}: ${result.events.length} events`)
+        console.log(`[TM]      page ${page}/${osTotal - 1}: ${result.events.length} events (${result.status})`)
         if (!result.events.length) break
+        segmentEventsFound += result.events.length
 
         for (const tmEvent of result.events) {
           total++
@@ -543,6 +639,17 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
 
         if (page + 1 < osTotal) await sleep(RATE_LIMIT_MS)
       }
+
+      const segmentOutcome = worstStatus(segmentResults)
+      if (segmentOutcome.status === 'rate_limited') rateLimited++
+      await logSegment(db, {
+        label:       `${classificationName}:${label}`,
+        startedAt:   segmentStarted,
+        eventsFound: segmentEventsFound,
+        status:      segmentOutcome.status,
+        error:       segmentOutcome.detail,
+      })
+
       await sleep(RATE_LIMIT_MS)
     }
   }
@@ -567,9 +674,18 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
 
   const durationMs = Date.now() - t0
   console.log(`\n[TM] ── Sync complete in ${(durationMs / 1000).toFixed(1)}s ──`)
-  console.log(`[TM]    total=${total} inserted=${inserted} skipped=${skipped} errors=${errors}`)
+  console.log(`[TM]    total=${total} inserted=${inserted} skipped=${skipped} errors=${errors} rateLimited=${rateLimited}`)
   console.log(`[TM]    by category:`, byCategory)
   console.log(`[TM]    flags updated: ${flagsUpdated}`)
+  if (rateLimited > 0) {
+    console.error(`[TM]    ⚠ ${rateLimited} segment(s) hit Ticketmaster's rate limit even after retrying — some events were very likely missed this run. Check the sync_log table for status='rate_limited' rows.`)
+  }
 
-  return { total, inserted, skipped, errors, byCategory, durationMs, flagsUpdated }
+  await updateSyncState(db, {
+    status:              rateLimited > 0 ? 'completed_with_rate_limits' : 'idle',
+    last_completed_at:   new Date().toISOString(),
+    total_events_synced: total,
+  })
+
+  return { total, inserted, skipped, errors, byCategory, durationMs, flagsUpdated, rateLimited }
 }
