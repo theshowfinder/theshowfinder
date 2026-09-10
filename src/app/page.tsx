@@ -104,23 +104,25 @@ async function HomepageStats() {
 }
 
 async function OnSaleThisWeek() {
-  const supabase = await createClient()
-  const now      = new Date()
-  const nowISO   = now.toISOString()
+  const supabase     = await createClient()
+  const now          = new Date()
+  const nowISO       = now.toISOString()
+  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
+  const sevenISO     = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  // Uses the precomputed on_sale_this_week / presale_this_week flags (set
-  // nightly by the sync's calculate_event_flags() DB function) rather than a
-  // manual onsale_date date-range — a manual "onsale_date >= now" filter drops
-  // an event the instant its window opens, which is why this section could
-  // show empty. The flags also pick up presale windows, not just public
-  // on-sale, so fan-club/venue presales show up here too.
-  console.log(`[OnSaleThisWeek] querying on_sale_this_week OR presale_this_week flags`)
+  // Query public_onsale_start and presale_start directly (not the
+  // on_sale_this_week / presale_this_week flag columns — the nightly DB
+  // function that's meant to keep those in sync isn't actually running, so
+  // they're stuck at false). A -3d lookback keeps an event visible for a few
+  // days after its window opens instead of vanishing the instant "now"
+  // passes it, which is what made this section go empty before.
+  console.log(`[OnSaleThisWeek] querying onsale/presale window ${threeDaysAgo} → ${sevenISO}`)
 
   const [evResult, arResult] = await Promise.all([
     supabase
       .from('events_with_venue')
       .select('*')
-      .or('on_sale_this_week.eq.true,presale_this_week.eq.true')
+      .or(`and(public_onsale_start.gte.${threeDaysAgo},public_onsale_start.lte.${sevenISO}),and(presale_start.gte.${threeDaysAgo},presale_start.lte.${sevenISO})`)
       .order('onsale_date', { ascending: true })
       .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
     supabase

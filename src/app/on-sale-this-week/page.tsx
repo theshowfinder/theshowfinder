@@ -18,19 +18,23 @@ export const metadata: Metadata = {
 }
 
 export default async function OnSaleThisWeekPage() {
-  const supabase   = await createClient()
-  const now        = new Date()
-  const weekAhead  = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const supabase      = await createClient()
+  const now           = new Date()
+  const threeDaysAgo  = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
+  const weekAhead     = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const windowISO     = threeDaysAgo.toISOString()
+  const weekISO       = weekAhead.toISOString()
 
-  // Uses the precomputed on_sale_this_week / presale_this_week flags (set
-  // nightly by the sync's calculate_event_flags() DB function) instead of a
-  // manual onsale_date date-range, so presale windows are included alongside
-  // public on-sale and nothing silently drops out once its window opens.
+  // Query public_onsale_start and presale_start directly (not the
+  // on_sale_this_week / presale_this_week flag columns — the nightly DB
+  // function meant to keep those in sync isn't actually running, so they're
+  // stuck at false). Checking both columns means presale windows show up
+  // here alongside public on-sale, not just after the public on-sale date.
   const [eventsResult, artistsResult] = await Promise.all([
     supabase
       .from('events_with_venue')
       .select('*')
-      .or('on_sale_this_week.eq.true,presale_this_week.eq.true')
+      .or(`and(public_onsale_start.gte.${windowISO},public_onsale_start.lte.${weekISO}),and(presale_start.gte.${windowISO},presale_start.lte.${weekISO})`)
       .order('onsale_date', { ascending: true })
       .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
     supabase

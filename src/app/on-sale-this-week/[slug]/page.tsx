@@ -15,16 +15,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug } = await params
   const supabase     = await createClient()
   const titlePrefix  = slug.replace(/-/g, ' ')
+  const now          = new Date()
+  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
+  const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  const onSaleOrPresaleFilter = `and(public_onsale_start.gte.${threeDaysAgo},public_onsale_start.lte.${weekAhead}),and(presale_start.gte.${threeDaysAgo},presale_start.lte.${weekAhead})`
 
-  // Uses the precomputed on_sale_this_week / presale_this_week flags instead
-  // of a manual onsale_date date-range — see the main page component below
-  // for why.
+  // Queries public_onsale_start / presale_start directly — see the main page
+  // component below for why this doesn't use the flag columns.
   const [broadResult, targetedResult, arResult] = await Promise.all([
     supabase.from('events_with_venue').select('*')
-      .or('on_sale_this_week.eq.true,presale_this_week.eq.true')
+      .or(onSaleOrPresaleFilter)
       .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
     supabase.from('events_with_venue').select('*')
-      .or('on_sale_this_week.eq.true,presale_this_week.eq.true')
+      .or(onSaleOrPresaleFilter)
       .ilike('title', `${titlePrefix}%`)
       .order('start_date', { ascending: true })
       .limit(200) as unknown as Promise<{ data: EventWithVenue[] | null }>,
@@ -55,24 +58,30 @@ function mergeEventResults(
 
 export default async function OnSaleArtistPage({ params }: PageProps) {
   const { slug } = await params
-  const supabase = await createClient()
-  const nowISO   = new Date().toISOString()
+  const supabase     = await createClient()
+  const now          = new Date()
+  const nowISO       = now.toISOString()
+  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
+  const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
   // Convert slug to an approximate title prefix for ILIKE matching.
   // "gracie-abrams" → "gracie abrams" → matches "Gracie Abrams: The Look at My Life Tour"
   const titlePrefix = slug.replace(/-/g, ' ')
+  const onSaleOrPresaleFilter = `and(public_onsale_start.gte.${threeDaysAgo},public_onsale_start.lte.${weekAhead}),and(presale_start.gte.${threeDaysAgo},presale_start.lte.${weekAhead})`
 
-  // Uses the precomputed on_sale_this_week / presale_this_week flags (set
-  // nightly by the sync's calculate_event_flags() DB function) rather than a
-  // manual onsale_date date-range — a manual "now to +7 days" filter drops an
-  // event the moment its window opens (that's why this section could go
-  // empty), and it missed presale-only windows entirely. The flags catch
-  // both and stay correct without any client-side date math.
+  // Queries public_onsale_start / presale_start directly rather than the
+  // on_sale_this_week / presale_this_week flag columns: those are meant to
+  // be kept current by a nightly DB function, but it isn't actually running
+  // (checked live — events with a presale_start due this week are still
+  // flagged false), so they're stuck permanently false. A -3d lookback keeps
+  // an event visible for a few days after its window opens rather than
+  // vanishing the instant "now" passes it, and checking presale_start too
+  // means presale-only windows show up, not just public on-sale.
   const [broadResult, targetedResult, arResult] = await Promise.all([
     // Broad query: catches artists with near-future shows (within the row limit)
     supabase
       .from('events_with_venue')
       .select('*')
-      .or('on_sale_this_week.eq.true,presale_this_week.eq.true')
+      .or(onSaleOrPresaleFilter)
       .order('start_date', { ascending: true })
       .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
     // Targeted query: catches artists with far-future shows (e.g. 2027 tours)
@@ -80,7 +89,7 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
     supabase
       .from('events_with_venue')
       .select('*')
-      .or('on_sale_this_week.eq.true,presale_this_week.eq.true')
+      .or(onSaleOrPresaleFilter)
       .ilike('title', `${titlePrefix}%`)
       .order('start_date', { ascending: true })
       .limit(200) as unknown as Promise<{ data: EventWithVenue[] | null }>,
