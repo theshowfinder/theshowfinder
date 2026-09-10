@@ -14,17 +14,17 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params
   const supabase     = await createClient()
-  const now          = new Date()
-  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
-  const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
   const titlePrefix  = slug.replace(/-/g, ' ')
 
+  // Uses the precomputed on_sale_this_week / presale_this_week flags instead
+  // of a manual onsale_date date-range — see the main page component below
+  // for why.
   const [broadResult, targetedResult, arResult] = await Promise.all([
     supabase.from('events_with_venue').select('*')
-      .gte('onsale_date', threeDaysAgo.toISOString()).lte('onsale_date', weekAhead.toISOString())
+      .or('on_sale_this_week.eq.true,presale_this_week.eq.true')
       .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
     supabase.from('events_with_venue').select('*')
-      .gte('onsale_date', threeDaysAgo.toISOString()).lte('onsale_date', weekAhead.toISOString())
+      .or('on_sale_this_week.eq.true,presale_this_week.eq.true')
       .ilike('title', `${titlePrefix}%`)
       .order('start_date', { ascending: true })
       .limit(200) as unknown as Promise<{ data: EventWithVenue[] | null }>,
@@ -55,22 +55,24 @@ function mergeEventResults(
 
 export default async function OnSaleArtistPage({ params }: PageProps) {
   const { slug } = await params
-  const supabase     = await createClient()
-  const now          = new Date()
-  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
-  const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const nowISO       = now.toISOString()
+  const supabase = await createClient()
+  const nowISO   = new Date().toISOString()
   // Convert slug to an approximate title prefix for ILIKE matching.
   // "gracie-abrams" → "gracie abrams" → matches "Gracie Abrams: The Look at My Life Tour"
-  const titlePrefix  = slug.replace(/-/g, ' ')
+  const titlePrefix = slug.replace(/-/g, ' ')
 
+  // Uses the precomputed on_sale_this_week / presale_this_week flags (set
+  // nightly by the sync's calculate_event_flags() DB function) rather than a
+  // manual onsale_date date-range — a manual "now to +7 days" filter drops an
+  // event the moment its window opens (that's why this section could go
+  // empty), and it missed presale-only windows entirely. The flags catch
+  // both and stay correct without any client-side date math.
   const [broadResult, targetedResult, arResult] = await Promise.all([
     // Broad query: catches artists with near-future shows (within the row limit)
     supabase
       .from('events_with_venue')
       .select('*')
-      .gte('onsale_date', threeDaysAgo.toISOString())
-      .lte('onsale_date', weekAhead.toISOString())
+      .or('on_sale_this_week.eq.true,presale_this_week.eq.true')
       .order('start_date', { ascending: true })
       .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
     // Targeted query: catches artists with far-future shows (e.g. 2027 tours)
@@ -78,8 +80,7 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
     supabase
       .from('events_with_venue')
       .select('*')
-      .gte('onsale_date', threeDaysAgo.toISOString())
-      .lte('onsale_date', weekAhead.toISOString())
+      .or('on_sale_this_week.eq.true,presale_this_week.eq.true')
       .ilike('title', `${titlePrefix}%`)
       .order('start_date', { ascending: true })
       .limit(200) as unknown as Promise<{ data: EventWithVenue[] | null }>,
@@ -92,8 +93,9 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
   const group    = groups.find(g => g.slug === slug)
   if (!group) notFound()
 
-  const { artistName, image_url, onsale_date, events, dbArtist } = group
+  const { artistName, image_url, onsale_date, saleType, events, dbArtist } = group
   const onSaleLabel = fmtOnSaleLabel(onsale_date)
+  const isPresale   = saleType === 'presale'
 
   const firstTicketUrl = events[0]?.tickets_url ?? null
 
@@ -129,8 +131,8 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
             <h1 className="text-5xl sm:text-6xl font-extrabold text-white leading-tight mb-3">
               {artistName}
             </h1>
-            <span className="inline-flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-full text-white" style={{ backgroundColor: '#026CDF' }}>
-              🎟️ On sale {onSaleLabel}
+            <span className="inline-flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-full text-white" style={{ backgroundColor: isPresale ? '#E8003D' : '#026CDF' }}>
+              🎟️ {isPresale ? 'Presale opens' : 'On sale'} {onSaleLabel}
             </span>
           </div>
         </div>
@@ -273,7 +275,7 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
                   </div>
                 )}
                 <div>
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">On Sale</p>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{isPresale ? 'Presale' : 'On Sale'}</p>
                   <p className="text-slate-900 font-medium">{onSaleLabel}</p>
                 </div>
                 <div>

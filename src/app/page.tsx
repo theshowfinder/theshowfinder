@@ -107,16 +107,20 @@ async function OnSaleThisWeek() {
   const supabase = await createClient()
   const now      = new Date()
   const nowISO   = now.toISOString()
-  const sevenISO = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  console.log(`[OnSaleThisWeek] querying onsale_date ${nowISO} → ${sevenISO}`)
+  // Uses the precomputed on_sale_this_week / presale_this_week flags (set
+  // nightly by the sync's calculate_event_flags() DB function) rather than a
+  // manual onsale_date date-range — a manual "onsale_date >= now" filter drops
+  // an event the instant its window opens, which is why this section could
+  // show empty. The flags also pick up presale windows, not just public
+  // on-sale, so fan-club/venue presales show up here too.
+  console.log(`[OnSaleThisWeek] querying on_sale_this_week OR presale_this_week flags`)
 
   const [evResult, arResult] = await Promise.all([
     supabase
       .from('events_with_venue')
       .select('*')
-      .gte('onsale_date', nowISO)
-      .lte('onsale_date', sevenISO)
+      .or('on_sale_this_week.eq.true,presale_this_week.eq.true')
       .order('onsale_date', { ascending: true })
       .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
     supabase
@@ -191,7 +195,9 @@ async function OnSaleThisWeek() {
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {groups.map(group => (
+              {groups.map(group => {
+                const isPresale = group.saleType === 'presale'
+                return (
                 <Link
                   key={group.slug}
                   href={`/on-sale-this-week/${group.slug}`}
@@ -211,8 +217,8 @@ async function OnSaleThisWeek() {
                       </div>
                     )}
                     <div className="absolute top-3 left-3">
-                      <span className="text-xs font-bold uppercase tracking-wider text-white px-2.5 py-1 rounded-full" style={{ backgroundColor: '#026CDF' }}>
-                        On Sale This Week
+                      <span className="text-xs font-bold uppercase tracking-wider text-white px-2.5 py-1 rounded-full" style={{ backgroundColor: isPresale ? '#E8003D' : '#026CDF' }}>
+                        {isPresale ? 'Presale' : 'On Sale This Week'}
                       </span>
                     </div>
                   </div>
@@ -232,11 +238,12 @@ async function OnSaleThisWeek() {
                       ) : null
                     })()}
                     <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
-                      🎟️ On sale {fmtOnSaleLabel(group.onsale_date)}
+                      🎟️ {isPresale ? 'Presale opens' : 'On sale'} {fmtOnSaleLabel(group.onsale_date)}
                     </div>
                   </div>
                 </Link>
-              ))}
+                )
+              })}
             </div>
             {overflow > 0 && (
               <div className="mt-10 text-center">

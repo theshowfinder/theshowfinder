@@ -18,19 +18,19 @@ export const metadata: Metadata = {
 }
 
 export default async function OnSaleThisWeekPage() {
-  const supabase      = await createClient()
-  const now           = new Date()
-  const threeDaysAgo  = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
-  const weekAhead     = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const windowISO     = threeDaysAgo.toISOString()
-  const weekISO       = weekAhead.toISOString()
+  const supabase   = await createClient()
+  const now        = new Date()
+  const weekAhead  = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
 
+  // Uses the precomputed on_sale_this_week / presale_this_week flags (set
+  // nightly by the sync's calculate_event_flags() DB function) instead of a
+  // manual onsale_date date-range, so presale windows are included alongside
+  // public on-sale and nothing silently drops out once its window opens.
   const [eventsResult, artistsResult] = await Promise.all([
     supabase
       .from('events_with_venue')
       .select('*')
-      .gte('onsale_date', windowISO)
-      .lte('onsale_date', weekISO)
+      .or('on_sale_this_week.eq.true,presale_this_week.eq.true')
       .order('onsale_date', { ascending: true })
       .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
     supabase
@@ -94,6 +94,7 @@ export default async function OnSaleThisWeekPage() {
 function OnSaleCard({ group }: { group: ReturnType<typeof groupEventsByArtist>[number] }) {
   const onSaleLabel = fmtOnSaleLabel(group.onsale_date)
   const datesCount  = group.events.length
+  const isPresale   = group.saleType === 'presale'
 
   return (
     <Link
@@ -115,8 +116,8 @@ function OnSaleCard({ group }: { group: ReturnType<typeof groupEventsByArtist>[n
           </div>
         )}
         <div className="absolute top-3 left-3">
-          <span className="text-xs font-bold uppercase tracking-wider text-white px-2.5 py-1 rounded-full" style={{ backgroundColor: '#026CDF' }}>
-            On Sale This Week
+          <span className="text-xs font-bold uppercase tracking-wider text-white px-2.5 py-1 rounded-full" style={{ backgroundColor: isPresale ? '#E8003D' : '#026CDF' }}>
+            {isPresale ? 'Presale' : 'On Sale This Week'}
           </span>
         </div>
       </div>
@@ -135,7 +136,7 @@ function OnSaleCard({ group }: { group: ReturnType<typeof groupEventsByArtist>[n
           </p>
         )}
         <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
-          🎟️ On sale {onSaleLabel}
+          🎟️ {isPresale ? 'Presale opens' : 'On sale'} {onSaleLabel}
         </div>
       </div>
     </Link>
