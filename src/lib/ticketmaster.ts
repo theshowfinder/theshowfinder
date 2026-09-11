@@ -267,7 +267,14 @@ async function fetchTMPage(
 
 // ── Venue upsert ─────────────────────────────────────────────────────────────
 
-async function upsertVenue(db: DbClient, tmVenue: TMVenue): Promise<string | null> {
+async function upsertVenue(db: DbClient, tmVenue: TMVenue, cache?: Map<string, string>): Promise<string | null> {
+  if (cache?.has(tmVenue.id)) return cache.get(tmVenue.id)!
+  const id = await upsertVenueUncached(db, tmVenue)
+  if (id && cache) cache.set(tmVenue.id, id)
+  return id
+}
+
+async function upsertVenueUncached(db: DbClient, tmVenue: TMVenue): Promise<string | null> {
   if (!tmVenue.name) return null  // some TM venues have no name; skip them
   const city = tmVenue.city?.name ?? 'Unknown'
   const baseSlug = slugify(`${tmVenue.name}-${city}`)
@@ -411,6 +418,29 @@ async function upsertEvent(
   return 'inserted'
 }
 
+// Resolves venue + upserts one event, isolating failures to that single event
+// so one bad row never takes down a whole page's batch. Multiple of these run
+// concurrently (see EVENT_CONCURRENCY below) instead of one at a time — this is
+// what turns thousands of sequential awaited DB round-trips (the actual cause
+// of the 5-minute Vercel function timeout) into a small number of concurrent
+// batches per page.
+async function processEvent(
+  db: DbClient,
+  tmEvent: TMEvent,
+  upsertCategory: EventCategory,
+  venueCache: Map<string, string>,
+): Promise<UpsertResult | 'no-venue'> {
+  const tmVenue = tmEvent._embedded?.venues?.[0]
+  if (!tmVenue) return 'no-venue'
+
+  const venueId = await upsertVenue(db, tmVenue, venueCache)
+  if (!venueId) return 'error'
+
+  return upsertEvent(db, tmEvent, venueId, upsertCategory)
+}
+
+const EVENT_CONCURRENCY = 20  // events processed in parallel per TM API page
+
 // ── On-sale-soon fetch ───────────────────────────────────────────────────────
 // Fetches one page of UK events whose public-sale period STARTS within the
 // given date range, filtered to a single classification. Paginated via the
@@ -515,6 +545,7 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
   const db = createAdminClient()
 
   await updateSyncState(db, { status: 'running', last_started_at: new Date().toISOString() })
+  const venueCache = new Map<string, string>()
 
   let total = 0, inserted = 0, skipped = 0, errors = 0, rateLimited = 0
   const byCategory: Record<string, number> = {}
@@ -535,30 +566,21 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
       if (!result.events.length) break
       segmentEventsFound += result.events.length
 
-      for (const tmEvent of result.events) {
-        total++
-        const tmVenue = tmEvent._embedded?.venues?.[0]
-
-        if (!tmVenue) {
-          console.warn(`[TM]    skip "${tmEvent.name}" — no venue`)
-          skipped++
-          continue
-        }
-
-        const venueId = await upsertVenue(db, tmVenue)
-        if (!venueId) {
-          errors++
-          continue
-        }
-
-        const upserted = await upsertEvent(db, tmEvent, venueId, dbCategory)
-        if (upserted === 'inserted') {
-          inserted++
-          byCategory[dbCategory] = (byCategory[dbCategory] ?? 0) + 1
-        } else if (upserted === 'skipped') {
-          skipped++
-        } else if (upserted === 'error') {
-          errors++
+      total += result.events.length
+      for (let i = 0; i < result.events.length; i += EVENT_CONCURRENCY) {
+        const chunk = result.events.slice(i, i + EVENT_CONCURRENCY)
+        const outcomes = await Promise.all(
+          chunk.map(ev => processEvent(db, ev, dbCategory, venueCache))
+        )
+        for (const outcome of outcomes) {
+          if (outcome === 'inserted') {
+            inserted++
+            byCategory[dbCategory] = (byCategory[dbCategory] ?? 0) + 1
+          } else if (outcome === 'skipped' || outcome === 'no-venue') {
+            skipped++
+          } else if (outcome === 'error') {
+            errors++
+          }
         }
       }
 
@@ -617,23 +639,24 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
         if (!result.events.length) break
         segmentEventsFound += result.events.length
 
-        for (const tmEvent of result.events) {
-          total++
-          const tmVenue = tmEvent._embedded?.venues?.[0]
-          if (!tmVenue) { skipped++; continue }
-
-          const venueId = await upsertVenue(db, tmVenue)
-          if (!venueId) { errors++; continue }
-
-          const category = mapCategory(tmEvent, dbCategory)
-          const upserted = await upsertEvent(db, tmEvent, venueId, category)
-          if (upserted === 'inserted') {
-            inserted++
-            byCategory[category] = (byCategory[category] ?? 0) + 1
-          } else if (upserted === 'skipped') {
-            skipped++
-          } else if (upserted === 'error') {
-            errors++
+        total += result.events.length
+        for (let i = 0; i < result.events.length; i += EVENT_CONCURRENCY) {
+          const chunk = result.events.slice(i, i + EVENT_CONCURRENCY)
+          const outcomes = await Promise.all(
+            chunk.map(ev => {
+              const category = mapCategory(ev, dbCategory)
+              return processEvent(db, ev, category, venueCache).then(outcome => ({ outcome, category }))
+            })
+          )
+          for (const { outcome, category } of outcomes) {
+            if (outcome === 'inserted') {
+              inserted++
+              byCategory[category] = (byCategory[category] ?? 0) + 1
+            } else if (outcome === 'skipped' || outcome === 'no-venue') {
+              skipped++
+            } else if (outcome === 'error') {
+              errors++
+            }
           }
         }
 
