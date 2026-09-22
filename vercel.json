@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/sync-events",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/sync-gigsberg",
+      "schedule": "30 2 * * *"
     }
   ]
 }
