@@ -339,7 +339,12 @@ export async function syncGigsbergTickets(): Promise<GigsbergSyncResult> {
 
     let matched = 0, updated = 0, unmatched = 0, unmatchedPastDated = 0
     const unmatchedByReason = { no_candidates: 0, no_artist_match: 0, multiple_matches: 0, fetch_failed: 0 }
-    const unmatchedSample: GigsbergSyncResult['unmatchedSample'] = []
+    // Stratified per reason (capped per bucket) rather than first-N overall,
+    // so a run dominated by one reason doesn't crowd the others out of the sample.
+    const sampleBuckets: Record<keyof typeof unmatchedByReason, GigsbergSyncResult['unmatchedSample']> = {
+      no_candidates: [], no_artist_match: [], multiple_matches: [], fetch_failed: [],
+    }
+    const SAMPLE_PER_REASON = 8
     const matchedLinks: Array<{ eventId: string; gigsbergEventId: number; url: string }> = []
     const todayStr = dateOnly(new Date().toISOString())!
 
@@ -348,8 +353,8 @@ export async function syncGigsbergTickets(): Promise<GigsbergSyncResult> {
       if (!ev) {
         unmatched++
         unmatchedByReason.fetch_failed++
-        if (unmatchedSample.length < 25) {
-          unmatchedSample.push({ gigsbergEventId: eventId, name: '(fetch failed)', venue: '', date: '', reason: 'event detail fetch failed' })
+        if (sampleBuckets.fetch_failed.length < SAMPLE_PER_REASON) {
+          sampleBuckets.fetch_failed.push({ gigsbergEventId: eventId, name: '(fetch failed)', venue: '', date: '', reason: 'event detail fetch failed' })
         }
         continue
       }
@@ -363,15 +368,23 @@ export async function syncGigsbergTickets(): Promise<GigsbergSyncResult> {
         unmatchedByReason[outcome.kind]++
         const evDate = dateOnly(ev.date)
         if (evDate && evDate < todayStr) unmatchedPastDated++
-        if (unmatchedSample.length < 25) {
+        const bucket = sampleBuckets[outcome.kind]
+        if (bucket.length < SAMPLE_PER_REASON) {
           const reason =
             outcome.kind === 'no_candidates'    ? 'no event at that venue on that date' :
             outcome.kind === 'no_artist_match'  ? `venue+date matched ${outcome.candidateCount} event(s), but no artist matched` :
             `matched ${outcome.candidateIds.length} events — ambiguous, skipped`
-          unmatchedSample.push({ gigsbergEventId: eventId, name: ev.name, venue: ev.venue, date: ev.date, reason })
+          bucket.push({ gigsbergEventId: eventId, name: ev.name, venue: ev.venue, date: ev.date, reason })
         }
       }
     }
+
+    const unmatchedSample: GigsbergSyncResult['unmatchedSample'] = [
+      ...sampleBuckets.no_artist_match,
+      ...sampleBuckets.multiple_matches,
+      ...sampleBuckets.fetch_failed,
+      ...sampleBuckets.no_candidates,
+    ]
 
     // ── Apply confirmed matches ────────────────────────────────────────────
     console.log(`[gigsberg] Applying ${matchedLinks.length} confirmed match(es)…`)
