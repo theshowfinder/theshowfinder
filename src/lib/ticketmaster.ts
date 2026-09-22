@@ -361,6 +361,62 @@ function buildPresaleInfo(tmEvent: TMEvent): PresaleInfo {
   }
 }
 
+// ── Artist / event_artists upsert ────────────────────────────────────────────
+
+// Only writes the fields TM actually gives us. bio, tour_name, onsale_date,
+// tickets_url, is_featured, gigsberg_url, viagogo_url, stubhub_url, and
+// vivid_seats_url are manually curated per artist and must never be
+// overwritten by the daily sync.
+async function upsertArtist(db: DbClient, attraction: TMAttraction, cache: Map<string, string>): Promise<string | null> {
+  if (cache.has(attraction.id)) return cache.get(attraction.id)!
+
+  const artistData = {
+    name:            attraction.name,
+    slug:            `${slugify(attraction.name)}-${attraction.id.slice(-8)}`,
+    ticketmaster_id: attraction.id,
+    image_url:       getBestImage(attraction.images),
+  }
+
+  const { data, error } = await db
+    .from('artists')
+    .upsert(artistData, { onConflict: 'ticketmaster_id' })
+    .select('id')
+    .single()
+
+  if (error) {
+    console.error(`[artist] upsert failed for "${attraction.name}" (${attraction.id}): ${error.message}`)
+    return null
+  }
+
+  const id = data?.id ?? null
+  if (id) cache.set(attraction.id, id)
+  return id
+}
+
+async function upsertEventArtists(
+  db: DbClient,
+  eventId: string,
+  attractions: TMAttraction[] | undefined,
+  artistCache: Map<string, string>,
+): Promise<void> {
+  if (!attractions?.length) return
+
+  for (let i = 0; i < attractions.length; i++) {
+    const artistId = await upsertArtist(db, attractions[i], artistCache)
+    if (!artistId) continue
+
+    const { error } = await db
+      .from('event_artists')
+      .upsert(
+        { event_id: eventId, artist_id: artistId, is_headliner: i === 0, order: i },
+        { onConflict: 'event_id,artist_id' },
+      )
+    if (error) {
+      console.error(`[event_artists] upsert failed for event ${eventId} / artist ${artistId}: ${error.message}`)
+    }
+  }
+}
+
 // ── Event upsert ─────────────────────────────────────────────────────────────
 
 type UpsertResult = 'inserted' | 'updated' | 'skipped' | 'error'
@@ -370,6 +426,7 @@ async function upsertEvent(
   tmEvent: TMEvent,
   venueId: string,
   defaultCategory: EventCategory,
+  artistCache: Map<string, string>,
 ): Promise<UpsertResult> {
   const startDate = buildStartDate(tmEvent)
   if (!startDate) return 'skipped'
@@ -406,13 +463,19 @@ async function upsertEvent(
     ticketmaster_id:     tmEvent.id,
   }
 
-  const { error } = await db
+  const { data, error } = await db
     .from('events')
     .upsert(eventData, { onConflict: 'ticketmaster_id' })
+    .select('id')
+    .single()
 
   if (error) {
     console.error(`[event] upsert failed for "${tmEvent.name}" (${tmEvent.id}): ${error.message}`)
     return 'error'
+  }
+
+  if (data?.id) {
+    await upsertEventArtists(db, data.id, tmEvent._embedded?.attractions, artistCache)
   }
 
   return 'inserted'
@@ -429,6 +492,7 @@ async function processEvent(
   tmEvent: TMEvent,
   upsertCategory: EventCategory,
   venueCache: Map<string, string>,
+  artistCache: Map<string, string>,
 ): Promise<UpsertResult | 'no-venue'> {
   const tmVenue = tmEvent._embedded?.venues?.[0]
   if (!tmVenue) return 'no-venue'
@@ -436,7 +500,7 @@ async function processEvent(
   const venueId = await upsertVenue(db, tmVenue, venueCache)
   if (!venueId) return 'error'
 
-  return upsertEvent(db, tmEvent, venueId, upsertCategory)
+  return upsertEvent(db, tmEvent, venueId, upsertCategory, artistCache)
 }
 
 const EVENT_CONCURRENCY = 20  // events processed in parallel per TM API page
@@ -546,6 +610,7 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
 
   await updateSyncState(db, { status: 'running', last_started_at: new Date().toISOString() })
   const venueCache = new Map<string, string>()
+  const artistCache = new Map<string, string>()
 
   let total = 0, inserted = 0, skipped = 0, errors = 0, rateLimited = 0
   const byCategory: Record<string, number> = {}
@@ -570,7 +635,7 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
       for (let i = 0; i < result.events.length; i += EVENT_CONCURRENCY) {
         const chunk = result.events.slice(i, i + EVENT_CONCURRENCY)
         const outcomes = await Promise.all(
-          chunk.map(ev => processEvent(db, ev, dbCategory, venueCache))
+          chunk.map(ev => processEvent(db, ev, dbCategory, venueCache, artistCache))
         )
         for (const outcome of outcomes) {
           if (outcome === 'inserted') {
@@ -645,7 +710,7 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
           const outcomes = await Promise.all(
             chunk.map(ev => {
               const category = mapCategory(ev, dbCategory)
-              return processEvent(db, ev, category, venueCache).then(outcome => ({ outcome, category }))
+              return processEvent(db, ev, category, venueCache, artistCache).then(outcome => ({ outcome, category }))
             })
           )
           for (const { outcome, category } of outcomes) {
