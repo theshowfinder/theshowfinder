@@ -299,6 +299,14 @@ export interface GigsbergSyncResult {
   unmatched:        number
   cleared:          number
   unmatchedSample:  Array<{ gigsbergEventId: number; name: string; venue: string; date: string; reason: string }>
+  // Counts by reason across ALL unmatched events, not just the capped sample —
+  // lets the caller see e.g. "mostly past-dated listings" vs "mostly venue-name
+  // mismatches" at a glance.
+  unmatchedByReason: { no_candidates: number; no_artist_match: number; multiple_matches: number; fetch_failed: number }
+  // How many unmatched events had a start_date already in the past — a big
+  // share here means the Gigsberg account has stale/never-delisted inventory
+  // for events that already happened, separate from any matching issue.
+  unmatchedPastDated: number
   durationMs:       number
 }
 
@@ -329,14 +337,17 @@ export async function syncGigsbergTickets(): Promise<GigsbergSyncResult> {
     console.log('[gigsberg] Building match index from our events…')
     const index = await buildEventIndex(db)
 
-    let matched = 0, updated = 0, unmatched = 0
+    let matched = 0, updated = 0, unmatched = 0, unmatchedPastDated = 0
+    const unmatchedByReason = { no_candidates: 0, no_artist_match: 0, multiple_matches: 0, fetch_failed: 0 }
     const unmatchedSample: GigsbergSyncResult['unmatchedSample'] = []
     const matchedLinks: Array<{ eventId: string; gigsbergEventId: number; url: string }> = []
+    const todayStr = dateOnly(new Date().toISOString())!
 
     for (const eventId of sellableEventIds) {
       const ev = gigsbergEvents.get(eventId)
       if (!ev) {
         unmatched++
+        unmatchedByReason.fetch_failed++
         if (unmatchedSample.length < 25) {
           unmatchedSample.push({ gigsbergEventId: eventId, name: '(fetch failed)', venue: '', date: '', reason: 'event detail fetch failed' })
         }
@@ -349,6 +360,9 @@ export async function syncGigsbergTickets(): Promise<GigsbergSyncResult> {
         matchedLinks.push({ eventId: outcome.eventId, gigsbergEventId: eventId, url: buildTicketUrl(eventId) })
       } else {
         unmatched++
+        unmatchedByReason[outcome.kind]++
+        const evDate = dateOnly(ev.date)
+        if (evDate && evDate < todayStr) unmatchedPastDated++
         if (unmatchedSample.length < 25) {
           const reason =
             outcome.kind === 'no_candidates'    ? 'no event at that venue on that date' :
@@ -440,6 +454,8 @@ export async function syncGigsbergTickets(): Promise<GigsbergSyncResult> {
       unmatched,
       cleared,
       unmatchedSample,
+      unmatchedByReason,
+      unmatchedPastDated,
       durationMs,
     }
   } catch (err) {
