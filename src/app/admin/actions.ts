@@ -226,3 +226,24 @@ export async function deleteTourDateAction(id: string, artistSlug: string) {
   revalidatePath('/admin/artists/' + artistSlug)
   revalidatePath('/artists/' + artistSlug)
 }
+
+// ── Events ───────────────────────────────────────────────────────────────────
+
+export async function updateEventOwnTicketUrlAction(id: string, slug: string, formData: FormData) {
+  await checkAuth()
+  const db = createAdminClient()
+
+  const own_ticket_url = ((formData.get('own_ticket_url') as string) || '').trim() || null
+
+  const { error } = await db
+    .from('events')
+    .update({ own_ticket_url })
+    .eq('id', id)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin/events')
+  revalidatePath('/admin/events/' + slug)
+  revalidatePath('/events/' + slug)
+  redirect('/admin/events/' + slug + '?saved=1')
+}

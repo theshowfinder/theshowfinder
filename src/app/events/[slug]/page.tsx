@@ -7,6 +7,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import type { EventCategory, EventStatus } from '@/lib/types/database'
+import { CopyLinkButton } from '@/components/CopyLinkButton'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,7 @@ interface EventDetail {
   price_to: number | null
   currency: string
   tickets_url: string | null
+  own_ticket_url: string | null
   status: EventStatus
   tags: string[] | null
   venue: {
@@ -48,7 +50,7 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
       id, title, slug, description, category,
       start_date, end_date, doors_time,
       image_url, price_from, price_to, currency,
-      tickets_url, status, tags,
+      tickets_url, own_ticket_url, status, tags,
       venue:venues(id, name, slug, address, city, postcode, website),
       artists:event_artists(
         is_headliner, order,
@@ -324,6 +326,37 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
           {/* Right: tickets ─────────────────────────────────────── */}
           <div id="tickets" className="space-y-5 lg:sticky lg:top-24 self-start">
+            {/* Buy Direct — our own listing, shown above the standard provider sections */}
+            {event.own_ticket_url && (
+              <div className="relative bg-white border-2 rounded-2xl p-5 pt-6 shadow-sm" style={{ borderColor: '#E8003D' }}>
+                <span
+                  className="absolute -top-3 left-5 text-[10px] font-extrabold uppercase tracking-widest text-white px-3 py-1 rounded-full"
+                  style={{ backgroundColor: '#E8003D' }}
+                >
+                  Direct
+                </span>
+                <h3 className="text-xs font-extrabold uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+                  Buy Direct
+                </h3>
+                <p className="text-xs text-slate-400 mb-4">We hold tickets for this event</p>
+                <a
+                  href={event.own_ticket_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center font-extrabold text-white rounded-xl px-5 py-4 hover:opacity-90 transition-opacity min-h-[56px] mb-3"
+                  style={{ backgroundColor: '#E8003D' }}
+                >
+                  Buy Direct →
+                </a>
+                <div className="flex justify-center">
+                  <CopyLinkButton
+                    link={`https://theshowfinder.com/go/${event.slug}`}
+                    label="Copy shareable link"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Primary tickets */}
             {isSoldOut ? (
               <div className="bg-slate-100 border border-slate-200 rounded-2xl p-6 text-center">

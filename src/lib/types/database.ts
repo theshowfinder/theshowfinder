@@ -231,6 +231,7 @@ export interface Database {
           price_to: number | null
           currency: string
           tickets_url: string | null
+          own_ticket_url: string | null
           status: EventStatus
           is_featured: boolean
           tags: string[] | null
@@ -264,6 +265,7 @@ export interface Database {
           price_to?: number | null
           currency?: string
           tickets_url?: string | null
+          own_ticket_url?: string | null
           status?: EventStatus
           is_featured?: boolean
           tags?: string[] | null
@@ -296,6 +298,7 @@ export interface Database {
           price_to?: number | null
           currency?: string
           tickets_url?: string | null
+          own_ticket_url?: string | null
           status?: EventStatus
           is_featured?: boolean
           tags?: string[] | null
