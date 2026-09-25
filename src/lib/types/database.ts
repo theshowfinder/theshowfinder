@@ -390,6 +390,37 @@ export interface Database {
           display_order?: number
         }
       }
+      city_news: {
+        Row: {
+          id: string
+          city_slug: string
+          city_name: string
+          headline: string
+          url: string
+          source: string | null
+          published_at: string | null
+          fetched_at: string
+        }
+        Insert: {
+          id?: string
+          city_slug: string
+          city_name: string
+          headline: string
+          url: string
+          source?: string | null
+          published_at?: string | null
+          fetched_at?: string
+        }
+        Update: {
+          city_slug?: string
+          city_name?: string
+          headline?: string
+          url?: string
+          source?: string | null
+          published_at?: string | null
+          fetched_at?: string
+        }
+      }
     }
     Views: {
       events_with_venue: {
@@ -447,3 +478,4 @@ export type EventArtist = Database['public']['Tables']['event_artists']['Row']
 export type UserFavorite = Database['public']['Tables']['user_favorites']['Row']
 export type EventWithVenue = Database['public']['Views']['events_with_venue']['Row']
 export type LocalBusiness = Database['public']['Tables']['local_businesses']['Row']
+export type CityNews = Database['public']['Tables']['city_news']['Row']

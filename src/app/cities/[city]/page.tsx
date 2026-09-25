@@ -12,7 +12,8 @@ import type { EventWithVenue, Artist } from '@/lib/types/database'
 import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
 import { CITIES } from '@/lib/cities'
 import { venueCardBlurb } from '@/lib/venueBlurb'
-import type { LocalBusiness } from '@/lib/types/database'
+import { citySlug } from '@/lib/cityNews'
+import type { LocalBusiness, CityNews } from '@/lib/types/database'
 
 export async function generateStaticParams() {
   return CITIES.map(c => ({ city: encodeURIComponent(c.name) }))
@@ -56,6 +57,15 @@ function pickFeaturedEvents(pool: EventWithVenue[]): EventWithVenue[] {
   return picked
 }
 
+// "Today" / "X days ago" for a news item's published_at.
+function fmtNewsAge(publishedAt: string | null): string {
+  if (!publishedAt) return ''
+  const days = Math.floor((Date.now() - new Date(publishedAt).getTime()) / 86400000)
+  if (days <= 0) return 'Today'
+  if (days === 1) return '1 day ago'
+  return `${days} days ago`
+}
+
 const PAGE_SIZE = 24
 
 export default async function CityPage({
@@ -82,7 +92,7 @@ export default async function CityPage({
   const from = (page - 1) * PAGE_SIZE
   const to   = from + PAGE_SIZE - 1
 
-  const [featuredPoolResult, onsalePoolResult, allEventsResult, artistsResult, venuesResult, venueCountResult, localBusinessesResult] = await Promise.all([
+  const [featuredPoolResult, onsalePoolResult, allEventsResult, artistsResult, venuesResult, venueCountResult, localBusinessesResult, cityNewsResult] = await Promise.all([
     // Pool for featured section: upcoming events with images, limit 50 (page 1 only)
     page === 1
       ? supabase
@@ -151,9 +161,20 @@ export default async function CityPage({
           .order('display_order', { ascending: true })
           .limit(24) as unknown as Promise<{ data: LocalBusiness[] | null }>
       : Promise.resolve({ data: [] as LocalBusiness[] }),
+
+    // Local entertainment news for this city (page 1 only)
+    page === 1
+      ? supabase
+          .from('city_news')
+          .select('*')
+          .eq('city_slug', citySlug(cityName))
+          .order('published_at', { ascending: false })
+          .limit(5) as unknown as Promise<{ data: CityNews[] | null }>
+      : Promise.resolve({ data: [] as CityNews[] }),
   ])
 
   const localBusinesses = localBusinessesResult.data ?? []
+  const cityNews = cityNewsResult.data ?? []
   const featuredPool = featuredPoolResult.data ?? []
   const onsalePool   = onsalePoolResult.data ?? []
   const allEvents    = allEventsResult.data ?? []
@@ -201,6 +222,39 @@ export default async function CityPage({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-14">
+
+        {/* ── LOCAL ENTERTAINMENT NEWS (page 1 only, hidden if no rows yet) ── */}
+        {page === 1 && cityNews.length > 0 && (
+          <section>
+            <div className="mb-7">
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+                In the news
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                {cityName} Entertainment News
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {cityNews.map(item => (
+                <a
+                  key={item.id}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow"
+                  className="block bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-5"
+                >
+                  <h3 className="font-bold text-slate-900 text-base leading-snug mb-2 hover:text-red-600 transition-colors">
+                    {item.headline}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {item.source ?? 'News'}
+                    {item.published_at && ` · ${fmtNewsAge(item.published_at)}`}
+                  </p>
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ── FEATURED / UPCOMING EVENTS (page 1 only) ── */}
         {page === 1 && topEvents.length > 0 && (
