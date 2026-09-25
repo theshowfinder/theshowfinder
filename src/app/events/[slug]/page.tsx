@@ -7,6 +7,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import type { EventCategory, EventStatus } from '@/lib/types/database'
+import { getTicketmasterAffiliateLink } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -69,7 +70,7 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
 function buildProviders(title: string, directUrl: string | null) {
   const q = encodeURIComponent(title)
   const primary = [
-    { name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: directUrl ?? `https://www.ticketmaster.co.uk/search?q=${q}` },
+    { name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: getTicketmasterAffiliateLink(directUrl ?? `https://www.ticketmaster.co.uk/search?q=${q}`) },
     { name: 'See Tickets',  tagline: 'Official tickets',    bg: '#e4022d', href: 'https://www.seetickets.com' },
     { name: 'Eventim',      tagline: 'Book direct',         bg: '#00a4e0', href: 'https://www.eventim.co.uk' },
   ]
@@ -217,7 +218,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           {/* Desktop primary CTA */}
           {!isSoldOut ? (
             <a
-              href={event.tickets_url ?? '#tickets'}
+              href={event.tickets_url ? getTicketmasterAffiliateLink(event.tickets_url) : '#tickets'}
               target={event.tickets_url ? '_blank' : undefined}
               rel={event.tickets_url ? 'noopener noreferrer' : undefined}
               className="hidden md:inline-flex items-center gap-2 text-white font-extrabold text-lg px-8 py-4 rounded-xl hover:opacity-90 transition-opacity shadow-lg"
@@ -243,7 +244,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             </div>
           )}
           <a
-            href={event.tickets_url ?? '#tickets'}
+            href={event.tickets_url ? getTicketmasterAffiliateLink(event.tickets_url) : '#tickets'}
             target={event.tickets_url ? '_blank' : undefined}
             rel={event.tickets_url ? 'noopener noreferrer' : undefined}
             className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm"
@@ -371,20 +372,26 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-4">Primary Tickets</h3>
                 <div className="flex flex-col gap-3">
                   {primary.map(({ name, tagline, bg, href }) => (
-                    <a
-                      key={name}
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-between text-white rounded-xl px-5 py-4 hover:opacity-90 transition-opacity min-h-[60px]"
-                      style={{ backgroundColor: bg }}
-                    >
-                      <div>
-                        <p className="font-extrabold text-base leading-none">{name}</p>
-                        <p className="text-xs mt-0.5 opacity-70">{tagline}</p>
-                      </div>
-                      <span className="text-xl ml-3">→</span>
-                    </a>
+                    <div key={name}>
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between text-white rounded-xl px-5 py-4 hover:opacity-90 transition-opacity min-h-[60px]"
+                        style={{ backgroundColor: bg }}
+                      >
+                        <div>
+                          <p className="font-extrabold text-base leading-none">{name}</p>
+                          <p className="text-xs mt-0.5 opacity-70">{tagline}</p>
+                        </div>
+                        <span className="text-xl ml-3">→</span>
+                      </a>
+                      {name === 'Ticketmaster' && event.tickets_url && (
+                        <div className="mt-2 flex justify-end">
+                          <CopyLinkButton link={getTicketmasterAffiliateLink(event.tickets_url)} />
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>

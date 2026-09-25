@@ -6,6 +6,7 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
+import { getTicketmasterAffiliateLink } from '@/lib/affiliate'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -205,7 +206,7 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
                       )}
                       {event.tickets_url && !isPast ? (
                         <a
-                          href={event.tickets_url}
+                          href={getTicketmasterAffiliateLink(event.tickets_url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-block text-xs font-bold text-white px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity"
@@ -236,7 +237,7 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
               {/* Primary ticket sources */}
               {(dbArtist?.tickets_url ?? firstTicketUrl) && (
                 <a
-                  href={dbArtist?.tickets_url ?? firstTicketUrl!}
+                  href={getTicketmasterAffiliateLink(dbArtist?.tickets_url ?? firstTicketUrl!)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
