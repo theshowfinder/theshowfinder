@@ -226,10 +226,20 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             >
               Get Tickets ↗
             </a>
-          ) : (
+          ) : event.status === 'cancelled' ? (
             <div className="hidden md:inline-flex items-center bg-slate-700 text-white/60 font-bold text-lg px-8 py-4 rounded-xl cursor-not-allowed">
-              {event.status === 'cancelled' ? 'Event Cancelled' : 'Sold Out'}
+              Event Cancelled
             </div>
+          ) : (
+            <a
+              href={resale[0].href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden md:inline-flex items-center gap-2 text-white font-extrabold text-lg px-8 py-4 rounded-xl hover:opacity-90 transition-opacity shadow-lg"
+              style={{ backgroundColor: resale[0].bg }}
+            >
+              Find Resale Tickets ↗
+            </a>
           )}
         </div>
       </section>
@@ -251,6 +261,23 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             style={{ backgroundColor: '#E8003D' }}
           >
             Get Tickets ↗
+          </a>
+        </div>
+      )}
+      {isSoldOut && event.status !== 'cancelled' && (
+        <div className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t-2 px-4 py-3 flex items-center gap-3 shadow-2xl" style={{ borderColor: resale[0].bg }}>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-slate-500 leading-none mb-0.5">Sold out</p>
+            <p className="text-base font-extrabold text-slate-900 truncate">Check resale</p>
+          </div>
+          <a
+            href={resale[0].href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm"
+            style={{ backgroundColor: resale[0].bg }}
+          >
+            Find Resale ↗
           </a>
         </div>
       )}

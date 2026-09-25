@@ -354,6 +354,42 @@ export interface Database {
           confirmed?: boolean
         }
       }
+      local_businesses: {
+        Row: {
+          id: string
+          city: string
+          name: string
+          category: 'restaurant' | 'bar' | 'hotel' | 'transport' | 'other'
+          description: string | null
+          website_url: string | null
+          is_sponsored: boolean
+          is_lusso_client: boolean
+          display_order: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          city: string
+          name: string
+          category: 'restaurant' | 'bar' | 'hotel' | 'transport' | 'other'
+          description?: string | null
+          website_url?: string | null
+          is_sponsored?: boolean
+          is_lusso_client?: boolean
+          display_order?: number
+          created_at?: string
+        }
+        Update: {
+          city?: string
+          name?: string
+          category?: 'restaurant' | 'bar' | 'hotel' | 'transport' | 'other'
+          description?: string | null
+          website_url?: string | null
+          is_sponsored?: boolean
+          is_lusso_client?: boolean
+          display_order?: number
+        }
+      }
     }
     Views: {
       events_with_venue: {
@@ -410,3 +446,4 @@ export type Event = Database['public']['Tables']['events']['Row']
 export type EventArtist = Database['public']['Tables']['event_artists']['Row']
 export type UserFavorite = Database['public']['Tables']['user_favorites']['Row']
 export type EventWithVenue = Database['public']['Views']['events_with_venue']['Row']
+export type LocalBusiness = Database['public']['Tables']['local_businesses']['Row']

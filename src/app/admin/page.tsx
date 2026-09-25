@@ -28,6 +28,12 @@ export default async function AdminPage() {
             Events
           </Link>
           <Link
+            href="/admin/local-businesses"
+            className="text-sm text-slate-500 hover:text-slate-700"
+          >
+            Local Businesses
+          </Link>
+          <Link
             href="/"
             className="text-sm text-slate-500 hover:text-slate-700"
           >

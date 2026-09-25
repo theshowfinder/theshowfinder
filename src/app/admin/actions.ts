@@ -247,3 +247,37 @@ export async function updateEventOwnTicketUrlAction(id: string, slug: string, fo
   revalidatePath('/events/' + slug)
   redirect('/admin/events/' + slug + '?saved=1')
 }
+
+// ── Local businesses ─────────────────────────────────────────────────────────
+
+export async function createLocalBusinessAction(formData: FormData) {
+  await checkAuth()
+  const db = createAdminClient()
+
+  const city            = (formData.get('city') as string).trim()
+  const name             = (formData.get('name') as string).trim()
+  const category         = formData.get('category') as string
+  const description      = ((formData.get('description') as string) || '').trim() || null
+  const website_url      = ((formData.get('website_url') as string) || '').trim() || null
+  const is_sponsored     = formData.get('is_sponsored') === 'on'
+  const is_lusso_client  = formData.get('is_lusso_client') === 'on'
+  const display_order    = parseInt(formData.get('display_order') as string) || 0
+
+  const { error } = await db.from('local_businesses').insert({
+    city, name, category, description, website_url, is_sponsored, is_lusso_client, display_order,
+  })
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin/local-businesses')
+  revalidatePath('/cities/' + encodeURIComponent(city))
+  redirect('/admin/local-businesses?created=1')
+}
+
+export async function deleteLocalBusinessAction(id: string, city: string) {
+  await checkAuth()
+  const db = createAdminClient()
+  await db.from('local_businesses').delete().eq('id', id)
+  revalidatePath('/admin/local-businesses')
+  revalidatePath('/cities/' + encodeURIComponent(city))
+}

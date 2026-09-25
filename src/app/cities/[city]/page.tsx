@@ -10,45 +10,8 @@ import Pagination from '@/components/Pagination'
 import { Suspense } from 'react'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
-
-const CITIES = [
-  { name: 'London',         emoji: '🎡' },
-  { name: 'Manchester',     emoji: '🐝' },
-  { name: 'Birmingham',     emoji: '🏭' },
-  { name: 'Glasgow',        emoji: '🎭' },
-  { name: 'Edinburgh',      emoji: '🏰' },
-  { name: 'Leeds',          emoji: '🦉' },
-  { name: 'Liverpool',      emoji: '⚽' },
-  { name: 'Bristol',        emoji: '🌉' },
-  { name: 'Cardiff',        emoji: '🐉' },
-  { name: 'Belfast',        emoji: '☘️' },
-  { name: 'Nottingham',     emoji: '🏹' },
-  { name: 'Newcastle',      emoji: '⚫' },
-  { name: 'Leicester',      emoji: '🦊' },
-  { name: 'Sheffield',      emoji: '⚙️' },
-  { name: 'Derby',          emoji: '🐏' },
-  { name: 'Coventry',       emoji: '🕊️' },
-  { name: 'Southampton',    emoji: '⚓' },
-  { name: 'Portsmouth',     emoji: '🚢' },
-  { name: 'Norwich',        emoji: '🐦' },
-  { name: 'Brighton',       emoji: '🎠' },
-  { name: 'Oxford',         emoji: '🎓' },
-  { name: 'Cambridge',      emoji: '🚣' },
-  { name: 'Exeter',         emoji: '🏛️' },
-  { name: 'Plymouth',       emoji: '⛵' },
-  { name: 'Hull',           emoji: '🐟' },
-  { name: 'Middlesbrough',  emoji: '🏗️' },
-  { name: 'Sunderland',     emoji: '🏟️' },
-  { name: 'Bradford',       emoji: '🌺' },
-  { name: 'Reading',        emoji: '📖' },
-  { name: 'Milton Keynes',  emoji: '🦁' },
-  { name: 'Bournemouth',    emoji: '🏖️' },
-  { name: 'Ipswich',        emoji: '🌊' },
-  { name: 'Stoke-on-Trent', emoji: '🏺' },
-  { name: 'Wolverhampton',  emoji: '🐺' },
-  { name: 'Swansea',        emoji: '🦢' },
-  { name: 'Aberdeen',       emoji: '🪨' },
-]
+import { CITIES } from '@/lib/cities'
+import type { LocalBusiness } from '@/lib/types/database'
 
 export async function generateStaticParams() {
   return CITIES.map(c => ({ city: encodeURIComponent(c.name) }))
@@ -118,7 +81,7 @@ export default async function CityPage({
   const from = (page - 1) * PAGE_SIZE
   const to   = from + PAGE_SIZE - 1
 
-  const [featuredPoolResult, onsalePoolResult, allEventsResult, artistsResult, venuesResult, venueCountResult] = await Promise.all([
+  const [featuredPoolResult, onsalePoolResult, allEventsResult, artistsResult, venuesResult, venueCountResult, localBusinessesResult] = await Promise.all([
     // Pool for featured section: upcoming events with images, limit 50 (page 1 only)
     page === 1
       ? supabase
@@ -176,8 +139,20 @@ export default async function CityPage({
           .gte('start_date', nowISO)
           .limit(2000) as unknown as Promise<{ data: { venue_id: string }[] | null }>
       : Promise.resolve({ data: [] as { venue_id: string }[] }),
+
+    // Local guide listings for this city (page 1 only) — sponsored first
+    page === 1
+      ? supabase
+          .from('local_businesses')
+          .select('*')
+          .ilike('city', cityName)
+          .order('is_sponsored', { ascending: false })
+          .order('display_order', { ascending: true })
+          .limit(24) as unknown as Promise<{ data: LocalBusiness[] | null }>
+      : Promise.resolve({ data: [] as LocalBusiness[] }),
   ])
 
+  const localBusinesses = localBusinessesResult.data ?? []
   const featuredPool = featuredPoolResult.data ?? []
   const onsalePool   = onsalePoolResult.data ?? []
   const allEvents    = allEventsResult.data ?? []
@@ -383,6 +358,92 @@ export default async function CityPage({
                   </div>
                 </Link>
               ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── GETTING THERE & STAYING (page 1 only) ── */}
+        {page === 1 && (
+          <section>
+            <div className="mb-7">
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+                Plan your trip
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                Getting to {cityName} & Staying Over
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <a
+                href={`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(`${cityName}, United Kingdom`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6"
+              >
+                <div>
+                  <p className="font-extrabold text-slate-900 text-lg mb-1">🏨 Hotels in {cityName}</p>
+                  <p className="text-sm text-slate-500">Staying over for the show? Search hotels via Booking.com</p>
+                </div>
+                <span className="text-xl text-slate-300">→</span>
+              </a>
+              <a
+                href="https://www.thetrainline.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6"
+              >
+                <div>
+                  <p className="font-extrabold text-slate-900 text-lg mb-1">🚆 Trains to {cityName}</p>
+                  <p className="text-sm text-slate-500">Book UK train tickets via Trainline</p>
+                </div>
+                <span className="text-xl text-slate-300">→</span>
+              </a>
+            </div>
+          </section>
+        )}
+
+        {/* ── LOCAL GUIDE (page 1 only, hidden until businesses are added) ── */}
+        {page === 1 && localBusinesses.length > 0 && (
+          <section>
+            <div className="mb-7">
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
+                Local guide
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                Where to Eat & Drink in {cityName}
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {localBusinesses.map(biz => {
+                const card = (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-5 h-full">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+                        {biz.category}
+                      </span>
+                      {biz.is_sponsored && (
+                        <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: '#E8003D' }}>
+                          Sponsored
+                        </span>
+                      )}
+                      {biz.is_lusso_client && (
+                        <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-blue-50 text-blue-700">
+                          Lusso Client
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-bold text-slate-900 text-base leading-snug mb-1">{biz.name}</h3>
+                    {biz.description && <p className="text-sm text-slate-500">{biz.description}</p>}
+                  </div>
+                )
+                return biz.website_url ? (
+                  <a key={biz.id} href={biz.website_url} target="_blank" rel="noopener noreferrer" className="block">
+                    {card}
+                  </a>
+                ) : (
+                  <div key={biz.id}>{card}</div>
+                )
+              })}
             </div>
           </section>
         )}
