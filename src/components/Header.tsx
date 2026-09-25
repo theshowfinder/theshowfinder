@@ -6,6 +6,8 @@ import { Bars3Icon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/o
 import { useRouter } from 'next/navigation'
 
 const nav = [
+  { label: 'News',     href: '/news' },
+  { label: 'On Sale',  href: '/on-sale-this-week' },
   { label: 'Concerts', href: '/events?category=concert' },
   { label: 'Theatre',  href: '/events?category=theatre' },
   { label: 'Comedy',   href: '/events?category=comedy'  },

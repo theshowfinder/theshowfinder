@@ -6,6 +6,7 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import EventCard from '@/components/EventCard'
 import type { EventWithVenue } from '@/lib/types/database'
+import { venuePageDescription } from '@/lib/venueBlurb'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -69,6 +70,12 @@ export default async function VenuePage({ params }: PageProps) {
     .limit(50) as unknown as { data: EventWithVenue[] | null }
 
   const upcomingEvents = events ?? []
+  const description = venuePageDescription(
+    venue.name,
+    venue.city,
+    venue.capacity,
+    upcomingEvents.map(e => e.category),
+  )
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
@@ -100,10 +107,14 @@ export default async function VenuePage({ params }: PageProps) {
           </p>
 
           {venue.capacity && (
-            <p className="text-white/50 text-sm">
+            <p className="text-white/50 text-sm mb-4">
               Capacity: {venue.capacity.toLocaleString('en-GB')}
             </p>
           )}
+
+          <p className="text-white/70 text-sm max-w-2xl leading-relaxed">
+            {description}
+          </p>
         </div>
       </div>
 

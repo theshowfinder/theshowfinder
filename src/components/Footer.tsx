@@ -1,13 +1,5 @@
 import Link from 'next/link'
 
-function XIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden>
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.745l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-  )
-}
-
 function InstagramIcon() {
   return (
     <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden>
@@ -24,22 +16,20 @@ function FacebookIcon() {
   )
 }
 
-function TikTokIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden>
-      <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V9.01a8.16 8.16 0 004.77 1.52V7.07a4.85 4.85 0 01-1-.38z" />
-    </svg>
-  )
-}
-
 const socialLinks = [
-  { label: 'Follow us on X', href: '#', Icon: XIcon        },
-  { label: 'Follow us on Instagram', href: '#', Icon: InstagramIcon },
-  { label: 'Follow us on Facebook',  href: '#', Icon: FacebookIcon  },
-  { label: 'Follow us on TikTok',    href: '#', Icon: TikTokIcon    },
+  { label: 'Follow us on Instagram', href: 'https://www.instagram.com/the_show_finder/' , Icon: InstagramIcon },
+  { label: 'Follow us on Facebook',  href: 'https://www.facebook.com/profile.php?id=61592305512592', Icon: FacebookIcon  },
 ]
 
-const discover = ['Concerts', 'Theatre', 'Comedy', 'Sports', 'Family']
+const discover = [
+  { label: 'News',     href: '/news' },
+  { label: 'On Sale',  href: '/on-sale-this-week' },
+  { label: 'Concerts', href: '/events?category=concert' },
+  { label: 'Theatre',  href: '/events?category=theatre' },
+  { label: 'Comedy',   href: '/events?category=comedy' },
+  { label: 'Sports',   href: '/events?category=sports' },
+  { label: 'Family',   href: '/events?category=family' },
+]
 
 const cities = [
   'London', 'Manchester', 'Birmingham', 'Glasgow', 'Edinburgh',
@@ -77,10 +67,10 @@ export default function Footer() {
           <div>
             <h3 className="text-xs font-extrabold text-white uppercase tracking-widest mb-5">Discover</h3>
             <ul className="space-y-3">
-              {discover.map(cat => (
-                <li key={cat}>
-                  <Link href={`/events?category=${cat.toLowerCase()}`} className="text-sm transition-colors hover:text-white">
-                    {cat}
+              {discover.map(({ label, href }) => (
+                <li key={label}>
+                  <Link href={href} className="text-sm transition-colors hover:text-white">
+                    {label}
                   </Link>
                 </li>
               ))}
@@ -134,6 +124,8 @@ export default function Footer() {
               <a
                 key={label}
                 href={href}
+                target="_blank"
+                rel="noopener noreferrer"
                 aria-label={label}
                 className="w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-[#E8003D] bg-white/10 transition-all duration-150"
               >

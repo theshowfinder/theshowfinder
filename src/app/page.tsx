@@ -265,6 +265,84 @@ async function OnSaleThisWeek() {
   )
 }
 
+async function LatestNews() {
+  const supabase   = await createClient()
+  const now        = new Date()
+  const windowFrom = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000).toISOString()
+  const windowTo   = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString()
+
+  // Wider window than On Sale This Week (-21d/+90d vs -3d/+7d) so this reads
+  // as a rolling news feed rather than duplicating that section's content —
+  // same underlying presale/onsale signal, just zoomed out.
+  const [evResult, arResult] = await Promise.all([
+    supabase
+      .from('events_with_venue')
+      .select('*')
+      .or(`and(public_onsale_start.gte.${windowFrom},public_onsale_start.lte.${windowTo}),and(presale_start.gte.${windowFrom},presale_start.lte.${windowTo})`)
+      .order('onsale_date', { ascending: true })
+      .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+    supabase
+      .from('artists')
+      .select('*') as unknown as Promise<{ data: Artist[] | null }>,
+  ])
+
+  const groups = groupEventsByArtist(evResult.data ?? [], arResult.data ?? [])
+    .sort((a, b) => {
+      const da = Math.abs(new Date(a.onsale_date).getTime() - now.getTime())
+      const db = Math.abs(new Date(b.onsale_date).getTime() - now.getTime())
+      return da - db
+    })
+    .slice(0, 6)
+
+  if (groups.length === 0) return null
+
+  return (
+    <section className="bg-[#1A1A2E] py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-end justify-between mb-6">
+          <div>
+            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
+              Ticket news
+            </p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Latest News</h2>
+          </div>
+          <Link href="/news" className="text-sm font-semibold hover:underline hidden sm:block" style={{ color: '#026CDF' }}>
+            View all news →
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {groups.map(group => {
+            const isLive = new Date(group.onsale_date).getTime() <= now.getTime()
+            const isPresale = group.saleType === 'presale'
+            const headline = isLive
+              ? `${group.artistName} tickets on sale now`
+              : isPresale
+                ? `${group.artistName} presale opens ${fmtOnSaleLabel(group.onsale_date)}`
+                : `${group.artistName} on sale ${fmtOnSaleLabel(group.onsale_date)}`
+            return (
+              <Link
+                key={group.slug}
+                href={`/on-sale-this-week/${group.slug}`}
+                className="flex items-center gap-3 bg-white/5 hover:bg-white/10 rounded-xl px-4 py-3.5 transition-colors"
+              >
+                <span className="text-lg shrink-0">{isLive ? '🎟️' : isPresale ? '📣' : '🗓️'}</span>
+                <span className="text-sm text-white/80 leading-snug">{headline}</span>
+              </Link>
+            )
+          })}
+        </div>
+
+        <div className="mt-6 text-center sm:hidden">
+          <Link href="/news" className="text-sm font-semibold hover:underline" style={{ color: '#026CDF' }}>
+            View all news →
+          </Link>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 const EventCardSkeleton = () => (
   <div className="rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm">
     <div className="h-48 bg-slate-200 animate-pulse" />
@@ -338,6 +416,11 @@ export default function HomePage() {
       {/* ── ON SALE THIS WEEK ───────────────────────────────────── */}
       <Suspense fallback={null}>
         <OnSaleThisWeek />
+      </Suspense>
+
+      {/* ── LATEST NEWS ─────────────────────────────────────────── */}
+      <Suspense fallback={null}>
+        <LatestNews />
       </Suspense>
 
       {/* ── FEATURED EVENTS ─────────────────────────────────────── */}

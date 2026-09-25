@@ -11,6 +11,7 @@ import { Suspense } from 'react'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
 import { CITIES } from '@/lib/cities'
+import { venueCardBlurb } from '@/lib/venueBlurb'
 import type { LocalBusiness } from '@/lib/types/database'
 
 export async function generateStaticParams() {
@@ -345,7 +346,10 @@ export default async function CityPage({
                   <h3 className="font-bold text-slate-900 text-base leading-snug mb-1 hover:text-red-600 transition-colors">
                     {venue.name}
                   </h3>
-                  <p className="text-sm text-slate-500 mb-3 truncate">{venue.address}</p>
+                  <p className="text-sm text-slate-500 mb-1 truncate">{venue.address}</p>
+                  <p className="text-xs text-slate-400 mb-3 leading-relaxed">
+                    {venueCardBlurb(venue.capacity, countByVenue[venue.id] ?? 0, cityName)}
+                  </p>
                   <div className="flex items-center justify-between text-xs text-slate-400">
                     {venue.capacity ? (
                       <span>🎪 {venue.capacity.toLocaleString('en-GB')} capacity</span>
