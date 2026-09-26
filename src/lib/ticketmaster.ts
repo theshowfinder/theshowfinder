@@ -370,27 +370,53 @@ function buildPresaleInfo(tmEvent: TMEvent): PresaleInfo {
 async function upsertArtist(db: DbClient, attraction: TMAttraction, cache: Map<string, string>): Promise<string | null> {
   if (cache.has(attraction.id)) return cache.get(attraction.id)!
 
-  const artistData = {
-    name:            attraction.name,
-    slug:            `${slugify(attraction.name)}-${attraction.id.slice(-8)}`,
-    ticketmaster_id: attraction.id,
-    image_url:       getBestImage(attraction.images),
-  }
+  const slug = `${slugify(attraction.name)}-${attraction.id.slice(-8)}`
+  const imageUrl = getBestImage(attraction.images)
 
   const { data, error } = await db
     .from('artists')
-    .upsert(artistData, { onConflict: 'ticketmaster_id' })
+    .upsert(
+      { name: attraction.name, slug, ticketmaster_id: attraction.id, image_url: imageUrl },
+      { onConflict: 'ticketmaster_id' },
+    )
     .select('id')
     .single()
 
-  if (error) {
-    console.error(`[artist] upsert failed for "${attraction.name}" (${attraction.id}): ${error.message}`)
-    return null
+  if (!error) {
+    const id = data?.id ?? null
+    if (id) cache.set(attraction.id, id)
+    return id
   }
 
-  const id = data?.id ?? null
-  if (id) cache.set(attraction.id, id)
-  return id
+  // A row with this slug can already exist without a ticketmaster_id (e.g. a
+  // manually curated artist added before this attraction was synced), which
+  // the upsert above can't see since it only resolves conflicts on
+  // ticketmaster_id. Fall back to matching that row by slug and attach the
+  // ticketmaster_id to it instead of trying to insert a second row.
+  if (error.code === '23505' && error.message.includes('artists_slug_key')) {
+    const { data: existing, error: fetchError } = await db
+      .from('artists')
+      .select('id')
+      .eq('slug', slug)
+      .single()
+
+    if (!fetchError && existing?.id) {
+      const { error: updateError } = await db
+        .from('artists')
+        .update({ ticketmaster_id: attraction.id, image_url: imageUrl })
+        .eq('id', existing.id)
+
+      if (!updateError) {
+        cache.set(attraction.id, existing.id)
+        return existing.id
+      }
+      console.error(`[artist] slug-fallback update failed for "${attraction.name}" (${attraction.id}): ${updateError.message}`)
+      return null
+    }
+  }
+
+  console.error(`[artist] upsert failed for "${attraction.name}" (${attraction.id}): ${error.message}`)
+  return null
 }
 
 async function upsertEventArtists(
