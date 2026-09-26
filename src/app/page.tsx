@@ -20,6 +20,7 @@ import EventCard from '@/components/EventCard'
 import SearchBar from '@/components/SearchBar'
 import CitiesGrid from '@/components/CitiesGrid'
 import NewsletterSignup from '@/components/NewsletterSignup'
+import LocationBanner from '@/components/LocationBanner'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 import { groupEventsByArtist, fmtOnSaleLabel, extractArtistName, toSlug } from '@/lib/on-sale'
 
@@ -381,6 +382,13 @@ export default function HomePage() {
         <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full bg-white/5 translate-y-1/2 -translate-x-1/4 blur-3xl pointer-events-none" />
 
         <div className="relative w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-0 text-center z-10">
+          {/* Location banner — client-only, renders nothing unless Vercel's
+              edge geolocation matched one of our 36 cities (see
+              middleware.ts + LocationBanner.tsx) */}
+          <div>
+            <LocationBanner />
+          </div>
+
           {/* Pre-headline */}
           <p className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest mb-6 bg-white/5 px-4 py-2 rounded-full border border-white/10"
             style={{ color: '#FFD700' }}>
