@@ -66,6 +66,21 @@ function fmtNewsAge(publishedAt: string | null): string {
   return `${days} days ago`
 }
 
+// Wraps a plain travel/hotel link in an affiliate tracking template once one
+// is configured, so the site can go from placeholder links to earning
+// commission by setting a single Vercel env var (no code change / no
+// redeploy-by-Claude needed). The env var's value is the affiliate network's
+// full click-tracking URL with `{url}` where the destination should go, e.g.
+// CJ Affiliate for Booking.com: BOOKING_AFFILIATE_TEMPLATE=
+//   "https://www.anrdoezrs.net/click-XXXXXXX-XXXXXXX?url={url}"
+// Until that env var is set (CJ/Awin approval still pending as of writing),
+// this returns the plain destination link unchanged.
+function affiliateUrl(directUrl: string, envVar: string): string {
+  const template = process.env[envVar]
+  if (!template) return directUrl
+  return template.replace('{url}', encodeURIComponent(directUrl))
+}
+
 const PAGE_SIZE = 24
 
 export default async function CityPage({
@@ -92,7 +107,7 @@ export default async function CityPage({
   const from = (page - 1) * PAGE_SIZE
   const to   = from + PAGE_SIZE - 1
 
-  const [featuredPoolResult, onsalePoolResult, allEventsResult, artistsResult, venuesResult, venueCountResult, localBusinessesResult, cityNewsResult] = await Promise.all([
+  const [featuredPoolResult, onsalePoolResult, allEventsResult, artistsResult, venuesResult, localBusinessesResult, cityNewsResult] = await Promise.all([
     // Pool for featured section: upcoming events with images, limit 50 (page 1 only)
     page === 1
       ? supabase
@@ -141,16 +156,6 @@ export default async function CityPage({
           .limit(20) as unknown as Promise<{ data: { id: string; name: string; slug: string; capacity: number | null; address: string }[] | null }>
       : Promise.resolve({ data: [] as { id: string; name: string; slug: string; capacity: number | null; address: string }[] }),
 
-    // Upcoming event venue_ids for this city — to count events per venue (page 1 only)
-    page === 1
-      ? supabase
-          .from('events_with_venue')
-          .select('venue_id')
-          .ilike('venue_city', cityName)
-          .gte('start_date', nowISO)
-          .limit(2000) as unknown as Promise<{ data: { venue_id: string }[] | null }>
-      : Promise.resolve({ data: [] as { venue_id: string }[] }),
-
     // Local guide listings for this city (page 1 only) — sponsored first
     page === 1
       ? supabase
@@ -181,6 +186,27 @@ export default async function CityPage({
   const totalCount   = allEventsResult.count ?? allEvents.length
   const totalPages   = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
+  // Exact upcoming-event counts for each candidate venue (page 1 only), queried
+  // one venue at a time with count:'exact', head:true rather than sampling all
+  // of the city's events into a capped, unordered array. The old sampling
+  // query silently dropped major arenas (The O2, Wembley Stadium) from big
+  // cities' Venues sections once a city had more upcoming event rows than the
+  // sample cap, or whenever a duplicate zero-event venue row happened to be
+  // the one counted. A per-venue exact count is correct regardless of how
+  // many rows the city has or how many duplicate venue rows exist.
+  const candidateVenues = venuesResult.data ?? []
+  const venueCountResults = page === 1
+    ? await Promise.all(
+        candidateVenues.map(v =>
+          supabase
+            .from('events_with_venue')
+            .select('venue_id', { count: 'exact', head: true })
+            .eq('venue_id', v.id)
+            .gte('start_date', nowISO) as unknown as Promise<{ count: number | null }>
+        )
+      )
+    : []
+
   function buildHref(p: number) {
     if (p === 1) return `/cities/${encodeURIComponent(cityName)}`
     return `/cities/${encodeURIComponent(cityName)}?page=${p}`
@@ -195,10 +221,10 @@ export default async function CityPage({
 
   // Build venue event count map and filter to venues with upcoming events
   const countByVenue: Record<string, number> = {}
-  for (const { venue_id } of (venueCountResult.data ?? [])) {
-    countByVenue[venue_id] = (countByVenue[venue_id] ?? 0) + 1
-  }
-  const cityVenues = (venuesResult.data ?? []).filter(v => countByVenue[v.id] > 0)
+  candidateVenues.forEach((v, i) => {
+    countByVenue[v.id] = venueCountResults[i]?.count ?? 0
+  })
+  const cityVenues = candidateVenues.filter(v => countByVenue[v.id] > 0)
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
@@ -433,7 +459,7 @@ export default async function CityPage({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <a
-                href={`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(`${cityName}, United Kingdom`)}`}
+                href={affiliateUrl(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(`${cityName}, United Kingdom`)}`, 'BOOKING_AFFILIATE_TEMPLATE')}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6"
@@ -445,7 +471,7 @@ export default async function CityPage({
                 <span className="text-xl text-slate-300">→</span>
               </a>
               <a
-                href="https://www.thetrainline.com/"
+                href={affiliateUrl('https://www.thetrainline.com/', 'TRAINLINE_AFFILIATE_TEMPLATE')}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6"
