@@ -6,7 +6,7 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
-import { getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink } from '@/lib/affiliate'
+import { getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink } from '@/lib/affiliate'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -112,7 +112,7 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
   // Secondary market links using artist name
   const secondaryMarket = [
     { name: 'Gigsberg',    bg: '#1a1f6e', href: dbArtist?.gigsberg_url    ?? `https://www.gigsberg.com/search?q=${encodeURIComponent(artistName)}` },
-    { name: 'Viagogo',     bg: '#00a650', href: dbArtist?.viagogo_url     ?? `https://www.viagogo.co.uk/ww/SearchResults?q=${encodeURIComponent(artistName)}` },
+    { name: 'Viagogo',     bg: '#00a650', href: getViagogoAffiliateLink(dbArtist?.viagogo_url ?? `https://www.viagogo.co.uk/ww/SearchResults?q=${encodeURIComponent(artistName)}`) },
     { name: 'StubHub',     bg: '#400078', href: dbArtist?.stubhub_url     ?? `https://www.stubhub.co.uk/srp/?q=${encodeURIComponent(artistName)}` },
     { name: 'Vivid Seats', bg: '#02044a', href: dbArtist?.vivid_seats_url ?? `https://www.vividseats.com/search?searchTerm=${encodeURIComponent(artistName)}` },
   ]

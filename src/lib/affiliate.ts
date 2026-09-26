@@ -21,3 +21,27 @@ export function getSeeTicketsAffiliateLink(destinationUrl: string): string {
   const encoded = encodeURIComponent(destinationUrl)
   return `https://www.awin1.com/cread.php?awinmid=${SEE_TICKETS_MERCHANT_ID}&awinaffid=${AWIN_PUBLISHER_ID}&ued=${encoded}`
 }
+
+// Generic wrapper for affiliate networks where TheShowFinder only has a
+// tracking-link *template* rather than a fixed merchant/publisher ID pair
+// (used for Partnerize, and already the pattern for Booking.com/Trainline
+// on the city pages). The env var's value is the network's full
+// click-tracking URL with `{url}` where the destination should go, e.g.
+// VIAGOGO_AFFILIATE_TEMPLATE="https://prf.hn/click/camref:XXXXX/destination:{url}"
+// Until that env var is set in Vercel, this returns the plain destination
+// link unchanged — no code change or redeploy needed once the real
+// template is available, just set the env var.
+export function wrapWithEnvTemplate(directUrl: string, envVar: string): string {
+  const template = process.env[envVar]
+  if (!template) return directUrl
+  return template.replace('{url}', encodeURIComponent(directUrl))
+}
+
+// Wraps a viagogo.co.uk destination URL in TheShowFinder's Partnerize
+// affiliate tracking template, once VIAGOGO_AFFILIATE_TEMPLATE is set in
+// Vercel. viagogo's programme is confirmed on Partnerize, not Awin (Awin's
+// viagogo programme was never joined on this account). Returns the plain
+// link unchanged until the env var is set.
+export function getViagogoAffiliateLink(destinationUrl: string): string {
+  return wrapWithEnvTemplate(destinationUrl, 'VIAGOGO_AFFILIATE_TEMPLATE')
+}

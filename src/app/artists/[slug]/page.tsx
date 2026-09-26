@@ -3,7 +3,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import type { Artist, Tour, TourDate } from '@/lib/types/database'
-import { getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink } from '@/lib/affiliate'
+import { getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 
 export const dynamic = 'force-dynamic'
@@ -285,7 +285,7 @@ export default async function ArtistPage({ params }: PageProps) {
                 <div className="space-y-2">
                   {[
                     { name: 'Gigsberg',    bg: '#1a1f6e', href: artist.gigsberg_url    ?? `https://www.gigsberg.com/search?q=${encodeURIComponent(artist.name)}` },
-                    { name: 'Viagogo',     bg: '#00a650', href: artist.viagogo_url     ?? `https://www.viagogo.co.uk/ww/SearchResults?q=${encodeURIComponent(artist.name)}` },
+                    { name: 'Viagogo',     bg: '#00a650', href: getViagogoAffiliateLink(artist.viagogo_url ?? `https://www.viagogo.co.uk/ww/SearchResults?q=${encodeURIComponent(artist.name)}`) },
                     { name: 'StubHub',     bg: '#400078', href: artist.stubhub_url     ?? `https://www.stubhub.co.uk/srp/?q=${encodeURIComponent(artist.name)}` },
                     { name: 'Vivid Seats', bg: '#02044a', href: artist.vivid_seats_url ?? `https://www.vividseats.com/search?searchTerm=${encodeURIComponent(artist.name)}` },
                   ].map(({ name, bg, href }) => (

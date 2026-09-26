@@ -7,7 +7,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import type { EventCategory, EventStatus } from '@/lib/types/database'
-import { getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink } from '@/lib/affiliate'
+import { getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ function buildProviders(title: string, directUrl: string | null) {
     { name: 'Eventim',      tagline: 'Book direct',         bg: '#00a4e0', href: 'https://www.eventim.co.uk' },
   ]
   const resale = [
-    { name: 'Viagogo',     bg: '#00a650', href: `https://www.viagogo.co.uk/ww/SearchResults?q=${q}` },
+    { name: 'Viagogo',     bg: '#00a650', href: getViagogoAffiliateLink(`https://www.viagogo.co.uk/ww/SearchResults?q=${q}`) },
     { name: 'StubHub',     bg: '#400078', href: `https://www.stubhub.co.uk/srp/?q=${q}` },
     { name: 'Gigsberg',    bg: '#1a1f6e', href: `https://www.gigsberg.com/tickets?q=${q}` },
     { name: 'Vivid Seats', bg: '#02044a', href: `https://www.vividseats.com/search?searchTerm=${q}` },
