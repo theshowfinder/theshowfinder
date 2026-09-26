@@ -42,17 +42,30 @@ const CITIES = [
 
 export default async function CitiesGrid() {
   const supabase = await createClient()
+  const nowISO = new Date().toISOString()
 
-  // Single query: fetch all upcoming event city names, then count in JS
-  const { data: rows } = await supabase
-    .from('events_with_venue')
-    .select('venue_city')
-    .gte('start_date', new Date().toISOString()) as unknown as { data: { venue_city: string }[] | null }
+  // One exact head-count per city, not a single unbounded select counted in
+  // JS. That query was capped by PostgREST's default row limit (1000) well
+  // below the 5,000+ total upcoming events, so it silently truncated to
+  // whichever ~1000 rows came back first — starving cities like Derby (which
+  // has 178+ upcoming shows) down to whatever sliver of that arbitrary
+  // subset happened to be tagged Derby. Same bug, same fix, as the venues
+  // section on the city pages: count:'exact', head:true is a cheap COUNT
+  // per city and is accurate regardless of how many total rows exist.
+  const countResults = await Promise.all(
+    CITIES.map(({ name }) =>
+      supabase
+        .from('events_with_venue')
+        .select('*', { count: 'exact', head: true })
+        .ilike('venue_city', name)
+        .gte('start_date', nowISO) as unknown as Promise<{ count: number | null }>
+    )
+  )
 
   const countMap: Record<string, number> = {}
-  for (const row of rows ?? []) {
-    countMap[row.venue_city] = (countMap[row.venue_city] ?? 0) + 1
-  }
+  CITIES.forEach(({ name }, i) => {
+    countMap[name] = countResults[i].count ?? 0
+  })
 
   return (
     <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2 md:grid md:grid-cols-4 lg:grid-cols-6 md:gap-4 md:pb-0">
