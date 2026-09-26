@@ -51,18 +51,42 @@ function resolveSource(item: RawItem): string | null {
 
 const RSS_PER_ITEM_TIMEOUT_MS = 15000
 
-// Excludes the two false-positive categories that swamp results for any city
-// whose name doubles as ordinary sporting vocabulary (Derby above all — "the
-// derby" is both a local football/rugby rivalry match anywhere in the world
-// and a family of horse races). Without these, /cities/Derby's news section
-// was pulling in "AC MILAN vs. INTER: AN UNMISSABLE DERBY" and Irish/Dubai
-// horse-racing recaps instead of Derby, UK entertainment news. Applied to
-// every city's query — a no-op for names that were never ambiguous, since
-// none of these terms would otherwise appear alongside them.
+// Query-level excludes: a best-effort hint to Google News. These reduce
+// volume but are NOT a reliable filter — Google's "-term" operators are a
+// soft relevance signal, not a hard match rule, and the exact same query has
+// been observed to return a clean result set on one run and a contaminated
+// one (e.g. "AC MILAN vs. INTER: AN UNMISSABLE DERBY") a few hours later with
+// no change to the query at all. Kept because it does reduce noise, but the
+// HEADLINE_BLOCKLIST below is the actual guarantee.
 const NEWS_EXCLUDE_TERMS =
   '-football+-soccer+-%22Serie+A%22+-%22Premier+League%22+-EFL+-Championship+' +
   '-%22horse+racing%22+-racecourse+-jockey+-racehorse+' +
   '-%22Kentucky+Derby%22+-%22Epsom+Derby%22+-%22Irish+Derby%22+-%22Dubai+World+Cup%22'
+
+// Deterministic backstop applied to every fetched headline, regardless of
+// what the Google News query itself returned. This is what actually
+// guarantees a city whose name doubles as sporting vocabulary (Derby above
+// all: a football/rugby rivalry fixture anywhere in the world, and a family
+// of horse races) never shows football or horse-racing results as "local
+// entertainment news". Applied to every city — a no-op for names that were
+// never ambiguous, since none of these terms would otherwise appear.
+const HEADLINE_BLOCKLIST: RegExp[] = [
+  /\bfootball\b/i, /\bsoccer\b/i,
+  /\bfa cup\b/i, /\bcarabao cup\b/i, /\bleague cup\b/i, /\bplay-?off(s)?\b/i,
+  /\bpremier league\b/i, /\befl\b/i, /\bchampionship\b/i,
+  /\bserie a\b/i, /\bla liga\b/i, /\bbundesliga\b/i, /\bligue 1\b/i,
+  /\brugby\b/i, /\bfixture(s)?\b/i,
+  /\bvs\.?\b/i, /\(\s*[ah]\s*\)/i, // "X vs Y" / "Team (A)" / "Team (H)" fixture notation
+  /\bafc\b/i, /\bf\.?c\.?\b/i,
+  /\bhorse racing\b/i, /\bracecourse\b/i, /\bracehorse\b/i, /\bjockey\b/i, /\bthoroughbred\b/i,
+  /\bracing post\b/i, /\bracing tv\b/i, /\bgrand national\b/i, /\bnon-runner\b/i, /\bbetting ring\b/i,
+  /\bkentucky derby\b/i, /\bepsom derby\b/i, /\birish derby\b/i,
+  /\bdubai world cup\b/i, /\bdubai duty free\b/i,
+]
+
+function isFalsePositive(headline: string): boolean {
+  return HEADLINE_BLOCKLIST.some(re => re.test(headline))
+}
 
 async function fetchCityNews(cityName: string): Promise<NewsItem[]> {
   const cityForQuery = cityName.replace(/\s+/g, '+')
@@ -76,7 +100,6 @@ async function fetchCityNews(cityName: string): Promise<NewsItem[]> {
   const feed = await parser.parseURL(feedUrl)
 
   return (feed.items ?? [])
-    .slice(0, 8)
     .map(item => ({
       headline:    (item.title ?? '').trim(),
       url:         item.link ?? '',
@@ -84,6 +107,8 @@ async function fetchCityNews(cityName: string): Promise<NewsItem[]> {
       publishedAt: item.pubDate && !Number.isNaN(Date.parse(item.pubDate)) ? new Date(item.pubDate).toISOString() : null,
     }))
     .filter(i => i.headline && i.url)
+    .filter(i => !isFalsePositive(i.headline))
+    .slice(0, 8)
 }
 
 // ── Logging (reuses sync_log, same as the Ticketmaster sync — one row per
@@ -119,7 +144,6 @@ export interface CityNewsSyncResult {
 }
 
 const CITY_DELAY_MS = 300
-const STALE_DAYS = 14
 
 // ── Main entry point ─────────────────────────────────────────────────────────
 
@@ -149,22 +173,37 @@ export async function syncCityNews(): Promise<CityNewsSyncResult> {
         }))
         const { error } = await db.from('city_news').upsert(rows, { onConflict: 'city_slug,url' })
         if (error) throw new Error(`upsert failed: ${error.message}`)
-      }
-      totalUpserted += items.length
+        totalUpserted += items.length
 
-      // Rows not refreshed in the last 14 days have either dropped out of
-      // Google's top-8 results or the sync hasn't run — either way, stale.
-      const cutoff = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000).toISOString()
-      const { data: deleted, error: delErr } = await db
-        .from('city_news')
-        .delete()
-        .eq('city_slug', slug)
-        .lt('fetched_at', cutoff)
-        .select('id')
-      if (delErr) {
-        console.error(`[city-news] cleanup failed for "${city.name}" (non-fatal): ${delErr.message}`)
-      } else {
-        totalDeleted += deleted?.length ?? 0
+        // Replace, don't accumulate: anything already stored for this city
+        // that isn't part of today's fresh top-8 is gone the moment we have
+        // a successful fetch to replace it with — including any false
+        // positive that slipped through on a previous run before this
+        // blocklist existed (or before Google's query-level exclusion
+        // happened to catch it). We only prune when today's fetch actually
+        // returned data, so a transient empty/failed fetch never wipes
+        // out otherwise-good existing rows.
+        const { data: existingRows, error: existingErr } = await db
+          .from('city_news')
+          .select('id, url')
+          .eq('city_slug', slug)
+
+        if (existingErr) {
+          console.error(`[city-news] existing-rows lookup failed for "${city.name}" (non-fatal): ${existingErr.message}`)
+        } else {
+          const freshUrls = new Set(rows.map(r => r.url))
+          const staleIds = (existingRows ?? [])
+            .filter(r => !freshUrls.has(r.url as string))
+            .map(r => r.id)
+          if (staleIds.length) {
+            const { error: delErr } = await db.from('city_news').delete().in('id', staleIds)
+            if (delErr) {
+              console.error(`[city-news] cleanup failed for "${city.name}" (non-fatal): ${delErr.message}`)
+            } else {
+              totalDeleted += staleIds.length
+            }
+          }
+        }
       }
 
       perCity.push({ city: city.name, fetched: items.length, upserted: items.length, status: 'ok' })
