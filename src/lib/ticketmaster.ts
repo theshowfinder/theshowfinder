@@ -275,20 +275,15 @@ async function fetchWithRetry(url: URL, label: string): Promise<FetchResult> {
   return { events: [], totalPages: 0, status: 'network_error', detail: 'unreachable' }
 }
 
-// Fetches one page of UK events for a classification within an explicit
-// [startDateTime, endDateTime) show-date window. The caller is responsible
-// for keeping that window narrow enough that the classification's total
-// results inside it stay under Ticketmaster's ~1200-result hard cap (see the
-// banded loop in syncTicketmasterEvents) — a single unbounded date range
-// silently drops every event past whatever fits in 6 pages, however many
-// there really are nationwide.
 async function fetchTMPage(
   classificationName: string,
   page: number,
-  startDateTime: string,
-  endDateTime: string,
-  label?: string,
+  startDateTime?: string,
 ): Promise<FetchResult> {
+  const endDate = new Date()
+  endDate.setFullYear(endDate.getFullYear() + 1)
+  const endDateTime = endDate.toISOString().replace(/\.\d{3}Z$/, 'Z')
+
   const url = new URL(`${TM_BASE}/events.json`)
   url.searchParams.set('apikey',             process.env.TICKETMASTER_API_KEY!)
   url.searchParams.set('countryCode',        'GB')
@@ -297,10 +292,10 @@ async function fetchTMPage(
   url.searchParams.set('page',               String(page))
   url.searchParams.set('locale',             'en-us')
   url.searchParams.set('sort',               'date,asc')
-  url.searchParams.set('startDateTime',      startDateTime)
   url.searchParams.set('endDateTime',        endDateTime)
+  if (startDateTime) url.searchParams.set('startDateTime', startDateTime)
 
-  return fetchWithRetry(url, label ?? `"${classificationName}" page ${page}`)
+  return fetchWithRetry(url, `"${classificationName}" page ${page}`)
 }
 
 // ── Venue upsert ─────────────────────────────────────────────────────────────
@@ -682,82 +677,55 @@ export async function syncTicketmasterEvents(
   let total = 0, inserted = 0, skipped = 0, errors = 0, rateLimited = 0
   const byCategory: Record<string, number> = {}
 
-  // ── Main pass ──────────────────────────────────────────────────────────────
-  // Banded across ~21-day show-date windows spanning the next 12.5 months, the
-  // same technique the on-sale-soon pass already uses below. Previously this
-  // queried each classification with one unbounded date range (capped at 6
-  // pages / ~1200 events by Ticketmaster itself) sorted soonest-first — fine
-  // for a quiet classification, but for a busy one (e.g. "family", which
-  // includes long-running daily attractions like Twist Museum racking up
-  // thousands of dated instances) 1200 nationwide results can be exhausted
-  // before reaching events only a few weeks out at a specific venue. That's
-  // how a live, on-sale, several-weeks-out Ticketmaster event (confirmed:
-  // Professor Brian Cox at Vaillant Live, Derby) never made it into the
-  // database at all. Banding guarantees every window is queried on its own
-  // terms, so no window's result count can ever crowd out another window's.
   if (pass !== 'onsale') {
-  const mainNow         = opts?.startDateTime ? new Date(opts.startDateTime) : new Date()
-  const MAIN_BAND_DAYS   = 21
-  const MAIN_BAND_COUNT  = 18  // 18 × 21 days ≈ 12.5 months
-  const fmtMain = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, 'Z')
-  const mainBands = Array.from({ length: MAIN_BAND_COUNT }, (_, i) => ({
-    label: `+${i * MAIN_BAND_DAYS}d–+${(i + 1) * MAIN_BAND_DAYS}d`,
-    start: fmtMain(new Date(mainNow.getTime() + i       * MAIN_BAND_DAYS * 86400000)),
-    end:   fmtMain(new Date(mainNow.getTime() + (i + 1) * MAIN_BAND_DAYS * 86400000)),
-  }))
-
-  console.log(`\n[TM] ── Main pass, banded across ${MAIN_BAND_COUNT} × ${MAIN_BAND_DAYS}d windows ──`)
-
   for (const { classificationName, dbCategory } of SEGMENT_QUERIES) {
-    for (const { label, start, end } of mainBands) {
-      console.log(`[TM]    "${classificationName}" ${label}`)
-      const segmentStarted = new Date().toISOString()
-      const segmentResults: FetchResult[] = []
-      let segmentEventsFound = 0
+    console.log(`\n[TM] ── Fetching "${classificationName}" ──`)
+    const segmentStarted = new Date().toISOString()
+    const segmentResults: FetchResult[] = []
+    let segmentEventsFound = 0
 
-      let totalPages = 1
-      for (let page = 0; page < totalPages; page++) {
-        const result = await fetchTMPage(classificationName, page, start, end, `"${classificationName}" ${label} page ${page}`)
-        segmentResults.push(result)
-        totalPages = Math.min(result.totalPages || 1, 6)  // TM API hard-caps at page 5 (0-indexed)
-        console.log(`[TM]      page ${page}/${totalPages - 1}: ${result.events.length} events (${result.status})`)
+    let totalPages = 1
+    for (let page = 0; page < totalPages; page++) {
+      const result = await fetchTMPage(classificationName, page, opts?.startDateTime)
+      segmentResults.push(result)
+      totalPages = Math.min(result.totalPages || 1, 6)  // TM API hard-caps at page 5 (0-indexed)
+      console.log(`[TM]    page ${page}/${totalPages - 1}: ${result.events.length} events (${result.status})`)
 
-        if (!result.events.length) break
-        segmentEventsFound += result.events.length
+      if (!result.events.length) break
+      segmentEventsFound += result.events.length
 
-        total += result.events.length
-        for (let i = 0; i < result.events.length; i += EVENT_CONCURRENCY) {
-          const chunk = result.events.slice(i, i + EVENT_CONCURRENCY)
-          const outcomes = await Promise.all(
-            chunk.map(ev => processEvent(db, ev, dbCategory, venueCache, artistCache))
-          )
-          for (const outcome of outcomes) {
-            if (outcome === 'inserted') {
-              inserted++
-              byCategory[dbCategory] = (byCategory[dbCategory] ?? 0) + 1
-            } else if (outcome === 'skipped' || outcome === 'no-venue') {
-              skipped++
-            } else if (outcome === 'error') {
-              errors++
-            }
+      total += result.events.length
+      for (let i = 0; i < result.events.length; i += EVENT_CONCURRENCY) {
+        const chunk = result.events.slice(i, i + EVENT_CONCURRENCY)
+        const outcomes = await Promise.all(
+          chunk.map(ev => processEvent(db, ev, dbCategory, venueCache, artistCache))
+        )
+        for (const outcome of outcomes) {
+          if (outcome === 'inserted') {
+            inserted++
+            byCategory[dbCategory] = (byCategory[dbCategory] ?? 0) + 1
+          } else if (outcome === 'skipped' || outcome === 'no-venue') {
+            skipped++
+          } else if (outcome === 'error') {
+            errors++
           }
         }
-
-        if (page + 1 < totalPages) await sleep(RATE_LIMIT_MS)
       }
 
-      const segmentOutcome = worstStatus(segmentResults)
-      if (segmentOutcome.status === 'rate_limited') rateLimited++
-      await logSegment(db, {
-        label:       `${classificationName}:${label}`,
-        startedAt:   segmentStarted,
-        eventsFound: segmentEventsFound,
-        status:      segmentOutcome.status,
-        error:       segmentOutcome.detail,
-      })
-
-      await sleep(RATE_LIMIT_MS)
+      if (page + 1 < totalPages) await sleep(RATE_LIMIT_MS)
     }
+
+    const segmentOutcome = worstStatus(segmentResults)
+    if (segmentOutcome.status === 'rate_limited') rateLimited++
+    await logSegment(db, {
+      label:       classificationName,
+      startedAt:   segmentStarted,
+      eventsFound: segmentEventsFound,
+      status:      segmentOutcome.status,
+      error:       segmentOutcome.detail,
+    })
+
+    await sleep(RATE_LIMIT_MS)
   }
   }
 
