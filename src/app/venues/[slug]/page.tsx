@@ -5,11 +5,15 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import EventCard from '@/components/EventCard'
+import Pagination from '@/components/Pagination'
 import type { EventWithVenue } from '@/lib/types/database'
 import { venuePageDescription } from '@/lib/venueBlurb'
 
+const PAGE_SIZE = 24
+
 interface PageProps {
   params: Promise<{ slug: string }>
+  searchParams: Promise<{ page?: string }>
 }
 
 interface VenueRow {
@@ -46,10 +50,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 }
 
-export default async function VenuePage({ params }: PageProps) {
-  const { slug }  = await params
+export default async function VenuePage({ params, searchParams }: PageProps) {
+  const { slug }        = await params
+  const { page: pageParam } = await searchParams
   const supabase  = await createClient()
   const now       = new Date().toISOString()
+  const page      = Math.max(1, Number(pageParam ?? 1))
+  const from      = (page - 1) * PAGE_SIZE
+  const to        = from + PAGE_SIZE - 1
 
   // Fetch venue — first query so we have the ID for the events query
   const { data: venue } = await supabase
@@ -60,16 +68,29 @@ export default async function VenuePage({ params }: PageProps) {
 
   if (!venue) notFound()
 
-  // Fetch upcoming events at this venue
-  const { data: events } = await supabase
+  // Fetch upcoming events at this venue — paginated (not capped at an
+  // arbitrary limit) so a busy venue's later shows aren't silently hidden.
+  // A flat .limit(50) previously meant any venue with more than ~25 distinct
+  // upcoming shows (Ticketmaster often lists a standard + a premium-package
+  // listing per show, doubling the row count) had its later dates vanish
+  // from the page entirely with no indication anything was missing.
+  const { data: events, count } = await supabase
     .from('events_with_venue')
-    .select('*')
+    .select('*', { count: 'exact' })
     .eq('venue_id', venue.id)
     .gte('start_date', now)
     .order('start_date', { ascending: true })
-    .limit(50) as unknown as { data: EventWithVenue[] | null }
+    .range(from, to) as unknown as { data: EventWithVenue[] | null; count: number | null }
 
   const upcomingEvents = events ?? []
+  const totalCount     = count ?? upcomingEvents.length
+  const totalPages     = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+
+  function buildHref(p: number) {
+    if (p === 1) return `/venues/${slug}`
+    return `/venues/${slug}?page=${p}`
+  }
+
   const description = venuePageDescription(
     venue.name,
     venue.city,
@@ -129,9 +150,9 @@ export default async function VenuePage({ params }: PageProps) {
               Events at {venue.name}
             </h2>
           </div>
-          {upcomingEvents.length > 0 && (
+          {totalCount > 0 && (
             <span className="text-sm text-slate-500 hidden sm:block">
-              {upcomingEvents.length} upcoming show{upcomingEvents.length !== 1 ? 's' : ''}
+              {totalCount} upcoming show{totalCount !== 1 ? 's' : ''}
             </span>
           )}
         </div>
@@ -150,11 +171,14 @@ export default async function VenuePage({ params }: PageProps) {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {upcomingEvents.map(event => (
-              <EventCard key={event.id} event={event} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {upcomingEvents.map(event => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </div>
+            <Pagination currentPage={page} totalPages={totalPages} buildHref={buildHref} />
+          </>
         )}
       </div>
     </div>
