@@ -105,6 +105,34 @@ function slugify(str: string): string {
     .substring(0, 80)
 }
 
+// Ticketmaster's venue.city.name is inconsistent in ways that silently break
+// the /cities/[city] pages, which match on an exact (trimmed) city name:
+//   - stray leading/trailing whitespace ("Norwich ", " London") — by far the
+//     most common case, seen across dozens of cities
+//   - the full official name where our CITIES list uses the short form
+//     ("Newcastle upon Tyne" / "Newcastle Upon Tyne" vs "Newcastle")
+//   - an appended postcode ("Newcastle upon Tyne, NE1 2PQ")
+// This normalizes at write time so every future sync stores the clean form;
+// see supabase/migration_018_normalize_venue_city.sql for the one-time
+// backfill of rows written before this existed.
+const CITY_ALIASES: Record<string, string> = {
+  'newcastle upon tyne': 'Newcastle',
+}
+
+function normalizeCityName(raw: string): string {
+  let city = raw
+    .trim()
+    .replace(/\s+/g, ' ')                          // collapse repeated whitespace
+    .replace(/,?\s*[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i, '') // drop trailing UK postcode
+    .replace(/,\s*$/, '')                          // drop a now-dangling trailing comma
+    .trim()
+
+  const alias = CITY_ALIASES[city.toLowerCase()]
+  if (alias) city = alias
+
+  return city
+}
+
 function getBestImage(images: TMImage[] | undefined): string | null {
   if (!images?.length) return null
   const ok = (i: TMImage) => !i.fallback
@@ -276,7 +304,7 @@ async function upsertVenue(db: DbClient, tmVenue: TMVenue, cache?: Map<string, s
 
 async function upsertVenueUncached(db: DbClient, tmVenue: TMVenue): Promise<string | null> {
   if (!tmVenue.name) return null  // some TM venues have no name; skip them
-  const city = tmVenue.city?.name ?? 'Unknown'
+  const city = normalizeCityName(tmVenue.city?.name ?? 'Unknown')
   const baseSlug = slugify(`${tmVenue.name}-${city}`)
 
   // 1. Look up by TM venue ID (fastest path on repeat runs)
