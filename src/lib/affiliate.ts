@@ -45,3 +45,32 @@ export function wrapWithEnvTemplate(directUrl: string, envVar: string): string {
 export function getViagogoAffiliateLink(destinationUrl: string): string {
   return wrapWithEnvTemplate(destinationUrl, 'VIAGOGO_AFFILIATE_TEMPLATE')
 }
+
+// Every remaining ticket provider on the site (Eventim, StubHub, Gigsberg,
+// Vivid Seats, Eventbrite, Skiddle, Seat Unique) has no confirmed affiliate
+// programme yet — these buttons currently send clicks out with zero
+// tracking. Wrapping them all in wrapWithEnvTemplate now means the moment
+// any one of these programmes is applied for and approved, turning on
+// tracking is a single Vercel env var — no further code changes, no more
+// buttons quietly leaking untracked clicks.
+export function getEventimAffiliateLink(destinationUrl: string): string {
+  return wrapWithEnvTemplate(destinationUrl, 'EVENTIM_AFFILIATE_TEMPLATE')
+}
+export function getStubHubAffiliateLink(destinationUrl: string): string {
+  return wrapWithEnvTemplate(destinationUrl, 'STUBHUB_AFFILIATE_TEMPLATE')
+}
+export function getGigsbergAffiliateLink(destinationUrl: string): string {
+  return wrapWithEnvTemplate(destinationUrl, 'GIGSBERG_AFFILIATE_TEMPLATE')
+}
+export function getVividSeatsAffiliateLink(destinationUrl: string): string {
+  return wrapWithEnvTemplate(destinationUrl, 'VIVIDSEATS_AFFILIATE_TEMPLATE')
+}
+export function getEventbriteAffiliateLink(destinationUrl: string): string {
+  return wrapWithEnvTemplate(destinationUrl, 'EVENTBRITE_AFFILIATE_TEMPLATE')
+}
+export function getSkiddleAffiliateLink(destinationUrl: string): string {
+  return wrapWithEnvTemplate(destinationUrl, 'SKIDDLE_AFFILIATE_TEMPLATE')
+}
+export function getSeatUniqueAffiliateLink(destinationUrl: string): string {
+  return wrapWithEnvTemplate(destinationUrl, 'SEATUNIQUE_AFFILIATE_TEMPLATE')
+}

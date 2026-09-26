@@ -7,7 +7,12 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import type { EventCategory, EventStatus } from '@/lib/types/database'
-import { getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink } from '@/lib/affiliate'
+import {
+  getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
+  getEventimAffiliateLink, getStubHubAffiliateLink, getGigsbergAffiliateLink,
+  getVividSeatsAffiliateLink, getEventbriteAffiliateLink, getSkiddleAffiliateLink,
+  getSeatUniqueAffiliateLink,
+} from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -72,18 +77,18 @@ function buildProviders(title: string, directUrl: string | null) {
   const primary = [
     { name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: getTicketmasterAffiliateLink(directUrl ?? `https://www.ticketmaster.co.uk/search?q=${q}`) },
     { name: 'See Tickets',  tagline: 'Official tickets',    bg: '#e4022d', href: getSeeTicketsAffiliateLink(`https://www.seetickets.com/search?q=${q}`) },
-    { name: 'Eventim',      tagline: 'Book direct',         bg: '#00a4e0', href: 'https://www.eventim.co.uk' },
+    { name: 'Eventim',      tagline: 'Book direct',         bg: '#00a4e0', href: getEventimAffiliateLink('https://www.eventim.co.uk') },
   ]
   const resale = [
     { name: 'Viagogo',     bg: '#00a650', href: getViagogoAffiliateLink(`https://www.viagogo.co.uk/ww/SearchResults?q=${q}`) },
-    { name: 'StubHub',     bg: '#400078', href: `https://www.stubhub.co.uk/srp/?q=${q}` },
-    { name: 'Gigsberg',    bg: '#1a1f6e', href: `https://www.gigsberg.com/tickets?q=${q}` },
-    { name: 'Vivid Seats', bg: '#02044a', href: `https://www.vividseats.com/search?searchTerm=${q}` },
+    { name: 'StubHub',     bg: '#400078', href: getStubHubAffiliateLink(`https://www.stubhub.co.uk/srp/?q=${q}`) },
+    { name: 'Gigsberg',    bg: '#1a1f6e', href: getGigsbergAffiliateLink(`https://www.gigsberg.com/tickets?q=${q}`) },
+    { name: 'Vivid Seats', bg: '#02044a', href: getVividSeatsAffiliateLink(`https://www.vividseats.com/search?searchTerm=${q}`) },
   ]
   const also = [
-    { name: 'Eventbrite',  bg: '#f05537',              href: `https://www.eventbrite.co.uk/d/united-kingdom/${q}/` },
-    { name: 'Skiddle',     bg: '#ffcc00', color: '#111111', href: 'https://www.skiddle.com' },
-    { name: 'Seat Unique', bg: '#1e3a5f', href: `https://www.seatunique.com/search?q=${q}` },
+    { name: 'Eventbrite',  bg: '#f05537',              href: getEventbriteAffiliateLink(`https://www.eventbrite.co.uk/d/united-kingdom/${q}/`) },
+    { name: 'Skiddle',     bg: '#ffcc00', color: '#111111', href: getSkiddleAffiliateLink('https://www.skiddle.com') },
+    { name: 'Seat Unique', bg: '#1e3a5f', href: getSeatUniqueAffiliateLink(`https://www.seatunique.com/search?q=${q}`) },
   ]
   return { primary, resale, also }
 }
