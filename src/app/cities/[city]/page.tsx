@@ -6,7 +6,6 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import EventCard from '@/components/EventCard'
 import SearchBarWrapper from '@/components/SearchBarWrapper'
-import Pagination from '@/components/Pagination'
 import { Suspense } from 'react'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
@@ -81,19 +80,13 @@ function affiliateUrl(directUrl: string, envVar: string): string {
   return template.replace('{url}', encodeURIComponent(directUrl))
 }
 
-const PAGE_SIZE = 24
-
 export default async function CityPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ city: string }>
-  searchParams: Promise<{ page?: string }>
 }) {
   const { city } = await params
-  const { page: pageParam } = await searchParams
   const cityName = decodeURIComponent(city)
-  const page     = Math.max(1, Number(pageParam ?? 1))
 
   const cityConfig = CITIES.find(c => c.name === cityName)
   if (!cityConfig) notFound()
@@ -104,113 +97,97 @@ export default async function CityPage({
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
   const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  const from = (page - 1) * PAGE_SIZE
-  const to   = from + PAGE_SIZE - 1
-
-  const [featuredPoolResult, onsalePoolResult, allEventsResult, artistsResult, venuesResult, localBusinessesResult, cityNewsResult] = await Promise.all([
-    // Pool for featured section: upcoming events with images, limit 50 (page 1 only)
-    page === 1
-      ? supabase
-          .from('events_with_venue')
-          .select('*')
-          .ilike('venue_city', cityName)
-          .gte('start_date', nowISO)
-          .not('image_url', 'is', null)
-          .order('start_date', { ascending: true })
-          .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>
-      : Promise.resolve({ data: [] as EventWithVenue[] }),
-
-    // On sale this week (page 1 only)
-    page === 1
-      ? supabase
-          .from('events_with_venue')
-          .select('*')
-          .ilike('venue_city', cityName)
-          .gte('onsale_date', threeDaysAgo)
-          .lte('onsale_date', weekAhead)
-          .order('onsale_date', { ascending: true })
-          .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>
-      : Promise.resolve({ data: [] as EventWithVenue[] }),
-
-    // All events for listing section — paginated
+  const [featuredPoolResult, onsalePoolResult, totalCountResult, artistsResult, venuesResult, localBusinessesResult, cityNewsResult] = await Promise.all([
+    // Pool for featured section: the city's biggest upcoming shows, sorted by
+    // venue capacity — NOT by date. Previously this pulled the 50 soonest-
+    // starting events first and only then sorted that pre-filtered pool by
+    // capacity, so a big venue's next show past the 50th-nearest date across
+    // the whole city never even entered the candidate pool. Sorting by
+    // capacity at the query level fixes that: the biggest venues surface
+    // regardless of how far out their next show is.
     supabase
       .from('events_with_venue')
-      .select('*', { count: 'exact' })
+      .select('*')
       .ilike('venue_city', cityName)
       .gte('start_date', nowISO)
+      .not('image_url', 'is', null)
+      .order('venue_capacity', { ascending: false, nullsFirst: false })
       .order('start_date', { ascending: true })
-      .range(from, to) as unknown as Promise<{ data: EventWithVenue[] | null; count: number | null }>,
+      .limit(100) as unknown as Promise<{ data: EventWithVenue[] | null }>,
 
-    // Artists for name matching (page 1 only)
-    page === 1
-      ? supabase.from('artists').select('*') as unknown as Promise<{ data: Artist[] | null }>
-      : Promise.resolve({ data: [] as Artist[] }),
+    // On sale this week
+    supabase
+      .from('events_with_venue')
+      .select('*')
+      .ilike('venue_city', cityName)
+      .gte('onsale_date', threeDaysAgo)
+      .lte('onsale_date', weekAhead)
+      .order('onsale_date', { ascending: true })
+      .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>,
 
-    // Venues in this city sorted by capacity (page 1 only)
-    page === 1
-      ? supabase
-          .from('venues')
-          .select('id, name, slug, capacity, address')
-          .ilike('city', cityName)
-          .order('capacity', { ascending: false, nullsFirst: false })
-          .limit(20) as unknown as Promise<{ data: { id: string; name: string; slug: string; capacity: number | null; address: string }[] | null }>
-      : Promise.resolve({ data: [] as { id: string; name: string; slug: string; capacity: number | null; address: string }[] }),
+    // Total upcoming count for the hero stat line — a head:true count query,
+    // not a full events fetch (the "All Events" grid this used to feed has
+    // been removed: with thousands of events in some cities it was more of a
+    // wall to search through than a useful section).
+    supabase
+      .from('events_with_venue')
+      .select('*', { count: 'exact', head: true })
+      .ilike('venue_city', cityName)
+      .gte('start_date', nowISO) as unknown as Promise<{ count: number | null }>,
 
-    // Local guide listings for this city (page 1 only) — sponsored first
-    page === 1
-      ? supabase
-          .from('local_businesses')
-          .select('*')
-          .ilike('city', cityName)
-          .order('is_sponsored', { ascending: false })
-          .order('display_order', { ascending: true })
-          .limit(24) as unknown as Promise<{ data: LocalBusiness[] | null }>
-      : Promise.resolve({ data: [] as LocalBusiness[] }),
+    // Artists for name matching
+    supabase.from('artists').select('*') as unknown as Promise<{ data: Artist[] | null }>,
 
-    // Local entertainment news for this city (page 1 only)
-    page === 1
-      ? supabase
-          .from('city_news')
-          .select('*')
-          .eq('city_slug', citySlug(cityName))
-          .order('published_at', { ascending: false })
-          .limit(5) as unknown as Promise<{ data: CityNews[] | null }>
-      : Promise.resolve({ data: [] as CityNews[] }),
+    // Venues in this city sorted by capacity
+    supabase
+      .from('venues')
+      .select('id, name, slug, capacity, address')
+      .ilike('city', cityName)
+      .order('capacity', { ascending: false, nullsFirst: false })
+      .limit(20) as unknown as Promise<{ data: { id: string; name: string; slug: string; capacity: number | null; address: string }[] | null }>,
+
+    // Local guide listings for this city — sponsored first
+    supabase
+      .from('local_businesses')
+      .select('*')
+      .ilike('city', cityName)
+      .order('is_sponsored', { ascending: false })
+      .order('display_order', { ascending: true })
+      .limit(24) as unknown as Promise<{ data: LocalBusiness[] | null }>,
+
+    // Local entertainment news for this city
+    supabase
+      .from('city_news')
+      .select('*')
+      .eq('city_slug', citySlug(cityName))
+      .order('published_at', { ascending: false })
+      .limit(5) as unknown as Promise<{ data: CityNews[] | null }>,
   ])
 
   const localBusinesses = localBusinessesResult.data ?? []
   const cityNews = cityNewsResult.data ?? []
   const featuredPool = featuredPoolResult.data ?? []
   const onsalePool   = onsalePoolResult.data ?? []
-  const allEvents    = allEventsResult.data ?? []
-  const totalCount   = allEventsResult.count ?? allEvents.length
-  const totalPages   = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const totalCount   = totalCountResult.count ?? 0
 
-  // Exact upcoming-event counts for each candidate venue (page 1 only), queried
-  // one venue at a time with count:'exact', head:true rather than sampling all
-  // of the city's events into a capped, unordered array. The old sampling
-  // query silently dropped major arenas (The O2, Wembley Stadium) from big
-  // cities' Venues sections once a city had more upcoming event rows than the
-  // sample cap, or whenever a duplicate zero-event venue row happened to be
-  // the one counted. A per-venue exact count is correct regardless of how
-  // many rows the city has or how many duplicate venue rows exist.
+  // Exact upcoming-event counts for each candidate venue, queried one venue
+  // at a time with count:'exact', head:true rather than sampling all of the
+  // city's events into a capped, unordered array. The old sampling query
+  // silently dropped major arenas (The O2, Wembley Stadium) from big cities'
+  // Venues sections once a city had more upcoming event rows than the sample
+  // cap, or whenever a duplicate zero-event venue row happened to be the one
+  // counted. A per-venue exact count is correct regardless of how many rows
+  // the city has or how many duplicate venue rows exist.
   const candidateVenues = venuesResult.data ?? []
-  const venueCountResults = page === 1
-    ? await Promise.all(
-        candidateVenues.map(v =>
-          supabase
-            .from('events_with_venue')
-            .select('venue_id', { count: 'exact', head: true })
-            .eq('venue_id', v.id)
-            .gte('start_date', nowISO) as unknown as Promise<{ count: number | null }>
-        )
-      )
-    : []
-
-  function buildHref(p: number) {
-    if (p === 1) return `/cities/${encodeURIComponent(cityName)}`
-    return `/cities/${encodeURIComponent(cityName)}?page=${p}`
-  }
+  const venueCountResults = await Promise.all(
+    candidateVenues.map(v =>
+      supabase
+        .from('events_with_venue')
+        .select('venue_id', { count: 'exact', head: true })
+        .eq('venue_id', v.id)
+        .gte('start_date', nowISO) as unknown as Promise<{ count: number | null }>
+    )
+  )
 
   // Group on-sale events by artist, limit 6 cards
   const onsaleGroups = groupEventsByArtist(onsalePool, artistsResult.data ?? []).slice(0, 6)
@@ -249,8 +226,8 @@ export default async function CityPage({
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-14">
 
-        {/* ── LOCAL ENTERTAINMENT NEWS (page 1 only, hidden if no rows yet) ── */}
-        {page === 1 && cityNews.length > 0 && (
+        {/* ── LOCAL ENTERTAINMENT NEWS (hidden if no rows yet) ── */}
+        {cityNews.length > 0 && (
           <section>
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
@@ -282,8 +259,8 @@ export default async function CityPage({
           </section>
         )}
 
-        {/* ── FEATURED / UPCOMING EVENTS (page 1 only) ── */}
-        {page === 1 && topEvents.length > 0 && (
+        {/* ── FEATURED / UPCOMING EVENTS ── */}
+        {topEvents.length > 0 && (
           <section>
             <div className="flex items-end justify-between mb-7">
               <div>
@@ -303,8 +280,8 @@ export default async function CityPage({
           </section>
         )}
 
-        {/* ── ON SALE THIS WEEK (page 1 only) ── */}
-        {page === 1 && onsaleGroups.length > 0 && (
+        {/* ── ON SALE THIS WEEK ── */}
+        {onsaleGroups.length > 0 && (
           <section>
             <div className="flex items-end justify-between mb-7">
               <div>
@@ -366,45 +343,8 @@ export default async function CityPage({
           </section>
         )}
 
-        {/* ── ALL EVENTS ── */}
-        <section>
-          <div className="flex items-end justify-between mb-7">
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                All Events in {cityName}
-              </h2>
-              {totalCount > 0 && (
-                <p className="text-sm text-slate-500 mt-1">
-                  {totalCount} upcoming show{totalCount !== 1 ? 's' : ''}
-                  {totalPages > 1 && ` — page ${page} of ${totalPages}`}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {allEvents.length === 0 ? (
-            <div className="text-center py-24 bg-white rounded-2xl border border-slate-200">
-              <p className="text-6xl mb-4">🎭</p>
-              <h3 className="text-xl font-semibold text-slate-700 mb-2">No events yet</h3>
-              <p className="text-slate-500 mb-6">Check back soon — we update daily.</p>
-              <Link href="/events" className="text-sm font-semibold hover:underline" style={{ color: '#E8003D' }}>
-                Browse all UK events →
-              </Link>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {allEvents.map(event => (
-                  <EventCard key={event.id} event={event} />
-                ))}
-              </div>
-              <Pagination currentPage={page} totalPages={totalPages} buildHref={buildHref} />
-            </>
-          )}
-        </section>
-
-        {/* ── VENUES (page 1 only) ── */}
-        {page === 1 && cityVenues.length > 0 && (
+        {/* ── VENUES ── */}
+        {cityVenues.length > 0 && (
           <section>
             <div className="flex items-end justify-between mb-7">
               <div>
@@ -446,48 +386,46 @@ export default async function CityPage({
           </section>
         )}
 
-        {/* ── GETTING THERE & STAYING (page 1 only) ── */}
-        {page === 1 && (
-          <section>
-            <div className="mb-7">
-              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
-                Plan your trip
-              </p>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                Getting to {cityName} & Staying Over
-              </h2>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <a
-                href={affiliateUrl(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(`${cityName}, United Kingdom`)}`, 'BOOKING_AFFILIATE_TEMPLATE')}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6"
-              >
-                <div>
-                  <p className="font-extrabold text-slate-900 text-lg mb-1">🏨 Hotels in {cityName}</p>
-                  <p className="text-sm text-slate-500">Staying over for the show? Search hotels via Booking.com</p>
-                </div>
-                <span className="text-xl text-slate-300">→</span>
-              </a>
-              <a
-                href={affiliateUrl('https://www.thetrainline.com/', 'TRAINLINE_AFFILIATE_TEMPLATE')}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6"
-              >
-                <div>
-                  <p className="font-extrabold text-slate-900 text-lg mb-1">🚆 Trains to {cityName}</p>
-                  <p className="text-sm text-slate-500">Book UK train tickets via Trainline</p>
-                </div>
-                <span className="text-xl text-slate-300">→</span>
-              </a>
-            </div>
-          </section>
-        )}
+        {/* ── GETTING THERE & STAYING ── */}
+        <section>
+          <div className="mb-7">
+            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+              Plan your trip
+            </p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+              Getting to {cityName} & Staying Over
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <a
+              href={affiliateUrl(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(`${cityName}, United Kingdom`)}`, 'BOOKING_AFFILIATE_TEMPLATE')}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6"
+            >
+              <div>
+                <p className="font-extrabold text-slate-900 text-lg mb-1">🏨 Hotels in {cityName}</p>
+                <p className="text-sm text-slate-500">Staying over for the show? Search hotels via Booking.com</p>
+              </div>
+              <span className="text-xl text-slate-300">→</span>
+            </a>
+            <a
+              href={affiliateUrl('https://www.thetrainline.com/', 'TRAINLINE_AFFILIATE_TEMPLATE')}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6"
+            >
+              <div>
+                <p className="font-extrabold text-slate-900 text-lg mb-1">🚆 Trains to {cityName}</p>
+                <p className="text-sm text-slate-500">Book UK train tickets via Trainline</p>
+              </div>
+              <span className="text-xl text-slate-300">→</span>
+            </a>
+          </div>
+        </section>
 
-        {/* ── LOCAL GUIDE (page 1 only, hidden until businesses are added) ── */}
-        {page === 1 && localBusinesses.length > 0 && (
+        {/* ── LOCAL GUIDE (hidden until businesses are added) ── */}
+        {localBusinesses.length > 0 && (
           <section>
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
