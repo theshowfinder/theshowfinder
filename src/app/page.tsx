@@ -21,6 +21,8 @@ import SearchBar from '@/components/SearchBar'
 import CitiesGrid from '@/components/CitiesGrid'
 import NewsletterSignup from '@/components/NewsletterSignup'
 import LocationBanner from '@/components/LocationBanner'
+import LocalSpotlight from '@/components/LocalSpotlight'
+import CategoryStrip from '@/components/CategoryStrip'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 import { groupEventsByArtist, fmtOnSaleLabel, extractArtistName, toSlug } from '@/lib/on-sale'
 
@@ -344,6 +346,64 @@ async function LatestNews() {
   )
 }
 
+async function JustAnnounced() {
+  const supabase = await createClient()
+  const now = new Date()
+  const nowISO = now.toISOString()
+  const sevenDaysAgoISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+  // events_with_venue doesn't expose created_at, so this queries the base
+  // events table with venues embedded (same venue:venues(...) join used in
+  // events/[slug]/page.tsx) rather than the view. Checks created_at /
+  // public_onsale_start directly rather than the newly_announced flag column
+  // — that flag depends on the same nightly calculate_event_flags() DB
+  // function already known not to be running (see the OnSaleThisWeek
+  // comment above), so it's stuck at false for everything.
+  const result = await supabase
+    .from('events')
+    .select('*, venue:venues(id, name, slug, city, postcode, capacity)')
+    .gte('created_at', sevenDaysAgoISO)
+    .or(`public_onsale_start.is.null,public_onsale_start.gt.${nowISO}`)
+    .gte('start_date', nowISO)
+    .order('created_at', { ascending: false })
+    .limit(8) as unknown as {
+      data: (Record<string, unknown> & {
+        id: string
+        venue: { id: string; name: string; slug: string | null; city: string; postcode: string; capacity: number | null } | null
+      })[] | null
+    }
+
+  const events: EventWithVenue[] = (result.data ?? [])
+    .filter(row => row.venue)
+    .map(row => ({
+      ...row,
+      venue_id:       row.venue!.id,
+      venue_name:     row.venue!.name,
+      venue_slug:     row.venue!.slug,
+      venue_city:     row.venue!.city,
+      venue_postcode: row.venue!.postcode,
+      venue_capacity: row.venue!.capacity,
+    } as unknown as EventWithVenue))
+
+  if (!events.length) return null
+
+  return (
+    <section className="bg-white py-14 border-t border-slate-100">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mb-7">
+          <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+            Hot off the press
+          </p>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Just Announced</h2>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {events.map(event => <EventCard key={event.id} event={event} />)}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 const EventCardSkeleton = () => (
   <div className="rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm">
     <div className="h-48 bg-slate-200 animate-pulse" />
@@ -412,6 +472,13 @@ export default function HomePage() {
             </Suspense>
           </div>
 
+          {/* Category quick-filters */}
+          <div className="mt-6 max-w-xl mx-auto">
+            <Suspense>
+              <CategoryStrip />
+            </Suspense>
+          </div>
+
           {/* Trust row */}
           <div className="mt-8 flex flex-wrap justify-center gap-6 text-sm text-white/50">
             <span>✓ Free to use</span>
@@ -421,6 +488,9 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── LOCAL SPOTLIGHT (only renders once a city is detected) ─ */}
+      <LocalSpotlight />
+
       {/* ── ON SALE THIS WEEK ───────────────────────────────────── */}
       <Suspense fallback={null}>
         <OnSaleThisWeek />
@@ -429,6 +499,11 @@ export default function HomePage() {
       {/* ── LATEST NEWS ─────────────────────────────────────────── */}
       <Suspense fallback={null}>
         <LatestNews />
+      </Suspense>
+
+      {/* ── JUST ANNOUNCED ──────────────────────────────────────── */}
+      <Suspense fallback={null}>
+        <JustAnnounced />
       </Suspense>
 
       {/* ── FEATURED EVENTS ─────────────────────────────────────── */}
