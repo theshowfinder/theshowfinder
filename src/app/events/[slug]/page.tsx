@@ -7,7 +7,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import type { EventCategory, EventStatus } from '@/lib/types/database'
-import { getTicketmasterAffiliateLink } from '@/lib/affiliate'
+import { getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ function buildProviders(title: string, directUrl: string | null) {
   const q = encodeURIComponent(title)
   const primary = [
     { name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: getTicketmasterAffiliateLink(directUrl ?? `https://www.ticketmaster.co.uk/search?q=${q}`) },
-    { name: 'See Tickets',  tagline: 'Official tickets',    bg: '#e4022d', href: 'https://www.seetickets.com' },
+    { name: 'See Tickets',  tagline: 'Official tickets',    bg: '#e4022d', href: getSeeTicketsAffiliateLink(`https://www.seetickets.com/search?q=${q}`) },
     { name: 'Eventim',      tagline: 'Book direct',         bg: '#00a4e0', href: 'https://www.eventim.co.uk' },
   ]
   const resale = [

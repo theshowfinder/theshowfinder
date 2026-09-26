@@ -3,7 +3,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import type { Artist, Tour, TourDate } from '@/lib/types/database'
-import { getTicketmasterAffiliateLink } from '@/lib/affiliate'
+import { getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 
 export const dynamic = 'force-dynamic'
@@ -213,7 +213,7 @@ export default async function ArtistPage({ params }: PageProps) {
               )}
               {artist.see_tickets_url && (
                 <a
-                  href={artist.see_tickets_url}
+                  href={getSeeTicketsAffiliateLink(artist.see_tickets_url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
