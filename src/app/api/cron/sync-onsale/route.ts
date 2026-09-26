@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { syncTicketmasterEvents } from '@/lib/ticketmaster'
 
-// Allow up to 5 minutes for a full sync (Vercel Pro/Enterprise only; Hobby = 10s)
+// Allow up to 5 minutes for the on-sale-soon pass (Vercel Pro/Enterprise only; Hobby = 10s)
 export const maxDuration = 300
 export const dynamic     = 'force-dynamic'
 
@@ -17,10 +17,10 @@ export async function GET(request: Request) {
   }
 
   const started = new Date().toISOString()
-  console.log(`[sync] Starting Ticketmaster event sync (main pass) at ${started}`)
+  console.log(`[sync] Starting Ticketmaster event sync (on-sale-soon pass) at ${started}`)
 
   try {
-    const result = await syncTicketmasterEvents({ pass: 'main' })
+    const result = await syncTicketmasterEvents({ pass: 'onsale' })
     return NextResponse.json({
       success: true,
       started,

@@ -630,9 +630,12 @@ function worstStatus(results: FetchResult[]): { status: 'ok' | 'rate_limited' | 
 
 // ── Main entry point ─────────────────────────────────────────────────────────
 
-export async function syncTicketmasterEvents(opts?: { startDateTime?: string }): Promise<SyncResult> {
+export async function syncTicketmasterEvents(
+  opts?: { startDateTime?: string; pass?: 'main' | 'onsale' | 'both' },
+): Promise<SyncResult> {
   const t0 = Date.now()
   const db = createAdminClient()
+  const pass = opts?.pass ?? 'both'
 
   await updateSyncState(db, { status: 'running', last_started_at: new Date().toISOString() })
   const venueCache = new Map<string, string>()
@@ -641,6 +644,7 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
   let total = 0, inserted = 0, skipped = 0, errors = 0, rateLimited = 0
   const byCategory: Record<string, number> = {}
 
+  if (pass !== 'onsale') {
   for (const { classificationName, dbCategory } of SEGMENT_QUERIES) {
     console.log(`\n[TM] ── Fetching "${classificationName}" ──`)
     const segmentStarted = new Date().toISOString()
@@ -690,12 +694,14 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
 
     await sleep(RATE_LIMIT_MS)
   }
+  }
 
   // ── On-sale-soon pass ──────────────────────────────────────────────────────
   // Uses 3-week (21-day) show-date bands with both startDateTime and endDateTime
   // so each band stays under TM's 1200-event / 6-page hard cap. Without the
   // endDateTime bound, a single classification can return 6000+ events in one
   // band, burying far-future events past page 6. 18 bands × 21 days ≈ 12.5 months.
+  if (pass !== 'main') {
   await sleep(RATE_LIMIT_MS)
   const onSaleNow     = new Date()
   const onSaleStart   = new Date(onSaleNow.getTime() - 3  * 24 * 60 * 60 * 1000)  // 3 days back
@@ -766,6 +772,7 @@ export async function syncTicketmasterEvents(opts?: { startDateTime?: string }):
 
       await sleep(RATE_LIMIT_MS)
     }
+  }
   }
 
   // ── Flag calculation pass ─────────────────────────────────────────────────

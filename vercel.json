@@ -5,6 +5,10 @@
       "schedule": "0 2 * * *"
     },
     {
+      "path": "/api/cron/sync-onsale",
+      "schedule": "15 2 * * *"
+    },
+    {
       "path": "/api/cron/sync-gigsberg",
       "schedule": "30 2 * * *"
     },
