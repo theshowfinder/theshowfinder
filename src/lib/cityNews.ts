@@ -51,9 +51,22 @@ function resolveSource(item: RawItem): string | null {
 
 const RSS_PER_ITEM_TIMEOUT_MS = 15000
 
+// Excludes the two false-positive categories that swamp results for any city
+// whose name doubles as ordinary sporting vocabulary (Derby above all — "the
+// derby" is both a local football/rugby rivalry match anywhere in the world
+// and a family of horse races). Without these, /cities/Derby's news section
+// was pulling in "AC MILAN vs. INTER: AN UNMISSABLE DERBY" and Irish/Dubai
+// horse-racing recaps instead of Derby, UK entertainment news. Applied to
+// every city's query — a no-op for names that were never ambiguous, since
+// none of these terms would otherwise appear alongside them.
+const NEWS_EXCLUDE_TERMS =
+  '-football+-soccer+-%22Serie+A%22+-%22Premier+League%22+-EFL+-Championship+' +
+  '-%22horse+racing%22+-racecourse+-jockey+-racehorse+' +
+  '-%22Kentucky+Derby%22+-%22Epsom+Derby%22+-%22Irish+Derby%22+-%22Dubai+World+Cup%22'
+
 async function fetchCityNews(cityName: string): Promise<NewsItem[]> {
   const cityForQuery = cityName.replace(/\s+/g, '+')
-  const q = `%22${cityForQuery}%22+(concert+OR+gig+OR+tour+OR+tickets+OR+arena+OR+festival+OR+entertainment)`
+  const q = `%22${cityForQuery}%22+(concert+OR+gig+OR+tour+OR+tickets+OR+arena+OR+festival+OR+entertainment)+${NEWS_EXCLUDE_TERMS}`
   const feedUrl = `https://news.google.com/rss/search?q=${q}&hl=en-GB&gl=GB&ceid=GB:en`
 
   const parser = new Parser<Record<string, unknown>, RawItem>({
