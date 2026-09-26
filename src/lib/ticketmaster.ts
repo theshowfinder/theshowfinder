@@ -127,7 +127,12 @@ function normalizeCityName(raw: string): string {
     .replace(/,\s*$/, '')                          // drop a now-dangling trailing comma
     .trim()
 
-  const alias = CITY_ALIASES[city.toLowerCase()]
+  // Match aliases hyphen-insensitively (Ticketmaster sometimes sends
+  // "Newcastle-upon-Tyne") without changing hyphenation of cities that are
+  // hyphenated in their own right (e.g. "Stoke-on-Trent", which has no
+  // alias entry and so passes through untouched).
+  const aliasKey = city.toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+  const alias = CITY_ALIASES[aliasKey]
   if (alias) city = alias
 
   return city
