@@ -84,7 +84,6 @@ export default function EventCard({ event }: Props) {
             <Link
               href={`/venues/${event.venue_slug}`}
               className="truncate hover:underline hover:text-slate-700 transition-colors"
-              onClick={e => e.stopPropagation()}
             >
               📍 {event.venue_name}, {event.venue_city}
             </Link>
