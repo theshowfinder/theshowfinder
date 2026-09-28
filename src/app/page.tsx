@@ -22,6 +22,7 @@ import CitiesGrid from '@/components/CitiesGrid'
 import NewsletterSignup from '@/components/NewsletterSignup'
 import LocationBanner from '@/components/LocationBanner'
 import LocalSpotlight from '@/components/LocalSpotlight'
+import LocalHeroCopy from '@/components/LocalHeroCopy'
 import CategoryStrip from '@/components/CategoryStrip'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 import { groupEventsByArtist, fmtOnSaleLabel, extractArtistName, toSlug } from '@/lib/on-sale'
@@ -455,15 +456,10 @@ export default function HomePage() {
             🎟️ The UK&apos;s events discovery platform
           </p>
 
-          {/* Headline */}
-          <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight leading-[1.05] mb-6 text-white">
-            Find Your Next<br />
-            <span style={{ color: '#FFD700' }}>Unforgettable</span> Show
-          </h1>
-
-          <p className="text-xl text-white/70 mb-10 max-w-xl mx-auto leading-relaxed">
-            Concerts, theatre, comedy, sports and family events — all across the UK in one place.
-          </p>
+          {/* Headline + subtext — swaps to a localized version once a city is
+              detected (see LocalHeroCopy.tsx); server always renders the
+              generic copy below as the safe default/fallback shape */}
+          <LocalHeroCopy />
 
           {/* Search bar */}
           <div className="flex justify-center">

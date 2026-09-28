@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     .ilike('venue_city', match.name)
     .gte('start_date', nowISO)
     .order('start_date', { ascending: true })
-    .limit(4) as unknown as {
+    .limit(8) as unknown as {
       data: Pick<EventWithVenue, 'slug' | 'title' | 'start_date' | 'venue_name' | 'image_url' | 'price_from' | 'currency' | 'category'>[] | null
     }
 

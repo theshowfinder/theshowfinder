@@ -15,6 +15,14 @@ interface SpotlightEvent {
   category: string
 }
 
+const CATEGORIES = [
+  { value: 'concert', label: 'Concerts', emoji: '🎵' },
+  { value: 'theatre', label: 'Theatre',  emoji: '🎭' },
+  { value: 'comedy',  label: 'Comedy',   emoji: '😂' },
+  { value: 'sports',  label: 'Sports',   emoji: '⚽' },
+  { value: 'family',  label: 'Family',   emoji: '🎠' },
+]
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
 }
@@ -23,10 +31,11 @@ const categoryEmoji: Record<string, string> = {
   concert: '🎵', theatre: '🎭', comedy: '😂', sports: '⚽', family: '🎠',
 }
 
-// Shows a handful of real upcoming events for the visitor's detected city
-// (via the tsf_city cookie — see middleware.ts / cityCookie.ts) right below
-// the hero. Fetches client-side from /api/city-spotlight rather than
-// server-side so the homepage itself keeps its hourly ISR caching.
+// Turns the homepage into a local hub the instant a visitor's city is known
+// (tsf_city cookie — see middleware.ts / cityCookie.ts): category
+// quick-links scoped to that city plus a grid of real upcoming events,
+// fetched client-side from /api/city-spotlight so the ISR-cached homepage
+// itself stays cached. Renders nothing until a city is detected.
 export default function LocalSpotlight() {
   const city = useSyncExternalStore(subscribeNoop, readCityCookie, getServerCitySnapshot)
   const [events, setEvents] = useState<SpotlightEvent[]>([])
@@ -50,10 +59,10 @@ export default function LocalSpotlight() {
   return (
     <section className="bg-white py-12 border-t border-slate-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-end justify-between mb-6">
+        <div className="flex items-end justify-between mb-5">
           <div>
             <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
-              📍 Near you
+              📍 Your local hub
             </p>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">What&apos;s on in {city}</h2>
           </div>
@@ -62,8 +71,22 @@ export default function LocalSpotlight() {
             className="text-sm font-semibold hover:underline hidden sm:block"
             style={{ color: '#E8003D' }}
           >
-            See all in {city} →
+            Explore all of {city} →
           </Link>
+        </div>
+
+        {/* City-scoped category quick-links */}
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 mb-6">
+          {CATEGORIES.map(({ value, label, emoji }) => (
+            <Link
+              key={value}
+              href={`/events?city=${encodeURIComponent(city)}&category=${value}`}
+              className="flex-none flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold border border-slate-200 text-slate-700 bg-white hover:border-slate-300 hover:bg-slate-50 transition-colors whitespace-nowrap"
+            >
+              <span>{emoji}</span>
+              <span>{label} in {city}</span>
+            </Link>
+          ))}
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -84,6 +107,9 @@ export default function LocalSpotlight() {
                     {categoryEmoji[event.category] ?? '🎟️'}
                   </div>
                 )}
+                <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-white/90 text-slate-700">
+                  {categoryEmoji[event.category] ?? '🎟️'} {event.category}
+                </span>
               </div>
               <div className="flex flex-col gap-0.5 p-3">
                 <span className="text-xs font-bold text-slate-500">{formatDate(event.start_date)}</span>
@@ -94,9 +120,13 @@ export default function LocalSpotlight() {
           ))}
         </div>
 
-        <div className="mt-6 text-center sm:hidden">
-          <Link href={`/cities/${encodeURIComponent(city)}`} className="text-sm font-semibold hover:underline" style={{ color: '#E8003D' }}>
-            See all in {city} →
+        <div className="mt-8 text-center">
+          <Link
+            href={`/cities/${encodeURIComponent(city)}`}
+            className="inline-block font-bold px-8 py-3.5 rounded-xl text-sm hover:opacity-90 transition-opacity text-white"
+            style={{ backgroundColor: '#E8003D' }}
+          >
+            Explore all of {city} →
           </Link>
         </div>
       </div>
