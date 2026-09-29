@@ -16,6 +16,7 @@ import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import CityNewsletterForm from '@/components/CityNewsletterForm'
 import { fetchEventsThisWeek, fetchTopEvents, fetchPresalesOpenNow } from '@/lib/eventPools'
+import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
 
@@ -255,6 +256,21 @@ export default async function CityPage({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-14">
+
+        {/* ── CITY GUIDE INTRO (only renders for cities with a written entry) ── */}
+        {CITY_GUIDE_INTROS[cityName] && (
+          <section>
+            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
+              About {cityName}
+            </p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-4">
+              {cityName}&rsquo;s Live Scene
+            </h2>
+            <p className="text-slate-600 leading-relaxed max-w-3xl">
+              {CITY_GUIDE_INTROS[cityName]}
+            </p>
+          </section>
+        )}
 
         {/* ── NEWSLETTER (city-scoped) ── */}
         <CityNewsletterForm cityName={cityName} />
