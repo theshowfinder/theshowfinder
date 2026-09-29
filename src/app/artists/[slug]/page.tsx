@@ -8,6 +8,7 @@ import {
   getStubHubAffiliateLink, getGigsbergAffiliateLink, getVividSeatsAffiliateLink,
 } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
+import { jsonLdScript, buildBreadcrumbSchema } from '@/lib/jsonld'
 
 export const dynamic = 'force-dynamic'
 
@@ -96,8 +97,45 @@ export default async function ArtistPage({ params }: PageProps) {
       }).replace(',', '') + ' GMT'
     : null
 
+  const canonicalUrl = `https://www.theshowfinder.com/artists/${artist.slug}`
+  const artistTicketUrl = artist.tickets_url ? getTicketmasterAffiliateLink(artist.tickets_url) : canonicalUrl
+
+  // One MusicEvent per upcoming date, bundled under a single @graph — this is
+  // what lets an artist page surface as a rich "tour dates" result in Google.
+  const tourEventsSchema = upcoming.map(d => ({
+    '@type':    'MusicEvent',
+    name:       `${artist.name} — ${d.venue_name}`,
+    url:        canonicalUrl,
+    startDate:  d.date,
+    eventStatus: d.status === 'cancelled' ? 'https://schema.org/EventCancelled' : 'https://schema.org/EventScheduled',
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    location: {
+      '@type':  'Place',
+      name:     d.venue_name,
+      address:  { '@type': 'PostalAddress', addressLocality: d.city, addressCountry: 'GB' },
+    },
+    performer: { '@type': 'MusicGroup', name: artist.name },
+    ...(artist.tickets_url ? { offers: { '@type': 'Offer', url: artistTicketUrl, priceCurrency: 'GBP', availability: 'https://schema.org/InStock' } } : {}),
+  }))
+
+  const breadcrumbSchema = buildBreadcrumbSchema([
+    { name: 'Home',    url: 'https://www.theshowfinder.com' },
+    { name: 'On Sale', url: 'https://www.theshowfinder.com/on-sale-this-week' },
+    { name: artist.name, url: canonicalUrl },
+  ])
+
   return (
     <div className="min-h-screen bg-[#F5F5F0]">
+      {tourEventsSchema.length > 0 && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdScript({ '@context': 'https://schema.org', '@graph': tourEventsSchema }) }}
+        />
+      )}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(breadcrumbSchema) }}
+      />
       {/* Hero */}
       <div className="relative h-[50vh] min-h-[380px] overflow-hidden bg-slate-900">
         {artist.image_url ? (

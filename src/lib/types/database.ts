@@ -342,16 +342,19 @@ export interface Database {
           id: string
           email: string
           confirmed: boolean
+          city: string | null
           created_at: string
         }
         Insert: {
           id?: string
           email: string
           confirmed?: boolean
+          city?: string | null
           created_at?: string
         }
         Update: {
           confirmed?: boolean
+          city?: string | null
         }
       }
       local_businesses: {

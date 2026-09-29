@@ -13,6 +13,8 @@ import { CITIES } from '@/lib/cities'
 import { venueCardBlurb } from '@/lib/venueBlurb'
 import { citySlug } from '@/lib/cityNews'
 import type { LocalBusiness, CityNews } from '@/lib/types/database'
+import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
+import CityNewsletterForm from '@/components/CityNewsletterForm'
 
 export async function generateStaticParams() {
   return CITIES.map(c => ({ city: encodeURIComponent(c.name) }))
@@ -90,8 +92,9 @@ export default async function CityPage({
   const nowISO       = now.toISOString()
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
   const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  const twoMonthsAhead = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString()
 
-  const [eventsThisWeekResult, onsalePoolResult, totalCountResult, artistsResult, venuesResult, localBusinessesResult, cityNewsResult] = await Promise.all([
+  const [eventsThisWeekResult, onsalePoolResult, presalePoolResult, topEventsResult, totalCountResult, artistsResult, venuesResult, localBusinessesResult, cityNewsResult] = await Promise.all([
     // Everything happening in the city in the next 7 days — ticketed shows
     // and hand-curated local events (markets, community stuff) together in
     // one chronological list. No image_url or venue_capacity requirement
@@ -121,6 +124,34 @@ export default async function CityPage({
       .order('onsale_date', { ascending: true })
       .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>,
 
+    // Presales open right now — presale_start already passed and presale_end
+    // (if the sync gave us one) hasn't. Distinct from "On Sale This Week"
+    // above, which is about the public on-sale date; this is "you can
+    // actually buy via presale today", which is why it's queried on
+    // presale_start/presale_end directly rather than the onsale_date field.
+    supabase
+      .from('events_with_venue')
+      .select('*')
+      .ilike('venue_city', cityName)
+      .lte('presale_start', nowISO)
+      .or(`presale_end.is.null,presale_end.gte.${nowISO}`)
+      .order('presale_end', { ascending: true, nullsFirst: false })
+      .limit(30) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+
+    // Top Events — beyond the strict 7-day "Events This Week" window, out to
+    // ~2 months, featured-first then soonest-first. Deliberately excludes
+    // anything already in that window so the two sections never repeat a
+    // card.
+    supabase
+      .from('events_with_venue')
+      .select('*')
+      .ilike('venue_city', cityName)
+      .gt('start_date', weekAhead)
+      .lte('start_date', twoMonthsAhead)
+      .order('is_featured', { ascending: false })
+      .order('start_date', { ascending: true })
+      .limit(60) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+
     // Total upcoming count for the hero stat line — a head:true count query,
     // not a full events fetch (the "All Events" grid this used to feed has
     // been removed: with thousands of events in some cities it was more of a
@@ -137,10 +168,10 @@ export default async function CityPage({
     // Venues in this city sorted by capacity
     supabase
       .from('venues')
-      .select('id, name, slug, capacity, address')
+      .select('id, name, slug, capacity, address, image_url')
       .ilike('city', cityName)
       .order('capacity', { ascending: false, nullsFirst: false })
-      .limit(20) as unknown as Promise<{ data: { id: string; name: string; slug: string; capacity: number | null; address: string }[] | null }>,
+      .limit(20) as unknown as Promise<{ data: { id: string; name: string; slug: string; capacity: number | null; address: string; image_url: string | null }[] | null }>,
 
     // Local guide listings for this city — sponsored first
     supabase
@@ -174,6 +205,12 @@ export default async function CityPage({
   // counted. A per-venue exact count is correct regardless of how many rows
   // the city has or how many duplicate venue rows exist.
   const candidateVenues = venuesResult.data ?? []
+
+  // City hero/card photo — the highest-capacity venue in this city that has
+  // a real (Ticketmaster-sourced) image, same images already trusted and
+  // displayed elsewhere on the site. No image for this city yet → falls
+  // back to the solid colour + emoji treatment.
+  const cityHeroImage = candidateVenues.find(v => v.image_url)?.image_url ?? null
   const venueCountResults = await Promise.all(
     candidateVenues.map(v =>
       supabase
@@ -189,6 +226,12 @@ export default async function CityPage({
 
   const eventsThisWeek = dedupeEvents(eventsThisWeekResult.data ?? [], 30)
 
+  // Presales open right now, grouped by artist same as On Sale This Week
+  const presaleGroups = groupEventsByArtist(presalePoolResult.data ?? [], artistsResult.data ?? []).slice(0, 6)
+
+  // Top Events beyond this week — dedupe by title, cap at 9 (3x3 grid)
+  const topEvents = dedupeEvents(topEventsResult.data ?? [], 9)
+
   // Build venue event count map and filter to venues with upcoming events
   const countByVenue: Record<string, number> = {}
   candidateVenues.forEach((v, i) => {
@@ -196,12 +239,52 @@ export default async function CityPage({
   })
   const cityVenues = candidateVenues.filter(v => countByVenue[v.id] > 0)
 
+  const canonical = `https://www.theshowfinder.com/cities/${encodeURIComponent(cityName)}`
+  const breadcrumbSchema = buildBreadcrumbSchema([
+    { name: 'Home', url: 'https://www.theshowfinder.com' },
+    { name: cityName, url: canonical },
+  ])
+  const itemListSchema = buildItemListSchema(
+    eventsThisWeek.slice(0, 20).map(ev => ({
+      name: ev.title,
+      url:  `https://www.theshowfinder.com/events/${ev.slug}`,
+    }))
+  )
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(breadcrumbSchema) }}
+      />
+      {itemListSchema.itemListElement.length > 0 && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdScript(itemListSchema) }}
+        />
+      )}
 
       {/* ── HERO ── */}
-      <div className="py-14 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: '#1A1A2E' }}>
-        <div className="max-w-7xl mx-auto">
+      <div
+        className="relative py-14 px-4 sm:px-6 lg:px-8 overflow-hidden"
+        style={{ backgroundColor: '#1A1A2E' }}
+      >
+        {cityHeroImage && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={cityHeroImage}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 w-full h-full object-cover opacity-30"
+            />
+            <div
+              className="absolute inset-0"
+              style={{ background: 'linear-gradient(180deg, rgba(26,26,46,0.55) 0%, #1A1A2E 90%)' }}
+            />
+          </>
+        )}
+        <div className="relative max-w-7xl mx-auto">
           <p className="text-5xl mb-4 select-none">{cityConfig.emoji}</p>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-2">
             Events in {cityName}
@@ -218,6 +301,9 @@ export default async function CityPage({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-14">
+
+        {/* ── NEWSLETTER (city-scoped) ── */}
+        <CityNewsletterForm cityName={cityName} />
 
         {/* ── LOCAL ENTERTAINMENT NEWS (hidden if no rows yet) ── */}
         {cityNews.length > 0 && (
@@ -315,6 +401,67 @@ export default async function CityPage({
           </section>
         )}
 
+        {/* ── PRESALES OPEN NOW ── */}
+        {presaleGroups.length > 0 && (
+          <section>
+            <div className="mb-7">
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFB800' }}>
+                Buy before everyone else
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                Presales Open Now in {cityName}
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {presaleGroups.map(group => {
+                const presaleClose = group.events
+                  .map(ev => ev.presale_end)
+                  .filter((d): d is string => !!d)
+                  .sort()[0] ?? null
+                const presaleName = group.events.find(ev => ev.presale_name)?.presale_name ?? null
+                return (
+                  <Link
+                    key={group.slug}
+                    href={`/on-sale-this-week/${group.slug}`}
+                    className="group block rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5"
+                  >
+                    <div className="relative h-48 overflow-hidden bg-slate-900">
+                      {group.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={group.image_url} alt={group.artistName}
+                          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A1A2E, #FFB800)' }}>
+                          <span className="text-5xl">🔥</span>
+                        </div>
+                      )}
+                      <div className="absolute top-3 left-3">
+                        <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full" style={{ backgroundColor: '#FFB800', color: '#1A1A2E' }}>
+                          Presale Open
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
+                        {presaleName ?? group.dbArtist?.tour_name ?? 'Presale'}
+                      </p>
+                      <h3 className="font-extrabold text-slate-900 text-lg leading-tight mb-2 group-hover:text-red-600 transition-colors">
+                        {group.artistName}
+                      </h3>
+                      <p className="text-sm text-slate-500 mb-3">
+                        🗓 {group.events.length} UK date{group.events.length !== 1 ? 's' : ''}
+                      </p>
+                      <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700">
+                        {presaleClose ? `⏳ Presale closes ${fmtOnSaleLabel(presaleClose)}` : '🎟️ Presale open now'}
+                      </div>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
         {/* ── EVENTS THIS WEEK (ticketed shows + local events, merged) ── */}
         {eventsThisWeek.length > 0 && (
           <section>
@@ -330,6 +477,25 @@ export default async function CityPage({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {eventsThisWeek.map(event => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── TOP EVENTS (beyond this week, up to ~2 months out) ── */}
+        {topEvents.length > 0 && (
+          <section>
+            <div className="mb-7">
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
+                Coming up
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                Top Events in {cityName}
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {topEvents.map(event => (
                 <EventCard key={event.id} event={event} />
               ))}
             </div>

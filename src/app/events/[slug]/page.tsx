@@ -14,6 +14,7 @@ import {
   getSeatUniqueAffiliateLink,
 } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
+import { jsonLdScript, buildEventSchema, buildBreadcrumbSchema } from '@/lib/jsonld'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -179,8 +180,38 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     .filter(a => a.is_headliner && a.artist)
     .sort((a, b) => a.order - b.order)
 
+  const canonicalUrl = `https://www.theshowfinder.com/events/${event.slug}`
+  const eventSchema = buildEventSchema({
+    name:          event.title,
+    url:           canonicalUrl,
+    startDate:     event.start_date,
+    endDate:       event.end_date,
+    description:   event.description,
+    image:         event.image_url,
+    status:        event.status,
+    venue:         event.venue,
+    priceFrom:     event.price_from,
+    priceCurrency: event.currency,
+    offerUrl:      event.tickets_url ? getTicketmasterAffiliateLink(event.tickets_url) : canonicalUrl,
+    performers:    headliners.map(h => h.artist?.name).filter((n): n is string => !!n),
+  })
+  const breadcrumbSchema = buildBreadcrumbSchema([
+    { name: 'Home',   url: 'https://www.theshowfinder.com' },
+    { name: 'Events', url: 'https://www.theshowfinder.com/events' },
+    ...(event.venue ? [{ name: event.venue.city, url: `https://www.theshowfinder.com/cities/${encodeURIComponent(event.venue.city)}` }] : []),
+    { name: event.title, url: canonicalUrl },
+  ])
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(eventSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(breadcrumbSchema) }}
+      />
       {/* ── HERO ──────────────────────────────────────────────── */}
       <section className="relative text-white overflow-hidden" style={{ backgroundColor: '#1A1A2E' }}>
         {event.image_url && (

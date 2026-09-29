@@ -4,6 +4,7 @@ import Script from 'next/script'
 import './globals.css'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
+import { jsonLdScript, buildWebsiteSchema, buildOrganizationSchema } from '@/lib/jsonld'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
 const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] })
@@ -50,6 +51,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en-GB" className={`${geistSans.variable} ${geistMono.variable} h-full`}>
       <body className="min-h-full flex flex-col" style={{ backgroundColor: '#F5F5F0' }}>
+        {/* Site-wide structured data — WebSite (enables a sitelinks search box)
+            and Organization (feeds Google's knowledge panel). */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdScript(buildWebsiteSchema()) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdScript(buildOrganizationSchema()) }}
+        />
         <Header />
         <main className="flex-1">{children}</main>
         <Footer />

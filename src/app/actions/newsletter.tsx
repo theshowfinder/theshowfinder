@@ -4,18 +4,24 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { resend, FROM_EMAIL } from '@/lib/resend'
 import WelcomeEmail from '@/emails/WelcomeEmail'
 
-export async function subscribeNewsletter(email: string): Promise<{ error?: string }> {
+export async function subscribeNewsletter(email: string, city?: string): Promise<{ error?: string }> {
   const trimmed = email.trim().toLowerCase()
   if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
     return { error: 'Please enter a valid email address.' }
   }
+  const cityTag = city?.trim() || null
 
   const db = createAdminClient()
-  const { error: dbError } = await db.from('subscribers').insert({ email: trimmed })
+  const { error: dbError } = await db.from('subscribers').insert({ email: trimmed, city: cityTag })
 
   if (dbError) {
     if (dbError.code === '23505') {
-      // Already subscribed — still try to return success, but skip the email
+      // Already subscribed. If they signed up here with a city (e.g. from a
+      // city page) and don't have one tagged yet, tag it now — but never
+      // overwrite a city someone already has on file.
+      if (cityTag) {
+        await db.from('subscribers').update({ city: cityTag }).eq('email', trimmed).is('city', null)
+      }
       return {}
     }
     console.error('[newsletter] insert failed:', dbError.message)
