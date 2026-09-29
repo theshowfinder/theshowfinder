@@ -24,8 +24,12 @@ import LocationBanner from '@/components/LocationBanner'
 import LocalSpotlight from '@/components/LocalSpotlight'
 import LocalHeroCopy from '@/components/LocalHeroCopy'
 import CategoryStrip from '@/components/CategoryStrip'
-import type { EventWithVenue, Artist } from '@/lib/types/database'
+import type { EventWithVenue, Artist, CityNews } from '@/lib/types/database'
 import { groupEventsByArtist, fmtOnSaleLabel, extractArtistName, toSlug } from '@/lib/on-sale'
+import { fetchEventsThisWeek, fetchPresalesOpenNow } from '@/lib/eventPools'
+import { NATIONAL_SLUG } from '@/lib/cityNews'
+import PresaleGrid from '@/components/PresaleGrid'
+import NewsCardGrid from '@/components/NewsCardGrid'
 
 async function FeaturedEvents() {
   const supabase = await createClient()
@@ -269,36 +273,23 @@ async function OnSaleThisWeek() {
   )
 }
 
-async function LatestNews() {
-  const supabase   = await createClient()
-  const now        = new Date()
-  const windowFrom = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000).toISOString()
-  const windowTo   = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString()
+async function NationalNews() {
+  const supabase = await createClient()
 
-  // Wider window than On Sale This Week (-21d/+90d vs -3d/+7d) so this reads
-  // as a rolling news feed rather than duplicating that section's content —
-  // same underlying presale/onsale signal, just zoomed out.
-  const [evResult, arResult] = await Promise.all([
-    supabase
-      .from('events_with_venue')
-      .select('*')
-      .or(`and(public_onsale_start.gte.${windowFrom},public_onsale_start.lte.${windowTo}),and(presale_start.gte.${windowFrom},presale_start.lte.${windowTo})`)
-      .order('onsale_date', { ascending: true })
-      .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
-    supabase
-      .from('artists')
-      .select('*') as unknown as Promise<{ data: Artist[] | null }>,
-  ])
+  // General UK entertainment news, not tied to any city or to a specific
+  // on-sale/presale date — the "big stories from all over" feed. Reuses the
+  // same city_news table and NewsCardGrid component as every city page,
+  // just reading the NATIONAL_SLUG rows the sync writes for this feed
+  // (src/lib/cityNews.ts).
+  const { data } = await supabase
+    .from('city_news')
+    .select('*')
+    .eq('city_slug', NATIONAL_SLUG)
+    .order('published_at', { ascending: false })
+    .limit(6) as unknown as { data: CityNews[] | null }
 
-  const groups = groupEventsByArtist(evResult.data ?? [], arResult.data ?? [])
-    .sort((a, b) => {
-      const da = Math.abs(new Date(a.onsale_date).getTime() - now.getTime())
-      const db = Math.abs(new Date(b.onsale_date).getTime() - now.getTime())
-      return da - db
-    })
-    .slice(0, 6)
-
-  if (groups.length === 0) return null
+  const items = data ?? []
+  if (!items.length) return null
 
   return (
     <section className="bg-[#1A1A2E] py-12">
@@ -306,41 +297,69 @@ async function LatestNews() {
         <div className="flex items-end justify-between mb-6">
           <div>
             <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
-              Ticket news
+              From around the UK
             </p>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Latest News</h2>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Entertainment News</h2>
           </div>
-          <Link href="/news" className="text-sm font-semibold hover:underline hidden sm:block" style={{ color: '#026CDF' }}>
-            View all news →
+        </div>
+        <NewsCardGrid items={items} />
+      </div>
+    </section>
+  )
+}
+
+async function PresalesOpenNow() {
+  const supabase = await createClient()
+
+  const { data: artistsData } = await supabase.from('artists').select('*') as unknown as { data: Artist[] | null }
+  const groups = await fetchPresalesOpenNow(supabase, artistsData ?? [], { limit: 6 })
+
+  if (!groups.length) return null
+
+  return (
+    <section className="bg-white py-14 border-t border-slate-100">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-end justify-between mb-7">
+          <div>
+            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFB800' }}>
+              Buy before everyone else
+            </p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Presales Open Now</h2>
+          </div>
+          <Link href="/on-sale-this-week" className="text-sm font-semibold hover:underline hidden sm:block" style={{ color: '#026CDF' }}>
+            View all →
           </Link>
         </div>
+        <PresaleGrid groups={groups} />
+      </div>
+    </section>
+  )
+}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {groups.map(group => {
-            const isLive = new Date(group.onsale_date).getTime() <= now.getTime()
-            const isPresale = group.saleType === 'presale'
-            const headline = isLive
-              ? `${group.artistName} tickets on sale now`
-              : isPresale
-                ? `${group.artistName} presale opens ${fmtOnSaleLabel(group.onsale_date)}`
-                : `${group.artistName} on sale ${fmtOnSaleLabel(group.onsale_date)}`
-            return (
-              <Link
-                key={group.slug}
-                href={`/on-sale-this-week/${group.slug}`}
-                className="flex items-center gap-3 bg-white/5 hover:bg-white/10 rounded-xl px-4 py-3.5 transition-colors"
-              >
-                <span className="text-lg shrink-0">{isLive ? '🎟️' : isPresale ? '📣' : '🗓️'}</span>
-                <span className="text-sm text-white/80 leading-snug">{headline}</span>
-              </Link>
-            )
-          })}
+async function EventsThisWeekNational() {
+  const supabase = await createClient()
+
+  // Biggest venues first, next 7 days, no city filter — the "generalised,
+  // biggest events, no small local stuff" version of Events This Week that
+  // belongs on the national homepage. Same shared helper city pages use
+  // (src/lib/eventPools.ts), just called without a `city`.
+  const events = await fetchEventsThisWeek(supabase, { limit: 9 })
+
+  if (!events.length) return null
+
+  return (
+    <section className="bg-[#F5F5F0] py-14">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-end justify-between mb-7">
+          <div>
+            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+              Next 7 days
+            </p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Events This Week</h2>
+          </div>
         </div>
-
-        <div className="mt-6 text-center sm:hidden">
-          <Link href="/news" className="text-sm font-semibold hover:underline" style={{ color: '#026CDF' }}>
-            View all news →
-          </Link>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {events.map(event => <EventCard key={event.id} event={event} />)}
         </div>
       </div>
     </section>
@@ -495,17 +514,27 @@ export default function HomePage() {
       {/* ── LOCAL SPOTLIGHT (only renders once a city is detected) ─ */}
       <LocalSpotlight />
 
-      {/* ── ON SALE THIS WEEK ───────────────────────────────────── */}
+      {/* ── ENTERTAINMENT NEWS (national, not city-scoped) ────────── */}
+      <Suspense fallback={null}>
+        <NationalNews />
+      </Suspense>
+
+      {/* ── ON SALE THIS WEEK ─────────────────────── */}
       <Suspense fallback={null}>
         <OnSaleThisWeek />
       </Suspense>
 
-      {/* ── LATEST NEWS ─────────────────────────────────────────── */}
+      {/* ── PRESALES OPEN NOW ─────────────────────── */}
       <Suspense fallback={null}>
-        <LatestNews />
+        <PresalesOpenNow />
       </Suspense>
 
-      {/* ── JUST ANNOUNCED ──────────────────────────────────────── */}
+      {/* ── EVENTS THIS WEEK (national, biggest venues first) ───── */}
+      <Suspense fallback={null}>
+        <EventsThisWeekNational />
+      </Suspense>
+
+      {/* ── JUST ANNOUNCED ──────────────────────── */}
       <Suspense fallback={null}>
         <JustAnnounced />
       </Suspense>
