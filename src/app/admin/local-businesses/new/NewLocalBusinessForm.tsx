@@ -12,6 +12,7 @@ const CATEGORIES = [
   { value: 'bar',        label: 'Bar' },
   { value: 'hotel',      label: 'Hotel' },
   { value: 'transport',  label: 'Transport' },
+  { value: 'beauty',     label: 'Beauty & Wellness' },
   { value: 'other',      label: 'Other' },
 ] as const
 

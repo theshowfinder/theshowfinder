@@ -425,7 +425,7 @@ export default async function CityPage({
                 Local guide
               </p>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                Where to Eat & Drink in {cityName}
+                Recommended in {cityName}
               </h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">

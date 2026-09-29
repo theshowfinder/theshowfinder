@@ -359,7 +359,7 @@ export interface Database {
           id: string
           city: string
           name: string
-          category: 'restaurant' | 'bar' | 'hotel' | 'transport' | 'other'
+          category: 'restaurant' | 'bar' | 'hotel' | 'transport' | 'beauty' | 'other'
           description: string | null
           website_url: string | null
           is_sponsored: boolean
@@ -371,7 +371,7 @@ export interface Database {
           id?: string
           city: string
           name: string
-          category: 'restaurant' | 'bar' | 'hotel' | 'transport' | 'other'
+          category: 'restaurant' | 'bar' | 'hotel' | 'transport' | 'beauty' | 'other'
           description?: string | null
           website_url?: string | null
           is_sponsored?: boolean
@@ -382,7 +382,7 @@ export interface Database {
         Update: {
           city?: string
           name?: string
-          category?: 'restaurant' | 'bar' | 'hotel' | 'transport' | 'other'
+          category?: 'restaurant' | 'bar' | 'hotel' | 'transport' | 'beauty' | 'other'
           description?: string | null
           website_url?: string | null
           is_sponsored?: boolean
