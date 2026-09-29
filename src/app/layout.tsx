@@ -65,12 +65,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="flex-1">{children}</main>
         <Footer />
 
-        {/* Google Analytics 4 */}
+        {/* Google Analytics 4 — beforeInteractive so Next.js injects these
+            into the document <head> regardless of where they're written in
+            this tree. Search Console's "verify via Google Analytics" method
+            specifically requires the gtag snippet to be in <head>, not
+            <body>; afterInteractive (the previous strategy) rendered it in
+            place here in the body, which is why that verification failed. */}
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-8HE8E2HF4Q"
-          strategy="afterInteractive"
+          strategy="beforeInteractive"
         />
-        <Script id="google-analytics" strategy="afterInteractive">
+        <Script id="google-analytics" strategy="beforeInteractive">
           {`
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
