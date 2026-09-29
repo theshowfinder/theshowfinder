@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/sync-city-news",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/sync-council-events",
+      "schedule": "15 3 * * *"
     }
   ]
 }
