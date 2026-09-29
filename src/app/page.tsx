@@ -360,9 +360,17 @@ async function JustAnnounced() {
   // — that flag depends on the same nightly calculate_event_flags() DB
   // function already known not to be running (see the OnSaleThisWeek
   // comment above), so it's stuck at false for everything.
+  //
+  // Excludes category='local' — hand-added local/community listings (city
+  // page markets, festivals, etc.) have no public_onsale_start by design
+  // (there's no ticket on-sale to announce), so they matched this "recently
+  // created, not yet on sale" filter and were showing up on the generic
+  // homepage mislabelled as "Just Announced" ticketed shows. This section
+  // is specifically for genuine newly-synced Ticketmaster announcements.
   const result = await supabase
     .from('events')
     .select('*, venue:venues(id, name, slug, city, postcode, capacity)')
+    .neq('category', 'local')
     .gte('created_at', sevenDaysAgoISO)
     .or(`public_onsale_start.is.null,public_onsale_start.gt.${nowISO}`)
     .gte('start_date', nowISO)
