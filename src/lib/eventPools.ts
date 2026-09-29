@@ -107,16 +107,29 @@ interface PresalesOpenNowOpts {
 // none) — genuinely "buy via presale today" content, grouped by artist same
 // as On Sale This Week. Distinct from the public on-sale date, which is
 // what On Sale This Week tracks.
+//
+// presale_end is NOT trusted on its own: synced dates occasionally get
+// corrupted (a Jamie T row once had presale_end stored as 2028 instead of
+// 2026, which kept a presale that closed in August showing as "open" right
+// up until 2028). Real presale windows run days, not months, so we also
+// require presale_start to be recent — that catches a bad/missing
+// presale_end regardless of what value it holds, without needing to trust
+// it at all.
+const PRESALE_MAX_AGE_DAYS = 21
+
 export async function fetchPresalesOpenNow(
   supabase: SupabaseClient,
   artists: Artist[],
   { city, limit, fetchLimit = 60 }: PresalesOpenNowOpts,
 ): Promise<OnSaleGroup[]> {
-  const nowISO = new Date().toISOString()
+  const now = new Date()
+  const nowISO = now.toISOString()
+  const recentFloorISO = new Date(now.getTime() - PRESALE_MAX_AGE_DAYS * DAY_MS).toISOString()
 
   let query = supabase
     .from('events_with_venue')
     .select('*')
+    .gte('presale_start', recentFloorISO)
     .lte('presale_start', nowISO)
     .or(`presale_end.is.null,presale_end.gte.${nowISO}`)
     .order('presale_end', { ascending: true, nullsFirst: false })
