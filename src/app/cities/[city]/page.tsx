@@ -34,24 +34,18 @@ export async function generateMetadata(
   }
 }
 
-// Pick up to 4 events sorted by venue capacity descending (biggest venues first).
-// Uses venue_capacity from the events_with_venue view (populated by migration_014).
-// Falls back to onsale_date descending for events at venues with no capacity set.
-function pickFeaturedEvents(pool: EventWithVenue[]): EventWithVenue[] {
-  const sorted = [...pool].sort((a, b) => {
-    const aCap = a.venue_capacity ?? 0
-    const bCap = b.venue_capacity ?? 0
-    if (bCap !== aCap) return bCap - aCap
-    return (b.onsale_date ?? '').localeCompare(a.onsale_date ?? '')
-  })
-
+// Drops repeat rows of the same real-world show (multiple Ticketmaster SKUs
+// — "Standard Entry" / "Venue Premium" / etc. — share a title) and caps the
+// result. Pool is expected to already be sorted the way callers want it
+// (featured-first, then chronological).
+function dedupeEvents(pool: EventWithVenue[], limit: number): EventWithVenue[] {
   const seen = new Set<string>()
   const picked: EventWithVenue[] = []
-  for (const ev of sorted) {
+  for (const ev of pool) {
     if (seen.has(ev.title)) continue
     seen.add(ev.title)
     picked.push(ev)
-    if (picked.length >= 4) break
+    if (picked.length >= limit) break
   }
   return picked
 }
@@ -97,23 +91,25 @@ export default async function CityPage({
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
   const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  const [featuredPoolResult, onsalePoolResult, localEventsResult, totalCountResult, artistsResult, venuesResult, localBusinessesResult, cityNewsResult] = await Promise.all([
-    // Pool for featured section: the city's biggest upcoming shows, sorted by
-    // venue capacity — NOT by date. Previously this pulled the 50 soonest-
-    // starting events first and only then sorted that pre-filtered pool by
-    // capacity, so a big venue's next show past the 50th-nearest date across
-    // the whole city never even entered the candidate pool. Sorting by
-    // capacity at the query level fixes that: the biggest venues surface
-    // regardless of how far out their next show is.
+  const [eventsThisWeekResult, onsalePoolResult, totalCountResult, artistsResult, venuesResult, localBusinessesResult, cityNewsResult] = await Promise.all([
+    // Everything happening in the city in the next 7 days — ticketed shows
+    // and hand-curated local events (markets, community stuff) together in
+    // one chronological list. No image_url or venue_capacity requirement
+    // (that was the old "Featured/Upcoming" pool's filter, which is why
+    // local events never showed up there). Featured events are still
+    // ordered first within the week so the is_featured admin toggle keeps
+    // meaning something, but nothing is pulled in from outside the 7-day
+    // window purely for being at a big venue — see /on-sale-this-week for
+    // the far-future arena-tour announcements this used to also surface.
     supabase
       .from('events_with_venue')
       .select('*')
       .ilike('venue_city', cityName)
       .gte('start_date', nowISO)
-      .not('image_url', 'is', null)
-      .order('venue_capacity', { ascending: false, nullsFirst: false })
+      .lte('start_date', weekAhead)
+      .order('is_featured', { ascending: false })
       .order('start_date', { ascending: true })
-      .limit(100) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+      .limit(60) as unknown as Promise<{ data: EventWithVenue[] | null }>,
 
     // On sale this week
     supabase
@@ -124,19 +120,6 @@ export default async function CityPage({
       .lte('onsale_date', weekAhead)
       .order('onsale_date', { ascending: true })
       .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>,
-
-    // Hand-curated local events (markets, art fairs, community events) —
-    // queried separately because the featured pool above requires an
-    // image_url and sorts by venue capacity, which excludes these by design.
-    // No image/capacity requirement here — just chronological.
-    supabase
-      .from('events_with_venue')
-      .select('*')
-      .eq('category', 'local')
-      .ilike('venue_city', cityName)
-      .gte('start_date', nowISO)
-      .order('start_date', { ascending: true })
-      .limit(12) as unknown as Promise<{ data: EventWithVenue[] | null }>,
 
     // Total upcoming count for the hero stat line — a head:true count query,
     // not a full events fetch (the "All Events" grid this used to feed has
@@ -179,10 +162,8 @@ export default async function CityPage({
 
   const localBusinesses = localBusinessesResult.data ?? []
   const cityNews = cityNewsResult.data ?? []
-  const featuredPool = featuredPoolResult.data ?? []
-  const onsalePool   = onsalePoolResult.data ?? []
-  const localEvents  = localEventsResult.data ?? []
-  const totalCount   = totalCountResult.count ?? 0
+  const onsalePool     = onsalePoolResult.data ?? []
+  const totalCount     = totalCountResult.count ?? 0
 
   // Exact upcoming-event counts for each candidate venue, queried one venue
   // at a time with count:'exact', head:true rather than sampling all of the
@@ -206,9 +187,7 @@ export default async function CityPage({
   // Group on-sale events by artist, limit 6 cards
   const onsaleGroups = groupEventsByArtist(onsalePool, artistsResult.data ?? []).slice(0, 6)
 
-  // venue_capacity comes directly from the events_with_venue view (migration_014)
-  const topEvents = pickFeaturedEvents(featuredPool)
-  const topIsFeatured = topEvents.some(e => e.is_featured)
+  const eventsThisWeek = dedupeEvents(eventsThisWeekResult.data ?? [], 30)
 
   // Build venue event count map and filter to venues with upcoming events
   const countByVenue: Record<string, number> = {}
@@ -273,48 +252,6 @@ export default async function CityPage({
           </section>
         )}
 
-        {/* ── FEATURED / UPCOMING EVENTS ── */}
-        {topEvents.length > 0 && (
-          <section>
-            <div className="flex items-end justify-between mb-7">
-              <div>
-                <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
-                  {topIsFeatured ? "Don't miss out" : 'Coming up'}
-                </p>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                  {topIsFeatured ? `Featured Events in ${cityName}` : `Upcoming Shows in ${cityName}`}
-                </h2>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {topEvents.map(event => (
-                <EventCard key={event.id} event={event} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ── LOCAL & COMMUNITY EVENTS ── */}
-        {localEvents.length > 0 && (
-          <section>
-            <div className="flex items-end justify-between mb-7">
-              <div>
-                <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#7C3AED' }}>
-                  Markets, fairs &amp; community
-                </p>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                  Local Events in {cityName}
-                </h2>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {localEvents.map(event => (
-                <EventCard key={event.id} event={event} />
-              ))}
-            </div>
-          </section>
-        )}
-
         {/* ── ON SALE THIS WEEK ── */}
         {onsaleGroups.length > 0 && (
           <section>
@@ -373,6 +310,27 @@ export default async function CityPage({
                     </div>
                   </div>
                 </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── EVENTS THIS WEEK (ticketed shows + local events, merged) ── */}
+        {eventsThisWeek.length > 0 && (
+          <section>
+            <div className="flex items-end justify-between mb-7">
+              <div>
+                <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+                  Next 7 days
+                </p>
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                  Events This Week in {cityName}
+                </h2>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {eventsThisWeek.map(event => (
+                <EventCard key={event.id} event={event} />
               ))}
             </div>
           </section>
