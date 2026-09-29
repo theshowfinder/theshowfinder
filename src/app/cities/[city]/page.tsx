@@ -15,6 +15,9 @@ import { citySlug } from '@/lib/cityNews'
 import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import CityNewsletterForm from '@/components/CityNewsletterForm'
+import { fetchEventsThisWeek, fetchTopEvents, fetchPresalesOpenNow } from '@/lib/eventPools'
+import PresaleGrid from '@/components/PresaleGrid'
+import NewsCardGrid from '@/components/NewsCardGrid'
 
 export async function generateStaticParams() {
   return CITIES.map(c => ({ city: encodeURIComponent(c.name) }))
@@ -36,30 +39,6 @@ export async function generateMetadata(
   }
 }
 
-// Drops repeat rows of the same real-world show (multiple Ticketmaster SKUs
-// — "Standard Entry" / "Venue Premium" / etc. — share a title) and caps the
-// result. Pool is expected to already be sorted the way callers want it
-// (featured-first, then chronological).
-function dedupeEvents(pool: EventWithVenue[], limit: number): EventWithVenue[] {
-  const seen = new Set<string>()
-  const picked: EventWithVenue[] = []
-  for (const ev of pool) {
-    if (seen.has(ev.title)) continue
-    seen.add(ev.title)
-    picked.push(ev)
-    if (picked.length >= limit) break
-  }
-  return picked
-}
-
-// "Today" / "X days ago" for a news item's published_at.
-function fmtNewsAge(publishedAt: string | null): string {
-  if (!publishedAt) return ''
-  const days = Math.floor((Date.now() - new Date(publishedAt).getTime()) / 86400000)
-  if (days <= 0) return 'Today'
-  if (days === 1) return '1 day ago'
-  return `${days} days ago`
-}
 
 // Wraps a plain travel/hotel link in an affiliate tracking template once one
 // is configured, so the site can go from placeholder links to earning
@@ -92,29 +71,43 @@ export default async function CityPage({
   const nowISO       = now.toISOString()
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
   const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
-  const twoMonthsAhead = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString()
 
-  const [eventsThisWeekResult, onsalePoolResult, presalePoolResult, topEventsResult, totalCountResult, artistsResult, venuesResult, localBusinessesResult, cityNewsResult] = await Promise.all([
-    // Everything happening in the city in the next 7 days — ticketed shows
-    // and hand-curated local events (markets, community stuff) together in
-    // one chronological list. No image_url or venue_capacity requirement
-    // (that was the old "Featured/Upcoming" pool's filter, which is why
-    // local events never showed up there). Featured events are still
-    // ordered first within the week so the is_featured admin toggle keeps
-    // meaning something, but nothing is pulled in from outside the 7-day
-    // window purely for being at a big venue — see /on-sale-this-week for
-    // the far-future arena-tour announcements this used to also surface.
-    supabase
-      .from('events_with_venue')
-      .select('*')
-      .ilike('venue_city', cityName)
-      .gte('start_date', nowISO)
-      .lte('start_date', weekAhead)
-      .order('is_featured', { ascending: false })
-      .order('start_date', { ascending: true })
-      .limit(60) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+  // Artists fetched up front — fetchPresalesOpenNow groups its pool by
+  // artist and needs the list to do it, so it can't run inside the
+  // Promise.all below alongside the query it groups.
+  const { data: artistsData } = await supabase.from('artists').select('*') as unknown as { data: Artist[] | null }
+  const artists = artistsData ?? []
 
-    // On sale this week
+  const [
+    eventsThisWeek,
+    topEvents,
+    presaleGroups,
+    onsalePoolResult,
+    totalCountResult,
+    venuesResult,
+    localBusinessesResult,
+    cityNewsResult,
+  ] = await Promise.all([
+    // Everything happening in the city in the next 7 days, biggest venues
+    // first — ticketed shows and hand-curated local events (markets,
+    // community stuff) together in one list. Shared with the homepage's
+    // national version of this section (src/lib/eventPools.ts) so the two
+    // never drift the way the old per-page copies did.
+    fetchEventsThisWeek(supabase, { city: cityName, limit: 30 }),
+
+    // The biggest shows beyond this week, out to ~2 months — same shared
+    // helper as the homepage's Top Events section.
+    fetchTopEvents(supabase, { city: cityName, limit: 9 }),
+
+    // Presales open right now — presale_start already passed and presale_end
+    // (if the sync gave us one) hasn't. Distinct from "On Sale This Week"
+    // below, which tracks the public on-sale date, not the presale window —
+    // kept as two separate queries/sections on purpose so an artist in an
+    // active presale isn't shown twice.
+    fetchPresalesOpenNow(supabase, artists, { city: cityName, limit: 6 }),
+
+    // On sale this week — public on-sale date only (see note above on why
+    // this doesn't also match on presale_start).
     supabase
       .from('events_with_venue')
       .select('*')
@@ -123,34 +116,6 @@ export default async function CityPage({
       .lte('onsale_date', weekAhead)
       .order('onsale_date', { ascending: true })
       .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>,
-
-    // Presales open right now — presale_start already passed and presale_end
-    // (if the sync gave us one) hasn't. Distinct from "On Sale This Week"
-    // above, which is about the public on-sale date; this is "you can
-    // actually buy via presale today", which is why it's queried on
-    // presale_start/presale_end directly rather than the onsale_date field.
-    supabase
-      .from('events_with_venue')
-      .select('*')
-      .ilike('venue_city', cityName)
-      .lte('presale_start', nowISO)
-      .or(`presale_end.is.null,presale_end.gte.${nowISO}`)
-      .order('presale_end', { ascending: true, nullsFirst: false })
-      .limit(30) as unknown as Promise<{ data: EventWithVenue[] | null }>,
-
-    // Top Events — beyond the strict 7-day "Events This Week" window, out to
-    // ~2 months, featured-first then soonest-first. Deliberately excludes
-    // anything already in that window so the two sections never repeat a
-    // card.
-    supabase
-      .from('events_with_venue')
-      .select('*')
-      .ilike('venue_city', cityName)
-      .gt('start_date', weekAhead)
-      .lte('start_date', twoMonthsAhead)
-      .order('is_featured', { ascending: false })
-      .order('start_date', { ascending: true })
-      .limit(60) as unknown as Promise<{ data: EventWithVenue[] | null }>,
 
     // Total upcoming count for the hero stat line — a head:true count query,
     // not a full events fetch (the "All Events" grid this used to feed has
@@ -161,9 +126,6 @@ export default async function CityPage({
       .select('*', { count: 'exact', head: true })
       .ilike('venue_city', cityName)
       .gte('start_date', nowISO) as unknown as Promise<{ count: number | null }>,
-
-    // Artists for name matching
-    supabase.from('artists').select('*') as unknown as Promise<{ data: Artist[] | null }>,
 
     // Venues in this city sorted by capacity
     supabase
@@ -222,15 +184,7 @@ export default async function CityPage({
   )
 
   // Group on-sale events by artist, limit 6 cards
-  const onsaleGroups = groupEventsByArtist(onsalePool, artistsResult.data ?? []).slice(0, 6)
-
-  const eventsThisWeek = dedupeEvents(eventsThisWeekResult.data ?? [], 30)
-
-  // Presales open right now, grouped by artist same as On Sale This Week
-  const presaleGroups = groupEventsByArtist(presalePoolResult.data ?? [], artistsResult.data ?? []).slice(0, 6)
-
-  // Top Events beyond this week — dedupe by title, cap at 9 (3x3 grid)
-  const topEvents = dedupeEvents(topEventsResult.data ?? [], 9)
+  const onsaleGroups = groupEventsByArtist(onsalePool, artists).slice(0, 6)
 
   // Build venue event count map and filter to venues with upcoming events
   const countByVenue: Record<string, number> = {}
@@ -316,25 +270,7 @@ export default async function CityPage({
                 {cityName} Entertainment News
               </h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              {cityNews.map(item => (
-                <a
-                  key={item.id}
-                  href={item.url}
-                  target="_blank"
-                  rel="noopener noreferrer nofollow"
-                  className="block bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-5"
-                >
-                  <h3 className="font-bold text-slate-900 text-base leading-snug mb-2 hover:text-red-600 transition-colors">
-                    {item.headline}
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    {item.source ?? 'News'}
-                    {item.published_at && ` · ${fmtNewsAge(item.published_at)}`}
-                  </p>
-                </a>
-              ))}
-            </div>
+            <NewsCardGrid items={cityNews} />
           </section>
         )}
 
@@ -412,53 +348,7 @@ export default async function CityPage({
                 Presales Open Now in {cityName}
               </h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {presaleGroups.map(group => {
-                const presaleClose = group.events
-                  .map(ev => ev.presale_end)
-                  .filter((d): d is string => !!d)
-                  .sort()[0] ?? null
-                const presaleName = group.events.find(ev => ev.presale_name)?.presale_name ?? null
-                return (
-                  <Link
-                    key={group.slug}
-                    href={`/on-sale-this-week/${group.slug}`}
-                    className="group block rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5"
-                  >
-                    <div className="relative h-48 overflow-hidden bg-slate-900">
-                      {group.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={group.image_url} alt={group.artistName}
-                          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A1A2E, #FFB800)' }}>
-                          <span className="text-5xl">🔥</span>
-                        </div>
-                      )}
-                      <div className="absolute top-3 left-3">
-                        <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full" style={{ backgroundColor: '#FFB800', color: '#1A1A2E' }}>
-                          Presale Open
-                        </span>
-                      </div>
-                    </div>
-                    <div className="p-4">
-                      <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
-                        {presaleName ?? group.dbArtist?.tour_name ?? 'Presale'}
-                      </p>
-                      <h3 className="font-extrabold text-slate-900 text-lg leading-tight mb-2 group-hover:text-red-600 transition-colors">
-                        {group.artistName}
-                      </h3>
-                      <p className="text-sm text-slate-500 mb-3">
-                        🗓 {group.events.length} UK date{group.events.length !== 1 ? 's' : ''}
-                      </p>
-                      <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700">
-                        {presaleClose ? `⏳ Presale closes ${fmtOnSaleLabel(presaleClose)}` : '🎟️ Presale open now'}
-                      </div>
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
+            <PresaleGrid groups={presaleGroups} />
           </section>
         )}
 

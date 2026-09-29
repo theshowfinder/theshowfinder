@@ -8,6 +8,12 @@ export function citySlug(cityName: string): string {
   return cityName.toLowerCase().replace(/\s+/g, '-')
 }
 
+// Sentinel city_slug for the homepage's national (not city-scoped) news
+// feed — stored in the same city_news table since the schema doesn't care
+// what the slug is, rather than standing up a second table for one row type.
+export const NATIONAL_SLUG = 'national'
+const NATIONAL_NAME = 'UK National'
+
 function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms))
 }
@@ -143,9 +149,10 @@ function isFalsePositive(item: { headline: string; source: string | null; url: s
   return false
 }
 
-async function fetchCityNews(cityName: string): Promise<NewsItem[]> {
-  const cityForQuery = cityName.replace(/\s+/g, '+')
-  const q = `%22${cityForQuery}%22+(concert+OR+gig+OR+tour+OR+tickets+OR+arena+OR+festival+OR+entertainment)+${NEWS_EXCLUDE_TERMS}`
+// Shared low-level fetch: takes an already-encoded Google News query string,
+// parses the RSS feed, and applies the same deterministic false-positive
+// backstop every feed goes through — city-scoped and national alike.
+async function fetchNewsForQuery(q: string): Promise<NewsItem[]> {
   const feedUrl = `https://news.google.com/rss/search?q=${q}&hl=en-GB&gl=GB&ceid=GB:en`
 
   const parser = new Parser<Record<string, unknown>, RawItem>({
@@ -164,6 +171,22 @@ async function fetchCityNews(cityName: string): Promise<NewsItem[]> {
     .filter(i => i.headline && i.url)
     .filter(i => !isFalsePositive(i))
     .slice(0, 8)
+}
+
+function fetchCityNews(cityName: string): Promise<NewsItem[]> {
+  const cityForQuery = cityName.replace(/\s+/g, '+')
+  const q = `%22${cityForQuery}%22+(concert+OR+gig+OR+tour+OR+tickets+OR+arena+OR+festival+OR+entertainment)+${NEWS_EXCLUDE_TERMS}`
+  return fetchNewsForQuery(q)
+}
+
+// The homepage's general "entertainment news from all over" feed — not tied
+// to any one city. Same GB-locale RSS search and the same blocklist as every
+// city feed, just without a `"City Name"` term, so this naturally skews
+// toward genuinely national/major stories (an arena tour, a festival
+// lineup, a big on-sale) rather than small local listings.
+function fetchNationalNews(): Promise<NewsItem[]> {
+  const q = `(concert+OR+gig+OR+tour+OR+festival+OR+arena+OR+%22on+sale%22+OR+presale)+UK+${NEWS_EXCLUDE_TERMS}`
+  return fetchNewsForQuery(q)
 }
 
 // ── Logging (reuses sync_log, same as the Ticketmaster sync — one row per
@@ -200,82 +223,109 @@ export interface CityNewsSyncResult {
 
 const CITY_DELAY_MS = 300
 
-// ── Main entry point ─────────────────────────────────────────────────────────
+// ── Main entry point ─────────────────────────────────────────────────────
+
+// One feed to sync: a city (slug = citySlug(name)) or the national feed
+// (slug = NATIONAL_SLUG). Same fetch → upsert → prune → log pipeline either
+// way — adding another non-city feed later (e.g. a genre-specific one) is
+// just another entry in the list `syncCityNews` builds below.
+interface NewsFeed {
+  slug: string
+  name: string
+  fetch: () => Promise<NewsItem[]>
+}
+
+async function syncOneFeed(
+  db: DbClient,
+  feed: NewsFeed,
+): Promise<{ fetched: number; upserted: number; deleted: number; status: 'ok' | 'error'; error?: string }> {
+  const startedAt = new Date().toISOString()
+
+  try {
+    const items = await feed.fetch()
+    let upserted = 0
+    let deleted  = 0
+
+    if (items.length) {
+      const rows = items.map(i => ({
+        city_slug:    feed.slug,
+        city_name:    feed.name,
+        headline:     i.headline,
+        url:          i.url,
+        source:       i.source,
+        published_at: i.publishedAt,
+        fetched_at:   new Date().toISOString(),
+      }))
+      const { error } = await db.from('city_news').upsert(rows, { onConflict: 'city_slug,url' })
+      if (error) throw new Error(`upsert failed: ${error.message}`)
+      upserted = items.length
+
+      // Replace, don't accumulate: anything already stored for this feed
+      // that isn't part of today's fresh top-8 is gone the moment we have
+      // a successful fetch to replace it with — including any false
+      // positive that slipped through on a previous run before this
+      // blocklist existed. We only prune when today's fetch actually
+      // returned data, so a transient empty/failed fetch never wipes out
+      // otherwise-good existing rows.
+      const { data: existingRows, error: existingErr } = await db
+        .from('city_news')
+        .select('id, url')
+        .eq('city_slug', feed.slug)
+
+      if (existingErr) {
+        console.error(`[city-news] existing-rows lookup failed for "${feed.name}" (non-fatal): ${existingErr.message}`)
+      } else {
+        const freshUrls = new Set(rows.map(r => r.url))
+        const staleIds = (existingRows ?? [])
+          .filter(r => !freshUrls.has(r.url as string))
+          .map(r => r.id)
+        if (staleIds.length) {
+          const { error: delErr } = await db.from('city_news').delete().in('id', staleIds)
+          if (delErr) {
+            console.error(`[city-news] cleanup failed for "${feed.name}" (non-fatal): ${delErr.message}`)
+          } else {
+            deleted = staleIds.length
+          }
+        }
+      }
+    }
+
+    await logCityRun(db, { city: feed.name, startedAt, itemsSynced: items.length, status: 'ok' })
+    return { fetched: items.length, upserted, deleted, status: 'ok' }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error(`[city-news] "${feed.name}" failed:`, message)
+    await logCityRun(db, { city: feed.name, startedAt, itemsSynced: 0, status: 'error', error: message })
+    return { fetched: 0, upserted: 0, deleted: 0, status: 'error', error: message }
+  }
+}
+
+// ── Main entry point ─────────────────────────────────────────────────────
 
 export async function syncCityNews(): Promise<CityNewsSyncResult> {
   const db = createAdminClient()
 
+  const feeds: NewsFeed[] = [
+    ...CITIES.map(city => ({ slug: citySlug(city.name), name: city.name, fetch: () => fetchCityNews(city.name) })),
+    { slug: NATIONAL_SLUG, name: NATIONAL_NAME, fetch: fetchNationalNews },
+  ]
+
   let totalFetched = 0, totalUpserted = 0, totalDeleted = 0, errors = 0
   const perCity: CityNewsSyncResult['perCity'] = []
 
-  for (const city of CITIES) {
-    const slug = citySlug(city.name)
-    const startedAt = new Date().toISOString()
-
-    try {
-      const items = await fetchCityNews(city.name)
-      totalFetched += items.length
-
-      if (items.length) {
-        const rows = items.map(i => ({
-          city_slug:    slug,
-          city_name:    city.name,
-          headline:     i.headline,
-          url:          i.url,
-          source:       i.source,
-          published_at: i.publishedAt,
-          fetched_at:   new Date().toISOString(),
-        }))
-        const { error } = await db.from('city_news').upsert(rows, { onConflict: 'city_slug,url' })
-        if (error) throw new Error(`upsert failed: ${error.message}`)
-        totalUpserted += items.length
-
-        // Replace, don't accumulate: anything already stored for this city
-        // that isn't part of today's fresh top-8 is gone the moment we have
-        // a successful fetch to replace it with — including any false
-        // positive that slipped through on a previous run before this
-        // blocklist existed (or before Google's query-level exclusion
-        // happened to catch it). We only prune when today's fetch actually
-        // returned data, so a transient empty/failed fetch never wipes
-        // out otherwise-good existing rows.
-        const { data: existingRows, error: existingErr } = await db
-          .from('city_news')
-          .select('id, url')
-          .eq('city_slug', slug)
-
-        if (existingErr) {
-          console.error(`[city-news] existing-rows lookup failed for "${city.name}" (non-fatal): ${existingErr.message}`)
-        } else {
-          const freshUrls = new Set(rows.map(r => r.url))
-          const staleIds = (existingRows ?? [])
-            .filter(r => !freshUrls.has(r.url as string))
-            .map(r => r.id)
-          if (staleIds.length) {
-            const { error: delErr } = await db.from('city_news').delete().in('id', staleIds)
-            if (delErr) {
-              console.error(`[city-news] cleanup failed for "${city.name}" (non-fatal): ${delErr.message}`)
-            } else {
-              totalDeleted += staleIds.length
-            }
-          }
-        }
-      }
-
-      perCity.push({ city: city.name, fetched: items.length, upserted: items.length, status: 'ok' })
-      await logCityRun(db, { city: city.name, startedAt, itemsSynced: items.length, status: 'ok' })
-    } catch (err) {
-      errors++
-      const message = err instanceof Error ? err.message : String(err)
-      console.error(`[city-news] "${city.name}" failed:`, message)
-      perCity.push({ city: city.name, fetched: 0, upserted: 0, status: 'error', error: message })
-      await logCityRun(db, { city: city.name, startedAt, itemsSynced: 0, status: 'error', error: message })
-    }
+  for (const feed of feeds) {
+    const result = await syncOneFeed(db, feed)
+    totalFetched  += result.fetched
+    totalUpserted += result.upserted
+    totalDeleted  += result.deleted
+    if (result.status === 'error') errors++
+    perCity.push({ city: feed.name, fetched: result.fetched, upserted: result.upserted, status: result.status, error: result.error })
 
     await sleep(CITY_DELAY_MS)
   }
 
   console.log(`[city-news] ── Sync complete ──`)
-  console.log(`[city-news]    cities=${CITIES.length} fetched=${totalFetched} upserted=${totalUpserted} deleted=${totalDeleted} errors=${errors}`)
+  console.log(`[city-news]    feeds=${feeds.length} fetched=${totalFetched} upserted=${totalUpserted} deleted=${totalDeleted} errors=${errors}`)
 
-  return { citiesProcessed: CITIES.length, totalFetched, totalUpserted, totalDeleted, errors, perCity }
+  return { citiesProcessed: feeds.length, totalFetched, totalUpserted, totalDeleted, errors, perCity }
 }
