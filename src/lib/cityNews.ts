@@ -82,10 +82,65 @@ const HEADLINE_BLOCKLIST: RegExp[] = [
   /\bracing post\b/i, /\bracing tv\b/i, /\bgrand national\b/i, /\bnon-runner\b/i, /\bbetting ring\b/i,
   /\bkentucky derby\b/i, /\bepsom derby\b/i, /\birish derby\b/i,
   /\bdubai world cup\b/i, /\bdubai duty free\b/i,
+  // "Derby"/"Derby race" as a generic American event TYPE (soap box derby,
+  // demolition derby, pinewood derby) rather than the English city — this is
+  // what actually let the Colorado/Oklahoma stories through, since neither
+  // mentions football or horse racing.
+  /\bsoap box derby\b/i, /\bdemolition derby\b/i, /\bpinewood derby\b/i,
+  /\bderby race\b/i, /\bderby days\b/i,
 ]
 
-function isFalsePositive(headline: string): boolean {
-  return HEADLINE_BLOCKLIST.some(re => re.test(headline))
+// Several of the 36 UK cities share a name with a US or Canadian town
+// (Derby CT/KS, Manchester NH, Cambridge MA, Bristol CT/TN/VA, Plymouth MA,
+// Newport RI, Richmond VA, Oxford MS, Reading PA, Norwich CT, London
+// Ontario, and more) — a plain city-name search picks up their local news
+// too. Two independent, low-false-negative-risk signals catch almost all of
+// it: the standard American/Canadian "City, ST" dateline format (never
+// occurs organically in UK press), and the full state/province name spelled
+// out (safe to blocklist outright — no legitimate "concert in Derby"
+// headline is going to organically contain "Oklahoma").
+const US_STATE_ABBR =
+  'AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|' +
+  'MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY'
+const CA_PROVINCE_ABBR = 'ON|BC|QC|AB|MB|SK|NS|NB|NL|PE'
+const US_STATE_NAMES = [
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut',
+  'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa',
+  'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan',
+  'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada',
+  'New Hampshire', 'New Jersey', 'New Mexico', 'North Carolina', 'North Dakota',
+  'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina',
+  'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington',
+  'West Virginia', 'Wisconsin', 'Wyoming',
+]
+const CA_PROVINCE_NAMES = [
+  'Ontario', 'Quebec', 'British Columbia', 'Alberta', 'Manitoba', 'Saskatchewan',
+  'Nova Scotia', 'New Brunswick', 'Newfoundland and Labrador', 'Prince Edward Island',
+]
+const NORTH_AMERICA_BLOCKLIST: RegExp[] = [
+  new RegExp(`,\\s*(?:${US_STATE_ABBR}|${CA_PROVINCE_ABBR})\\b`), // "Lawton, OK" dateline
+  ...[...US_STATE_NAMES, ...CA_PROVINCE_NAMES].map(
+    name => new RegExp(`\\b${name.replace(/\s+/g, '\\s+')}\\b`, 'i')
+  ),
+]
+
+// US government sites (.gov) are a near-certain non-UK signal — UK
+// government sites are under .gov.uk, a different TLD entirely.
+function isUsGovHost(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    return host.endsWith('.gov') && !host.endsWith('.gov.uk')
+  } catch {
+    return false
+  }
+}
+
+function isFalsePositive(item: { headline: string; source: string | null; url: string }): boolean {
+  const text = `${item.headline} ${item.source ?? ''}`
+  if (HEADLINE_BLOCKLIST.some(re => re.test(text))) return true
+  if (NORTH_AMERICA_BLOCKLIST.some(re => re.test(text))) return true
+  if (isUsGovHost(item.url)) return true
+  return false
 }
 
 async function fetchCityNews(cityName: string): Promise<NewsItem[]> {
@@ -107,7 +162,7 @@ async function fetchCityNews(cityName: string): Promise<NewsItem[]> {
       publishedAt: item.pubDate && !Number.isNaN(Date.parse(item.pubDate)) ? new Date(item.pubDate).toISOString() : null,
     }))
     .filter(i => i.headline && i.url)
-    .filter(i => !isFalsePositive(i.headline))
+    .filter(i => !isFalsePositive(i))
     .slice(0, 8)
 }
 
