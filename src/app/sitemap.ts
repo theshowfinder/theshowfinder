@@ -114,6 +114,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority:        0.8,
   }))
 
+  const cityThisWeekPages: MetadataRoute.Sitemap = CITIES.map(city => ({
+    url:             `${BASE}/cities/${encodeURIComponent(city)}/this-week`,
+    lastModified:    new Date(),
+    changeFrequency: 'daily' as const,
+    priority:        0.7,
+  }))
+
   const eventPages: MetadataRoute.Sitemap = eventRows.map(e => ({
     url:             `${BASE}/events/${e.slug}`,
     lastModified:    new Date(e.updated_at),
@@ -135,5 +142,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority:        0.6,
   }))
 
-  return [...staticPages, ...cityPages, ...eventPages, ...venuePages, ...artistPages]
+  return [...staticPages, ...cityPages, ...cityThisWeekPages, ...eventPages, ...venuePages, ...artistPages]
 }

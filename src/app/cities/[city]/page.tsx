@@ -380,6 +380,13 @@ export default async function CityPage({
                   Events This Week in {cityName}
                 </h2>
               </div>
+              <Link
+                href={`/cities/${encodeURIComponent(cityName)}/this-week`}
+                className="text-sm font-semibold whitespace-nowrap hover:underline"
+                style={{ color: '#E8003D' }}
+              >
+                See all →
+              </Link>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {eventsThisWeek.map(event => (
