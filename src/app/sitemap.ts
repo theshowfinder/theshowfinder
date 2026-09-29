@@ -1,7 +1,86 @@
 import type { MetadataRoute } from 'next'
 import { createClient } from '@/lib/supabase/server'
 
+export const maxDuration = 60
+
 const BASE = 'https://www.theshowfinder.com'
+
+// Supabase's PostgREST layer caps any single request at 1000 rows
+// regardless of the .limit() passed in the query — the previous version of
+// this file asked for up to 5000/2000/1000 rows per table but silently
+// only ever got the first 1000 back every time. With 25,000+ upcoming
+// events and 4,000+ artists, that meant well over half the site's pages
+// were never in the sitemap at all. The three fetchAll* helpers below page
+// through in parallel batches of 1000 instead, so every row makes it in
+// regardless of table size — nothing here needs raising a Supabase project
+// setting to fix, it's all done from the query side.
+const PAGE_SIZE = 1000
+
+type SlugRow        = { slug: string }
+type SlugUpdatedRow = { slug: string; updated_at: string }
+type DbClient       = Awaited<ReturnType<typeof createClient>>
+
+async function fetchAllEvents(supabase: DbClient, nowISO: string): Promise<SlugUpdatedRow[]> {
+  const { count } = await supabase
+    .from('events')
+    .select('*', { count: 'exact', head: true })
+    .gte('start_date', nowISO)
+  const total = count ?? 0
+  if (total === 0) return []
+
+  const pageCount = Math.ceil(total / PAGE_SIZE)
+  const pages = await Promise.all(
+    Array.from({ length: pageCount }, (_, i) => {
+      const from = i * PAGE_SIZE
+      return supabase
+        .from('events')
+        .select('slug, updated_at')
+        .gte('start_date', nowISO)
+        .range(from, from + PAGE_SIZE - 1) as unknown as Promise<{ data: SlugUpdatedRow[] | null }>
+    }),
+  )
+  return pages.flatMap(p => p.data ?? [])
+}
+
+async function fetchAllVenues(supabase: DbClient): Promise<SlugRow[]> {
+  const { count } = await supabase
+    .from('venues')
+    .select('*', { count: 'exact', head: true })
+    .not('slug', 'is', null)
+  const total = count ?? 0
+  if (total === 0) return []
+
+  const pageCount = Math.ceil(total / PAGE_SIZE)
+  const pages = await Promise.all(
+    Array.from({ length: pageCount }, (_, i) => {
+      const from = i * PAGE_SIZE
+      return supabase
+        .from('venues')
+        .select('slug')
+        .not('slug', 'is', null)
+        .range(from, from + PAGE_SIZE - 1) as unknown as Promise<{ data: SlugRow[] | null }>
+    }),
+  )
+  return pages.flatMap(p => p.data ?? [])
+}
+
+async function fetchAllArtists(supabase: DbClient): Promise<SlugRow[]> {
+  const { count } = await supabase.from('artists').select('*', { count: 'exact', head: true })
+  const total = count ?? 0
+  if (total === 0) return []
+
+  const pageCount = Math.ceil(total / PAGE_SIZE)
+  const pages = await Promise.all(
+    Array.from({ length: pageCount }, (_, i) => {
+      const from = i * PAGE_SIZE
+      return supabase
+        .from('artists')
+        .select('slug')
+        .range(from, from + PAGE_SIZE - 1) as unknown as Promise<{ data: SlugRow[] | null }>
+    }),
+  )
+  return pages.flatMap(p => p.data ?? [])
+}
 
 const CITIES = [
   'London','Manchester','Birmingham','Glasgow','Edinburgh','Leeds','Liverpool',
@@ -16,13 +95,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = await createClient()
   const now      = new Date().toISOString()
 
-  type SlugRow        = { slug: string }
-  type SlugUpdatedRow = { slug: string; updated_at: string }
-
-  const [eventsRes, venuesRes, artistsRes] = await Promise.all([
-    supabase.from('events').select('slug, updated_at').gte('start_date', now).limit(5000) as unknown as Promise<{ data: SlugUpdatedRow[] | null }>,
-    supabase.from('venues').select('slug').not('slug', 'is', null).limit(2000)            as unknown as Promise<{ data: SlugRow[] | null }>,
-    supabase.from('artists').select('slug').limit(1000)                                    as unknown as Promise<{ data: SlugRow[] | null }>,
+  const [eventRows, venueRows, artistRows] = await Promise.all([
+    fetchAllEvents(supabase, now),
+    fetchAllVenues(supabase),
+    fetchAllArtists(supabase),
   ])
 
   const staticPages: MetadataRoute.Sitemap = [
@@ -38,21 +114,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority:        0.8,
   }))
 
-  const eventPages: MetadataRoute.Sitemap = (eventsRes.data ?? []).map(e => ({
+  const eventPages: MetadataRoute.Sitemap = eventRows.map(e => ({
     url:             `${BASE}/events/${e.slug}`,
     lastModified:    new Date(e.updated_at),
     changeFrequency: 'weekly' as const,
     priority:        0.6,
   }))
 
-  const venuePages: MetadataRoute.Sitemap = (venuesRes.data ?? []).map(v => ({
+  const venuePages: MetadataRoute.Sitemap = venueRows.map(v => ({
     url:             `${BASE}/venues/${v.slug}`,
     lastModified:    new Date(),
     changeFrequency: 'weekly' as const,
     priority:        0.7,
   }))
 
-  const artistPages: MetadataRoute.Sitemap = (artistsRes.data ?? []).map(a => ({
+  const artistPages: MetadataRoute.Sitemap = artistRows.map(a => ({
     url:             `${BASE}/artists/${a.slug}`,
     lastModified:    new Date(),
     changeFrequency: 'weekly' as const,
