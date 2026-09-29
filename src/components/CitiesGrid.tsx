@@ -67,10 +67,29 @@ export default async function CitiesGrid() {
     countMap[name] = countResults[i].count ?? 0
   })
 
+  // One real photo per city — the highest-capacity venue with a
+  // Ticketmaster-sourced image, same images already trusted and shown
+  // elsewhere on the site (event/venue pages). A single query ordered by
+  // capacity desc, reduced client-side to the first (= biggest-venue) row
+  // per city, rather than 36 separate per-city queries.
+  const { data: venueImageRows } = await supabase
+    .from('venues')
+    .select('city, image_url, capacity')
+    .not('image_url', 'is', null)
+    .order('capacity', { ascending: false, nullsFirst: false })
+    .limit(500) as unknown as { data: { city: string; image_url: string; capacity: number | null }[] | null }
+
+  const imageMap: Record<string, string> = {}
+  for (const row of venueImageRows ?? []) {
+    const key = row.city.trim().toLowerCase()
+    if (!imageMap[key]) imageMap[key] = row.image_url
+  }
+
   return (
     <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2 md:grid md:grid-cols-4 lg:grid-cols-6 md:gap-4 md:pb-0">
       {CITIES.map(({ name, gradient, emoji }) => {
         const count = countMap[name] ?? 0
+        const photo = imageMap[name.toLowerCase()]
 
         return (
           <Link
@@ -79,6 +98,22 @@ export default async function CitiesGrid() {
             className="flex-none w-40 md:w-auto relative flex flex-col justify-end p-4 rounded-2xl overflow-hidden h-32 md:h-36 hover:scale-[1.02] hover:shadow-xl transition-all duration-200 group"
             style={{ background: gradient }}
           >
+            {photo && (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={photo}
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div
+                  className="absolute inset-0"
+                  style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.75) 100%)' }}
+                />
+              </>
+            )}
+
             {/* Emoji watermark */}
             <span className="absolute top-2 right-3 text-3xl opacity-25 group-hover:opacity-40 transition-opacity select-none">
               {emoji}
