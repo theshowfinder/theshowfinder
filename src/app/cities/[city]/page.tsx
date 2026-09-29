@@ -97,7 +97,7 @@ export default async function CityPage({
   const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
   const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-  const [featuredPoolResult, onsalePoolResult, totalCountResult, artistsResult, venuesResult, localBusinessesResult, cityNewsResult] = await Promise.all([
+  const [featuredPoolResult, onsalePoolResult, localEventsResult, totalCountResult, artistsResult, venuesResult, localBusinessesResult, cityNewsResult] = await Promise.all([
     // Pool for featured section: the city's biggest upcoming shows, sorted by
     // venue capacity — NOT by date. Previously this pulled the 50 soonest-
     // starting events first and only then sorted that pre-filtered pool by
@@ -124,6 +124,19 @@ export default async function CityPage({
       .lte('onsale_date', weekAhead)
       .order('onsale_date', { ascending: true })
       .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+
+    // Hand-curated local events (markets, art fairs, community events) —
+    // queried separately because the featured pool above requires an
+    // image_url and sorts by venue capacity, which excludes these by design.
+    // No image/capacity requirement here — just chronological.
+    supabase
+      .from('events_with_venue')
+      .select('*')
+      .eq('category', 'local')
+      .ilike('venue_city', cityName)
+      .gte('start_date', nowISO)
+      .order('start_date', { ascending: true })
+      .limit(12) as unknown as Promise<{ data: EventWithVenue[] | null }>,
 
     // Total upcoming count for the hero stat line — a head:true count query,
     // not a full events fetch (the "All Events" grid this used to feed has
@@ -168,6 +181,7 @@ export default async function CityPage({
   const cityNews = cityNewsResult.data ?? []
   const featuredPool = featuredPoolResult.data ?? []
   const onsalePool   = onsalePoolResult.data ?? []
+  const localEvents  = localEventsResult.data ?? []
   const totalCount   = totalCountResult.count ?? 0
 
   // Exact upcoming-event counts for each candidate venue, queried one venue
@@ -274,6 +288,27 @@ export default async function CityPage({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {topEvents.map(event => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── LOCAL & COMMUNITY EVENTS ── */}
+        {localEvents.length > 0 && (
+          <section>
+            <div className="flex items-end justify-between mb-7">
+              <div>
+                <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#7C3AED' }}>
+                  Markets, fairs &amp; community
+                </p>
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                  Local Events in {cityName}
+                </h2>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {localEvents.map(event => (
                 <EventCard key={event.id} event={event} />
               ))}
             </div>
