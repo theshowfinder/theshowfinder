@@ -3,12 +3,16 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getTicketmasterAffiliateLink } from '@/lib/affiliate'
+import { CopyLinkButton } from '@/components/CopyLinkButton'
 
 interface EventRow {
   id: string
   title: string
   slug: string
+  category: string
   start_date: string
+  tickets_url: string | null
   own_ticket_url: string | null
   venue: { name: string; city: string } | null
 }
@@ -19,7 +23,7 @@ export default async function AdminEventsPage() {
 
   const { data: events } = await db
     .from('events')
-    .select('id, title, slug, start_date, own_ticket_url, venue:venues(name, city)')
+    .select('id, title, slug, category, start_date, tickets_url, own_ticket_url, venue:venues(name, city)')
     .gte('start_date', new Date().toISOString())
     .order('start_date', { ascending: true })
     .limit(200) as unknown as { data: EventRow[] | null }
@@ -32,6 +36,13 @@ export default async function AdminEventsPage() {
         <Link href="/admin" className="text-slate-400 hover:text-slate-600 text-sm">← Admin</Link>
         <h1 className="text-xl font-extrabold text-slate-900">Events</h1>
         <span className="text-slate-400 text-sm ml-auto">{rows.length} upcoming</span>
+        <Link
+          href="/admin/events/new"
+          className="inline-block font-bold text-white px-5 py-2.5 rounded-xl hover:opacity-90 transition-opacity text-sm"
+          style={{ backgroundColor: '#E8003D' }}
+        >
+          + Add Local Event
+        </Link>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
@@ -48,6 +59,7 @@ export default async function AdminEventsPage() {
                   <th className="px-4 py-3 font-semibold text-slate-600">Event</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">Date</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">Venue</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600">Ticketmaster</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">Own tickets</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -56,7 +68,12 @@ export default async function AdminEventsPage() {
                 {rows.map(event => (
                   <tr key={event.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <p className="font-bold text-slate-900">{event.title}</p>
+                      <p className="font-bold text-slate-900 flex items-center gap-2">
+                        {event.title}
+                        {event.category === 'local' && (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">📍 Local</span>
+                        )}
+                      </p>
                       <p className="text-slate-400 text-xs">/events/{event.slug}</p>
                     </td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
@@ -64,6 +81,17 @@ export default async function AdminEventsPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600">
                       {event.venue ? `${event.venue.name}, ${event.venue.city}` : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {event.tickets_url ? (
+                        <CopyLinkButton
+                          link={getTicketmasterAffiliateLink(event.tickets_url)}
+                          label="Copy link"
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+                        />
+                      ) : (
+                        <span className="text-slate-300 text-xs">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {event.own_ticket_url ? (

@@ -248,6 +248,78 @@ export async function updateEventOwnTicketUrlAction(id: string, slug: string, fo
   redirect('/admin/events/' + slug + '?saved=1')
 }
 
+// Local events (markets, art fairs, community events) — hand-curated, not
+// synced from Ticketmaster. Finds-or-creates a venue for the location typed
+// in, then creates the event with category 'local'.
+export async function createLocalEventAction(formData: FormData) {
+  await checkAuth()
+  const db = createAdminClient()
+
+  const title       = (formData.get('title')       as string).trim()
+  const city        = (formData.get('city')        as string).trim()
+  const venue_name  = (formData.get('venue_name')  as string).trim()
+  const address     = ((formData.get('address')  as string) || '').trim() || `${venue_name}, ${city}`
+  const postcode    = ((formData.get('postcode') as string) || '').trim()
+  const dateStr     = formData.get('date') as string
+  const timeStr     = (formData.get('time') as string) || '10:00'
+  const description = ((formData.get('description') as string) || '').trim() || null
+  const info_url    = ((formData.get('info_url')     as string) || '').trim() || null
+  const is_free     = formData.get('is_free') === 'on'
+
+  const start_date = new Date(`${dateStr}T${timeStr}:00`).toISOString()
+
+  // Find-or-create the venue (slugged per-city so the same location name in
+  // two different cities doesn't collide).
+  const venueSlug = slugify(`${venue_name}-${city}`)
+  const { data: existingVenue } = await db
+    .from('venues')
+    .select('id')
+    .eq('slug', venueSlug)
+    .maybeSingle()
+
+  let venueId = existingVenue?.id as string | undefined
+
+  if (!venueId) {
+    const { data: newVenue, error: venueError } = await db
+      .from('venues')
+      .insert({ name: venue_name, slug: venueSlug, address, city, postcode, country: 'GB' })
+      .select('id')
+      .single()
+    if (venueError) throw new Error(venueError.message)
+    venueId = newVenue.id
+  }
+
+  // Unique event slug — markets recur weekly, so fold the date in and fall
+  // back to a numbered suffix on the rare collision.
+  const baseSlug = slugify(`${title}-${dateStr}`)
+  let eventSlug = baseSlug
+  for (let i = 2; i < 10; i++) {
+    const { data: clash } = await db.from('events').select('id').eq('slug', eventSlug).maybeSingle()
+    if (!clash) break
+    eventSlug = `${baseSlug}-${i}`
+  }
+
+  const { error } = await db.from('events').insert({
+    title,
+    slug: eventSlug,
+    description: is_free ? [description, 'Free entry.'].filter(Boolean).join(' ') : description,
+    category: 'local',
+    venue_id: venueId,
+    start_date,
+    currency: 'GBP',
+    own_ticket_url: info_url,
+    status: 'upcoming',
+  })
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin/events')
+  revalidatePath('/events')
+  revalidatePath('/cities/' + encodeURIComponent(city))
+  revalidatePath('/')
+  redirect('/admin/events?created=1')
+}
+
 // ── Local businesses ─────────────────────────────────────────────────────────
 
 export async function createLocalBusinessAction(formData: FormData) {

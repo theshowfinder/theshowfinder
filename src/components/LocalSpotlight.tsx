@@ -21,6 +21,7 @@ const CATEGORIES = [
   { value: 'comedy',  label: 'Comedy',   emoji: '😂' },
   { value: 'sports',  label: 'Sports',   emoji: '⚽' },
   { value: 'family',  label: 'Family',   emoji: '🎠' },
+  { value: 'local',    label: 'Local',    emoji: '📍' },
 ]
 
 function formatDate(iso: string) {

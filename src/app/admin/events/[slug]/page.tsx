@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { updateEventOwnTicketUrlAction } from '../../actions'
+import { getTicketmasterAffiliateLink } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 import type { Event } from '@/lib/types/database'
 
@@ -44,6 +45,17 @@ export default async function EditEventPage({ params, searchParams }: PageProps)
           <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">
             ✓ Saved successfully
           </div>
+        )}
+
+        {event.tickets_url && (
+          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <h2 className="text-lg font-extrabold text-slate-900 mb-1">Ticketmaster</h2>
+            <p className="text-sm text-slate-500 mb-4 truncate">{event.tickets_url}</p>
+            <CopyLinkButton
+              link={getTicketmasterAffiliateLink(event.tickets_url)}
+              label="Copy affiliate link"
+            />
+          </section>
         )}
 
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">

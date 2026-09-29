@@ -1,4 +1,4 @@
-export type EventCategory = 'concert' | 'theatre' | 'comedy' | 'sports' | 'family'
+export type EventCategory = 'concert' | 'theatre' | 'comedy' | 'sports' | 'family' | 'local'
 export type EventStatus = 'upcoming' | 'on_sale' | 'sold_out' | 'cancelled' | 'postponed'
 
 export interface Database {

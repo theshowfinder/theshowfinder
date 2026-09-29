@@ -10,6 +10,7 @@ const categories = [
   { value: 'comedy',   label: 'Comedy',    emoji: '😂' },
   { value: 'sports',   label: 'Sports',    emoji: '⚽' },
   { value: 'family',   label: 'Family',    emoji: '🎠' },
+  { value: 'local',     label: 'Local',     emoji: '📍' },
 ]
 
 export default function CategoryStrip() {

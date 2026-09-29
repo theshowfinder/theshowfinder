@@ -7,6 +7,7 @@ const categoryConfig: Record<string, { label: string; colour: string }> = {
   comedy:   { label: 'Comedy',   colour: 'bg-amber-100  text-amber-700'  },
   sports:   { label: 'Sports',   colour: 'bg-green-100  text-green-700'  },
   family:   { label: 'Family',   colour: 'bg-sky-100    text-sky-700'    },
+  local:    { label: 'Local',    colour: 'bg-purple-100 text-purple-700' },
 }
 
 const statusConfig: Record<string, { label: string; colour: string }> = {
@@ -18,7 +19,7 @@ const statusConfig: Record<string, { label: string; colour: string }> = {
 }
 
 const categoryEmoji: Record<string, string> = {
-  concert: '🎵', theatre: '🎭', comedy: '😂', sports: '⚽', family: '🎠',
+  concert: '🎵', theatre: '🎭', comedy: '😂', sports: '⚽', family: '🎠', local: '📍',
 }
 
 function formatDate(iso: string) {
