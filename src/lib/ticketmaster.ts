@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { buildFallbackDescription, cleanSourceDescription } from '@/lib/eventDescription'
 import type { EventCategory } from '@/lib/types/database'
 
 type DbClient = ReturnType<typeof createAdminClient>
@@ -60,6 +61,8 @@ interface TMEvent {
   images?: TMImage[]
   priceRanges?: TMPriceRange[]
   classifications?: TMClassification[]
+  info?: string
+  pleaseNote?: string
   _embedded?: {
     venues?: TMVenue[]
     attractions?: TMAttraction[]
@@ -499,6 +502,21 @@ async function upsertEvent(
   // Slug uses TM event ID suffix → guaranteed unique
   const slug = `${slugify(tmEvent.name)}-${tmEvent.id.slice(-8)}`
 
+  // Prefer Ticketmaster's own description text when they supply it (only a
+  // minority of events); otherwise synthesize one from data we already have
+  // so every event gets a unique, non-empty description for SEO/schema.org.
+  const tmVenue     = tmEvent._embedded?.venues?.[0]
+  const sourceText  = tmEvent.info?.trim() || tmEvent.pleaseNote?.trim() || ''
+  const description = sourceText
+    ? cleanSourceDescription(sourceText)
+    : buildFallbackDescription({
+        title:     tmEvent.name,
+        venueName: tmVenue?.name ?? null,
+        city:      tmVenue?.city?.name ? normalizeCityName(tmVenue.city.name) : null,
+        startDate,
+        category,
+      })
+
   const eventData = {
     title:               tmEvent.name,
     slug,
@@ -513,6 +531,7 @@ async function upsertEvent(
     presale_name:        presaleInfo.presale_name,
     last_synced_at:      new Date().toISOString(),
     image_url:           getBestImage(tmEvent.images),
+    description,
     price_from:          price?.min      ?? null,
     price_to:            price?.max      ?? null,
     currency:            price?.currency ?? 'GBP',
