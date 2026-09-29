@@ -45,6 +45,9 @@ export const metadata: Metadata = {
   other: {
     'impact-site-verification': 'c168f3c5-519c-42fa-a56a-61a670276ba4',
   },
+  verification: {
+    google: 'M3c6R_aFiZNIgqVpjNK4npRvuim9F5IqSULCgjDFOWI',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
