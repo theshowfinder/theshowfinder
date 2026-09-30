@@ -445,6 +445,7 @@ export interface Database {
           city_name: string | null
           headline: string
           source: string | null
+          source_url: string | null
           url: string
           published_at: string | null
           discovered_at: string
@@ -457,6 +458,8 @@ export interface Database {
           review_status: NewsReviewStatus
           reviewed_at: string | null
           published_to_city_news_at: string | null
+          created_by: string | null
+          reviewed_by: string | null
           created_at: string
           updated_at: string
         }
@@ -467,6 +470,7 @@ export interface Database {
           city_name?: string | null
           headline: string
           source?: string | null
+          source_url?: string | null
           url: string
           published_at?: string | null
           discovered_at?: string
@@ -479,6 +483,8 @@ export interface Database {
           review_status?: NewsReviewStatus
           reviewed_at?: string | null
           published_to_city_news_at?: string | null
+          created_by?: string | null
+          reviewed_by?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -488,6 +494,7 @@ export interface Database {
           city_name?: string | null
           headline?: string
           source?: string | null
+          source_url?: string | null
           url?: string
           published_at?: string | null
           discovered_at?: string
@@ -500,7 +507,26 @@ export interface Database {
           review_status?: NewsReviewStatus
           reviewed_at?: string | null
           published_to_city_news_at?: string | null
+          created_by?: string | null
+          reviewed_by?: string | null
           updated_at?: string
+        }
+      }
+      news_candidate_cities: {
+        Row: {
+          candidate_id: string
+          city_slug: string
+          city_name: string
+        }
+        Insert: {
+          candidate_id: string
+          city_slug: string
+          city_name: string
+        }
+        Update: {
+          candidate_id?: string
+          city_slug?: string
+          city_name?: string
         }
       }
     }
@@ -562,3 +588,4 @@ export type EventWithVenue = Database['public']['Views']['events_with_venue']['R
 export type LocalBusiness = Database['public']['Tables']['local_businesses']['Row']
 export type CityNews = Database['public']['Tables']['city_news']['Row']
 export type NewsCandidate = Database['public']['Tables']['news_candidates']['Row']
+export type NewsCandidateCity = Database['public']['Tables']['news_candidate_cities']['Row']

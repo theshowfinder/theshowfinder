@@ -1,31 +1,15 @@
 // Pure publish/unpublish logic for the News Intelligence Inbox
-// (supabase/migration_026_news_candidates.sql). Extracted out of
-// src/app/admin/actions.ts so the publish <-> unpublish contract can be
-// unit-tested directly (src/lib/newsPublishing.test.ts) without pulling in
-// Next.js server-action machinery (cookies/redirect/revalidatePath) or a
-// live Supabase connection.
+// (supabase/migration_026_news_candidates.sql, extended by
+// supabase/migration_027_news_candidate_multi_city_provenance.sql for
+// multi-city targeting). Kept free of Next.js/Supabase machinery
+// (cookies(), redirect(), revalidatePath(), a live db client) so it can be
+// unit-tested with Node's built-in test runner — see newsPublishing.test.ts.
 //
-// Every function here is a pure data-in/data-out helper — no DB calls, no
-// side effects. actions.ts feeds their output straight into the same
-// db.from(...) calls it always used; this file only decides *what* to
-// write, never *how* to write it, so it stays consistent with the rest of
-// the codebase's style of calling the Supabase client directly.
-//
-// Uses relative imports with explicit .ts extensions (not the '@/' alias
-// used everywhere else in this codebase) specifically so the test file can
-// run standalone with plain `node --test` — Node's native ESM loader
-// requires explicit extensions and has no tsconfig `paths` alias
-// resolution.
-//
-// NATIONAL_SLUG/NATIONAL_NAME are deliberately re-declared here rather than
-// imported from ./cityNews.ts: that file also imports `rss-parser` and
-// `@/lib/supabase/admin`/`@/lib/cities` via the '@/' alias, which would
-// drag the whole RSS pipeline (and its unresolvable-under-plain-node
-// aliases) into this file's dependency graph just to get two string
-// constants. Values must stay in sync with cityNews.ts's own
-// NATIONAL_SLUG/NATIONAL_NAME by hand — both are stable, long-settled
-// sentinels (unlikely to change), and pulling cityNews.ts in just to
-// compare them isn't worth reintroducing the alias problem this avoids.
+// NATIONAL_SLUG/NATIONAL_NAME are re-declared here rather than imported
+// from ./cityNews.ts, specifically to keep this file free of that file's
+// rss-parser and '@/' path-alias imports, neither of which resolves under
+// plain `node --test`. Both are long-settled sentinels; keep them in sync
+// by hand if either is ever renamed.
 import type { NewsCandidate } from './types/database.ts'
 
 export const NATIONAL_SLUG = 'national'
@@ -36,8 +20,6 @@ type CandidatePublishFields = Pick<NewsCandidate, 'scope_type' | 'city_slug' | '
 type CandidateUnpublishFields = Pick<NewsCandidate, 'scope_type' | 'city_slug' | 'city_name' | 'url'>
 
 export function canPublishCandidate(reviewStatus: NewsCandidate['review_status']): boolean {
-  // 'published' is allowed through too — re-publishing (e.g. after editing
-  // the headline) just re-upserts the same city_news row.
   return reviewStatus === 'approved' || reviewStatus === 'published'
 }
 
@@ -45,102 +27,146 @@ export function canUnpublishCandidate(reviewStatus: NewsCandidate['review_status
   return reviewStatus === 'published'
 }
 
-export interface CandidateCityTarget {
-  city_slug: string
-  city_name: string
-}
+export interface CandidateCityTarget { city_slug: string; city_name: string }
 
-// Resolves the exact city_news identity (city_slug/city_name) a candidate
-// maps to. Centralised so publish and unpublish can never disagree about
-// which row belongs to which candidate — both call this, not two separate
-// copies of the national/city branching.
-export function resolveCityNewsTarget(candidate: CandidateScope): CandidateCityTarget | null {
-  if (candidate.scope_type === 'national') return { city_slug: NATIONAL_SLUG, city_name: NATIONAL_NAME }
-  if (candidate.city_slug && candidate.city_name) return { city_slug: candidate.city_slug, city_name: candidate.city_name }
-  return null
+// A candidate's real target cities live in news_candidate_cities (Phase
+// 2) — pass its rows as `cityRows`. For a national candidate that table is
+// irrelevant and the single national target is returned regardless of
+// what's passed. For a city candidate with no cityRows (e.g. a
+// pre-Phase-2 candidate whose join-table backfill somehow didn't run, or
+// a caller that hasn't fetched them), this falls back to the legacy
+// singular city_slug/city_name columns so nothing that already works
+// breaks. An empty result means "cannot resolve a target" — callers must
+// treat that as an error, not silently skip it.
+export function resolveCityNewsTargets(
+  candidate: CandidateScope,
+  cityRows: CandidateCityTarget[] = []
+): CandidateCityTarget[] {
+  if (candidate.scope_type === 'national') return [{ city_slug: NATIONAL_SLUG, city_name: NATIONAL_NAME }]
+  if (cityRows.length) return cityRows
+  if (candidate.city_slug && candidate.city_name) return [{ city_slug: candidate.city_slug, city_name: candidate.city_name }]
+  return []
 }
 
 export interface CityNewsUpsertRow {
-  city_slug: string
-  city_name: string
-  headline: string
-  url: string
-  source: string | null
-  published_at: string | null
-  fetched_at: string
-  is_editorial: true
+  city_slug: string; city_name: string; headline: string; url: string
+  source: string | null; published_at: string | null; fetched_at: string; is_editorial: true
 }
 
-// The row publishNewsCandidateAction upserts into city_news, keyed on its
-// existing (city_slug, url) unique constraint — so publishing the same
-// candidate twice re-writes this same row instead of duplicating it.
-export function buildPublishUpsertRow(candidate: CandidatePublishFields, now: string): CityNewsUpsertRow | null {
-  const target = resolveCityNewsTarget(candidate)
-  if (!target) return null
-  return {
-    city_slug: target.city_slug,
-    city_name: target.city_name,
-    headline: candidate.headline,
-    url: candidate.url,
-    source: candidate.source,
-    published_at: candidate.published_at,
-    fetched_at: now,
-    is_editorial: true,
-  }
+// One upsert row per target city (or exactly one, for national). Returns
+// [] — not null — when there are no resolvable targets, so callers can
+// treat "nothing to publish" uniformly whether it came from a malformed
+// national candidate or a city candidate with no cities attached.
+export function buildPublishUpsertRows(
+  candidate: CandidatePublishFields,
+  targets: CandidateCityTarget[],
+  now: string
+): CityNewsUpsertRow[] {
+  return targets.map(target => ({
+    city_slug:     target.city_slug,
+    city_name:     target.city_name,
+    headline:      candidate.headline,
+    url:           candidate.url,
+    source:        candidate.source,
+    published_at:  candidate.published_at,
+    fetched_at:    now,
+    is_editorial:  true as const,
+  }))
 }
 
-export interface CityNewsDeleteFilter {
-  city_slug: string
-  url: string
-  is_editorial: true
+export interface CityNewsDeleteFilter { city_slugs: string[]; url: string; is_editorial: true }
+
+// A single filter covering every target city at once (the caller issues
+// one `.in('city_slug', citySlugs).eq('url', ...).eq('is_editorial', true)`
+// delete) rather than one filter per city — same net effect, fewer round
+// trips. Returns null when there's nothing to delete against.
+export function buildUnpublishDeleteFilter(
+  candidate: CandidateUnpublishFields,
+  targets: CandidateCityTarget[]
+): CityNewsDeleteFilter | null {
+  if (!targets.length) return null
+  return { city_slugs: targets.map(t => t.city_slug), url: candidate.url, is_editorial: true }
 }
 
-// The filter unpublishNewsCandidateAction deletes by. is_editorial: true is
-// load-bearing, not decorative — it's what makes this structurally unable
-// to ever match an RSS-sourced row, even one that happened to share the
-// exact same (city_slug, url) by coincidence. An RSS row always has
-// is_editorial = false (the column default), so it can never satisfy this
-// filter, and a different candidate's published row has a different url,
-// so it can't either.
-export function buildUnpublishDeleteFilter(candidate: CandidateUnpublishFields): CityNewsDeleteFilter | null {
-  const target = resolveCityNewsTarget(candidate)
-  if (!target) return null
-  return { city_slug: target.city_slug, url: candidate.url, is_editorial: true }
-}
-
-export interface PublishCandidatePatch {
-  review_status: 'published'
-  published_to_city_news_at: string
-  updated_at: string
-}
-
+export interface PublishCandidatePatch { review_status: 'published'; published_to_city_news_at: string; updated_at: string }
 export function buildPublishCandidatePatch(now: string): PublishCandidatePatch {
   return { review_status: 'published', published_to_city_news_at: now, updated_at: now }
 }
 
-export interface UnpublishCandidatePatch {
-  review_status: 'approved'
-  published_to_city_news_at: null
-  updated_at: string
-}
-
-// Unpublishing returns the candidate to 'approved' (not 'pending') — it was
-// reviewed and approved before it went live, and that review doesn't
-// become invalid just because the public row was pulled; only the
-// publish-specific metadata is cleared. reviewed_at is deliberately left
-// alone for the same reason.
+export interface UnpublishCandidatePatch { review_status: 'approved'; published_to_city_news_at: null; updated_at: string }
 export function buildUnpublishCandidatePatch(now: string): UnpublishCandidatePatch {
   return { review_status: 'approved', published_to_city_news_at: null, updated_at: now }
 }
 
-// Paths to revalidate after a publish or unpublish. This codebase has no
-// separate "national news" route today — the national feed only renders on
-// the homepage (src/app/page.tsx) — so '/' stands in for both "homepage"
-// and "national news page" until/unless a dedicated route exists.
-export function revalidatePathsForCandidate(candidate: CandidateScope): string[] {
+// Always revalidates '/' (cheap and idempotent even when a city-scoped
+// story can't actually appear there today) plus one '/cities/<name>' path
+// per target city.
+export function revalidatePathsForCandidate(
+  candidate: CandidateScope,
+  targets: CandidateCityTarget[] = []
+): string[] {
   const paths = ['/']
-  if (candidate.scope_type === 'city' && candidate.city_name) {
-    paths.push('/cities/' + encodeURIComponent(candidate.city_name))
+  if (candidate.scope_type === 'city') {
+    for (const target of targets) {
+      paths.push('/cities/' + encodeURIComponent(target.city_name))
+    }
   }
   return paths
+}
+
+// ── URL canonicalization & duplicate detection ──────────────────────────────
+//
+// Every candidate's `url` is normalized through this before it's saved
+// (see parseNewsCandidateForm in src/app/admin/actions.ts), so the exact
+// same article submitted as "http://Example.com/story/", "https://
+// example.com/story" and "https://www.example.com/story#top" all collapse
+// to one stored value — making the existing UNIQUE(url) constraint on
+// news_candidates a real duplicate guard instead of one a trailing slash
+// or a www. can slip past. Deliberately conservative: only scheme, host
+// case, a leading "www.", a trailing slash and the fragment are
+// normalized — the query string is left alone, since some sites
+// legitimately use it to distinguish different articles (?id=123).
+export function normalizeUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim()
+  try {
+    const parsed = new URL(trimmed)
+    const protocol = parsed.protocol === 'http:' ? 'https:' : parsed.protocol
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '')
+    const port = parsed.port ? ':' + parsed.port : ''
+    let path = parsed.pathname
+    if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1)
+    return `${protocol}//${host}${port}${path}${parsed.search}`
+  } catch {
+    // Not a parseable URL at all — isValidHttpUrl() will reject it
+    // upstream; just pass the trimmed value through unchanged here.
+    return trimmed
+  }
+}
+
+export type DuplicateMatchSource = 'candidate' | 'published'
+
+export interface DuplicateMatch {
+  source: DuplicateMatchSource
+  headline: string
+  cityName: string | null
+}
+
+// Pure decision logic for "is this URL already in use" — given whatever
+// rows the two lookup queries (news_candidates and city_news, both by the
+// normalized url) found, decide what message to show. Candidates take
+// priority in the message since that's the more actionable state (there's
+// a record to go look at/approve); a live city_news row is reported
+// second. Excluding the candidate's own id (when editing) is the caller's
+// job when it builds `existingCandidate`.
+export function describeDuplicateUrl(
+  existingCandidate: { headline: string } | null,
+  existingCityNews: { headline: string; city_name: string } | null
+): DuplicateMatch | null {
+  if (existingCandidate) {
+    return { source: 'candidate', headline: existingCandidate.headline, cityName: null }
+  }
+  if (existingCityNews) {
+    return { source: 'published', headline: existingCityNews.headline, cityName: existingCityNews.city_name }
+  }
+  return null
 }
