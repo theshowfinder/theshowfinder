@@ -138,22 +138,6 @@ const ENTERTAINMENT_TERMS: RegExp[] = [
   /\bopera\b/i, /\bballet\b/i, /\bpanto(mime)?\b/i,
 ]
 
-// Second positive backstop, national feed only. Dropping the bare
-// "British" anchor (see fetchNationalNews) stopped an unrelated political
-// story from getting through, but it also removed the only thing that was
-// tying results to the UK at all -- confirmed live afterward with a Japan
-// traditional-music concert ("Metropolis Japan") and an American band's
-// "2027 North American Tour" (The Nu-Metal Agenda), both genuine
-// entertainment news, neither remotely UK-relevant. Requires the headline
-// itself name the UK, a UK nation, or one of TheShowFinder's own 36 cities
-// -- reuses CITIES rather than a second hand-maintained list.
-const UK_RELEVANCE_TERMS: RegExp[] = [
-  /\buk\b/i, /\bbritain\b/i, /\bbritish\b/i,
-  /\bengland\b/i, /\bscotland\b/i, /\bwales\b/i, /\bnorthern ireland\b/i,
-  /\bwest end\b/i,
-  ...CITIES.map(c => new RegExp(`\\b${c.name.replace(/\s+/g, '\\s+')}\\b`, 'i')),
-]
-
 // Several of the 36 UK cities share a name with a US or Canadian town
 // (Derby CT/KS, Manchester NH, Cambridge MA, Bristol CT/TN/VA, Plymouth MA,
 // Newport RI, Richmond VA, Oxford MS, Reading PA, Norwich CT, London
@@ -225,7 +209,7 @@ function isFalsePositive(item: { headline: string; source: string | null; url: s
 // Shared low-level fetch: takes an already-encoded Google News query string,
 // parses the RSS feed, and applies the same deterministic false-positive
 // backstop every feed goes through — city-scoped and national alike.
-async function fetchNewsForQuery(q: string, opts: { requireUkSignal?: boolean } = {}): Promise<NewsItem[]> {
+async function fetchNewsForQuery(q: string): Promise<NewsItem[]> {
   // "when:4d" scopes the Google News search itself to the last 4 days —
   // a soft hint (like the -exclude terms), not a hard guarantee, which is
   // why MAX_NEWS_AGE_MS below still enforces it deterministically.
@@ -247,11 +231,6 @@ async function fetchNewsForQuery(q: string, opts: { requireUkSignal?: boolean } 
     }))
     .filter(i => i.headline && i.url)
     .filter(i => !isFalsePositive(i))
-    // National feed only (see UK_RELEVANCE_TERMS comment) -- city feeds
-    // already anchor on a specific UK city name in the query itself, so
-    // this would risk dropping valid local stories that don't repeat the
-    // city name in the headline.
-    .filter(i => !opts.requireUkSignal || UK_RELEVANCE_TERMS.some(re => re.test(i.headline)))
     // No parseable date means we can't verify it's fresh, so it doesn't
     // get the benefit of the doubt -- drop it rather than risk another
     // stale item slipping in the way the UKNow ones did.
@@ -267,26 +246,79 @@ function fetchCityNews(cityName: string): Promise<NewsItem[]> {
 }
 
 // The homepage's general "entertainment news from all over" feed — not tied
-// to any one city. Same GB-locale RSS search and the same blocklist as every
-// city feed, just without a `"City Name"` term, so this naturally skews
-// toward genuinely national/major stories (an arena tour, a festival
-// lineup, a big on-sale) rather than small local listings.
-function fetchNationalNews(): Promise<NewsItem[]> {
-  // No bare country/demonym anchor ("UK", then "British") -- every attempt
-  // at one has eventually matched something structurally unrelated (the
-  // University of Kentucky, a Wyoming tourism piece, an Australian-academic
-  // political story) because Google News treats a lone anchor word as a
-  // loose relevance signal, not a hard requirement, and fills gaps with
-  // whatever else contains it once when:4d narrows the pool. Anchoring on
-  // actual UK-touring-act phrasing instead is more specific AND still keeps
-  // results British, since these exact phrases are how UK/Irish music press
-  // writes about live events -- no country word needed. ENTERTAINMENT_TERMS
-  // above is the hard backstop if a loose match still gets through.
-  const q =
-    '(%22UK+tour%22+OR+%22UK+tour+dates%22+OR+%22arena+tour%22+OR+%22on+sale%22+OR+presale+' +
-    'OR+%22music+festival%22+OR+%22album+out+now%22+OR+%22new+single%22+OR+gig+OR+concert)+' +
-    `${NEWS_EXCLUDE_TERMS}`
-  return fetchNewsForQuery(q, { requireUkSignal: true })
+// to any one city.
+//
+// Chris, 2026-09-30: "there is loads of UK entertainment news, why is this
+// proving so difficult" -- fair challenge. Every fix up to this point
+// (University of Kentucky, a Wyoming tourism piece, an Australian-politics
+// story, a Japan concert, an American band's US tour) was a patch on the
+// same underlying mistake: this was a generic Google News keyword SEARCH,
+// which returns whatever anywhere on the web matches a query, ranked by an
+// opaque relevance score -- it was never actually a "UK entertainment
+// news" feed, just the closest approximation without picking real
+// publications. That's why every anchor word eventually leaked something.
+//
+// Fixed properly this time: pull directly from five UK entertainment/music
+// desks' own RSS feeds (NATIONAL_FEEDS below). These ARE dedicated UK
+// entertainment coverage, not a keyword guess at it, so there's no anchor
+// word left to leak through. ENTERTAINMENT_TERMS is kept as a live-events
+// relevance filter -- these desks also cover TV, film, museums and art, not
+// every story is a concert/gig/tour, and TheShowFinder is specifically
+// about live events -- and the same MAX_NEWS_AGE_MS freshness cutoff still
+// applies. City feeds are untouched (below) -- no single outlet covers all
+// 36 cities' local scenes, so the Google News search + blocklist approach
+// stays there, and it's been working correctly on every city checked so far
+// (e.g. Leicester: fresh, genuinely local, correctly filtered).
+const NATIONAL_FEEDS: { source: string; url: string }[] = [
+  { source: 'BBC News',       url: 'https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml' },
+  { source: 'NME',            url: 'https://www.nme.com/news/music/feed' },
+  { source: 'The Guardian',   url: 'https://www.theguardian.com/music/rss' },
+  { source: 'The Independent', url: 'https://www.independent.co.uk/arts-entertainment/music/rss' },
+  { source: 'Sky News',       url: 'https://feeds.skynews.com/feeds/rss/entertainment.xml' },
+]
+
+async function fetchNamedFeed(feed: { source: string; url: string }): Promise<NewsItem[]> {
+  const parser = new Parser<Record<string, unknown>, RawItem>({ timeout: RSS_PER_ITEM_TIMEOUT_MS })
+  try {
+    const parsed = await parser.parseURL(feed.url)
+    return (parsed.items ?? [])
+      .map(item => ({
+        headline:    (item.title ?? '').trim(),
+        url:         item.link ?? '',
+        source:      feed.source,
+        publishedAt: item.pubDate && !Number.isNaN(Date.parse(item.pubDate)) ? new Date(item.pubDate).toISOString() : null,
+      }))
+      .filter(i => i.headline && i.url)
+  } catch (err) {
+    // One outlet's feed hiccuping (a timeout, a redesign) should never take
+    // out the other four -- this is why each feed gets its own try/catch
+    // instead of one Promise.all that fails as a whole.
+    console.error(`[city-news] national feed "${feed.source}" failed (non-fatal):`, err)
+    return []
+  }
+}
+
+async function fetchNationalNews(): Promise<NewsItem[]> {
+  const now = Date.now()
+  const perFeed = await Promise.all(NATIONAL_FEEDS.map(fetchNamedFeed))
+  const seenUrls = new Set<string>()
+
+  return perFeed
+    .flat()
+    .filter(i => !isFalsePositive(i))
+    .filter(i => ENTERTAINMENT_TERMS.some(re => re.test(i.headline)))
+    // No parseable date means we can't verify it's fresh, so it doesn't
+    // get the benefit of the doubt -- drop it rather than risk another
+    // stale item slipping in the way the UKNow ones did.
+    .filter(i => i.publishedAt !== null && now - new Date(i.publishedAt).getTime() <= MAX_NEWS_AGE_MS)
+    .filter(i => {
+      // The rare story two of these desks both cover.
+      if (seenUrls.has(i.url)) return false
+      seenUrls.add(i.url)
+      return true
+    })
+    .sort((a, b) => new Date(b.publishedAt!).getTime() - new Date(a.publishedAt!).getTime())
+    .slice(0, 8)
 }
 
 // ── Logging (reuses sync_log, same as the Ticketmaster sync — one row per
