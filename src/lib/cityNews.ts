@@ -57,6 +57,10 @@ function resolveSource(item: RawItem): string | null {
 
 const RSS_PER_ITEM_TIMEOUT_MS = 15000
 
+// Chris, 2026-09-30: nothing older than 3-4 days — this is meant to read
+// as "what's happening right now", not a stale digest.
+const MAX_NEWS_AGE_MS = 4 * 24 * 60 * 60 * 1000
+
 // Query-level excludes: a best-effort hint to Google News. These reduce
 // volume but are NOT a reliable filter — Google's "-term" operators are a
 // soft relevance signal, not a hard match rule, and the exact same query has
@@ -176,13 +180,17 @@ function isFalsePositive(item: { headline: string; source: string | null; url: s
 // parses the RSS feed, and applies the same deterministic false-positive
 // backstop every feed goes through — city-scoped and national alike.
 async function fetchNewsForQuery(q: string): Promise<NewsItem[]> {
-  const feedUrl = `https://news.google.com/rss/search?q=${q}&hl=en-GB&gl=GB&ceid=GB:en`
+  // "when:4d" scopes the Google News search itself to the last 4 days —
+  // a soft hint (like the -exclude terms), not a hard guarantee, which is
+  // why MAX_NEWS_AGE_MS below still enforces it deterministically.
+  const feedUrl = `https://news.google.com/rss/search?q=${q}+when:4d&hl=en-GB&gl=GB&ceid=GB:en`
 
   const parser = new Parser<Record<string, unknown>, RawItem>({
     timeout: RSS_PER_ITEM_TIMEOUT_MS,
     customFields: { item: [['source', 'sourceTag']] },
   })
   const feed = await parser.parseURL(feedUrl)
+  const now = Date.now()
 
   return (feed.items ?? [])
     .map(item => ({
@@ -193,6 +201,11 @@ async function fetchNewsForQuery(q: string): Promise<NewsItem[]> {
     }))
     .filter(i => i.headline && i.url)
     .filter(i => !isFalsePositive(i))
+    // No parseable date means we can't verify it's fresh, so it doesn't
+    // get the benefit of the doubt -- drop it rather than risk another
+    // stale item slipping in the way the UKNow ones did.
+    .filter(i => i.publishedAt !== null && now - new Date(i.publishedAt).getTime() <= MAX_NEWS_AGE_MS)
+    .sort((a, b) => new Date(b.publishedAt!).getTime() - new Date(a.publishedAt!).getTime())
     .slice(0, 8)
 }
 
