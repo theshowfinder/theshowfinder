@@ -449,9 +449,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                         </div>
                         <span className="text-xl ml-3">→</span>
                       </a>
-                      {name === 'Ticketmaster' && event.tickets_url && (
+                      {(name === 'Ticketmaster' || name === 'See Tickets') && (
                         <div className="mt-2 flex justify-end">
-                          <CopyLinkButton link={getTicketmasterAffiliateLink(event.tickets_url)} />
+                          <CopyLinkButton link={href} label="Share with friends" />
                         </div>
                       )}
                     </div>

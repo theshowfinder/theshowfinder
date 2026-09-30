@@ -248,20 +248,25 @@ export default async function ArtistPage({ params }: PageProps) {
                     Get Tickets
                   </a>
                   <div className="mt-2 flex justify-center">
-                    <CopyLinkButton link={getTicketmasterAffiliateLink(artist.tickets_url)} />
+                    <CopyLinkButton link={getTicketmasterAffiliateLink(artist.tickets_url)} label="Share with friends" />
                   </div>
                 </div>
               )}
               {artist.see_tickets_url && (
-                <a
-                  href={getSeeTicketsAffiliateLink(artist.see_tickets_url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
-                  style={{ backgroundColor: '#e4022d' }}
-                >
-                  See Tickets
-                </a>
+                <div>
+                  <a
+                    href={getSeeTicketsAffiliateLink(artist.see_tickets_url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: '#e4022d' }}
+                  >
+                    See Tickets
+                  </a>
+                  <div className="mt-2 flex justify-center">
+                    <CopyLinkButton link={getSeeTicketsAffiliateLink(artist.see_tickets_url)} label="Share with friends" />
+                  </div>
+                </div>
               )}
               {artist.eventim_url && (
                 <a
