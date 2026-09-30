@@ -4,8 +4,17 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { citySlug, NATIONAL_SLUG, NATIONAL_NAME } from '@/lib/cityNews'
+import { citySlug } from '@/lib/cityNews'
 import type { NewsStoryType, NewsPriority, NewsReviewStatus } from '@/lib/types/database'
+import {
+  canPublishCandidate,
+  canUnpublishCandidate,
+  buildPublishUpsertRow,
+  buildUnpublishDeleteFilter,
+  buildPublishCandidatePatch,
+  buildUnpublishCandidatePatch,
+  revalidatePathsForCandidate,
+} from '@/lib/newsPublishing'
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -487,6 +496,8 @@ export async function reopenNewsCandidateAction(id: string) {
 // second news system. Idempotent: publishing an already-published candidate
 // re-upserts the same city_news row (on the city_slug+url unique constraint
 // from migration_021_city_news.sql) instead of erroring or duplicating it.
+// See src/lib/newsPublishing.ts for the pure row-shape/state-transition
+// logic this calls into (also covered by src/lib/newsPublishing.test.ts).
 export async function publishNewsCandidateAction(id: string) {
   await checkAuth()
   const db = createAdminClient()
@@ -499,44 +510,75 @@ export async function publishNewsCandidateAction(id: string) {
 
   if (fetchError || !candidate) throw new Error(fetchError?.message || 'Candidate not found.')
 
-  if (candidate.review_status !== 'approved' && candidate.review_status !== 'published') {
+  if (!canPublishCandidate(candidate.review_status)) {
     throw new Error('Only an approved candidate can be published — approve it first.')
   }
 
-  const city_slug = candidate.scope_type === 'national' ? NATIONAL_SLUG : candidate.city_slug
-  const city_name = candidate.scope_type === 'national' ? NATIONAL_NAME : candidate.city_name
-  if (!city_slug || !city_name) throw new Error('Candidate is missing a city — cannot publish.')
+  const now = new Date().toISOString()
+  const upsertRow = buildPublishUpsertRow(candidate, now)
+  if (!upsertRow) throw new Error('Candidate is missing a city — cannot publish.')
 
   const { error: upsertError } = await db
     .from('city_news')
-    .upsert(
-      {
-        city_slug,
-        city_name,
-        headline: candidate.headline,
-        url: candidate.url,
-        source: candidate.source,
-        published_at: candidate.published_at,
-        fetched_at: new Date().toISOString(),
-        is_editorial: true,
-      },
-      { onConflict: 'city_slug,url' },
-    )
+    .upsert(upsertRow, { onConflict: 'city_slug,url' })
   if (upsertError) throw new Error(upsertError.message)
+
+  const { error: updateError } = await db
+    .from('news_candidates')
+    .update(buildPublishCandidatePatch(now))
+    .eq('id', id)
+  if (updateError) throw new Error(updateError.message)
+
+  revalidatePath('/admin/news')
+  revalidatePath('/admin/news/' + id)
+  for (const path of revalidatePathsForCandidate(candidate)) revalidatePath(path)
+}
+
+// Removes the city_news row a published candidate created, without
+// touching the candidate itself or any RSS/other-editorial row (the delete
+// filter includes is_editorial: true — see buildUnpublishDeleteFilter).
+// Idempotent: if the row is already gone (deleted separately, or this is
+// called twice), the delete simply matches zero rows and completes
+// cleanly — no error either way. Returns the candidate to 'approved'
+// (its state before it went live) and clears publish-specific metadata;
+// it does not touch reviewed_at, since the review itself still stands.
+export async function unpublishNewsCandidateAction(id: string) {
+  await checkAuth()
+  const db = createAdminClient()
+
+  const { data: candidate, error: fetchError } = await db
+    .from('news_candidates')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (fetchError || !candidate) throw new Error(fetchError?.message || 'Candidate not found.')
+
+  if (!canUnpublishCandidate(candidate.review_status)) {
+    throw new Error('This candidate isn\'t currently published.')
+  }
+
+  const deleteFilter = buildUnpublishDeleteFilter(candidate)
+  if (!deleteFilter) throw new Error('Candidate is missing a city — cannot unpublish.')
+
+  const { error: deleteError } = await db
+    .from('city_news')
+    .delete()
+    .eq('city_slug', deleteFilter.city_slug)
+    .eq('url', deleteFilter.url)
+    .eq('is_editorial', deleteFilter.is_editorial)
+  if (deleteError) throw new Error(deleteError.message)
 
   const now = new Date().toISOString()
   const { error: updateError } = await db
     .from('news_candidates')
-    .update({ review_status: 'published', published_to_city_news_at: now, updated_at: now })
+    .update(buildUnpublishCandidatePatch(now))
     .eq('id', id)
   if (updateError) throw new Error(updateError.message)
 
-  revalidatePath('/')
   revalidatePath('/admin/news')
   revalidatePath('/admin/news/' + id)
-  if (candidate.scope_type === 'city' && candidate.city_name) {
-    revalidatePath('/cities/' + encodeURIComponent(candidate.city_name))
-  }
+  for (const path of revalidatePathsForCandidate(candidate)) revalidatePath(path)
 }
 
 // Delete stays in the queue only — a published candidate already has a

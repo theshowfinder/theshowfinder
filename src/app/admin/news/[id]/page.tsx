@@ -10,9 +10,11 @@ import {
   rejectNewsCandidateAction,
   reopenNewsCandidateAction,
   publishNewsCandidateAction,
+  unpublishNewsCandidateAction,
   deleteNewsCandidateAction,
 } from '../../actions'
 import NewsCandidateForm from '../NewsCandidateForm'
+import ConfirmSubmitButton from '../ConfirmSubmitButton'
 import type { NewsCandidate } from '@/lib/types/database'
 
 interface PageProps {
@@ -45,6 +47,7 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
   const rejectAction = rejectNewsCandidateAction.bind(null, candidate.id)
   const reopenAction = reopenNewsCandidateAction.bind(null, candidate.id)
   const publishAction = publishNewsCandidateAction.bind(null, candidate.id)
+  const unpublishAction = unpublishNewsCandidateAction.bind(null, candidate.id)
   const deleteAction = deleteNewsCandidateAction.bind(null, candidate.id)
 
   const liveNewsPath = candidate.review_status === 'published'
@@ -125,11 +128,20 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
             )}
 
             {candidate.review_status === 'published' && (
-              <form action={publishAction}>
-                <button type="submit" className="text-sm font-semibold px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
-                  Re-publish (refresh live card)
-                </button>
-              </form>
+              <>
+                <form action={publishAction}>
+                  <button type="submit" className="text-sm font-semibold px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                    Re-publish (refresh live card)
+                  </button>
+                </form>
+                <ConfirmSubmitButton
+                  action={unpublishAction}
+                  confirmMessage={`Unpublish "${candidate.headline}"? This removes it from the live site immediately. The story stays in the queue as Approved, so you can publish it again later.`}
+                  className="text-sm font-bold px-4 py-2 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
+                >
+                  Unpublish
+                </ConfirmSubmitButton>
+              </>
             )}
 
             <form action={deleteAction} className="ml-auto">
