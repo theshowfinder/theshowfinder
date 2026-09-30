@@ -34,6 +34,12 @@ export default async function AdminPage() {
             Local Businesses
           </Link>
           <Link
+            href="/admin/news"
+            className="text-sm text-slate-500 hover:text-slate-700"
+          >
+            News Inbox
+          </Link>
+          <Link
             href="/"
             className="text-sm text-slate-500 hover:text-slate-700"
           >

@@ -1,6 +1,12 @@
 export type EventCategory = 'concert' | 'theatre' | 'comedy' | 'sports' | 'family' | 'local'
 export type EventStatus = 'upcoming' | 'on_sale' | 'sold_out' | 'cancelled' | 'postponed'
 
+// News Intelligence Inbox (Phase 1) — see supabase/migration_026_news_candidates.sql
+export type NewsScopeType = 'national' | 'city'
+export type NewsStoryType = 'presale' | 'tour_announcement' | 'new_dates' | 'venue_news' | 'general_entertainment'
+export type NewsPriority = 'low' | 'normal' | 'high'
+export type NewsReviewStatus = 'pending' | 'approved' | 'rejected' | 'published'
+
 export interface Database {
   public: {
     Tables: {
@@ -407,6 +413,7 @@ export interface Database {
           source: string | null
           published_at: string | null
           fetched_at: string
+          is_editorial: boolean
         }
         Insert: {
           id?: string
@@ -417,6 +424,7 @@ export interface Database {
           source?: string | null
           published_at?: string | null
           fetched_at?: string
+          is_editorial?: boolean
         }
         Update: {
           city_slug?: string
@@ -426,6 +434,73 @@ export interface Database {
           source?: string | null
           published_at?: string | null
           fetched_at?: string
+          is_editorial?: boolean
+        }
+      }
+      news_candidates: {
+        Row: {
+          id: string
+          scope_type: NewsScopeType
+          city_slug: string | null
+          city_name: string | null
+          headline: string
+          source: string | null
+          url: string
+          published_at: string | null
+          discovered_at: string
+          story_type: NewsStoryType
+          artist_name: string | null
+          artist_id: string | null
+          summary: string | null
+          editorial_note: string | null
+          priority: NewsPriority
+          review_status: NewsReviewStatus
+          reviewed_at: string | null
+          published_to_city_news_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          scope_type: NewsScopeType
+          city_slug?: string | null
+          city_name?: string | null
+          headline: string
+          source?: string | null
+          url: string
+          published_at?: string | null
+          discovered_at?: string
+          story_type?: NewsStoryType
+          artist_name?: string | null
+          artist_id?: string | null
+          summary?: string | null
+          editorial_note?: string | null
+          priority?: NewsPriority
+          review_status?: NewsReviewStatus
+          reviewed_at?: string | null
+          published_to_city_news_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          scope_type?: NewsScopeType
+          city_slug?: string | null
+          city_name?: string | null
+          headline?: string
+          source?: string | null
+          url?: string
+          published_at?: string | null
+          discovered_at?: string
+          story_type?: NewsStoryType
+          artist_name?: string | null
+          artist_id?: string | null
+          summary?: string | null
+          editorial_note?: string | null
+          priority?: NewsPriority
+          review_status?: NewsReviewStatus
+          reviewed_at?: string | null
+          published_to_city_news_at?: string | null
+          updated_at?: string
         }
       }
     }
@@ -486,3 +561,4 @@ export type UserFavorite = Database['public']['Tables']['user_favorites']['Row']
 export type EventWithVenue = Database['public']['Views']['events_with_venue']['Row']
 export type LocalBusiness = Database['public']['Tables']['local_businesses']['Row']
 export type CityNews = Database['public']['Tables']['city_news']['Row']
+export type NewsCandidate = Database['public']['Tables']['news_candidates']['Row']

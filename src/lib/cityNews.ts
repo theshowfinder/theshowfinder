@@ -12,7 +12,7 @@ export function citySlug(cityName: string): string {
 // feed — stored in the same city_news table since the schema doesn't care
 // what the slug is, rather than standing up a second table for one row type.
 export const NATIONAL_SLUG = 'national'
-const NATIONAL_NAME = 'UK National'
+export const NATIONAL_NAME = 'UK National'
 
 function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms))
@@ -401,7 +401,7 @@ async function syncOneFeed(
       // otherwise-good existing rows.
       const { data: existingRows, error: existingErr } = await db
         .from('city_news')
-        .select('id, url')
+        .select('id, url, is_editorial')
         .eq('city_slug', feed.slug)
 
       if (existingErr) {
@@ -409,7 +409,11 @@ async function syncOneFeed(
       } else {
         const freshUrls = new Set(rows.map(r => r.url))
         const staleIds = (existingRows ?? [])
-          .filter(r => !freshUrls.has(r.url as string))
+          // Never prune a manually-published editorial row (News Intelligence
+          // Inbox, see migration_026_news_candidates.sql) — it will never
+          // appear in an RSS fetch, so "not in today's fresh set" doesn't
+          // mean stale for these the way it does for RSS-sourced rows.
+          .filter(r => !freshUrls.has(r.url as string) && !r.is_editorial)
           .map(r => r.id)
         if (staleIds.length) {
           const { error: delErr } = await db.from('city_news').delete().in('id', staleIds)

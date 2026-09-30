@@ -4,6 +4,8 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { citySlug, NATIONAL_SLUG, NATIONAL_NAME } from '@/lib/cityNews'
+import type { NewsStoryType, NewsPriority, NewsReviewStatus } from '@/lib/types/database'
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -352,4 +354,212 @@ export async function deleteLocalBusinessAction(id: string, city: string) {
   await db.from('local_businesses').delete().eq('id', id)
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(city))
+}
+// ── News candidates (News Intelligence Inbox, Phase 1) ─────────────────────
+// Manual editorial queue for presale/tour-announcement/ticket news the RSS
+// pipeline (src/lib/cityNews.ts) hasn't picked up yet. No AI classification
+// or automated source monitoring here — that's Phase 2. See
+// supabase/migration_026_news_candidates.sql for the schema.
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function parseNewsCandidateForm(formData: FormData) {
+  const scope_type   = (formData.get('scope_type') as string) === 'city' ? 'city' : 'national'
+  const city_name    = ((formData.get('city_name') as string) || '').trim() || null
+
+  const headline        = ((formData.get('headline') as string) || '').trim()
+  const source           = ((formData.get('source') as string) || '').trim() || null
+  const url               = ((formData.get('url') as string) || '').trim()
+  const publishedStr       = (formData.get('published_at') as string) || ''
+  const published_at        = publishedStr ? new Date(publishedStr).toISOString() : null
+  const story_type            = ((formData.get('story_type') as string) || 'general_entertainment') as NewsStoryType
+  const artist_name             = ((formData.get('artist_name') as string) || '').trim() || null
+  const artist_id                = ((formData.get('artist_id') as string) || '').trim() || null
+  const summary                   = ((formData.get('summary') as string) || '').trim() || null
+  const editorial_note              = ((formData.get('editorial_note') as string) || '').trim() || null
+  const priority                     = ((formData.get('priority') as string) || 'normal') as NewsPriority
+  const requestedStatus                = ((formData.get('review_status') as string) || 'pending') as NewsReviewStatus
+
+  if (!headline) throw new Error('Headline is required.')
+  if (!url) throw new Error('URL is required.')
+  if (!isValidHttpUrl(url)) throw new Error('Enter a valid http(s) URL.')
+  if (scope_type === 'city' && !city_name) throw new Error('Select a city for a city-scoped story.')
+
+  // 'published' is only ever reached through publishNewsCandidateAction,
+  // which is the one place that also writes the city_news row — never let
+  // the plain edit form set it directly, or the two would drift out of sync.
+  const review_status = requestedStatus === 'published' ? 'pending' : requestedStatus
+
+  return {
+    scope_type,
+    city_slug: scope_type === 'city' ? citySlug(city_name as string) : null,
+    city_name: scope_type === 'city' ? city_name : null,
+    headline,
+    source,
+    url,
+    published_at,
+    story_type,
+    artist_name,
+    artist_id,
+    summary,
+    editorial_note,
+    priority,
+    review_status,
+  }
+}
+
+function newsCandidateDbError(error: { code?: string; message: string }): Error {
+  if (error.code === '23505') return new Error('A candidate with this URL has already been added.')
+  return new Error(error.message)
+}
+
+export async function createNewsCandidateAction(formData: FormData) {
+  await checkAuth()
+  const db = createAdminClient()
+  const fields = parseNewsCandidateForm(formData)
+
+  const { data, error } = await db.from('news_candidates').insert(fields).select('id').single()
+  if (error) throw newsCandidateDbError(error)
+
+  revalidatePath('/admin/news')
+  redirect('/admin/news/' + data.id + '?created=1')
+}
+
+export async function updateNewsCandidateAction(id: string, formData: FormData) {
+  await checkAuth()
+  const db = createAdminClient()
+  const fields = parseNewsCandidateForm(formData)
+
+  const { error } = await db
+    .from('news_candidates')
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq('id', id)
+
+  if (error) throw newsCandidateDbError(error)
+
+  revalidatePath('/admin/news')
+  revalidatePath('/admin/news/' + id)
+  redirect('/admin/news/' + id + '?saved=1')
+}
+
+async function setNewsCandidateReviewStatus(id: string, review_status: NewsReviewStatus, extra: Record<string, unknown> = {}) {
+  const db = createAdminClient()
+  const { error } = await db
+    .from('news_candidates')
+    .update({ review_status, updated_at: new Date().toISOString(), ...extra })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+export async function approveNewsCandidateAction(id: string) {
+  await checkAuth()
+  await setNewsCandidateReviewStatus(id, 'approved', { reviewed_at: new Date().toISOString() })
+  revalidatePath('/admin/news')
+  revalidatePath('/admin/news/' + id)
+}
+
+export async function rejectNewsCandidateAction(id: string) {
+  await checkAuth()
+  await setNewsCandidateReviewStatus(id, 'rejected', { reviewed_at: new Date().toISOString() })
+  revalidatePath('/admin/news')
+  revalidatePath('/admin/news/' + id)
+}
+
+// Sends a reviewed (approved/rejected/published) candidate back to pending —
+// note this does NOT retract an already-published city_news row; Phase 1
+// has no "unpublish", only re-review of the candidate itself.
+export async function reopenNewsCandidateAction(id: string) {
+  await checkAuth()
+  await setNewsCandidateReviewStatus(id, 'pending', { reviewed_at: null })
+  revalidatePath('/admin/news')
+  revalidatePath('/admin/news/' + id)
+}
+
+// Publishes an approved candidate into the existing city_news table so it
+// renders through the exact same public card design as an RSS story — no
+// second news system. Idempotent: publishing an already-published candidate
+// re-upserts the same city_news row (on the city_slug+url unique constraint
+// from migration_021_city_news.sql) instead of erroring or duplicating it.
+export async function publishNewsCandidateAction(id: string) {
+  await checkAuth()
+  const db = createAdminClient()
+
+  const { data: candidate, error: fetchError } = await db
+    .from('news_candidates')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (fetchError || !candidate) throw new Error(fetchError?.message || 'Candidate not found.')
+
+  if (candidate.review_status !== 'approved' && candidate.review_status !== 'published') {
+    throw new Error('Only an approved candidate can be published — approve it first.')
+  }
+
+  const city_slug = candidate.scope_type === 'national' ? NATIONAL_SLUG : candidate.city_slug
+  const city_name = candidate.scope_type === 'national' ? NATIONAL_NAME : candidate.city_name
+  if (!city_slug || !city_name) throw new Error('Candidate is missing a city — cannot publish.')
+
+  const { error: upsertError } = await db
+    .from('city_news')
+    .upsert(
+      {
+        city_slug,
+        city_name,
+        headline: candidate.headline,
+        url: candidate.url,
+        source: candidate.source,
+        published_at: candidate.published_at,
+        fetched_at: new Date().toISOString(),
+        is_editorial: true,
+      },
+      { onConflict: 'city_slug,url' },
+    )
+  if (upsertError) throw new Error(upsertError.message)
+
+  const now = new Date().toISOString()
+  const { error: updateError } = await db
+    .from('news_candidates')
+    .update({ review_status: 'published', published_to_city_news_at: now, updated_at: now })
+    .eq('id', id)
+  if (updateError) throw new Error(updateError.message)
+
+  revalidatePath('/')
+  revalidatePath('/admin/news')
+  revalidatePath('/admin/news/' + id)
+  if (candidate.scope_type === 'city' && candidate.city_name) {
+    revalidatePath('/cities/' + encodeURIComponent(candidate.city_name))
+  }
+}
+
+// Delete stays in the queue only — a published candidate already has a
+// standalone city_news row (see publishNewsCandidateAction), so deleting
+// the candidate here would silently orphan the audit trail without
+// removing anything public. Reopen it first if it genuinely needs removing.
+export async function deleteNewsCandidateAction(id: string) {
+  await checkAuth()
+  const db = createAdminClient()
+
+  const { data: candidate } = await db
+    .from('news_candidates')
+    .select('review_status')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (candidate?.review_status === 'published') {
+    throw new Error('This candidate has already been published — reopen it first if you want to delete it.')
+  }
+
+  const { error } = await db.from('news_candidates').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin/news')
+  redirect('/admin/news?deleted=1')
 }
