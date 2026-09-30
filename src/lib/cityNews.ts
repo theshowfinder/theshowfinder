@@ -352,3 +352,13 @@ export async function syncCityNews(): Promise<CityNewsSyncResult> {
 
   return { citiesProcessed: feeds.length, totalFetched, totalUpserted, totalDeleted, errors, perCity }
 }
+
+// Refreshes just the homepage's national feed, skipping all 36 per-city
+// feeds — the full syncCityNews() run takes long enough (36 sequential
+// fetches + a 300ms pace delay each) that it doesn't fit inside a quick
+// manual re-run when only the national feed's blocklist/query changed.
+// Same fetch → upsert → prune pipeline as every other feed via syncOneFeed.
+export async function syncNationalNewsOnly(): Promise<{ fetched: number; upserted: number; deleted: number; status: 'ok' | 'error'; error?: string }> {
+  const db = createAdminClient()
+  return syncOneFeed(db, { slug: NATIONAL_SLUG, name: NATIONAL_NAME, fetch: fetchNationalNews })
+}
