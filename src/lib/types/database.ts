@@ -6,6 +6,8 @@ export type NewsScopeType = 'national' | 'city'
 export type NewsStoryType = 'presale' | 'tour_announcement' | 'new_dates' | 'venue_news' | 'general_entertainment'
 export type NewsPriority = 'low' | 'normal' | 'high'
 export type NewsReviewStatus = 'pending' | 'approved' | 'rejected' | 'published'
+export type NewsIntakeMethod = 'manual' | 'url_import'
+export type NewsAiReviewStatus = 'not_applicable' | 'unreviewed' | 'reviewed'
 
 export interface Database {
   public: {
@@ -460,6 +462,12 @@ export interface Database {
           published_to_city_news_at: string | null
           created_by: string | null
           reviewed_by: string | null
+          intake_method: NewsIntakeMethod
+          extracted_content: Record<string, unknown> | null
+          ai_suggestions: Record<string, unknown> | null
+          ai_model: string | null
+          ai_generated_at: string | null
+          ai_review_status: NewsAiReviewStatus
           created_at: string
           updated_at: string
         }
@@ -485,6 +493,12 @@ export interface Database {
           published_to_city_news_at?: string | null
           created_by?: string | null
           reviewed_by?: string | null
+          intake_method?: NewsIntakeMethod
+          extracted_content?: Record<string, unknown> | null
+          ai_suggestions?: Record<string, unknown> | null
+          ai_model?: string | null
+          ai_generated_at?: string | null
+          ai_review_status?: NewsAiReviewStatus
           created_at?: string
           updated_at?: string
         }
@@ -509,6 +523,12 @@ export interface Database {
           published_to_city_news_at?: string | null
           created_by?: string | null
           reviewed_by?: string | null
+          intake_method?: NewsIntakeMethod
+          extracted_content?: Record<string, unknown> | null
+          ai_suggestions?: Record<string, unknown> | null
+          ai_model?: string | null
+          ai_generated_at?: string | null
+          ai_review_status?: NewsAiReviewStatus
           updated_at?: string
         }
       }
