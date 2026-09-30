@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { isPrivateOrReservedIp, extractArticleMetadata } from './urlIntake.ts'
+import { isPrivateOrReservedIp, extractArticleMetadata, assertSafeFetchUrl, UnsafeUrlError } from './urlIntake.ts'
 
 describe('isPrivateOrReservedIp (SSRF guard — requirement: reject localhost/private-network/unsafe destinations)', () => {
   const unsafe = [
@@ -45,6 +45,52 @@ describe('isPrivateOrReservedIp (SSRF guard — requirement: reject localhost/pr
       assert.equal(isPrivateOrReservedIp(ip), false)
     })
   }
+})
+
+describe('assertSafeFetchUrl (requirement 1: valid URL intake / invalid URL / unsafe-private-URL rejection)', () => {
+  // These cases are all rejected before any DNS lookup happens (malformed
+  // input, wrong protocol, or an obviously-local hostname caught by the
+  // string check) — safe to exercise directly in a unit test with no
+  // network access required.
+
+  test('rejects a completely malformed URL', async () => {
+    await assert.rejects(() => assertSafeFetchUrl('not a url at all'), UnsafeUrlError)
+  })
+
+  test('rejects a non-http(s) protocol', async () => {
+    await assert.rejects(() => assertSafeFetchUrl('ftp://example.com/file'), UnsafeUrlError)
+    await assert.rejects(() => assertSafeFetchUrl('file:///etc/passwd'), UnsafeUrlError)
+    await assert.rejects(() => assertSafeFetchUrl('javascript:alert(1)'), UnsafeUrlError)
+  })
+
+  test('rejects localhost and .local hostnames without needing DNS', async () => {
+    await assert.rejects(() => assertSafeFetchUrl('http://localhost/admin'), UnsafeUrlError)
+    await assert.rejects(() => assertSafeFetchUrl('http://localhost:3000/admin'), UnsafeUrlError)
+    await assert.rejects(() => assertSafeFetchUrl('http://myhost.local/'), UnsafeUrlError)
+  })
+
+  test('rejects a bare private/loopback IP literal without needing DNS', async () => {
+    await assert.rejects(() => assertSafeFetchUrl('http://127.0.0.1/'), UnsafeUrlError)
+    await assert.rejects(() => assertSafeFetchUrl('http://169.254.169.254/latest/meta-data/'), UnsafeUrlError) // cloud metadata SSRF target
+    await assert.rejects(() => assertSafeFetchUrl('http://192.168.1.1/'), UnsafeUrlError)
+    await assert.rejects(() => assertSafeFetchUrl('http://[::1]/'), UnsafeUrlError)
+  })
+
+  test('accepts a well-formed public https URL (passes format/protocol/hostname checks; DNS resolution happens next)', async () => {
+    // Not asserting the DNS-resolution step here (no network in this test
+    // environment) — this proves the fast pre-checks correctly let a
+    // normal public URL through rather than false-positively blocking it.
+    const parsed = await assertSafeFetchUrl('https://example.com/some-article').catch(err => err)
+    // Either it resolved fine (a URL object) or failed at the DNS-lookup
+    // step specifically (not at format/protocol/hostname) — both are
+    // correct outcomes for this test; only a rejection from the earlier
+    // checks would be wrong.
+    if (parsed instanceof UnsafeUrlError) {
+      assert.ok(/resolve/i.test(parsed.message), `should only fail at DNS resolution, got: ${parsed.message}`)
+    } else {
+      assert.ok(parsed instanceof URL)
+    }
+  })
 })
 
 describe('extractArticleMetadata (requirement: extract title/description/headline/source/date/text/url)', () => {
