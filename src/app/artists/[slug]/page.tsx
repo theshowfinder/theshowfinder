@@ -114,8 +114,20 @@ export default async function ArtistPage({ params }: PageProps) {
       name:     d.venue_name,
       address:  { '@type': 'PostalAddress', addressLocality: d.city, addressCountry: 'GB' },
     },
+    // Same rationale as buildEventSchema in src/lib/jsonld.ts: the venue is
+    // the best available proxy for "organizer" (no promoter data in the DB),
+    // and offers is always present since every tour date has a ticket link
+    // to fall back to (the artist's own ticket URL, or the artist page
+    // itself) — only `price` stays omitted, since we don't have per-date
+    // pricing and won't fabricate a number.
+    organizer: { '@type': 'Organization', name: d.venue_name },
     performer: { '@type': 'MusicGroup', name: artist.name },
-    ...(artist.tickets_url ? { offers: { '@type': 'Offer', url: artistTicketUrl, priceCurrency: 'GBP', availability: 'https://schema.org/InStock' } } : {}),
+    offers: {
+      '@type':       'Offer',
+      url:            artist.tickets_url ? artistTicketUrl : canonicalUrl,
+      priceCurrency:  'GBP',
+      availability:   'https://schema.org/InStock',
+    },
   }))
 
   const breadcrumbSchema = buildBreadcrumbSchema([

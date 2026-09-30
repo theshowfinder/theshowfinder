@@ -56,23 +56,32 @@ export function buildEventSchema(input: EventSchemaInput) {
           name:    'United Kingdom',
           address: { '@type': 'PostalAddress', addressCountry: 'GB' },
         },
+    // The venue is the best available proxy for "organizer" — Ticketmaster's
+    // feed doesn't supply a promoter/production-company name, and the venue
+    // is genuinely the party that booked and is hosting the show. Falls back
+    // to TheShowFinder itself only on the rare event with no venue at all.
+    organizer: input.venue
+      ? { '@type': 'Organization', name: input.venue.name }
+      : { '@type': 'Organization', name: 'TheShowFinder', url: BASE_URL },
     ...(input.performers && input.performers.length
       ? { performer: input.performers.map(name => ({ '@type': 'PerformingGroup', name })) }
       : {}),
-    ...(input.priceFrom
-      ? {
-          offers: {
-            '@type':         'Offer',
-            url:              input.offerUrl ?? input.url,
-            price:            input.priceFrom,
-            priceCurrency:    input.priceCurrency ?? 'GBP',
-            availability:     input.status === 'sold_out'
-              ? 'https://schema.org/SoldOut'
-              : 'https://schema.org/InStock',
-            validFrom:        new Date().toISOString(),
-          },
-        }
-      : {}),
+    // offers is always present — every event page has a ticket URL to point
+    // to (the real tickets_url, or the event page itself as a fallback) and
+    // this site is UK-only so priceCurrency is always correctly 'GBP'. Only
+    // `price` is conditional: Ticketmaster's UK feed supplies almost no
+    // price_from data, and a missing number is honest where a guessed one
+    // would not be — never fabricate a price.
+    offers: {
+      '@type':      'Offer',
+      url:           input.offerUrl ?? input.url,
+      priceCurrency: input.priceCurrency ?? 'GBP',
+      availability:  input.status === 'sold_out'
+        ? 'https://schema.org/SoldOut'
+        : 'https://schema.org/InStock',
+      validFrom:     new Date().toISOString(),
+      ...(input.priceFrom ? { price: input.priceFrom } : {}),
+    },
   }
 }
 
