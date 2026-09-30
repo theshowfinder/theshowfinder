@@ -107,6 +107,14 @@ const HEADLINE_BLOCKLIST: RegExp[] = [
   // actual giveaway terms confirmed from real contaminated results.
   /\buknow\b/i, /\buniversity of kentucky\b/i, /\bcommencement\b/i,
   /\bwildcats\b/i, /\brupp arena\b/i, /\bdanceblue\b/i, /\blexington\b/i,
+  // The national feed's "British" anchor (see fetchNationalNews) still lets
+  // through stories that merely mention a British person/company doing
+  // something abroad -- e.g. a US regional outlet's tourism-boosting piece
+  // about a British TOUR COMPANY (coach holidays, not concert tours)
+  // praising an American town. "tour company" is the generic giveaway
+  // (a real concert story says "UK tour", never "tour company"), plus the
+  // specific outlet/place confirmed from a real contaminated result.
+  /\btour compan(y|ies)\b/i, /\bcowboy state daily\b/i, /\bcheyenne\b/i,
 ]
 
 // Several of the 36 UK cities share a name with a US or Canadian town
