@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { isPrivateOrReservedIp, extractArticleMetadata, assertSafeFetchUrl, UnsafeUrlError } from './urlIntake.ts'
+import { isPrivateOrReservedIp, extractArticleMetadata, assertSafeFetchUrl, fetchArticleHtml, UnsafeUrlError, FetchArticleError } from './urlIntake.ts'
 
 describe('isPrivateOrReservedIp (SSRF guard — requirement: reject localhost/private-network/unsafe destinations)', () => {
   const unsafe = [
@@ -89,6 +89,116 @@ describe('assertSafeFetchUrl (requirement 1: valid URL intake / invalid URL / un
       assert.ok(/resolve/i.test(parsed.message), `should only fail at DNS resolution, got: ${parsed.message}`)
     } else {
       assert.ok(parsed instanceof URL)
+    }
+  })
+})
+
+// fetchArticleHtml's redirect handling is exercised here with a mocked
+// global fetch (rather than the real network, which this sandbox can't
+// reach anyway) — these are the only tests in this file that touch
+// fetchArticleHtml directly rather than the pure assertSafeFetchUrl.
+// Redirect targets use bare public IP literals (not hostnames) so the
+// real DNS lookup inside assertSafeFetchUrl resolves instantly via
+// getaddrinfo's IP-literal fast path, with no actual network call —
+// verified separately to work in this sandbox.
+describe('fetchArticleHtml redirect handling (requirement 1: redirect SSRF protection)', () => {
+  const originalFetch = globalThis.fetch
+
+  function mockResponse(status: number, body: string | null, headers: Record<string, string> = {}) {
+    return new Response(body, { status, headers })
+  }
+
+  test('rejects a redirect to a loopback address without following it', async () => {
+    let calls = 0
+    globalThis.fetch = (async () => {
+      calls++
+      return mockResponse(302, null, { location: 'http://127.0.0.1/admin' })
+    }) as typeof fetch
+
+    try {
+      await assert.rejects(
+        () => fetchArticleHtml('http://93.184.216.34/start'),
+        (err: unknown) => err instanceof UnsafeUrlError
+      )
+      assert.equal(calls, 1, 'must not have followed the unsafe redirect with a second request')
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  test('rejects a redirect to the cloud metadata address', async () => {
+    globalThis.fetch = (async () =>
+      mockResponse(301, null, { location: 'http://169.254.169.254/latest/meta-data/' })
+    ) as typeof fetch
+
+    try {
+      await assert.rejects(() => fetchArticleHtml('http://93.184.216.34/start'), UnsafeUrlError)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  test('rejects a redirect to a private-range address (10.x)', async () => {
+    globalThis.fetch = (async () =>
+      mockResponse(302, null, { location: 'http://10.0.0.5/internal' })
+    ) as typeof fetch
+
+    try {
+      await assert.rejects(() => fetchArticleHtml('http://93.184.216.34/start'), UnsafeUrlError)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  test('rejects a redirect to localhost by hostname', async () => {
+    globalThis.fetch = (async () =>
+      mockResponse(302, null, { location: 'http://localhost:8080/admin' })
+    ) as typeof fetch
+
+    try {
+      await assert.rejects(() => fetchArticleHtml('http://93.184.216.34/start'), UnsafeUrlError)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  test('caps redirect chains rather than following them indefinitely', async () => {
+    let calls = 0
+    globalThis.fetch = (async () => {
+      calls++
+      // Every hop redirects to another safe public IP literal — none of
+      // these are individually unsafe, so if the redirect count weren't
+      // capped this would loop forever.
+      return mockResponse(302, null, { location: `http://93.184.216.34/hop-${calls}` })
+    }) as typeof fetch
+
+    try {
+      await assert.rejects(
+        () => fetchArticleHtml('http://93.184.216.34/start'),
+        (err: unknown) => err instanceof FetchArticleError && /too many times/i.test((err as Error).message)
+      )
+      assert.ok(calls <= 10, `redirect loop must be capped, not indefinite (saw ${calls} calls)`)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  test('follows a safe redirect chain through to its final safe destination', async () => {
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = input.toString()
+      if (url === 'http://93.184.216.34/start') {
+        return mockResponse(302, null, { location: 'http://1.1.1.1/final' })
+      }
+      return mockResponse(200, '<html><head><title>Final destination</title></head><body>ok</body></html>', {
+        'content-type': 'text/html',
+      })
+    }) as typeof fetch
+
+    try {
+      const result = await fetchArticleHtml('http://93.184.216.34/start')
+      assert.match(result.html, /Final destination/)
+    } finally {
+      globalThis.fetch = originalFetch
     }
   })
 })

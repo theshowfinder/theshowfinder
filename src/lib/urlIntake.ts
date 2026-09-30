@@ -111,31 +111,69 @@ export interface FetchedArticle {
   finalUrl: string // post-redirect URL, as reported by fetch()
 }
 
+const MAX_REDIRECTS = 5
+
 // Fetches the page after the safety check above, with a timeout and a hard
 // response-size cap (checked incrementally as bytes arrive, not just via
 // Content-Length — a server can omit or lie about that header).
+//
+// Redirects are followed manually (redirect: 'manual'), one hop at a time,
+// re-running the exact same assertSafeFetchUrl SSRF check against every
+// redirect destination before following it. This matters because the
+// initial URL passing the check only proves the URL the admin pasted is
+// safe — a malicious or compromised page can still respond with a 3xx
+// pointing at 127.0.0.1, a private range, or the 169.254.169.254 cloud
+// metadata address, and letting fetch() follow that automatically
+// (redirect: 'follow') would bypass the check entirely for that hop.
 export async function fetchArticleHtml(rawUrl: string): Promise<FetchedArticle> {
-  const safeUrl = await assertSafeFetchUrl(rawUrl)
+  let currentUrl = await assertSafeFetchUrl(rawUrl)
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
 
-  let res: Response
   try {
-    res = await fetch(safeUrl.toString(), {
-      headers: { 'User-Agent': USER_AGENT, Accept: 'text/html' },
-      signal: controller.signal,
-      redirect: 'follow',
-    })
-  } catch (err) {
-    clearTimeout(timeout)
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new FetchArticleError('Timed out fetching that page.')
-    }
-    throw new FetchArticleError('Could not fetch that page.')
-  }
+    let res: Response | null = null
 
-  try {
+    for (let hop = 0; ; hop++) {
+      try {
+        res = await fetch(currentUrl.toString(), {
+          headers: { 'User-Agent': USER_AGENT, Accept: 'text/html' },
+          signal: controller.signal,
+          redirect: 'manual',
+        })
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw new FetchArticleError('Timed out fetching that page.')
+        }
+        throw new FetchArticleError('Could not fetch that page.')
+      }
+
+      const isRedirect = res.status >= 300 && res.status < 400
+      if (!isRedirect) break
+
+      if (hop >= MAX_REDIRECTS) {
+        throw new FetchArticleError('That page redirected too many times.')
+      }
+
+      const location = res.headers.get('location')
+      if (!location) {
+        throw new FetchArticleError('That page redirected without a destination.')
+      }
+
+      let nextUrl: URL
+      try {
+        nextUrl = new URL(location, currentUrl)
+      } catch {
+        throw new FetchArticleError('That page redirected to an invalid address.')
+      }
+
+      // Re-validate the redirect destination with the same SSRF checks as
+      // the original URL (protocol, hostname pattern, and a real DNS
+      // lookup against the private/reserved IP blocklist) before following
+      // it. Throws UnsafeUrlError, same as a directly-pasted unsafe URL.
+      currentUrl = await assertSafeFetchUrl(nextUrl.toString())
+    }
+
     if (!res.ok) {
       throw new FetchArticleError(`That page returned an error (HTTP ${res.status}).`)
     }
@@ -171,7 +209,7 @@ export async function fetchArticleHtml(rawUrl: string): Promise<FetchedArticle> 
     }
 
     const html = Buffer.concat(chunks.map(c => Buffer.from(c))).toString('utf-8')
-    return { html, finalUrl: res.url || safeUrl.toString() }
+    return { html, finalUrl: res.url || currentUrl.toString() }
   } finally {
     clearTimeout(timeout)
   }
