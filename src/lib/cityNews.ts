@@ -102,7 +102,7 @@ const HEADLINE_BLOCKLIST: RegExp[] = [
   // the US-state-name blocklist below never caught them. These are the
   // actual giveaway terms confirmed from real contaminated results.
   /\buknow\b/i, /\buniversity of kentucky\b/i, /\bcommencement\b/i,
-  /\bwildcats\b/i,
+  /\bwildcats\b/i, /\brupp arena\b/i, /\bdanceblue\b/i, /\blexington\b/i,
 ]
 
 // Several of the 36 UK cities share a name with a US or Canadian town
@@ -208,7 +208,10 @@ function fetchCityNews(cityName: string): Promise<NewsItem[]> {
 // toward genuinely national/major stories (an arena tour, a festival
 // lineup, a big on-sale) rather than small local listings.
 function fetchNationalNews(): Promise<NewsItem[]> {
-  const q = `(concert+OR+gig+OR+tour+OR+festival+OR+arena+OR+%22on+sale%22+OR+presale)+UK+${NEWS_EXCLUDE_TERMS}`
+  // Deliberately "British", not "UK" -- see the comment above the
+  // Kentucky-related HEADLINE_BLOCKLIST entries for why the bare
+  // abbreviation is a trap for this specific query.
+  const q = `(concert+OR+gig+OR+tour+OR+festival+OR+arena+OR+%22on+sale%22+OR+presale)+British+${NEWS_EXCLUDE_TERMS}`
   return fetchNewsForQuery(q)
 }
 
