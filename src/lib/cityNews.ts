@@ -117,6 +117,27 @@ const HEADLINE_BLOCKLIST: RegExp[] = [
   /\btour compan(y|ies)\b/i, /\bcowboy state daily\b/i, /\bcheyenne\b/i,
 ]
 
+// Positive backstop -- the mirror image of HEADLINE_BLOCKLIST. Google's OR
+// query matching is a loose relevance signal, not a hard requirement, and
+// once "when:4d" narrows the fresh result pool it will happily fill
+// remaining slots with any story that merely contains the anchor word --
+// confirmed live with "British Jews back calls to ban Australian academic
+// Randa Abdel-Fattah" (AFR), a political story with zero connection to
+// music/entertainment. Every kept item must itself read like real
+// entertainment/live-events coverage, checked against the headline alone
+// (not source, which is just the publisher's name).
+const ENTERTAINMENT_TERMS: RegExp[] = [
+  /\bconcert(s)?\b/i, /\bgig(s)?\b/i, /\btour(s)?\b/i, /\bfestival(s)?\b/i,
+  /\barena\b/i, /\bticket(s)?\b/i, /\bpresale\b/i, /\bon sale\b/i,
+  /\balbum\b/i, /\bsingle\b/i, /\bep\b/i, /\bband\b/i, /\bsinger\b/i,
+  /\brapper\b/i, /\bdj\b/i, /\bmusical\b/i, /\btheatre\b/i, /\btheater\b/i,
+  /\bcomedy\b/i, /\bcomedian\b/i, /\bsetlist\b/i, /\blineup\b/i, /\bheadliner\b/i,
+  /\bstadium\b/i, /\bperformance\b/i, /\borchestra\b/i, /\bsymphony\b/i,
+  /\bstand-?up\b/i, /\bshow(s)?\b/i, /\bvenue\b/i, /\bmusic\b/i,
+  /\bartist(s)?\b/i, /\bsold out\b/i, /\bencore\b/i, /\bentertainment\b/i,
+  /\bopera\b/i, /\bballet\b/i, /\bpanto(mime)?\b/i,
+]
+
 // Several of the 36 UK cities share a name with a US or Canadian town
 // (Derby CT/KS, Manchester NH, Cambridge MA, Bristol CT/TN/VA, Plymouth MA,
 // Newport RI, Richmond VA, Oxford MS, Reading PA, Norwich CT, London
@@ -181,6 +202,7 @@ function isFalsePositive(item: { headline: string; source: string | null; url: s
   if (NORTH_AMERICA_BLOCKLIST.some(re => re.test(text))) return true
   if (isUsGovHost(item.url)) return true
   if (isUsEduHost(item.url)) return true
+  if (!ENTERTAINMENT_TERMS.some(re => re.test(item.headline))) return true
   return false
 }
 
@@ -229,10 +251,20 @@ function fetchCityNews(cityName: string): Promise<NewsItem[]> {
 // toward genuinely national/major stories (an arena tour, a festival
 // lineup, a big on-sale) rather than small local listings.
 function fetchNationalNews(): Promise<NewsItem[]> {
-  // Deliberately "British", not "UK" -- see the comment above the
-  // Kentucky-related HEADLINE_BLOCKLIST entries for why the bare
-  // abbreviation is a trap for this specific query.
-  const q = `(concert+OR+gig+OR+tour+OR+festival+OR+arena+OR+%22on+sale%22+OR+presale)+British+${NEWS_EXCLUDE_TERMS}`
+  // No bare country/demonym anchor ("UK", then "British") -- every attempt
+  // at one has eventually matched something structurally unrelated (the
+  // University of Kentucky, a Wyoming tourism piece, an Australian-academic
+  // political story) because Google News treats a lone anchor word as a
+  // loose relevance signal, not a hard requirement, and fills gaps with
+  // whatever else contains it once when:4d narrows the pool. Anchoring on
+  // actual UK-touring-act phrasing instead is more specific AND still keeps
+  // results British, since these exact phrases are how UK/Irish music press
+  // writes about live events -- no country word needed. ENTERTAINMENT_TERMS
+  // above is the hard backstop if a loose match still gets through.
+  const q =
+    '(%22UK+tour%22+OR+%22UK+tour+dates%22+OR+%22arena+tour%22+OR+%22on+sale%22+OR+presale+' +
+    'OR+%22music+festival%22+OR+%22album+out+now%22+OR+%22new+single%22+OR+gig+OR+concert)+' +
+    `${NEWS_EXCLUDE_TERMS}`
   return fetchNewsForQuery(q)
 }
 
