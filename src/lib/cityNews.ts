@@ -67,7 +67,8 @@ const RSS_PER_ITEM_TIMEOUT_MS = 15000
 const NEWS_EXCLUDE_TERMS =
   '-football+-soccer+-%22Serie+A%22+-%22Premier+League%22+-EFL+-Championship+' +
   '-%22horse+racing%22+-racecourse+-jockey+-racehorse+' +
-  '-%22Kentucky+Derby%22+-%22Epsom+Derby%22+-%22Irish+Derby%22+-%22Dubai+World+Cup%22'
+  '-%22Kentucky+Derby%22+-%22Epsom+Derby%22+-%22Irish+Derby%22+-%22Dubai+World+Cup%22+' +
+  '-%22University+of+Kentucky%22+-UKNow+-commencement+-Wildcats+-alumni'
 
 // Deterministic backstop applied to every fetched headline, regardless of
 // what the Google News query itself returned. This is what actually
@@ -94,6 +95,14 @@ const HEADLINE_BLOCKLIST: RegExp[] = [
   // mentions football or horse racing.
   /\bsoap box derby\b/i, /\bdemolition derby\b/i, /\bpinewood derby\b/i,
   /\bderby race\b/i, /\bderby days\b/i,
+  // The national feed's query anchors on the bare word "UK" to bias results
+  // toward Britain — but Google News resolves "UK" to the University of
+  // Kentucky's "UKNow" news site just as readily as "United Kingdom", and
+  // its commencement/alumni/recital stories never spell out "Kentucky", so
+  // the US-state-name blocklist below never caught them. These are the
+  // actual giveaway terms confirmed from real contaminated results.
+  /\buknow\b/i, /\buniversity of kentucky\b/i, /\bcommencement\b/i,
+  /\bwildcats\b/i,
 ]
 
 // Several of the 36 UK cities share a name with a US or Canadian town
@@ -141,11 +150,25 @@ function isUsGovHost(url: string): boolean {
   }
 }
 
+// Same idea for American universities: .edu is a US-specific TLD (the
+// University of Kentucky's "UKNow" news site is exactly the kind of source
+// this exists to catch — see the HEADLINE_BLOCKLIST comment above). UK
+// universities are under .ac.uk, never .edu.
+function isUsEduHost(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    return host.endsWith('.edu')
+  } catch {
+    return false
+  }
+}
+
 function isFalsePositive(item: { headline: string; source: string | null; url: string }): boolean {
   const text = `${item.headline} ${item.source ?? ''}`
   if (HEADLINE_BLOCKLIST.some(re => re.test(text))) return true
   if (NORTH_AMERICA_BLOCKLIST.some(re => re.test(text))) return true
   if (isUsGovHost(item.url)) return true
+  if (isUsEduHost(item.url)) return true
   return false
 }
 
