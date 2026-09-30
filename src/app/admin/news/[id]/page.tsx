@@ -69,7 +69,7 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
           {candidate.review_status}
         </span>
         <span className="text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap bg-slate-100 text-slate-500">
-          ✎ Manually added
+          {candidate.intake_method === 'url_import' ? '🔗 Imported from URL' : '✎ Manually added'}
         </span>
       </header>
 
@@ -203,6 +203,119 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
             )}
           </dl>
         </section>
+
+        {candidate.ai_suggestions !== null && (() => {
+          const ai = candidate.ai_suggestions as {
+            headline?: string | null; summary?: string | null; scope_type?: string; cities?: string[]
+            category?: string; priority?: string; suggested_published_at?: string | null
+            confidence?: string; uncertainty_notes?: string | null; social_caption?: string | null
+            email_teaser?: string | null; warnings?: string[]
+          }
+          return (
+            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">
+                  AI suggestions {candidate.ai_model && <span className="normal-case font-normal text-slate-400">({candidate.ai_model})</span>}
+                </h2>
+                {ai.confidence && (
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full capitalize ${
+                    ai.confidence === 'high' ? 'bg-green-100 text-green-700' : ai.confidence === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {ai.confidence} confidence
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs text-slate-400 -mt-2">
+                Reference only — these are Claude&rsquo;s suggestions from the extracted article, not final. The editable fields
+                below already start pre-filled from them; edit those directly, this panel never re-applies itself.
+              </p>
+
+              {ai.uncertainty_notes && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm">
+                  ⚠ {ai.uncertainty_notes}
+                </div>
+              )}
+
+              {ai.warnings && ai.warnings.length > 0 && (
+                <div className="bg-slate-50 border border-slate-200 text-slate-600 rounded-xl px-4 py-3 text-xs space-y-1">
+                  {ai.warnings.map((w, i) => <p key={i}>• {w}</p>)}
+                </div>
+              )}
+
+              <dl className="text-sm text-slate-600 space-y-1.5">
+                {ai.headline && (
+                  <div className="flex gap-2"><dt className="font-semibold text-slate-500 w-32 shrink-0">Headline</dt><dd>{ai.headline}</dd></div>
+                )}
+                {ai.summary && (
+                  <div className="flex gap-2"><dt className="font-semibold text-slate-500 w-32 shrink-0">Summary</dt><dd>{ai.summary}</dd></div>
+                )}
+                <div className="flex gap-2">
+                  <dt className="font-semibold text-slate-500 w-32 shrink-0">Scope</dt>
+                  <dd className="capitalize">{ai.scope_type}{ai.cities && ai.cities.length > 0 ? `: ${ai.cities.join(', ')}` : ''}</dd>
+                </div>
+                {ai.category && (
+                  <div className="flex gap-2"><dt className="font-semibold text-slate-500 w-32 shrink-0">Category</dt><dd className="capitalize">{ai.category.replace(/_/g, ' ')}</dd></div>
+                )}
+                {ai.priority && (
+                  <div className="flex gap-2"><dt className="font-semibold text-slate-500 w-32 shrink-0">Priority</dt><dd className="capitalize">{ai.priority}</dd></div>
+                )}
+              </dl>
+
+              {(ai.social_caption || ai.email_teaser) && (
+                <div className="border-t border-slate-100 pt-4 space-y-3">
+                  {ai.social_caption && (
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Suggested social caption</p>
+                      <p className="text-sm text-slate-700 bg-slate-50 rounded-lg px-3 py-2">{ai.social_caption}</p>
+                    </div>
+                  )}
+                  {ai.email_teaser && (
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Suggested email teaser</p>
+                      <p className="text-sm text-slate-700 bg-slate-50 rounded-lg px-3 py-2">{ai.email_teaser}</p>
+                    </div>
+                  )}
+                  <p className="text-xs text-slate-400">Reference text only — no social posting or email sending is automated by this feature.</p>
+                </div>
+              )}
+            </section>
+          )
+        })()}
+
+        {candidate.extracted_content !== null && (() => {
+          const extracted = candidate.extracted_content as {
+            title?: string | null; description?: string | null; headline?: string | null
+            sourceDomain?: string; publishedAt?: string | null; articleText?: string | null; originalUrl?: string
+          }
+          return (
+            <details className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+              <summary className="text-sm font-bold text-slate-500 uppercase tracking-wider cursor-pointer select-none">
+                Extracted article (what was actually pulled from the page)
+              </summary>
+              <dl className="text-sm text-slate-600 space-y-1.5 mt-4">
+                {extracted.title && (
+                  <div className="flex gap-2"><dt className="font-semibold text-slate-500 w-32 shrink-0">Page title</dt><dd>{extracted.title}</dd></div>
+                )}
+                {extracted.description && (
+                  <div className="flex gap-2"><dt className="font-semibold text-slate-500 w-32 shrink-0">Description</dt><dd>{extracted.description}</dd></div>
+                )}
+                {extracted.sourceDomain && (
+                  <div className="flex gap-2"><dt className="font-semibold text-slate-500 w-32 shrink-0">Source domain</dt><dd>{extracted.sourceDomain}</dd></div>
+                )}
+                {extracted.publishedAt && (
+                  <div className="flex gap-2"><dt className="font-semibold text-slate-500 w-32 shrink-0">Published</dt><dd>{new Date(extracted.publishedAt).toLocaleString('en-GB')}</dd></div>
+                )}
+              </dl>
+              {extracted.articleText && (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Extracted text</p>
+                  <p className="text-sm text-slate-600 whitespace-pre-wrap bg-slate-50 rounded-lg px-3 py-2 max-h-64 overflow-y-auto">{extracted.articleText}</p>
+                </div>
+              )}
+            </details>
+          )
+        })()}
 
         <NewsCandidateForm mode="edit" action={updateAction} candidate={candidate} artists={artists ?? []} cityNames={cityNames} />
       </main>

@@ -20,6 +20,8 @@ import {
   describeDuplicateUrl,
   type CandidateCityTarget,
 } from '@/lib/newsPublishing'
+import { fetchArticleHtml, extractArticleMetadata, UnsafeUrlError, FetchArticleError } from '@/lib/urlIntake'
+import { requestAiSuggestions } from '@/lib/newsAiSuggestions'
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -581,6 +583,113 @@ export async function createNewsCandidateAction(formData: FormData) {
   redirect('/admin/news/' + data.id + '?created=1')
 }
 
+// ── News candidates: AI-assisted URL intake (Phase 3) ───────────────────────
+// Paste-a-URL alternative to the manual form above. Fetches the page
+// server-side (SSRF-guarded — see src/lib/urlIntake.ts), extracts basic
+// metadata, runs the exact same duplicate check as the manual flow
+// (checkForDuplicateUrl, reused unchanged), asks Claude for a structured
+// editorial suggestion (src/lib/newsAiSuggestions.ts — degrades gracefully
+// to no suggestion if ANTHROPIC_API_KEY isn't set or the call fails), and
+// inserts a normal 'pending' news_candidates row pre-filled with the
+// suggestion as an editable draft. From this point on it's a completely
+// ordinary candidate — the exact same approve/reject/publish/unpublish/
+// republish actions below apply to it unchanged, and it renders through
+// the exact same NewsCandidateForm as a manually-entered one. The only
+// permanent difference is intake_method='url_import' plus the read-only
+// extracted_content/ai_suggestions reference data shown on the detail page.
+export async function createNewsCandidateFromUrlAction(formData: FormData) {
+  await checkAuth()
+  const db = createAdminClient()
+
+  const rawUrl = ((formData.get('url') as string) || '').trim()
+
+  if (!rawUrl) {
+    redirect('/admin/news/from-url?error=' + encodeURIComponent('Paste an article URL first.'))
+  }
+  if (!isValidHttpUrl(rawUrl)) {
+    redirect('/admin/news/from-url?error=' + encodeURIComponent('Enter a valid http(s) URL.') + '&url=' + encodeURIComponent(rawUrl))
+  }
+
+  const url = normalizeUrl(rawUrl)
+
+  try {
+    await checkForDuplicateUrl(db, url, null)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Something went wrong.'
+    redirect('/admin/news/from-url?error=' + encodeURIComponent(message) + '&url=' + encodeURIComponent(rawUrl))
+  }
+
+  let html: string
+  let finalUrl: string
+  try {
+    const fetched = await fetchArticleHtml(rawUrl)
+    html = fetched.html
+    finalUrl = fetched.finalUrl
+  } catch (err) {
+    const message =
+      err instanceof UnsafeUrlError || err instanceof FetchArticleError
+        ? err.message
+        : 'Could not fetch that page.'
+    redirect('/admin/news/from-url?error=' + encodeURIComponent(message) + '&url=' + encodeURIComponent(rawUrl))
+  }
+
+  const extracted = extractArticleMetadata(html!, finalUrl!)
+
+  // A second duplicate check against the final (post-redirect) URL — the
+  // admin-typed URL and the page's real URL can differ (a shortlink, a
+  // tracking redirect); both are worth catching before we insert anything.
+  const normalizedFinalUrl = normalizeUrl(finalUrl!)
+  if (normalizedFinalUrl !== url) {
+    try {
+      await checkForDuplicateUrl(db, normalizedFinalUrl, null)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong.'
+      redirect('/admin/news/from-url?error=' + encodeURIComponent(message) + '&url=' + encodeURIComponent(rawUrl))
+    }
+  }
+
+  const { suggestion, warnings, model } = await requestAiSuggestions(extracted)
+
+  const cityTargets: CandidateCityTarget[] = suggestion.scope_type === 'city'
+    ? suggestion.cities.map(name => ({ city_slug: citySlug(name), city_name: name }))
+    : []
+
+  const headline = suggestion.headline || extracted.headline || extracted.title || 'Untitled — needs a headline'
+
+  const { data, error } = await db
+    .from('news_candidates')
+    .insert({
+      scope_type: suggestion.scope_type,
+      city_slug: cityTargets[0]?.city_slug ?? null,
+      city_name: cityTargets[0]?.city_name ?? null,
+      headline,
+      source: extracted.sourceDomain,
+      source_url: `https://${extracted.sourceDomain}`,
+      url: normalizedFinalUrl,
+      published_at: suggestion.suggested_published_at ?? extracted.publishedAt ?? null,
+      story_type: suggestion.category,
+      summary: suggestion.summary ?? extracted.description ?? null,
+      priority: suggestion.priority,
+      review_status: 'pending', // always — requirement 7/8: never auto-published, whatever the AI's confidence
+      created_by: ADMIN_IDENTITY,
+      intake_method: 'url_import',
+      extracted_content: extracted,
+      ai_suggestions: { ...suggestion, warnings },
+      ai_model: model,
+      ai_generated_at: model ? new Date().toISOString() : null,
+      ai_review_status: model ? 'unreviewed' : 'not_applicable',
+    })
+    .select('id')
+    .single()
+
+  if (error) redirect('/admin/news/from-url?error=' + encodeURIComponent(newsCandidateDbError(error).message) + '&url=' + encodeURIComponent(rawUrl))
+
+  await syncNewsCandidateCities(db, data.id, cityTargets)
+
+  revalidatePath('/admin/news')
+  redirect('/admin/news/' + data.id + '?created=1')
+}
+
 export async function updateNewsCandidateAction(id: string, formData: FormData) {
   await checkAuth()
   const db = createAdminClient()
@@ -595,9 +704,17 @@ export async function updateNewsCandidateAction(id: string, formData: FormData) 
     redirect('/admin/news/' + id + '?error=' + encodeURIComponent(message))
   }
 
+  // A URL-imported candidate's AI suggestion starts 'unreviewed' — the
+  // admin editing and saving the candidate at all (whether or not they
+  // changed anything AI-suggested) is treated as having reviewed it. Manual
+  // candidates are always 'not_applicable' already and this is a no-op for
+  // them.
+  const { data: existing } = await db.from('news_candidates').select('ai_review_status').eq('id', id).maybeSingle()
+  const aiReviewPatch = existing?.ai_review_status === 'unreviewed' ? { ai_review_status: 'reviewed' as const } : {}
+
   const { error } = await db
     .from('news_candidates')
-    .update({ ...fields, updated_at: new Date().toISOString() })
+    .update({ ...fields, ...aiReviewPatch, updated_at: new Date().toISOString() })
     .eq('id', id)
   if (error) redirect('/admin/news/' + id + '?error=' + encodeURIComponent(newsCandidateDbError(error).message))
 

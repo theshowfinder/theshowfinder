@@ -95,8 +95,14 @@ export default async function NewsCandidatesAdminPage() {
           </span>
         )}
         <Link
+          href="/admin/news/from-url"
+          className="inline-block font-semibold text-slate-600 px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors text-sm ml-auto"
+        >
+          🔗 Add from URL
+        </Link>
+        <Link
           href="/admin/news/new"
-          className="inline-block font-bold text-white px-5 py-2.5 rounded-xl hover:opacity-90 transition-opacity text-sm ml-auto"
+          className="inline-block font-bold text-white px-5 py-2.5 rounded-xl hover:opacity-90 transition-opacity text-sm"
           style={{ backgroundColor: '#E8003D' }}
         >
           + Add Story
@@ -139,6 +145,9 @@ export default async function NewsCandidatesAdminPage() {
                     <td className="px-4 py-3 max-w-xs">
                       <p className="font-bold text-slate-900 line-clamp-2">{item.headline}</p>
                       {item.artist_name && <p className="text-slate-400 text-xs mt-0.5">{item.artist_name}</p>}
+                      {item.intake_method === 'url_import' && (
+                        <p className="text-slate-400 text-xs mt-0.5">🔗 via URL{item.ai_review_status === 'unreviewed' ? ' — AI suggestion not yet reviewed' : ''}</p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{item.source ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
