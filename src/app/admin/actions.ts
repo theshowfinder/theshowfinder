@@ -544,19 +544,36 @@ async function syncNewsCandidateCities(
   if (insertError) throw new Error(insertError.message)
 }
 
+// Validation/duplicate errors redirect back to the form with a message in
+// the query string (the same pattern this page already uses for the
+// created=1/saved=1 success banners) rather than throwing into Next.js's
+// generic error boundary — that's what makes requirement 2's "show a
+// clear message when a duplicate is found" actually show up as a message
+// instead of a crash screen. Known limitation: because this is a redirect
+// to a fresh page load, whatever the admin had typed is lost on error —
+// only the URL (which the error is usually about) survives, echoed back
+// via ?url= so the form pre-fills at least that field.
 export async function createNewsCandidateAction(formData: FormData) {
   await checkAuth()
   const db = createAdminClient()
-  const { cityTargets, ...fields } = parseNewsCandidateForm(formData)
 
-  await checkForDuplicateUrl(db, fields.url, null)
+  let cityTargets: CandidateCityTarget[]
+  let fields: Omit<ParsedNewsCandidateForm, 'cityTargets'>
+  try {
+    ;({ cityTargets, ...fields } = parseNewsCandidateForm(formData))
+    await checkForDuplicateUrl(db, fields.url, null)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Something went wrong.'
+    const url = (formData.get('url') as string) || ''
+    redirect('/admin/news/new?error=' + encodeURIComponent(message) + (url ? '&url=' + encodeURIComponent(url) : ''))
+  }
 
   const { data, error } = await db
     .from('news_candidates')
     .insert({ ...fields, created_by: ADMIN_IDENTITY })
     .select('id')
     .single()
-  if (error) throw newsCandidateDbError(error)
+  if (error) redirect('/admin/news/new?error=' + encodeURIComponent(newsCandidateDbError(error).message))
 
   await syncNewsCandidateCities(db, data.id, cityTargets)
 
@@ -567,15 +584,22 @@ export async function createNewsCandidateAction(formData: FormData) {
 export async function updateNewsCandidateAction(id: string, formData: FormData) {
   await checkAuth()
   const db = createAdminClient()
-  const { cityTargets, ...fields } = parseNewsCandidateForm(formData)
 
-  await checkForDuplicateUrl(db, fields.url, id)
+  let cityTargets: CandidateCityTarget[]
+  let fields: Omit<ParsedNewsCandidateForm, 'cityTargets'>
+  try {
+    ;({ cityTargets, ...fields } = parseNewsCandidateForm(formData))
+    await checkForDuplicateUrl(db, fields.url, id)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Something went wrong.'
+    redirect('/admin/news/' + id + '?error=' + encodeURIComponent(message))
+  }
 
   const { error } = await db
     .from('news_candidates')
     .update({ ...fields, updated_at: new Date().toISOString() })
     .eq('id', id)
-  if (error) throw newsCandidateDbError(error)
+  if (error) redirect('/admin/news/' + id + '?error=' + encodeURIComponent(newsCandidateDbError(error).message))
 
   await syncNewsCandidateCities(db, id, cityTargets)
 

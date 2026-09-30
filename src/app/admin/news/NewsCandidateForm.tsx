@@ -23,7 +23,7 @@ const PRIORITIES = [
 ] as const
 
 // 'published' is deliberately excluded — that state is only ever reached
-// via the dedicated Publish action, which also writes the city_news row.
+// via the dedicated Publish action, which also writes the city_news row(s).
 const REVIEW_STATUSES = [
   { value: 'pending',  label: 'Pending' },
   { value: 'approved', label: 'Approved' },
@@ -49,10 +49,27 @@ interface Props {
   action: (formData: FormData) => void | Promise<void>
   candidate?: NewsCandidate
   artists: ArtistOption[]
+  // The candidate's current target cities (from news_candidate_cities) —
+  // may be more than one. Ignored in create mode.
+  cityNames?: string[]
+  // Pre-fills the URL field after a duplicate/validation error redirect,
+  // since the rest of what was typed is otherwise lost (see the comment
+  // on createNewsCandidateAction in src/app/admin/actions.ts).
+  defaultUrl?: string
 }
 
-export default function NewsCandidateForm({ mode, action, candidate, artists }: Props) {
+export default function NewsCandidateForm({ mode, action, candidate, artists, cityNames, defaultUrl }: Props) {
   const [scopeType, setScopeType] = useState<'national' | 'city'>(candidate?.scope_type ?? 'national')
+  const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set(cityNames ?? []))
+
+  function toggleCity(name: string) {
+    setSelectedCities(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
 
   return (
     <form action={action} className="space-y-5">
@@ -64,8 +81,8 @@ export default function NewsCandidateForm({ mode, action, candidate, artists }: 
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={LABEL}>Source</label>
-            <input name="source" defaultValue={candidate?.source ?? ''} placeholder="e.g. NME" className={INPUT} />
+            <label className={LABEL}>Source name</label>
+            <input name="source" defaultValue={candidate?.source ?? ''} placeholder="e.g. NME, GetToTheFront" className={INPUT} />
           </div>
           <div>
             <label className={LABEL}>Published date</label>
@@ -74,36 +91,52 @@ export default function NewsCandidateForm({ mode, action, candidate, artists }: 
         </div>
 
         <div>
-          <label className={LABEL}>URL *</label>
-          <input name="url" type="url" required defaultValue={candidate?.url ?? ''} placeholder="https://…" className={INPUT} />
+          <label className={LABEL}>Article URL *</label>
+          <input name="url" type="url" required defaultValue={candidate?.url ?? defaultUrl ?? ''} placeholder="https://… (the specific story)" className={INPUT} />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className={LABEL}>Scope *</label>
-            <select
-              name="scope_type"
-              required
-              className={INPUT}
-              value={scopeType}
-              onChange={e => setScopeType(e.target.value === 'city' ? 'city' : 'national')}
-            >
-              <option value="national">National</option>
-              <option value="city">City</option>
-            </select>
-          </div>
-          {scopeType === 'city' && (
-            <div>
-              <label className={LABEL}>City *</label>
-              <select name="city_name" required defaultValue={candidate?.city_name ?? ''} className={INPUT}>
-                <option value="" disabled>Select a city…</option>
-                {CITIES.map(c => (
-                  <option key={c.name} value={c.name}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+        <div>
+          <label className={LABEL}>Source URL</label>
+          <input name="source_url" type="url" defaultValue={candidate?.source_url ?? ''} placeholder="https://… (the outlet itself, optional)" className={INPUT} />
         </div>
+
+        <div>
+          <label className={LABEL}>Scope *</label>
+          <select
+            name="scope_type"
+            required
+            className={INPUT}
+            value={scopeType}
+            onChange={e => setScopeType(e.target.value === 'city' ? 'city' : 'national')}
+          >
+            <option value="national">National</option>
+            <option value="city">City</option>
+          </select>
+        </div>
+
+        {scopeType === 'city' && (
+          <div>
+            <label className={LABEL}>Cities * (select one or more)</label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5 border border-slate-200 rounded-lg p-3 max-h-56 overflow-y-auto bg-slate-50">
+              {CITIES.map(c => (
+                <label key={c.name} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    name="city_names"
+                    value={c.name}
+                    checked={selectedCities.has(c.name)}
+                    onChange={() => toggleCity(c.name)}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  {c.emoji} {c.name}
+                </label>
+              ))}
+            </div>
+            {selectedCities.size === 0 && (
+              <p className="text-xs text-amber-600 mt-1">Select at least one city.</p>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -142,7 +175,7 @@ export default function NewsCandidateForm({ mode, action, candidate, artists }: 
 
         <div>
           <label className={LABEL}>Summary</label>
-          <textarea name="summary" rows={3} defaultValue={candidate?.summary ?? ''} placeholder="Manually editable — not shown publicly in Phase 1" className={`${INPUT} resize-none`} />
+          <textarea name="summary" rows={3} defaultValue={candidate?.summary ?? ''} placeholder="Manually editable — not shown publicly" className={`${INPUT} resize-none`} />
         </div>
 
         <div>
@@ -159,7 +192,7 @@ export default function NewsCandidateForm({ mode, action, candidate, artists }: 
           </select>
           {candidate?.review_status === 'published' && (
             <p className="text-xs text-slate-400 mt-1">
-              Already published — saving here only edits the candidate record, it won&rsquo;t change the live news card. Use Reopen below to move it back to review.
+              Already published — saving here only edits the candidate record, it won&rsquo;t change the live news card(s). Use Reopen below to move it back to review.
             </p>
           )}
         </div>

@@ -6,9 +6,14 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createNewsCandidateAction } from '../../actions'
 import NewsCandidateForm from '../NewsCandidateForm'
 
-export default async function NewNewsCandidatePage() {
+interface PageProps {
+  searchParams: Promise<{ error?: string; url?: string }>
+}
+
+export default async function NewNewsCandidatePage({ searchParams }: PageProps) {
   await requireAdmin()
   const db = createAdminClient()
+  const { error, url } = await searchParams
 
   const { data: artists } = await db
     .from('artists')
@@ -21,8 +26,13 @@ export default async function NewNewsCandidatePage() {
         <Link href="/admin/news" className="text-slate-400 hover:text-slate-600 text-sm">← News Inbox</Link>
         <h1 className="text-xl font-extrabold text-slate-900">Add Story</h1>
       </header>
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
-        <NewsCandidateForm mode="create" action={createNewsCandidateAction} artists={artists ?? []} />
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-3 text-sm font-semibold">
+            ⚠ {error}
+          </div>
+        )}
+        <NewsCandidateForm mode="create" action={createNewsCandidateAction} artists={artists ?? []} defaultUrl={url} />
       </main>
     </div>
   )

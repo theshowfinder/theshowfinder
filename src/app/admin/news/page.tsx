@@ -60,6 +60,30 @@ export default async function NewsCandidatesAdminPage() {
   const rows = sortCandidates(candidates ?? [])
   const pendingCount = rows.filter(r => r.review_status === 'pending').length
 
+  // One extra query for every candidate's target cities (Phase 2 —
+  // supersedes the single city_name column for anything beyond display).
+  const { data: cityRows } = rows.length
+    ? await db
+        .from('news_candidate_cities')
+        .select('candidate_id, city_name')
+        .in('candidate_id', rows.map(r => r.id)) as unknown as { data: { candidate_id: string; city_name: string }[] | null }
+    : { data: [] as { candidate_id: string; city_name: string }[] }
+
+  const citiesByCandidate = new Map<string, string[]>()
+  for (const row of cityRows ?? []) {
+    const list = citiesByCandidate.get(row.candidate_id) ?? []
+    list.push(row.city_name)
+    citiesByCandidate.set(row.candidate_id, list)
+  }
+
+  function scopeLabel(item: NewsCandidate): string {
+    if (item.scope_type === 'national') return 'National'
+    const cities = citiesByCandidate.get(item.id) ?? (item.city_name ? [item.city_name] : [])
+    if (cities.length === 0) return '—'
+    if (cities.length === 1) return cities[0]
+    return `${cities[0]} +${cities.length - 1} more`
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4">
@@ -118,7 +142,7 @@ export default async function NewsCandidatesAdminPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{item.source ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
-                      {item.scope_type === 'national' ? 'National' : (item.city_name ?? '—')}
+                      {scopeLabel(item)}
                     </td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{STORY_TYPE_LABEL[item.story_type] ?? item.story_type}</td>
                     <td className="px-4 py-3">
