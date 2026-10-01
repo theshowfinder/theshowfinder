@@ -4,6 +4,8 @@
 // machinery so it can be unit-tested with Node's built-in test runner,
 // matching the pattern already used for newsFiltering.ts/newsPublishing.ts.
 
+import { buildNewsletterLink } from './analytics.ts'
+
 export interface NewsletterArticleSummary {
   id: string
   headline: string
@@ -72,4 +74,19 @@ export function resolveNewsletterArticles(
   available: Map<string, NewsletterArticleSummary>
 ): NewsletterArticleSummary[] {
   return articleIds.map(id => available.get(id)).filter((a): a is NewsletterArticleSummary => a !== undefined)
+}
+
+// Requirement 4's "Newsletter traffic" measurement: tags every article
+// link that goes out in a send with utm_source=newsletter/medium=email/
+// campaign=newsletter-<id>, so GA4 can separate newsletter click-throughs
+// from everything else. Applied once here — both the live send
+// (src/app/admin/newsletter/actions.tsx) and the admin preview
+// (src/app/admin/newsletter/[id]/page.tsx) call this before handing
+// articles to NewsletterEmail/NewsletterEmailBody, so what an admin
+// previews is exactly what a recipient's links will actually point to.
+export function applyNewsletterTracking(
+  articles: NewsletterArticleSummary[],
+  newsletterId: string
+): NewsletterArticleSummary[] {
+  return articles.map(article => ({ ...article, url: buildNewsletterLink(article.url, newsletterId) }))
 }

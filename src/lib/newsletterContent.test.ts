@@ -7,6 +7,7 @@ import {
   chunkRecipients,
   buildUnsubscribeLink,
   resolveNewsletterArticles,
+  applyNewsletterTracking,
   type NewsletterArticleSummary,
 } from './newsletterContent.ts'
 
@@ -117,5 +118,39 @@ describe('resolveNewsletterArticles', () => {
 
   test('an empty id list resolves to an empty array', () => {
     assert.deepEqual(resolveNewsletterArticles([], new Map()), [])
+  })
+})
+
+describe('applyNewsletterTracking', () => {
+  const article = (id: string, url: string): NewsletterArticleSummary => ({ id, headline: `Headline ${id}`, summary: null, source: null, url })
+
+  test('tags each article url with the newsletter id as the utm campaign', () => {
+    const [result] = applyNewsletterTracking([article('a', 'https://theshowfinder.com/events/show')], 'nl-42')
+    const url = new URL(result.url)
+    assert.equal(url.searchParams.get('utm_source'), 'newsletter')
+    assert.equal(url.searchParams.get('utm_medium'), 'email')
+    assert.equal(url.searchParams.get('utm_campaign'), 'newsletter-nl-42')
+  })
+
+  test('leaves every other field untouched', () => {
+    const [result] = applyNewsletterTracking([{ id: 'a', headline: 'H', summary: 'S', source: 'Src', url: 'https://x.com' }], 'nl-1')
+    assert.equal(result.id, 'a')
+    assert.equal(result.headline, 'H')
+    assert.equal(result.summary, 'S')
+    assert.equal(result.source, 'Src')
+  })
+
+  test('tags multiple articles independently, preserving order', () => {
+    const result = applyNewsletterTracking(
+      [article('a', 'https://x.com/a'), article('b', 'https://x.com/b')],
+      'nl-7'
+    )
+    assert.deepEqual(result.map(r => r.id), ['a', 'b'])
+    assert.ok(result[0].url.includes('utm_campaign=newsletter-nl-7'))
+    assert.ok(result[1].url.includes('utm_campaign=newsletter-nl-7'))
+  })
+
+  test('an empty article list returns an empty array', () => {
+    assert.deepEqual(applyNewsletterTracking([], 'nl-1'), [])
   })
 })

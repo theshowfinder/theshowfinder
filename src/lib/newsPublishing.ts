@@ -14,6 +14,7 @@
 // long-settled sentinels; keep them in sync by hand if any is ever
 // renamed.
 import type { NewsCandidate } from './types/database.ts'
+import { buildSocialShareLink } from './analytics.ts'
 
 export const NATIONAL_SLUG = 'national'
 export const NATIONAL_NAME = 'UK National'
@@ -523,6 +524,36 @@ export function buildShareKitDefaults(
     cities: cityNames,
     hashtags: buildDefaultHashtags(candidate, cityNames),
   }
+}
+
+// ── Platform-specific share links (Phase 5A, requirement 5) ──────────────
+//
+// "Improve the Share & Email Kit only if necessary so it produces
+// platform-specific versions for Facebook, Instagram, TikTok, and
+// Email." The copy itself (headline/summary/caption/teaser) is already
+// platform-agnostic text an admin edits by hand — what actually differs
+// per platform is the *link* each one should carry, so traffic arriving
+// back on the site can be told apart in GA4 (requirement 4's "Social
+// traffic"). This never posts anywhere — still copy-and-paste only, per
+// ShareKit.tsx's existing design — it just tags the link each copy
+// button hands the admin with the right utm_source/medium for wherever
+// they're about to paste it.
+
+export type SharePlatform = 'facebook' | 'instagram' | 'tiktok' | 'email'
+
+export type ShareKitPlatformLinks = Record<SharePlatform, string>
+
+const SHARE_PLATFORMS: SharePlatform[] = ['facebook', 'instagram', 'tiktok', 'email']
+
+// candidateId is the news_candidates row id — stable for the life of the
+// story, so every platform's tagged link for the same story shares one
+// utm_campaign (share-<id>) while utm_source tells the platforms apart.
+export function buildShareKitPlatformLinks(sourceLink: string, candidateId: string): ShareKitPlatformLinks {
+  const links = {} as ShareKitPlatformLinks
+  for (const platform of SHARE_PLATFORMS) {
+    links[platform] = buildSocialShareLink(sourceLink, platform, candidateId)
+  }
+  return links
 }
 
 

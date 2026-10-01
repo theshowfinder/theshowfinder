@@ -37,6 +37,7 @@ import {
   describeDestinations,
   buildDefaultHashtags,
   buildShareKitDefaults,
+  buildShareKitPlatformLinks,
   destinationDisplayLimit,
   sortNewsCandidatesForQueue,
   matchesNewsQueueFilters,
@@ -956,6 +957,45 @@ describe('buildShareKitDefaults', () => {
   test('hashtags come from buildDefaultHashtags for the same candidate/cities', () => {
     const kit = buildShareKitDefaults(base, ['Derby'], null)
     assert.deepEqual(kit.hashtags, buildDefaultHashtags(base, ['Derby']))
+  })
+})
+
+describe('buildShareKitPlatformLinks', () => {
+  const sourceLink = 'https://theshowfinder.com/news/donny'
+
+  test('returns a tagged link for all four platforms', () => {
+    const links = buildShareKitPlatformLinks(sourceLink, 'cand-1')
+    assert.deepEqual(Object.keys(links).sort(), ['email', 'facebook', 'instagram', 'tiktok'])
+  })
+
+  test('facebook/instagram/tiktok links are tagged medium=social with their own utm_source', () => {
+    const links = buildShareKitPlatformLinks(sourceLink, 'cand-1')
+    for (const platform of ['facebook', 'instagram', 'tiktok'] as const) {
+      const url = new URL(links[platform])
+      assert.equal(url.searchParams.get('utm_source'), platform)
+      assert.equal(url.searchParams.get('utm_medium'), 'social')
+      assert.equal(url.searchParams.get('utm_campaign'), 'share-cand-1')
+    }
+  })
+
+  test('the email link is tagged medium=email, not social', () => {
+    const links = buildShareKitPlatformLinks(sourceLink, 'cand-1')
+    const url = new URL(links.email)
+    assert.equal(url.searchParams.get('utm_source'), 'email')
+    assert.equal(url.searchParams.get('utm_medium'), 'email')
+  })
+
+  test('every platform shares the same campaign for the same candidate', () => {
+    const links = buildShareKitPlatformLinks(sourceLink, 'cand-9')
+    for (const link of Object.values(links)) {
+      assert.ok(link.includes('utm_campaign=share-cand-9'))
+    }
+  })
+
+  test('different candidates produce different campaigns', () => {
+    const a = buildShareKitPlatformLinks(sourceLink, 'cand-a')
+    const b = buildShareKitPlatformLinks(sourceLink, 'cand-b')
+    assert.notEqual(a.facebook, b.facebook)
   })
 })
 

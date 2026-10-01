@@ -14,6 +14,7 @@ import {
   chunkRecipients,
   buildUnsubscribeLink,
   resolveNewsletterArticles,
+  applyNewsletterTracking,
   type NewsletterArticleSummary,
 } from '@/lib/newsletterContent'
 import type { Newsletter } from '@/lib/types/database'
@@ -133,7 +134,7 @@ export async function sendTestNewsletterAction(id: string, formData: FormData) {
   if (!newsletter) redirect('/admin/newsletter?error=not_found')
   if (!canSendNewsletter(newsletter)) redirect(`/admin/newsletter/${id}?error=incomplete`)
 
-  const articles = await fetchResolvedArticles(db, newsletter)
+  const articles = applyNewsletterTracking(await fetchResolvedArticles(db, newsletter), id)
 
   try {
     const { error } = await resend.emails.send({
@@ -178,7 +179,7 @@ export async function sendNewsletterAction(id: string) {
   if (isNewsletterLocked(newsletter.status)) redirect(`/admin/newsletter/${id}?error=already_sent`)
   if (!canSendNewsletter(newsletter)) redirect(`/admin/newsletter/${id}?error=incomplete`)
 
-  const articles = await fetchResolvedArticles(db, newsletter)
+  const articles = applyNewsletterTracking(await fetchResolvedArticles(db, newsletter), id)
   if (articles.length === 0) redirect(`/admin/newsletter/${id}?error=no_valid_articles`)
 
   const { data: subscriberRows } = await db

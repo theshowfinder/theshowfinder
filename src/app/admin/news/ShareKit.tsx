@@ -10,10 +10,18 @@
 // want to tweak it from the AI-seeded or candidate-derived default.
 
 import { useState } from 'react'
-import type { ShareKitDefaults } from '@/lib/newsPublishing'
+import type { ShareKitDefaults, ShareKitPlatformLinks, SharePlatform } from '@/lib/newsPublishing'
 
 interface ShareKitProps {
   defaults: ShareKitDefaults
+  platformLinks: ShareKitPlatformLinks
+}
+
+const PLATFORM_LABELS: Record<SharePlatform, string> = {
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  email: 'Email',
 }
 
 interface FieldConfig {
@@ -30,7 +38,7 @@ const FIELDS: FieldConfig[] = [
   { key: 'sourceLink', label: 'Source link', multiline: false },
 ]
 
-export default function ShareKit({ defaults }: ShareKitProps) {
+export default function ShareKit({ defaults, platformLinks }: ShareKitProps) {
   const [values, setValues] = useState({
     headline: defaults.headline,
     summary: defaults.summary,
@@ -90,6 +98,39 @@ export default function ShareKit({ defaults }: ShareKitProps) {
           </div>
         )
       })}
+
+      <div>
+        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-2">
+          Platform links
+        </label>
+        <p className="text-xs text-slate-400 mb-2">
+          Same source link, tagged per platform so clicks back on the site show up separately in analytics. Paste
+          the matching one wherever you&apos;re posting — still nothing here posts automatically.
+        </p>
+        <div className="space-y-2">
+          {(Object.keys(PLATFORM_LABELS) as SharePlatform[]).map(platform => {
+            const key = `platform-${platform}`
+            const link = platformLinks[platform]
+            return (
+              <div key={platform} className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500 w-16 shrink-0">{PLATFORM_LABELS[platform]}</span>
+                <input
+                  readOnly
+                  value={link}
+                  className="flex-1 min-w-0 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 truncate"
+                />
+                <button
+                  type="button"
+                  onClick={() => copy(key, link)}
+                  className="text-xs font-semibold text-blue-600 hover:underline shrink-0"
+                >
+                  {copiedKey === key ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      </div>
 
       <div>
         <div className="flex items-center justify-between mb-1">

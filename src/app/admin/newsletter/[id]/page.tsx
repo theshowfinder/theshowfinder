@@ -8,7 +8,7 @@ import ConfirmSubmitButton from '@/app/admin/news/ConfirmSubmitButton'
 import { NewsletterEmailBody } from '@/emails/NewsletterEmail'
 import { updateNewsletterAction, deleteNewsletterAction, sendTestNewsletterAction, sendNewsletterAction } from '../actions'
 import { describeDestinations, resolveCityNewsTargets, type CandidateCityTarget } from '@/lib/newsPublishing'
-import { canSendNewsletter, isNewsletterLocked, resolveNewsletterArticles, type NewsletterArticleSummary } from '@/lib/newsletterContent'
+import { canSendNewsletter, isNewsletterLocked, resolveNewsletterArticles, applyNewsletterTracking, type NewsletterArticleSummary } from '@/lib/newsletterContent'
 import type { Newsletter, NewsCandidate } from '@/lib/types/database'
 
 interface PageProps {
@@ -88,7 +88,10 @@ export default async function EditNewsletterPage({ params, searchParams }: PageP
     const summary = ai?.email_teaser || c.summary
     available.set(c.id, { id: c.id, headline: c.headline, summary, source: c.source, url: c.url })
   }
-  const previewArticles = resolveNewsletterArticles(newsletter.article_ids, available)
+  // Tagged with this newsletter's own UTM campaign so the preview shows
+  // exactly the links a recipient would actually get (requirement 4's
+  // newsletter-traffic measurement) — same helper the real send uses.
+  const previewArticles = applyNewsletterTracking(resolveNewsletterArticles(newsletter.article_ids, available), id)
 
   const updateAction = updateNewsletterAction.bind(null, id)
   const deleteAction = deleteNewsletterAction.bind(null, id)

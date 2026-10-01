@@ -16,7 +16,7 @@ import {
 import NewsCandidateForm from '../NewsCandidateForm'
 import ConfirmSubmitButton from '../ConfirmSubmitButton'
 import ShareKit from '../ShareKit'
-import { describeDestinations, buildShareKitDefaults, type ShareKitAiFields } from '@/lib/newsPublishing'
+import { describeDestinations, buildShareKitDefaults, buildShareKitPlatformLinks, type ShareKitAiFields } from '@/lib/newsPublishing'
 import type { NewsCandidate } from '@/lib/types/database'
 
 interface PageProps {
@@ -89,6 +89,7 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
   const showShareKit = candidate.review_status === 'approved' || candidate.review_status === 'published'
   const aiFields = candidate.ai_suggestions as ShareKitAiFields | null
   const shareKitDefaults = showShareKit ? buildShareKitDefaults(candidate, cityNames, aiFields) : null
+  const platformLinks = shareKitDefaults ? buildShareKitPlatformLinks(shareKitDefaults.sourceLink, candidate.id) : null
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -242,7 +243,7 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
           )}
         </section>
 
-        {shareKitDefaults && <ShareKit defaults={shareKitDefaults} />}
+        {shareKitDefaults && platformLinks && <ShareKit defaults={shareKitDefaults} platformLinks={platformLinks} />}
 
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
           <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Provenance</h2>
