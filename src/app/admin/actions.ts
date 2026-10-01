@@ -408,6 +408,8 @@ interface ParsedNewsCandidateForm {
   city_slug: string | null
   city_name: string | null
   cityTargets: CandidateCityTarget[]
+  publish_to_homepage: boolean
+  publish_to_news_page: boolean
   headline: string
   source: string | null
   source_url: string | null
@@ -445,6 +447,12 @@ function parseNewsCandidateForm(formData: FormData): ParsedNewsCandidateForm {
   const priority                         = ((formData.get('priority') as string) || 'normal') as NewsPriority
   const requestedStatus                     = ((formData.get('review_status') as string) || 'pending') as NewsReviewStatus
 
+  // Publishing destinations (migration_029) — independent of scope_type/
+  // cities. Plain HTML checkboxes only submit a value when checked, so
+  // absence from the FormData means false, not "unspecified".
+  const publish_to_homepage  = formData.get('publish_to_homepage') === 'on'
+  const publish_to_news_page = formData.get('publish_to_news_page') === 'on'
+
   if (!headline) throw new Error('Headline is required.')
   if (!rawUrl) throw new Error('Article URL is required.')
   if (!isValidHttpUrl(rawUrl)) throw new Error('Enter a valid http(s) article URL.')
@@ -476,6 +484,8 @@ function parseNewsCandidateForm(formData: FormData): ParsedNewsCandidateForm {
     city_slug: cityTargets[0]?.city_slug ?? null,
     city_name: cityTargets[0]?.city_name ?? null,
     cityTargets,
+    publish_to_homepage,
+    publish_to_news_page,
     headline,
     source,
     source_url,
@@ -662,6 +672,12 @@ export async function createNewsCandidateFromUrlAction(formData: FormData) {
       scope_type: suggestion.scope_type,
       city_slug: cityTargets[0]?.city_slug ?? null,
       city_name: cityTargets[0]?.city_name ?? null,
+      // Destinations (migration_029) always start unset for a URL-imported
+      // candidate — Homepage/Main News page are an explicit editorial
+      // decision, never inferred from the AI's scope/city suggestion. The
+      // admin opts in via the two new checkboxes when reviewing/editing.
+      publish_to_homepage: false,
+      publish_to_news_page: false,
       headline,
       source: extracted.sourceDomain,
       source_url: `https://${extracted.sourceDomain}`,

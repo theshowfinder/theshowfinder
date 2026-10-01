@@ -141,6 +141,33 @@ export default function NewsCandidateForm({ mode, action, candidate, artists, ci
           </div>
         )}
 
+        <div>
+          <label className={LABEL}>Publish to</label>
+          <p className="text-xs text-slate-500 mb-2">
+            Independent of scope/cities above — a story can target any combination of these plus the selected cities, or none of them.
+          </p>
+          <div className="flex flex-wrap gap-4 border border-slate-200 rounded-lg p-3 bg-slate-50">
+            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                name="publish_to_homepage"
+                defaultChecked={candidate?.publish_to_homepage ?? false}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              🏠 Homepage
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                name="publish_to_news_page"
+                defaultChecked={candidate?.publish_to_news_page ?? false}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              📰 Main News page
+            </label>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={LABEL}>Story type</label>

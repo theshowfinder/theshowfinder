@@ -15,6 +15,18 @@ export function citySlug(cityName: string): string {
 export const NATIONAL_SLUG = 'national'
 export const NATIONAL_NAME = 'UK National'
 
+// Same pattern, for the public Main News page (/news) — a third
+// independent publishing destination (see migration_029 and
+// src/lib/newsPublishing.ts/resolveCityNewsTargets). Like NATIONAL_SLUG,
+// this slug is never touched by the RSS sync below (syncCityNews's feed
+// list only ever iterates CITIES + the national feed), so a story
+// published here is automatically exempt from RSS pruning without even
+// needing the is_editorial check — nothing ever looks at this slug except
+// the News page's own query and the News-Intelligence-Inbox publish/
+// unpublish actions.
+export const NEWS_HUB_SLUG = 'news-hub'
+export const NEWS_HUB_NAME = 'TheShowFinder News'
+
 function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms))
 }

@@ -468,6 +468,8 @@ export interface Database {
           ai_model: string | null
           ai_generated_at: string | null
           ai_review_status: NewsAiReviewStatus
+          publish_to_homepage: boolean
+          publish_to_news_page: boolean
           created_at: string
           updated_at: string
         }
@@ -499,6 +501,8 @@ export interface Database {
           ai_model?: string | null
           ai_generated_at?: string | null
           ai_review_status?: NewsAiReviewStatus
+          publish_to_homepage?: boolean
+          publish_to_news_page?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -529,6 +533,8 @@ export interface Database {
           ai_model?: string | null
           ai_generated_at?: string | null
           ai_review_status?: NewsAiReviewStatus
+          publish_to_homepage?: boolean
+          publish_to_news_page?: boolean
           updated_at?: string
         }
       }

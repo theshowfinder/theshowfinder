@@ -84,6 +84,16 @@ export default async function NewsCandidatesAdminPage() {
     return `${cities[0]} +${cities.length - 1} more`
   }
 
+  // Publishing destinations (migration_029) are independent of scope_type
+  // — this is purely a display hint next to the Scope/City column, not a
+  // reflection of what scope_type itself means.
+  function destinationBadges(item: NewsCandidate): string {
+    const badges: string[] = []
+    if (item.publish_to_homepage) badges.push('🏠')
+    if (item.publish_to_news_page) badges.push('📰')
+    return badges.join(' ')
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4">
@@ -152,6 +162,7 @@ export default async function NewsCandidatesAdminPage() {
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{item.source ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
                       {scopeLabel(item)}
+                      {destinationBadges(item) && <span className="ml-1.5" title="Publishing destinations">{destinationBadges(item)}</span>}
                     </td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{STORY_TYPE_LABEL[item.story_type] ?? item.story_type}</td>
                     <td className="px-4 py-3">

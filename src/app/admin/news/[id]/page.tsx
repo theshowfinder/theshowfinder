@@ -55,9 +55,14 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
   const deleteAction = deleteNewsCandidateAction.bind(null, candidate.id)
 
   // Every live news card this candidate is (or was) responsible for — one
-  // per target city, or the homepage for a national story.
+  // per destination (migration_029: Homepage and Main News page are now
+  // independent of scope_type) plus one per target city.
   const liveNewsPaths = candidate.review_status === 'published'
-    ? (candidate.scope_type === 'national' ? ['/'] : cityNames.map(name => `/cities/${encodeURIComponent(name)}`))
+    ? [
+        ...(candidate.publish_to_homepage ? ['/'] : []),
+        ...(candidate.publish_to_news_page ? ['/news'] : []),
+        ...cityNames.map(name => `/cities/${encodeURIComponent(name)}`),
+      ]
     : []
 
   return (

@@ -1,21 +1,34 @@
 // Pure publish/unpublish logic for the News Intelligence Inbox
 // (supabase/migration_026_news_candidates.sql, extended by
 // supabase/migration_027_news_candidate_multi_city_provenance.sql for
-// multi-city targeting). Kept free of Next.js/Supabase machinery
-// (cookies(), redirect(), revalidatePath(), a live db client) so it can be
-// unit-tested with Node's built-in test runner — see newsPublishing.test.ts.
+// multi-city targeting and supabase/migration_029_news_candidate_destinations.sql
+// for independent Homepage/Main-News-page destinations). Kept free of
+// Next.js/Supabase machinery (cookies(), redirect(), revalidatePath(), a
+// live db client) so it can be unit-tested with Node's built-in test
+// runner — see newsPublishing.test.ts.
 //
-// NATIONAL_SLUG/NATIONAL_NAME are re-declared here rather than imported
-// from ./cityNews.ts, specifically to keep this file free of that file's
-// rss-parser and '@/' path-alias imports, neither of which resolves under
-// plain `node --test`. Both are long-settled sentinels; keep them in sync
-// by hand if either is ever renamed.
+// NATIONAL_SLUG/NATIONAL_NAME/NEWS_HUB_SLUG/NEWS_HUB_NAME are re-declared
+// here rather than imported from ./cityNews.ts, specifically to keep this
+// file free of that file's rss-parser and '@/' path-alias imports,
+// neither of which resolves under plain `node --test`. All four are
+// long-settled sentinels; keep them in sync by hand if any is ever
+// renamed.
 import type { NewsCandidate } from './types/database.ts'
 
 export const NATIONAL_SLUG = 'national'
 export const NATIONAL_NAME = 'UK National'
+export const NEWS_HUB_SLUG = 'news-hub'
+export const NEWS_HUB_NAME = 'TheShowFinder News'
 
-type CandidateScope = Pick<NewsCandidate, 'scope_type' | 'city_slug' | 'city_name'>
+// publish_to_homepage/publish_to_news_page are independent destination
+// flags (migration_029) — completely separate from scope_type, which
+// continues to do only what it always did: gate whether city_slug/
+// city_name/news_candidate_cities apply at all. A candidate can be
+// scope_type 'city' with 3 cities AND publish_to_homepage true AND
+// publish_to_news_page true, all at once; a bare 'national' candidate
+// with both destination flags false now resolves to zero targets, not an
+// implied homepage — see resolveCityNewsTargets below.
+type CandidateScope = Pick<NewsCandidate, 'scope_type' | 'city_slug' | 'city_name' | 'publish_to_homepage' | 'publish_to_news_page'>
 type CandidatePublishFields = Pick<NewsCandidate, 'scope_type' | 'city_slug' | 'city_name' | 'headline' | 'url' | 'source' | 'published_at'>
 type CandidateUnpublishFields = Pick<NewsCandidate, 'scope_type' | 'city_slug' | 'city_name' | 'url'>
 
@@ -29,23 +42,38 @@ export function canUnpublishCandidate(reviewStatus: NewsCandidate['review_status
 
 export interface CandidateCityTarget { city_slug: string; city_name: string }
 
+// Builds the full list of city_news targets across all three independent
+// destination kinds: Homepage (publish_to_homepage → the NATIONAL_SLUG
+// sentinel row, same bucket the homepage query reads), Main News page
+// (publish_to_news_page → the NEWS_HUB_SLUG sentinel row), and Cities
+// (only when scope_type is 'city' — unchanged gating from before this
+// migration). All three can combine freely: a candidate may resolve to
+// homepage + news page + N cities, or just news page + N cities, or just
+// N cities, or nothing at all if every flag/field is unset (callers must
+// treat an empty result as "cannot publish", not silently skip it — see
+// publishNewsCandidateAction).
+//
 // A candidate's real target cities live in news_candidate_cities (Phase
-// 2) — pass its rows as `cityRows`. For a national candidate that table is
-// irrelevant and the single national target is returned regardless of
-// what's passed. For a city candidate with no cityRows (e.g. a
-// pre-Phase-2 candidate whose join-table backfill somehow didn't run, or
-// a caller that hasn't fetched them), this falls back to the legacy
-// singular city_slug/city_name columns so nothing that already works
-// breaks. An empty result means "cannot resolve a target" — callers must
-// treat that as an error, not silently skip it.
+// 2) — pass its rows as `cityRows`. For a city candidate with no cityRows
+// (e.g. a pre-Phase-2 candidate whose join-table backfill somehow didn't
+// run, or a caller that hasn't fetched them), this falls back to the
+// legacy singular city_slug/city_name columns so nothing that already
+// works breaks.
 export function resolveCityNewsTargets(
   candidate: CandidateScope,
   cityRows: CandidateCityTarget[] = []
 ): CandidateCityTarget[] {
-  if (candidate.scope_type === 'national') return [{ city_slug: NATIONAL_SLUG, city_name: NATIONAL_NAME }]
-  if (cityRows.length) return cityRows
-  if (candidate.city_slug && candidate.city_name) return [{ city_slug: candidate.city_slug, city_name: candidate.city_name }]
-  return []
+  const targets: CandidateCityTarget[] = []
+
+  if (candidate.publish_to_homepage) targets.push({ city_slug: NATIONAL_SLUG, city_name: NATIONAL_NAME })
+  if (candidate.publish_to_news_page) targets.push({ city_slug: NEWS_HUB_SLUG, city_name: NEWS_HUB_NAME })
+
+  if (candidate.scope_type === 'city') {
+    if (cityRows.length) targets.push(...cityRows)
+    else if (candidate.city_slug && candidate.city_name) targets.push({ city_slug: candidate.city_slug, city_name: candidate.city_name })
+  }
+
+  return targets
 }
 
 export interface CityNewsUpsertRow {
@@ -156,16 +184,20 @@ export function buildUnpublishCandidatePatch(now: string): UnpublishCandidatePat
   return { review_status: 'approved', published_to_city_news_at: null, updated_at: now }
 }
 
-// Always revalidates '/' (cheap and idempotent even when a city-scoped
-// story can't actually appear there today) plus one '/cities/<name>' path
-// per target city.
+// Always revalidates '/' (cheap and idempotent even when homepage isn't
+// itself a destination for this candidate) plus '/news' when the Main
+// News page is a target, plus one '/cities/<name>' path per target city.
 export function revalidatePathsForCandidate(
   candidate: CandidateScope,
   targets: CandidateCityTarget[] = []
 ): string[] {
   const paths = ['/']
-  if (candidate.scope_type === 'city') {
-    for (const target of targets) {
+  for (const target of targets) {
+    if (target.city_slug === NATIONAL_SLUG) {
+      continue // already covered by the unconditional '/' above
+    } else if (target.city_slug === NEWS_HUB_SLUG) {
+      paths.push('/news')
+    } else if (candidate.scope_type === 'city') {
       paths.push('/cities/' + encodeURIComponent(target.city_name))
     }
   }

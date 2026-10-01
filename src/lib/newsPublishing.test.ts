@@ -25,6 +25,10 @@ import {
   describeDuplicateUrl,
   rankCityNewsForDisplay,
   selectStaleCityNewsIds,
+  NATIONAL_SLUG,
+  NATIONAL_NAME,
+  NEWS_HUB_SLUG,
+  NEWS_HUB_NAME,
 } from './newsPublishing.ts'
 
 const NOW = '2026-09-30T12:00:00.000Z'
@@ -34,11 +38,21 @@ const LATER = '2026-09-30T13:00:00.000Z'
 // manually created (RSS writes straight to city_news, never to
 // news_candidates — see src/lib/cityNews.ts), so this doubles as
 // requirement 6's "national manual candidate" test fixture.
+// publish_to_homepage: true models migration_029's backfill
+// (`UPDATE news_candidates SET publish_to_homepage = true WHERE
+// scope_type = 'national'`) — every *pre-existing* national candidate
+// keeps resolving to the homepage exactly as it always did. A *new*
+// national candidate created after the migration starts with both
+// destination flags false (see the 'destination combinations' describe
+// block below) — scope_type 'national' no longer implies Homepage by
+// itself.
 function nationalCandidate(overrides: Record<string, unknown> = {}) {
   return {
     scope_type: 'national' as const,
     city_slug: null,
     city_name: null,
+    publish_to_homepage: true,
+    publish_to_news_page: false,
     headline: 'Oasis add second Wembley date',
     url: 'https://nme.com/oasis-wembley-2',
     source: 'NME',
@@ -54,6 +68,8 @@ function cityCandidate(overrides: Record<string, unknown> = {}) {
     scope_type: 'city' as const,
     city_slug: 'derby',
     city_name: 'Derby',
+    publish_to_homepage: false,
+    publish_to_news_page: false,
     headline: 'Vaillant Live announces new autumn residency',
     url: 'https://derbytelegraph.co.uk/vaillant-live-residency',
     source: 'Derby Telegraph',
@@ -82,7 +98,7 @@ describe('canPublishCandidate / canUnpublishCandidate', () => {
   })
 })
 
-describe('resolveCityNewsTargets — national manual candidate', () => {
+describe('resolveCityNewsTargets — national manual candidate (migrated, publish_to_homepage backfilled true)', () => {
   test('resolves to the single NATIONAL_SLUG sentinel target, regardless of any cityRows passed', () => {
     assert.deepEqual(resolveCityNewsTargets(nationalCandidate()), [{ city_slug: 'national', city_name: 'UK National' }])
     assert.deepEqual(resolveCityNewsTargets(nationalCandidate(), [DERBY]), [{ city_slug: 'national', city_name: 'UK National' }])
@@ -104,7 +120,73 @@ describe('resolveCityNewsTargets — city manual candidate', () => {
   })
 
   test('malformed city candidate (missing slug/name, no cityRows) resolves to an empty list, not null', () => {
-    assert.deepEqual(resolveCityNewsTargets({ scope_type: 'city', city_slug: null, city_name: null }), [])
+    assert.deepEqual(
+      resolveCityNewsTargets({ scope_type: 'city', city_slug: null, city_name: null, publish_to_homepage: false, publish_to_news_page: false }),
+      [],
+    )
+  })
+})
+
+// migration_029 — Homepage and Main News page are independent destination
+// flags, completely separate from scope_type/cities. Covers every
+// combination requirement 'Add tests for each destination combination'
+// calls for: Homepage alone, News page alone, both together, both plus
+// cities, News page plus cities with Homepage explicitly off, and a
+// scope_type 'national' candidate with neither flag set (proving national
+// no longer implies Homepage on its own).
+describe('resolveCityNewsTargets — destination combinations (migration_029)', () => {
+  test('Homepage only: a national candidate with no destinations selected resolves to zero targets — national no longer implies Homepage', () => {
+    const candidate = nationalCandidate({ publish_to_homepage: false, publish_to_news_page: false })
+    assert.deepEqual(resolveCityNewsTargets(candidate), [])
+  })
+
+  test('Homepage only, explicitly opted in', () => {
+    const candidate = nationalCandidate({ publish_to_homepage: true, publish_to_news_page: false })
+    assert.deepEqual(resolveCityNewsTargets(candidate), [{ city_slug: NATIONAL_SLUG, city_name: NATIONAL_NAME }])
+  })
+
+  test('Main News page only (national candidate, Homepage off)', () => {
+    const candidate = nationalCandidate({ publish_to_homepage: false, publish_to_news_page: true })
+    assert.deepEqual(resolveCityNewsTargets(candidate), [{ city_slug: NEWS_HUB_SLUG, city_name: NEWS_HUB_NAME }])
+  })
+
+  test('Homepage + Main News page together (national candidate, no cities)', () => {
+    const candidate = nationalCandidate({ publish_to_homepage: true, publish_to_news_page: true })
+    assert.deepEqual(resolveCityNewsTargets(candidate), [
+      { city_slug: NATIONAL_SLUG, city_name: NATIONAL_NAME },
+      { city_slug: NEWS_HUB_SLUG, city_name: NEWS_HUB_NAME },
+    ])
+  })
+
+  test('Homepage + Main News page + multiple cities, all at once', () => {
+    const candidate = cityCandidate({ publish_to_homepage: true, publish_to_news_page: true })
+    const targets = resolveCityNewsTargets(candidate, [DERBY, NOTTINGHAM])
+    assert.deepEqual(targets, [
+      { city_slug: NATIONAL_SLUG, city_name: NATIONAL_NAME },
+      { city_slug: NEWS_HUB_SLUG, city_name: NEWS_HUB_NAME },
+      DERBY,
+      NOTTINGHAM,
+    ])
+  })
+
+  test('Main News page + selected cities only, Homepage explicitly off', () => {
+    const candidate = cityCandidate({ publish_to_homepage: false, publish_to_news_page: true })
+    const targets = resolveCityNewsTargets(candidate, [DERBY, LEICESTER])
+    assert.deepEqual(targets, [
+      { city_slug: NEWS_HUB_SLUG, city_name: NEWS_HUB_NAME },
+      DERBY,
+      LEICESTER,
+    ])
+  })
+
+  test('cities only — neither Homepage nor Main News page selected (today\'s default for a brand-new city candidate)', () => {
+    const candidate = cityCandidate({ publish_to_homepage: false, publish_to_news_page: false })
+    assert.deepEqual(resolveCityNewsTargets(candidate, [DERBY]), [DERBY])
+  })
+
+  test('nothing selected at all: national scope, both destination flags false, no cities applicable — zero targets, not a crash', () => {
+    const candidate = nationalCandidate({ publish_to_homepage: false, publish_to_news_page: false })
+    assert.deepEqual(resolveCityNewsTargets(candidate), [])
   })
 })
 
@@ -225,7 +307,7 @@ describe('buildPublishCandidatePatch / buildUnpublishCandidatePatch', () => {
 })
 
 describe('revalidatePathsForCandidate', () => {
-  test('national candidate revalidates only the homepage', () => {
+  test('national candidate (Homepage target) revalidates only the homepage', () => {
     assert.deepEqual(revalidatePathsForCandidate(nationalCandidate(), resolveCityNewsTargets(nationalCandidate())), ['/'])
   })
 
@@ -238,6 +320,23 @@ describe('revalidatePathsForCandidate', () => {
       revalidatePathsForCandidate(cityCandidate(), [DERBY, NOTTINGHAM]),
       ['/', '/cities/Derby', '/cities/Nottingham']
     )
+  })
+
+  test('Main News page target revalidates / and /news', () => {
+    const candidate = nationalCandidate({ publish_to_homepage: false, publish_to_news_page: true })
+    const targets = resolveCityNewsTargets(candidate)
+    assert.deepEqual(revalidatePathsForCandidate(candidate, targets), ['/', '/news'])
+  })
+
+  test('Homepage + Main News page + cities all together revalidates all four, with no duplicate \'/\'', () => {
+    const candidate = cityCandidate({ publish_to_homepage: true, publish_to_news_page: true })
+    const targets = resolveCityNewsTargets(candidate, [DERBY, NOTTINGHAM])
+    assert.deepEqual(revalidatePathsForCandidate(candidate, targets), ['/', '/news', '/cities/Derby', '/cities/Nottingham'])
+  })
+
+  test('zero destinations (nothing selected) still revalidates \'/\' and nothing else', () => {
+    const candidate = nationalCandidate({ publish_to_homepage: false, publish_to_news_page: false })
+    assert.deepEqual(revalidatePathsForCandidate(candidate, resolveCityNewsTargets(candidate)), ['/'])
   })
 })
 
