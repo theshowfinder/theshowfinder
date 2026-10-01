@@ -40,6 +40,18 @@ export default async function AdminPage() {
             News Inbox
           </Link>
           <Link
+            href="/admin/subscribers"
+            className="text-sm text-slate-500 hover:text-slate-700"
+          >
+            Subscribers
+          </Link>
+          <Link
+            href="/admin/newsletter"
+            className="text-sm text-slate-500 hover:text-slate-700"
+          >
+            Newsletter
+          </Link>
+          <Link
             href="/"
             className="text-sm text-slate-500 hover:text-slate-700"
           >

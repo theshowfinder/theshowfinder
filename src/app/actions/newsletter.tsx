@@ -2,11 +2,12 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resend, FROM_EMAIL } from '@/lib/resend'
+import { normalizeEmail, isValidEmail } from '@/lib/subscribers'
 import WelcomeEmail from '@/emails/WelcomeEmail'
 
 export async function subscribeNewsletter(email: string, city?: string): Promise<{ error?: string }> {
-  const trimmed = email.trim().toLowerCase()
-  if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+  const trimmed = normalizeEmail(email)
+  if (!isValidEmail(trimmed)) {
     return { error: 'Please enter a valid email address.' }
   }
   const cityTag = city?.trim() || null
@@ -16,12 +17,19 @@ export async function subscribeNewsletter(email: string, city?: string): Promise
 
   if (dbError) {
     if (dbError.code === '23505') {
-      // Already subscribed. If they signed up here with a city (e.g. from a
-      // city page) and don't have one tagged yet, tag it now — but never
-      // overwrite a city someone already has on file.
+      // Already on the list. Two things can still need doing here:
+      // - If they signed up with a city (e.g. from a city page) and don't
+      //   have one tagged yet, tag it now — but never overwrite a city
+      //   someone already has on file.
+      // - If they'd previously unsubscribed, signing up again here is a
+      //   clear, explicit re-opt-in — clear unsubscribed_at so they start
+      //   receiving mail again. Nothing here re-sends the welcome email on
+      //   a resubscribe; it's covered by Resend's own welcome-email send
+      //   below, which runs for every call that reaches this point.
       if (cityTag) {
         await db.from('subscribers').update({ city: cityTag }).eq('email', trimmed).is('city', null)
       }
+      await db.from('subscribers').update({ unsubscribed_at: null }).eq('email', trimmed).not('unsubscribed_at', 'is', null)
       return {}
     }
     console.error('[newsletter] insert failed:', dbError.message)
@@ -66,6 +74,35 @@ export async function subscribeNewsletter(email: string, city?: string): Promise
     }
   } catch (err) {
     console.error('[newsletter] resend threw exception:', err)
+  }
+
+  return {}
+}
+
+// ── Unsubscribe (Phase 5A) ────────────────────────────────────────────────
+//
+// Reached from the /unsubscribe page, whose link is the one every welcome
+// email already sends (see above) — that link previously 404'd, since no
+// page or action existed for it. Always returns a generic success result
+// regardless of whether the email was actually found on the list, so this
+// can never be used to probe which addresses are subscribed (the same
+// reasoning the signup path above already applies to its duplicate case).
+export async function unsubscribeNewsletter(email: string): Promise<{ error?: string }> {
+  const trimmed = normalizeEmail(email)
+  if (!isValidEmail(trimmed)) {
+    return { error: 'Please enter a valid email address.' }
+  }
+
+  const db = createAdminClient()
+  const { error: dbError } = await db
+    .from('subscribers')
+    .update({ unsubscribed_at: new Date().toISOString() })
+    .eq('email', trimmed)
+    .is('unsubscribed_at', null)
+
+  if (dbError) {
+    console.error('[newsletter] unsubscribe failed:', dbError.message)
+    return { error: 'Something went wrong. Please try again.' }
   }
 
   return {}
