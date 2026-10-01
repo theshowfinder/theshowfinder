@@ -1,6 +1,7 @@
 import Parser from 'rss-parser'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
+import { selectStaleCityNewsIds } from './newsPublishing.ts'
 
 type DbClient = ReturnType<typeof createAdminClient>
 
@@ -408,13 +409,16 @@ async function syncOneFeed(
         console.error(`[city-news] existing-rows lookup failed for "${feed.name}" (non-fatal): ${existingErr.message}`)
       } else {
         const freshUrls = new Set(rows.map(r => r.url))
-        const staleIds = (existingRows ?? [])
-          // Never prune a manually-published editorial row (News Intelligence
-          // Inbox, see migration_026_news_candidates.sql) — it will never
-          // appear in an RSS fetch, so "not in today's fresh set" doesn't
-          // mean stale for these the way it does for RSS-sourced rows.
-          .filter(r => !freshUrls.has(r.url as string) && !r.is_editorial)
-          .map(r => r.id)
+        // Never prune a manually-published editorial row (News Intelligence
+        // Inbox, see migration_026_news_candidates.sql) — it will never
+        // appear in an RSS fetch, so "not in today's fresh set" doesn't
+        // mean stale for these the way it does for RSS-sourced rows. See
+        // selectStaleCityNewsIds (newsPublishing.ts) for the unit-tested
+        // predicate this calls.
+        const staleIds = selectStaleCityNewsIds(
+          (existingRows ?? []) as { id: string; url: string; is_editorial: boolean }[],
+          freshUrls
+        )
         if (staleIds.length) {
           const { error: delErr } = await db.from('city_news').delete().in('id', staleIds)
           if (delErr) {

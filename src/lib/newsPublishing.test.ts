@@ -23,6 +23,8 @@ import {
   revalidatePathsForCandidate,
   normalizeUrl,
   describeDuplicateUrl,
+  rankCityNewsForDisplay,
+  selectStaleCityNewsIds,
 } from './newsPublishing.ts'
 
 const NOW = '2026-09-30T12:00:00.000Z'
@@ -116,7 +118,11 @@ describe('buildPublishUpsertRows', () => {
       headline: 'Oasis add second Wembley date',
       url: 'https://nme.com/oasis-wembley-2',
       source: 'NME',
-      published_at: '2026-09-29T09:00:00.000Z',
+      // published_at is the publish timestamp (NOW), not the candidate's own
+      // published_at ('2026-09-29T09:00:00.000Z' — the original article's
+      // date) — see the dedicated describe block below for the regression
+      // this guards against.
+      published_at: NOW,
       fetched_at: NOW,
       is_editorial: true,
     })
@@ -136,6 +142,45 @@ describe('buildPublishUpsertRows', () => {
 
   test('no targets produces no rows', () => {
     assert.deepEqual(buildPublishUpsertRows(cityCandidate(), [], NOW), [])
+  })
+})
+
+describe('buildPublishUpsertRows — effective publish date (city-ranking fix)', () => {
+  // Regression coverage for the Andrea Bocelli bug (2026-09-30): an
+  // editorial candidate's own `published_at` holds the ORIGINAL article's
+  // date (still admin-editable, still shown as "Original article date" in
+  // NewsCandidateForm) — it must never flow into the city_news row that
+  // actually drives public ranking/display. The row must instead carry the
+  // real Showfinder publish time (`now`), however old or recent the
+  // article itself was.
+  test('uses `now` for published_at, ignoring an old candidate.published_at entirely', () => {
+    const oldArticleDate = '2020-01-01T00:00:00.000Z'
+    const candidate = nationalCandidate({ published_at: oldArticleDate })
+    const rows = buildPublishUpsertRows(candidate, resolveCityNewsTargets(candidate), NOW)
+    assert.equal(rows[0].published_at, NOW)
+    assert.notEqual(rows[0].published_at, oldArticleDate)
+  })
+
+  test('uses `now` even when candidate.published_at is null (no article date was ever captured)', () => {
+    const candidate = nationalCandidate({ published_at: null })
+    const rows = buildPublishUpsertRows(candidate, resolveCityNewsTargets(candidate), NOW)
+    assert.equal(rows[0].published_at, NOW)
+  })
+
+  test('applies the exact same `now` timestamp to every targeted city row, not a per-row value', () => {
+    const candidate = cityCandidate({ published_at: '2019-06-15T00:00:00.000Z' })
+    const rows = buildPublishUpsertRows(candidate, [DERBY, NOTTINGHAM, LEICESTER], NOW)
+    assert.equal(rows.length, 3)
+    for (const row of rows) assert.equal(row.published_at, NOW)
+    assert.equal(new Set(rows.map(r => r.published_at)).size, 1)
+  })
+
+  test('republishing with a later `now` updates published_at to the new publish time', () => {
+    const candidate = cityCandidate()
+    const first = buildPublishUpsertRows(candidate, [DERBY], NOW)
+    const second = buildPublishUpsertRows(candidate, [DERBY], LATER)
+    assert.equal(first[0].published_at, NOW)
+    assert.equal(second[0].published_at, LATER)
   })
 })
 
@@ -407,5 +452,103 @@ describe('publish -> unpublish -> publish again (full cycle, multi-city — requ
     table.upsertMany(buildPublishUpsertRows(candidate, targets, LATER))
     assert.equal(table.rows.length, 6)
     for (const target of targets) assert.equal(table.find(target.city_slug, candidate.url)?.fetched_at, LATER)
+  })
+})
+
+
+// ── rankCityNewsForDisplay (public-ranking regression coverage) ─────────────
+describe('rankCityNewsForDisplay (requirement: editorial content competes fairly, not permanently, against RSS)', () => {
+  function row(published_at: string | null, is_editorial = false, headline = 'row') {
+    return { headline, published_at, is_editorial }
+  }
+
+  test('an editorial story published today stays in the top 5 even surrounded by many older-dated RSS rows', () => {
+    // Models the exact Birmingham/London/Manchester/Glasgow shape: 8 RSS
+    // rows with a published_at older than the editorial story's effective
+    // publish time, which (pre-fix) pushed Bocelli out of every city's top
+    // 5. With published_at correctly set to "today" at publish time, it
+    // must now rank first.
+    const today = '2026-10-01T09:00:00.000Z'
+    const rssRows = Array.from({ length: 8 }, (_, i) =>
+      row(`2026-09-2${i % 9}T10:00:00.000Z`, false, `rss-${i}`)
+    )
+    const editorial = row(today, true, 'Andrea Bocelli announces UK tour dates')
+
+    const ranked = rankCityNewsForDisplay([...rssRows, editorial], 5)
+
+    assert.equal(ranked.length, 5)
+    assert.ok(ranked.some(r => r.headline === 'Andrea Bocelli announces UK tour dates'), 'editorial story must appear in the top 5')
+    assert.equal(ranked[0].headline, 'Andrea Bocelli announces UK tour dates', 'it should rank first — it is the most recent by published_at')
+  })
+
+  test('does NOT permanently rank editorial content above RSS — a newer RSS row still outranks an older editorial one', () => {
+    const editorialYesterday = row('2026-09-30T09:00:00.000Z', true, 'editorial')
+    const rssToday = row('2026-10-01T09:00:00.000Z', false, 'rss-today')
+
+    const ranked = rankCityNewsForDisplay([editorialYesterday, rssToday], 5)
+
+    assert.equal(ranked[0].headline, 'rss-today', 'a genuinely newer RSS story must outrank an older editorial one')
+    assert.equal(ranked[1].headline, 'editorial')
+  })
+
+  test('an editorial story naturally falls out of the top N as enough newer content (of either kind) accumulates', () => {
+    const editorial = row('2026-09-28T09:00:00.000Z', true, 'editorial')
+    const newerDates = [
+      '2026-09-30T00:00:00.000Z',
+      '2026-10-01T00:00:00.000Z',
+      '2026-10-02T00:00:00.000Z',
+      '2026-10-03T00:00:00.000Z',
+      '2026-10-04T00:00:00.000Z',
+    ]
+    const newerRss = newerDates.map((d, i) => row(d, false, `rss-${i}`))
+
+    const ranked = rankCityNewsForDisplay([editorial, ...newerRss], 5)
+
+    assert.equal(ranked.length, 5)
+    assert.ok(!ranked.some(r => r.headline === 'editorial'), 'editorial story should fall out of the top 5 once 5 newer items exist — no permanent boost')
+  })
+
+  test('rows with a null published_at sort last, never crash the comparator', () => {
+    const withNull = row(null, false, 'no-date')
+    const dated = row('2026-09-30T00:00:00.000Z', false, 'dated')
+    const ranked = rankCityNewsForDisplay([withNull, dated], 5)
+    assert.deepEqual(ranked.map(r => r.headline), ['dated', 'no-date'])
+  })
+
+  test('does not mutate the input array', () => {
+    const rows = [row('2026-09-01T00:00:00.000Z'), row('2026-09-30T00:00:00.000Z')]
+    const original = [...rows]
+    rankCityNewsForDisplay(rows, 1)
+    assert.deepEqual(rows, original)
+  })
+})
+
+// ── selectStaleCityNewsIds (requirement: editorial rows stay protected from RSS pruning) ─
+describe('selectStaleCityNewsIds (requirement 8 carried forward: editorial rows survive the daily RSS prune)', () => {
+  test('an editorial row absent from today\'s fresh RSS fetch is never marked stale', () => {
+    const existing = [
+      { id: 'editorial-1', url: 'https://gettothefront.co.uk/andrea-bocelli', is_editorial: true },
+      { id: 'rss-1', url: 'https://old-rss-story.test/gone', is_editorial: false },
+    ]
+    const freshUrls = new Set<string>() // nothing fresh today — worst case for both rows
+    const stale = selectStaleCityNewsIds(existing, freshUrls)
+    assert.deepEqual(stale, ['rss-1'])
+    assert.ok(!stale.includes('editorial-1'), 'editorial row must never be pruned, regardless of RSS freshness')
+  })
+
+  test('an RSS row still present in today\'s fresh fetch is not pruned either', () => {
+    const existing = [{ id: 'rss-1', url: 'https://still-there.test/story', is_editorial: false }]
+    const freshUrls = new Set(['https://still-there.test/story'])
+    assert.deepEqual(selectStaleCityNewsIds(existing, freshUrls), [])
+  })
+
+  test('mixed set: only the genuinely-stale RSS row is selected', () => {
+    const existing = [
+      { id: 'editorial-1', url: 'https://example.com/editorial', is_editorial: true },
+      { id: 'rss-fresh', url: 'https://example.com/fresh', is_editorial: false },
+      { id: 'rss-stale', url: 'https://example.com/stale', is_editorial: false },
+    ]
+    const freshUrls = new Set(['https://example.com/fresh'])
+    assert.deepEqual(selectStaleCityNewsIds(existing, freshUrls), ['rss-stale'])
   })
 })

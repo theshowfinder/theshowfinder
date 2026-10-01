@@ -28,6 +28,7 @@ import type { EventWithVenue, Artist, CityNews } from '@/lib/types/database'
 import { groupEventsByArtist, fmtOnSaleLabel, extractArtistName, toSlug } from '@/lib/on-sale'
 import { fetchEventsThisWeek, fetchPresalesOpenNow } from '@/lib/eventPools'
 import { NATIONAL_SLUG } from '@/lib/cityNews'
+import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
 
@@ -288,7 +289,9 @@ async function NationalNews() {
     .order('published_at', { ascending: false })
     .limit(6) as unknown as { data: CityNews[] | null }
 
-  const items = data ?? []
+  // See rankCityNewsForDisplay (newsPublishing.ts) / the equivalent comment
+  // on the city page — same ranking contract, same reason.
+  const items = rankCityNewsForDisplay(data ?? [], 6)
   if (!items.length) return null
 
   return (

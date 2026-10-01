@@ -85,8 +85,11 @@ export default function NewsCandidateForm({ mode, action, candidate, artists, ci
             <input name="source" defaultValue={candidate?.source ?? ''} placeholder="e.g. NME, GetToTheFront" className={INPUT} />
           </div>
           <div>
-            <label className={LABEL}>Published date</label>
+            <label className={LABEL}>Original article date</label>
             <input name="published_at" type="datetime-local" defaultValue={toDatetimeLocal(candidate?.published_at ?? null)} className={INPUT} />
+            <p className="text-xs text-slate-400 mt-1">
+              For reference only — when this story goes live, its public display date is set to the actual publish time, not this date.
+            </p>
           </div>
         </div>
 

@@ -57,6 +57,40 @@ export interface CityNewsUpsertRow {
 // [] — not null — when there are no resolvable targets, so callers can
 // treat "nothing to publish" uniformly whether it came from a malformed
 // national candidate or a city candidate with no cities attached.
+//
+// published_at here is deliberately `now` (the actual Showfinder publish
+// timestamp — the same value the caller also writes to
+// news_candidates.published_to_city_news_at), NOT candidate.published_at.
+//
+// Why: city_news.published_at is both the public ranking key (the city
+// page and homepage query `.order('published_at', {ascending:false})
+// .limit(N)`) and the "Today" / "N days ago" label NewsCardGrid renders.
+// It's shared with RSS-sourced rows, which legitimately use the source
+// article's own recency to compete for one of those N slots. An editorial
+// candidate's `published_at` column, by contrast, holds the *original
+// article's* publication date (still admin-editable, still the field
+// shown as "Published date" in NewsCandidateForm) — kept purely for
+// editorial provenance. Writing that original, often several-days-old
+// date straight into city_news.published_at meant an editorial story
+// could be structurally outranked by that same day's RSS churn within
+// hours of going live, even though from the reader's (and the site's)
+// point of view it had just been published. (This is exactly what
+// happened to the Andrea Bocelli candidate on 2026-09-30: it stayed
+// visible on Cardiff, the lowest-RSS-volume target city, for about a day
+// before dropping out of the top 5 there too, while higher-volume cities
+// like London never showed it at all.)
+//
+// Using `now` instead fixes that without giving editorial content a
+// permanent boost: the row still ranks on plain recency against RSS rows
+// (see rankCityNewsForDisplay below) and will naturally fall down the
+// list as newer content — editorial or RSS — gets published, exactly the
+// way an RSS row would. It only ever surfaces because it's actually
+// recent by Showfinder-publish-time, which is the correct meaning of
+// "this just went up on the site."
+//
+// No migration needed for this: the original article date already has a
+// home (news_candidates.published_at) separate from this upsert row, so
+// nothing new needs to be stored to preserve it.
 export function buildPublishUpsertRows(
   candidate: CandidatePublishFields,
   targets: CandidateCityTarget[],
@@ -68,10 +102,34 @@ export function buildPublishUpsertRows(
     headline:      candidate.headline,
     url:           candidate.url,
     source:        candidate.source,
-    published_at:  candidate.published_at,
+    published_at:  now,
     fetched_at:    now,
     is_editorial:  true as const,
   }))
+}
+
+// ── Public display ranking ───────────────────────────────────────────────────
+//
+// The exact "what shows, in what order" rule the city page and homepage
+// news sections use, pulled out as a pure function so it's independently
+// testable without a live database. Plain recency, nothing else: editorial
+// and RSS rows rank purely by published_at, newest first. An editorial row
+// is prominent only because its published_at (set to the Showfinder
+// publish time above, not the source article's date) is recent — it is
+// NOT given a permanent is_editorial boost, so it falls down the list
+// exactly like an RSS row would as newer content of either kind appears.
+// Both the city page and homepage already fetch pre-sorted, pre-limited
+// results from Supabase (`.order('published_at', {ascending:false})
+// .limit(N)`); passing that result through this function too is
+// deliberately redundant in production — it costs nothing against an
+// already-small result set — and exists so the ranking contract itself
+// (not just the data going into it) is covered by a unit test.
+export function rankCityNewsForDisplay<T extends { published_at: string | null }>(
+  rows: T[],
+  limit: number
+): T[] {
+  const time = (row: T) => (row.published_at ? new Date(row.published_at).getTime() : -Infinity)
+  return [...rows].sort((a, b) => time(b) - time(a)).slice(0, limit)
 }
 
 export interface CityNewsDeleteFilter { city_slugs: string[]; url: string; is_editorial: true }
@@ -112,6 +170,25 @@ export function revalidatePathsForCandidate(
     }
   }
   return paths
+}
+
+// ── RSS sync / editorial-row protection ─────────────────────────────────────
+//
+// The daily RSS sync (src/lib/cityNews.ts, syncOneFeed) replaces a feed's
+// city_news rows with whatever it just fetched, pruning anything from a
+// previous run that's no longer in today's results. A manually-published
+// editorial row (is_editorial: true) will never appear in an RSS fetch —
+// it's not from RSS at all — so without this exclusion it would look
+// "stale" and get deleted on the very next sync, typically within 24
+// hours of being published. Pulled out as a pure predicate so this
+// protection is unit-tested directly rather than only read as correct by
+// inspection; cityNews.ts calls this instead of filtering inline.
+export interface PrunableCityNewsRow { id: string; url: string; is_editorial: boolean }
+
+export function selectStaleCityNewsIds(existingRows: PrunableCityNewsRow[], freshUrls: Set<string>): string[] {
+  return existingRows
+    .filter(row => !freshUrls.has(row.url) && !row.is_editorial)
+    .map(row => row.id)
 }
 
 // ── URL canonicalization & duplicate detection ──────────────────────────────

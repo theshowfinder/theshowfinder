@@ -19,6 +19,7 @@ import { fetchEventsThisWeek, fetchTopEvents, fetchPresalesOpenNow } from '@/lib
 import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
+import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 
 export async function generateStaticParams() {
   return CITIES.map(c => ({ city: encodeURIComponent(c.name) }))
@@ -155,7 +156,14 @@ export default async function CityPage({
   ])
 
   const localBusinesses = localBusinessesResult.data ?? []
-  const cityNews = cityNewsResult.data ?? []
+  // Re-applies the same recency ranking the query above already expresses
+  // (.order('published_at', {ascending:false}).limit(5)) as an explicit,
+  // unit-tested contract — see rankCityNewsForDisplay in newsPublishing.ts
+  // for why an editorial story's published_at is the Showfinder publish
+  // time, not the source article's own date, and why that's what lets it
+  // compete fairly (not permanently) against RSS rows for one of these 5
+  // slots.
+  const cityNews = rankCityNewsForDisplay(cityNewsResult.data ?? [], 5)
   const onsalePool     = onsalePoolResult.data ?? []
   const totalCount     = totalCountResult.count ?? 0
 
