@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, FormEvent } from 'react'
-import { subscribeNewsletter } from '@/app/actions/newsletter'
+import { subscribeNewsletter, type SubscribeResult } from '@/app/actions/newsletter'
 
 export default function NewsletterSignup() {
   const [email,   setEmail]   = useState('')
-  const [success, setSuccess] = useState(false)
+  const [success, setSuccess] = useState<SubscribeResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
 
@@ -19,8 +19,21 @@ export default function NewsletterSignup() {
     if (result.error) {
       setError(result.error)
     } else {
-      setSuccess(true)
+      setSuccess(result)
     }
+  }
+
+  // Three distinct outcomes, three distinct messages — never promises an
+  // inbox email that wasn't actually sent (see SubscribeResult's comment
+  // in src/app/actions/newsletter.tsx for why that distinction exists).
+  function successCopy(result: SubscribeResult): { heading: string; body: string } {
+    if (result.alreadySubscribed) {
+      return { heading: "You're already on the list!", body: "No need to sign up again — you'll keep getting ticket alerts." }
+    }
+    if (result.emailDelivered === false) {
+      return { heading: "You're on the list!", body: "We've saved your email, but the welcome email couldn't be sent — you'll still get ticket alerts." }
+    }
+    return { heading: "You're on the list!", body: 'Check your inbox — a welcome email is on its way.' }
   }
 
   return (
@@ -38,8 +51,8 @@ export default function NewsletterSignup() {
         {success ? (
           <div className="inline-flex flex-col items-center gap-2 bg-white/20 text-white px-8 py-6 rounded-2xl text-center max-w-sm mx-auto">
             <span className="text-3xl">🎉</span>
-            <p className="font-extrabold text-lg">You&apos;re on the list!</p>
-            <p className="text-white/80 text-sm">Check your inbox — a welcome email is on its way.</p>
+            <p className="font-extrabold text-lg">{successCopy(success).heading}</p>
+            <p className="text-white/80 text-sm">{successCopy(success).body}</p>
           </div>
         ) : (
           <>

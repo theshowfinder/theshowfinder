@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, FormEvent } from 'react'
-import { subscribeNewsletter } from '@/app/actions/newsletter'
+import { subscribeNewsletter, type SubscribeResult } from '@/app/actions/newsletter'
 
 export default function CityNewsletterForm({ cityName }: { cityName: string }) {
   const [email,   setEmail]   = useState('')
-  const [success, setSuccess] = useState(false)
+  const [success, setSuccess] = useState<SubscribeResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
 
@@ -19,7 +19,7 @@ export default function CityNewsletterForm({ cityName }: { cityName: string }) {
     if (result.error) {
       setError(result.error)
     } else {
-      setSuccess(true)
+      setSuccess(result)
     }
   }
 
@@ -40,7 +40,8 @@ export default function CityNewsletterForm({ cityName }: { cityName: string }) {
       <div className="w-full sm:w-auto shrink-0">
         {success ? (
           <div className="flex items-center gap-2 text-white font-semibold text-sm justify-center sm:justify-start">
-            <span className="text-xl">🎉</span> You&apos;re on the list!
+            <span className="text-xl">🎉</span>
+            {success.alreadySubscribed ? "You're already on the list!" : "You're on the list!"}
           </div>
         ) : (
           <>
