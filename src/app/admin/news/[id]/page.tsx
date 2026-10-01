@@ -15,7 +15,8 @@ import {
 } from '../../actions'
 import NewsCandidateForm from '../NewsCandidateForm'
 import ConfirmSubmitButton from '../ConfirmSubmitButton'
-import { describeDestinations } from '@/lib/newsPublishing'
+import ShareKit from '../ShareKit'
+import { describeDestinations, buildShareKitDefaults, type ShareKitAiFields } from '@/lib/newsPublishing'
 import type { NewsCandidate } from '@/lib/types/database'
 
 interface PageProps {
@@ -79,6 +80,15 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
   // does (requirement 4: "visibly confirm the destinations").
   const destinations = describeDestinations(candidate, cityNames)
   const destinationsSummary = destinations.join(', ')
+
+  // Requirement 5 ("prepare content for email and social reuse"): only
+  // offered once a candidate is approved or published — before that it's
+  // still being reviewed and may not represent what actually goes live.
+  // ai_suggestions is read defensively the same way the AI suggestions
+  // panel below reads it (it's untyped JSON in the database).
+  const showShareKit = candidate.review_status === 'approved' || candidate.review_status === 'published'
+  const aiFields = candidate.ai_suggestions as ShareKitAiFields | null
+  const shareKitDefaults = showShareKit ? buildShareKitDefaults(candidate, cityNames, aiFields) : null
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -231,6 +241,8 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
             </p>
           )}
         </section>
+
+        {shareKitDefaults && <ShareKit defaults={shareKitDefaults} />}
 
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
           <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Provenance</h2>

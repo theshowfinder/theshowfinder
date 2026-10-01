@@ -35,6 +35,8 @@ import {
   STALE_PENDING_MS,
   STALE_APPROVED_MS,
   describeDestinations,
+  buildDefaultHashtags,
+  buildShareKitDefaults,
 } from './newsPublishing.ts'
 
 const NOW = '2026-09-30T12:00:00.000Z'
@@ -851,5 +853,103 @@ describe('describeDestinations', () => {
 
   test('cities only, no homepage/news page', () => {
     assert.deepEqual(describeDestinations({ publish_to_homepage: false, publish_to_news_page: false }, ['Leicester']), ['Leicester'])
+  })
+})
+
+describe('buildDefaultHashtags', () => {
+  const base = { headline: 'h', summary: null, story_type: 'general_entertainment' as const, artist_name: null, url: 'https://theshowfinder.com/news/x', source_url: null }
+
+  test('always includes the brand tag', () => {
+    assert.ok(buildDefaultHashtags(base, []).includes('#TheShowFinder'))
+  })
+
+  test('includes a hashtag for the artist name when present', () => {
+    const tags = buildDefaultHashtags({ ...base, artist_name: 'Van Morrison' }, [])
+    assert.ok(tags.includes('#VanMorrison'))
+  })
+
+  test('includes a hashtag for each target city', () => {
+    const tags = buildDefaultHashtags(base, ['Derby', 'Newcastle upon Tyne'])
+    assert.ok(tags.includes('#Derby'))
+    assert.ok(tags.includes('#NewcastleUponTyne'))
+  })
+
+  test('includes a story-type hashtag where one is mapped', () => {
+    const tags = buildDefaultHashtags({ ...base, story_type: 'presale' }, [])
+    assert.ok(tags.includes('#Presale'))
+  })
+
+  test('falls back to #UK when there are no target cities', () => {
+    assert.ok(buildDefaultHashtags(base, []).includes('#UK'))
+  })
+
+  test('does not add #UK once at least one city is targeted', () => {
+    assert.ok(!buildDefaultHashtags(base, ['Derby']).includes('#UK'))
+  })
+
+  test('never produces duplicate tags', () => {
+    const tags = buildDefaultHashtags({ ...base, artist_name: 'Derby' }, ['Derby'])
+    assert.equal(tags.length, new Set(tags).size)
+  })
+
+  test('strips punctuation from a multi-word label into one PascalCase tag', () => {
+    const tags = buildDefaultHashtags({ ...base, artist_name: "Gerry Cinnamon & The Band" }, [])
+    assert.ok(tags.includes('#GerryCinnamonTheBand'))
+  })
+})
+
+describe('buildShareKitDefaults', () => {
+  const base = { headline: 'Donny Osmond announces VIVA UK Tour', summary: null, story_type: 'tour_announcement' as const, artist_name: 'Donny Osmond', url: 'https://theshowfinder.com/news/donny', source_url: 'https://bbc.co.uk/story' }
+
+  test('uses the candidate headline as-is', () => {
+    const kit = buildShareKitDefaults(base, [], null)
+    assert.equal(kit.headline, base.headline)
+  })
+
+  test('prefers the candidate summary over the AI summary when both exist', () => {
+    const kit = buildShareKitDefaults({ ...base, summary: 'Candidate summary' }, [], { summary: 'AI summary' })
+    assert.equal(kit.summary, 'Candidate summary')
+  })
+
+  test('falls back to the AI summary when the candidate has none', () => {
+    const kit = buildShareKitDefaults(base, [], { summary: 'AI summary' })
+    assert.equal(kit.summary, 'AI summary')
+  })
+
+  test('summary is empty string, not null, when neither source has one', () => {
+    const kit = buildShareKitDefaults(base, [], null)
+    assert.equal(kit.summary, '')
+  })
+
+  test('seeds social caption and email teaser from ai_suggestions when present', () => {
+    const kit = buildShareKitDefaults(base, [], { social_caption: 'Caption!', email_teaser: 'Teaser!' })
+    assert.equal(kit.socialCaption, 'Caption!')
+    assert.equal(kit.emailTeaser, 'Teaser!')
+  })
+
+  test('social caption and email teaser default to empty string with no ai_suggestions', () => {
+    const kit = buildShareKitDefaults(base, [], null)
+    assert.equal(kit.socialCaption, '')
+    assert.equal(kit.emailTeaser, '')
+  })
+
+  test('source link prefers source_url over the candidate url', () => {
+    const kit = buildShareKitDefaults(base, [], null)
+    assert.equal(kit.sourceLink, 'https://bbc.co.uk/story')
+  })
+
+  test('source link falls back to the candidate url when source_url is null', () => {
+    const kit = buildShareKitDefaults({ ...base, source_url: null }, [], null)
+    assert.equal(kit.sourceLink, base.url)
+  })
+
+  test('carries the resolved city names through unchanged', () => {
+    const kit = buildShareKitDefaults(base, ['Derby', 'Leeds'], null)
+    assert.deepEqual(kit.cities, ['Derby', 'Leeds'])
+  })
+
+  test('hashtags come from buildDefaultHashtags for the same candidate/cities', () => {
+    const kit = buildShareKitDefaults(base, ['Derby'], null)
+    assert.deepEqual(kit.hashtags, buildDefaultHashtags(base, ['Derby']))
   })
 })

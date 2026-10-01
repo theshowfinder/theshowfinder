@@ -394,3 +394,110 @@ export function describeDestinations(
   parts.push(...cityNames)
   return parts
 }
+
+// ── Share & Email Kit defaults (Phase 4, requirement 5) ──────────────────
+//
+// For an approved or published candidate, the admin UI offers an editable
+// "share kit" of reusable copy — headline, short summary, social caption,
+// email teaser, source link, cities, hashtags — seeded from whatever is
+// already on the candidate (headline/summary/source_url/url) and, where
+// present, the existing Claude-generated ai_suggestions.social_caption/
+// email_teaser. This never calls the AI again and nothing here persists:
+// the admin page holds these as local editable state only, matching
+// Chris's "we will first test the content manually" framing — no
+// Facebook/Instagram/TikTok posting is wired up in this phase.
+
+type ShareKitCandidateFields = Pick<NewsCandidate, 'headline' | 'summary' | 'story_type' | 'artist_name' | 'url' | 'source_url'>
+
+export interface ShareKitAiFields {
+  summary?: string | null
+  social_caption?: string | null
+  email_teaser?: string | null
+}
+
+export interface ShareKitDefaults {
+  headline: string
+  summary: string
+  socialCaption: string
+  emailTeaser: string
+  sourceLink: string
+  cities: string[]
+  hashtags: string[]
+}
+
+// A human label ("Van Morrison", "Newcastle upon Tyne") -> a single
+// hashtag token: strips anything that isn't a letter/number, then
+// title-cases each word and joins them. Returns '' for a label with no
+// alphanumeric content at all (e.g. an empty string), which callers
+// filter out rather than ever emitting a bare '#'.
+function toHashtag(label: string): string {
+  const cleaned = label.replace(/[^a-zA-Z0-9 ]/g, ' ').trim()
+  if (!cleaned) return ''
+  const words = cleaned.split(/\s+/)
+  return '#' + words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('')
+}
+
+const STORY_TYPE_HASHTAGS: Partial<Record<NewsCandidate['story_type'], string>> = {
+  presale: '#Presale',
+  tour_announcement: '#TourAnnouncement',
+  new_dates: '#NewDates',
+  venue_news: '#VenueNews',
+  general_entertainment: '#LiveMusic',
+}
+
+// Pure, deterministic — no AI call. #TheShowFinder is always included;
+// the artist (if any) and each target city each contribute one tag, the
+// story type contributes one more where it maps to something read as a
+// hashtag, and a national (no-city) story gets #UK as a fallback so it is
+// never left with just the brand tag. Order is stable for the same input
+// (Set preserves insertion order), duplicates are naturally de-duplicated
+// by the Set (e.g. an artist named "UK" wouldn't double up with the
+// national fallback — a deliberately harmless edge case, not one worth
+// guarding against explicitly).
+export function buildDefaultHashtags(candidate: ShareKitCandidateFields, cityNames: string[]): string[] {
+  const tags = new Set<string>()
+  tags.add('#TheShowFinder')
+
+  if (candidate.artist_name) {
+    const artistTag = toHashtag(candidate.artist_name)
+    if (artistTag) tags.add(artistTag)
+  }
+
+  for (const city of cityNames) {
+    const cityTag = toHashtag(city)
+    if (cityTag) tags.add(cityTag)
+  }
+
+  const storyTag = STORY_TYPE_HASHTAGS[candidate.story_type]
+  if (storyTag) tags.add(storyTag)
+
+  if (cityNames.length === 0) tags.add('#UK')
+
+  return [...tags]
+}
+
+// Composes the full share-kit default set. aiSuggestions is the
+// candidate's own parsed ai_suggestions (or null for a manually-entered
+// candidate, or one with no AI involvement) — social_caption/email_teaser
+// only ever come from there since news_candidates has no dedicated
+// columns for them; summary prefers the candidate's own (possibly
+// edited) summary field over the AI's, falling back to it only when the
+// candidate has none. sourceLink prefers the original publisher URL
+// (source_url) over TheShowFinder's own article URL, since the share kit
+// is for crediting/linking the original story, falling back to `url`
+// for a manually-entered candidate with no separate source_url.
+export function buildShareKitDefaults(
+  candidate: ShareKitCandidateFields,
+  cityNames: string[],
+  aiSuggestions: ShareKitAiFields | null
+): ShareKitDefaults {
+  return {
+    headline: candidate.headline,
+    summary: candidate.summary ?? aiSuggestions?.summary ?? '',
+    socialCaption: aiSuggestions?.social_caption ?? '',
+    emailTeaser: aiSuggestions?.email_teaser ?? '',
+    sourceLink: candidate.source_url ?? candidate.url,
+    cities: cityNames,
+    hashtags: buildDefaultHashtags(candidate, cityNames),
+  }
+}
