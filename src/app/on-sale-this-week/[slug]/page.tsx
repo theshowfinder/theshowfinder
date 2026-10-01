@@ -4,9 +4,10 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
-import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
+import { groupEventsByArtist, fmtOnSaleLabel, mergeEventsById } from '@/lib/on-sale'
+import { fetchOnSaleThisWeekEvents, fetchPresalesOpenNowEvents } from '@/lib/eventPools'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
-import type { EventWithVenue, Artist } from '@/lib/types/database'
+import type { Artist } from '@/lib/types/database'
 import {
   getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
   getStubHubAffiliateLink, getGigsbergAffiliateLink, getVividSeatsAffiliateLink,
@@ -17,29 +18,23 @@ interface PageProps {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { slug } = await params
-  const supabase     = await createClient()
-  const titlePrefix  = slug.replace(/-/g, ' ')
-  const now          = new Date()
-  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
-  const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
-  const onSaleOrPresaleFilter = `and(public_onsale_start.gte.${threeDaysAgo},public_onsale_start.lte.${weekAhead}),and(presale_start.gte.${threeDaysAgo},presale_start.lte.${weekAhead})`
+  const { slug }  = await params
+  const supabase  = await createClient()
 
-  // Queries public_onsale_start / presale_start directly — see the main page
-  // component below for why this doesn't use the flag columns.
-  const [broadResult, targetedResult, arResult] = await Promise.all([
-    supabase.from('events_with_venue').select('*')
-      .or(onSaleOrPresaleFilter)
-      .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
-    supabase.from('events_with_venue').select('*')
-      .or(onSaleOrPresaleFilter)
-      .ilike('title', `${titlePrefix}%`)
-      .order('start_date', { ascending: true })
-      .limit(200) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+  // Resolves against the UNION of the same two pools that produce the
+  // "On Sale This Week" and "Presales Open Now" cards elsewhere on the site
+  // (home/city pages), via the shared helpers in eventPools.ts. Previously
+  // this page ran its own narrower, differently-sorted query, so a card
+  // that was correctly shown elsewhere (e.g. a presale opened 4-21 days ago,
+  // which only "Presales Open Now" looks back that far for) could 404 here.
+  // See src/lib/on-sale.ts for the window/merge helpers.
+  const [onSaleEvents, presaleEvents, arResult] = await Promise.all([
+    fetchOnSaleThisWeekEvents(supabase, { fetchLimit: 1000 }),
+    fetchPresalesOpenNowEvents(supabase, { fetchLimit: 1000 }),
     supabase.from('artists').select('*') as unknown as Promise<{ data: Artist[] | null }>,
   ])
 
-  const merged = mergeEventResults(broadResult.data, targetedResult.data)
+  const merged = mergeEventsById(onSaleEvents, presaleEvents)
   const group  = groupEventsByArtist(merged, arResult.data ?? []).find(g => g.slug === slug)
   if (!group) return { title: 'On Sale This Week' }
 
@@ -68,63 +63,31 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 }
 
-// Merge two event result arrays, deduplicating by id and sorting by start_date.
-// The broad query catches near-future shows; the targeted query catches far-future
-// shows that fall beyond PostgREST's row limit when ordered by start_date.
-function mergeEventResults(
-  broad:    EventWithVenue[] | null,
-  targeted: EventWithVenue[] | null,
-): EventWithVenue[] {
-  const map = new Map<string, EventWithVenue>()
-  for (const e of (broad    ?? [])) map.set(e.id, e)
-  for (const e of (targeted ?? [])) map.set(e.id, e)
-  return [...map.values()].sort((a, b) => a.start_date.localeCompare(b.start_date))
-}
-
 export default async function OnSaleArtistPage({ params }: PageProps) {
-  const { slug } = await params
-  const supabase     = await createClient()
-  const now          = new Date()
-  const nowISO       = now.toISOString()
-  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
-  const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
-  // Convert slug to an approximate title prefix for ILIKE matching.
-  // "gracie-abrams" → "gracie abrams" → matches "Gracie Abrams: The Look at My Life Tour"
-  const titlePrefix = slug.replace(/-/g, ' ')
-  const onSaleOrPresaleFilter = `and(public_onsale_start.gte.${threeDaysAgo},public_onsale_start.lte.${weekAhead}),and(presale_start.gte.${threeDaysAgo},presale_start.lte.${weekAhead})`
+  const { slug }   = await params
+  const supabase   = await createClient()
+  const nowISO     = new Date().toISOString()
 
-  // Queries public_onsale_start / presale_start directly rather than the
-  // on_sale_this_week / presale_this_week flag columns: those are meant to
-  // be kept current by a nightly DB function, but it isn't actually running
-  // (checked live — events with a presale_start due this week are still
-  // flagged false), so they're stuck permanently false. A -3d lookback keeps
-  // an event visible for a few days after its window opens rather than
-  // vanishing the instant "now" passes it, and checking presale_start too
-  // means presale-only windows show up, not just public on-sale.
-  const [broadResult, targetedResult, arResult] = await Promise.all([
-    // Broad query: catches artists with near-future shows (within the row limit)
-    supabase
-      .from('events_with_venue')
-      .select('*')
-      .or(onSaleOrPresaleFilter)
-      .order('start_date', { ascending: true })
-      .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
-    // Targeted query: catches artists with far-future shows (e.g. 2027 tours)
-    // that fall beyond the row limit when the broad query orders by start_date.
-    supabase
-      .from('events_with_venue')
-      .select('*')
-      .or(onSaleOrPresaleFilter)
-      .ilike('title', `${titlePrefix}%`)
-      .order('start_date', { ascending: true })
-      .limit(200) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+  // Resolves against the UNION of the "On Sale This Week" pool (public
+  // onsale/presale opening within the -3d/+7d window) and the "Presales
+  // Open Now" pool (presale opened within the last 21 days and still open)
+  // via the shared helpers in src/lib/eventPools.ts — the same pools that
+  // produce the cards on the homepage and city pages. This page used to run
+  // its own hand-rolled, narrower (-3d only) query sorted by a different
+  // column with a lossy ILIKE title-reconstruction fallback, which meant a
+  // card shown correctly elsewhere (e.g. a presale opened 4-21 days ago)
+  // could 404 here. See src/lib/on-sale.ts for onSaleThisWeekWindow /
+  // presaleOpenNowWindow / mergeEventsById.
+  const [onSaleEvents, presaleEvents, arResult] = await Promise.all([
+    fetchOnSaleThisWeekEvents(supabase, { fetchLimit: 1000 }),
+    fetchPresalesOpenNowEvents(supabase, { fetchLimit: 1000 }),
     supabase
       .from('artists')
       .select('*') as unknown as Promise<{ data: Artist[] | null }>,
   ])
 
-  const groups   = groupEventsByArtist(mergeEventResults(broadResult.data, targetedResult.data), arResult.data ?? [])
-  const group    = groups.find(g => g.slug === slug)
+  const groups = groupEventsByArtist(mergeEventsById(onSaleEvents, presaleEvents), arResult.data ?? [])
+  const group  = groups.find(g => g.slug === slug)
   if (!group) notFound()
 
   const { artistName, image_url, onsale_date, saleType, events, dbArtist } = group

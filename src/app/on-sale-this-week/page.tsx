@@ -3,8 +3,9 @@ export const revalidate = 3600
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
-import type { EventWithVenue, Artist } from '@/lib/types/database'
+import { fmtOnSaleLabel, type OnSaleGroup } from '@/lib/on-sale'
+import { fetchOnSaleThisWeek } from '@/lib/eventPools'
+import type { Artist } from '@/lib/types/database'
 
 const OSW_OG_IMAGE = 'https://www.theshowfinder.com/og-image.png'
 
@@ -27,31 +28,19 @@ export const metadata: Metadata = {
 }
 
 export default async function OnSaleThisWeekPage() {
-  const supabase      = await createClient()
-  const now           = new Date()
-  const threeDaysAgo  = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
-  const weekAhead     = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const windowISO     = threeDaysAgo.toISOString()
-  const weekISO       = weekAhead.toISOString()
+  const supabase  = await createClient()
+  const weekAhead = new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000)
 
-  // Query public_onsale_start and presale_start directly (not the
-  // on_sale_this_week / presale_this_week flag columns — the nightly DB
-  // function meant to keep those in sync isn't actually running, so they're
-  // stuck at false). Checking both columns means presale windows show up
-  // here alongside public on-sale, not just after the public on-sale date.
-  const [eventsResult, artistsResult] = await Promise.all([
-    supabase
-      .from('events_with_venue')
-      .select('*')
-      .or(`and(public_onsale_start.gte.${windowISO},public_onsale_start.lte.${weekISO}),and(presale_start.gte.${windowISO},presale_start.lte.${weekISO})`)
-      .order('onsale_date', { ascending: true })
-      .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
-    supabase
-      .from('artists')
-      .select('*') as unknown as Promise<{ data: Artist[] | null }>,
-  ])
+  // fetchOnSaleThisWeek (src/lib/eventPools.ts) is the single source of
+  // truth for this window/sort/dedupe — the /on-sale-this-week/[slug]
+  // detail page resolves every card against the same merged pool this
+  // produces, so a card rendered here can never 404 on click from a window
+  // mismatch (see on-sale.ts's onSaleThisWeekWindow for the full history).
+  const { data: artistsData } = await supabase
+    .from('artists')
+    .select('*') as unknown as { data: Artist[] | null }
 
-  const groups = groupEventsByArtist(eventsResult.data ?? [], artistsResult.data ?? [])
+  const groups = await fetchOnSaleThisWeek(supabase, artistsData ?? [], { limit: 500 })
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
@@ -104,7 +93,7 @@ export default async function OnSaleThisWeekPage() {
   )
 }
 
-function OnSaleCard({ group }: { group: ReturnType<typeof groupEventsByArtist>[number] }) {
+function OnSaleCard({ group }: { group: OnSaleGroup }) {
   const onSaleLabel = fmtOnSaleLabel(group.onsale_date)
   const datesCount  = group.events.length
   const isPresale   = group.saleType === 'presale'

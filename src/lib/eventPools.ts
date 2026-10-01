@@ -7,7 +7,10 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { EventWithVenue, Artist } from './types/database'
-import { groupEventsByArtist, type OnSaleGroup } from './on-sale'
+import {
+  groupEventsByArtist, type OnSaleGroup,
+  onSaleThisWeekWindow, presaleOpenNowWindow,
+} from './on-sale'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -115,28 +118,78 @@ interface PresalesOpenNowOpts {
 // require presale_start to be recent — that catches a bad/missing
 // presale_end regardless of what value it holds, without needing to trust
 // it at all.
-const PRESALE_MAX_AGE_DAYS = 21
-
-export async function fetchPresalesOpenNow(
+export async function fetchPresalesOpenNowEvents(
   supabase: SupabaseClient,
-  artists: Artist[],
-  { city, limit, fetchLimit = 60 }: PresalesOpenNowOpts,
-): Promise<OnSaleGroup[]> {
-  const now = new Date()
-  const nowISO = now.toISOString()
-  const recentFloorISO = new Date(now.getTime() - PRESALE_MAX_AGE_DAYS * DAY_MS).toISOString()
+  { city, fetchLimit = 60 }: { city?: string; fetchLimit?: number },
+): Promise<EventWithVenue[]> {
+  const { floorISO, ceilISO } = presaleOpenNowWindow()
 
   let query = supabase
     .from('events_with_venue')
     .select('*')
-    .gte('presale_start', recentFloorISO)
-    .lte('presale_start', nowISO)
-    .or(`presale_end.is.null,presale_end.gte.${nowISO}`)
+    .gte('presale_start', floorISO)
+    .lte('presale_start', ceilISO)
+    .or(`presale_end.is.null,presale_end.gte.${ceilISO}`)
     .order('presale_end', { ascending: true, nullsFirst: false })
     .limit(fetchLimit)
 
   if (city) query = query.ilike('venue_city', city)
 
   const { data } = await query as unknown as { data: EventWithVenue[] | null }
-  return groupEventsByArtist(data ?? [], artists).slice(0, limit)
+  return data ?? []
+}
+
+export async function fetchPresalesOpenNow(
+  supabase: SupabaseClient,
+  artists: Artist[],
+  { city, limit, fetchLimit = 60 }: PresalesOpenNowOpts,
+): Promise<OnSaleGroup[]> {
+  const data = await fetchPresalesOpenNowEvents(supabase, { city, fetchLimit })
+  return groupEventsByArtist(data, artists).slice(0, limit)
+}
+
+interface OnSaleThisWeekOpts {
+  city?: string
+  limit: number
+  /** Fetch pool size before dedupe/limit — leave generous room for repeats. */
+  fetchLimit?: number
+}
+
+// Events going on sale (public on-sale) OR into presale within
+// onSaleThisWeekWindow() — "Tickets just released" content for the
+// homepage, the /on-sale-this-week listing, and each city page's On Sale
+// This Week section. Queries public_onsale_start / presale_start directly
+// rather than the on_sale_this_week / presale_this_week flag columns: the
+// nightly DB function meant to keep those in sync isn't actually running,
+// so they're stuck at false.
+export async function fetchOnSaleThisWeekEvents(
+  supabase: SupabaseClient,
+  { city, fetchLimit = 500 }: { city?: string; fetchLimit?: number },
+): Promise<EventWithVenue[]> {
+  const { floorISO, ceilISO } = onSaleThisWeekWindow()
+
+  let query = supabase
+    .from('events_with_venue')
+    .select('*')
+    .or(`and(public_onsale_start.gte.${floorISO},public_onsale_start.lte.${ceilISO}),and(presale_start.gte.${floorISO},presale_start.lte.${ceilISO})`)
+    .order('onsale_date', { ascending: true })
+    .limit(fetchLimit)
+
+  if (city) query = query.ilike('venue_city', city)
+
+  const { data } = await query as unknown as { data: EventWithVenue[] | null }
+  return data ?? []
+}
+
+// Grouped, deduped version of the above — one card per artist/promoter
+// rather than one per Ticketmaster SKU row ("Standard Entry" / "Venue
+// Premium" / etc. sharing a title).
+export async function fetchOnSaleThisWeek(
+  supabase: SupabaseClient,
+  artists: Artist[],
+  { city, limit, fetchLimit = 500 }: OnSaleThisWeekOpts,
+): Promise<OnSaleGroup[]> {
+  const data    = await fetchOnSaleThisWeekEvents(supabase, { city, fetchLimit })
+  const deduped = dedupeEventsByTitle(data, fetchLimit)
+  return groupEventsByArtist(deduped, artists).slice(0, limit)
 }

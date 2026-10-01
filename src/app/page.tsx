@@ -34,8 +34,8 @@ import LocalSpotlight from '@/components/LocalSpotlight'
 import LocalHeroCopy from '@/components/LocalHeroCopy'
 import CategoryStrip from '@/components/CategoryStrip'
 import type { EventWithVenue, Artist, CityNews } from '@/lib/types/database'
-import { groupEventsByArtist, fmtOnSaleLabel, extractArtistName, toSlug } from '@/lib/on-sale'
-import { fetchEventsThisWeek, fetchPresalesOpenNow } from '@/lib/eventPools'
+import { fmtOnSaleLabel, extractArtistName, toSlug } from '@/lib/on-sale'
+import { fetchEventsThisWeek, fetchPresalesOpenNow, fetchOnSaleThisWeek } from '@/lib/eventPools'
 import { NATIONAL_SLUG } from '@/lib/cityNews'
 import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 import PresaleGrid from '@/components/PresaleGrid'
@@ -122,47 +122,19 @@ async function HomepageStats() {
 }
 
 async function OnSaleThisWeek() {
-  const supabase     = await createClient()
-  const now          = new Date()
-  const nowISO       = now.toISOString()
-  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
-  const sevenISO     = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  const supabase = await createClient()
+  const nowISO    = new Date().toISOString()
 
-  // Query public_onsale_start and presale_start directly (not the
-  // on_sale_this_week / presale_this_week flag columns — the nightly DB
-  // function that's meant to keep those in sync isn't actually running, so
-  // they're stuck at false). A -3d lookback keeps an event visible for a few
-  // days after its window opens instead of vanishing the instant "now"
-  // passes it, which is what made this section go empty before.
-  console.log(`[OnSaleThisWeek] querying onsale/presale window ${threeDaysAgo} → ${sevenISO}`)
+  // fetchOnSaleThisWeek (src/lib/eventPools.ts) is the single source of
+  // truth for this window/sort/dedupe — the /on-sale-this-week/[slug]
+  // detail page resolves every card against the same merged pool this
+  // produces, so a card rendered here can never 404 on click from a window
+  // mismatch (see on-sale.ts's onSaleThisWeekWindow for the full history).
+  const { data: artistsData } = await supabase
+    .from('artists')
+    .select('*') as unknown as { data: Artist[] | null }
 
-  const [evResult, arResult] = await Promise.all([
-    supabase
-      .from('events_with_venue')
-      .select('*')
-      .or(`and(public_onsale_start.gte.${threeDaysAgo},public_onsale_start.lte.${sevenISO}),and(presale_start.gte.${threeDaysAgo},presale_start.lte.${sevenISO})`)
-      .order('onsale_date', { ascending: true })
-      .limit(500) as unknown as Promise<{ data: EventWithVenue[] | null }>,
-    supabase
-      .from('artists')
-      .select('*') as unknown as Promise<{ data: Artist[] | null }>,
-  ])
-
-  const rawCount = (evResult.data ?? []).length
-
-  // Deduplicate by title (keep earliest start_date) so each tour announcement
-  // produces one group rather than one card per venue.
-  const sorted = (evResult.data ?? []).slice().sort((a, b) => a.start_date.localeCompare(b.start_date))
-  const seen = new Set<string>()
-  const deduped: EventWithVenue[] = []
-  for (const event of sorted) {
-    if (!seen.has(event.title)) {
-      seen.add(event.title)
-      deduped.push(event)
-    }
-  }
-
-  const allGroups = groupEventsByArtist(deduped, arResult.data ?? [])
+  const allGroups = await fetchOnSaleThisWeek(supabase, artistsData ?? [], { limit: 500 })
   const groups    = allGroups.slice(0, 12)
   const overflow  = allGroups.length > 12 ? allGroups.length : 0
 
@@ -188,8 +160,6 @@ async function OnSaleThisWeek() {
       upcomingCount.set(slug, (upcomingCount.get(slug) ?? 0) + 1)
     }
   }
-
-  console.log(`[OnSaleThisWeek] ${rawCount} raw → ${deduped.length} unique titles → ${allGroups.length} groups | counts: ${JSON.stringify(Object.fromEntries(upcomingCount))}`)
 
   return (
     <section className="bg-white py-14 border-t border-slate-100">
