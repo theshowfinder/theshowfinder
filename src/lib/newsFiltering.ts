@@ -192,11 +192,31 @@ export function isFreshEnough(publishedAt: string | null, now: number, maxAgeMs:
 // city's Google News search results (fetchNewsForQuery in cityNews.ts).
 // Exact same pipeline as before this was extracted: require headline+url,
 // reject false positives, require freshness, newest first, cap at 8.
+// Phase 4 fix (requirement 2's "whether duplicate stories are prevented"
+// audit item): a single Google News RSS search can itself return the same
+// article URL more than once (e.g. a syndicated repost picked up twice by
+// the search). That wasn't deduped here before — only the national-feed
+// merge (mergeNationalFeedResults, below) deduped by url, since *that*
+// function's whole job is combining several feeds that might overlap.
+// Left alone, two rows with the same (city_slug, url) reaching
+// syncOneFeed's `db.from('city_news').upsert(rows, { onConflict:
+// 'city_slug,url' })` call (cityNews.ts) make Postgres reject the entire
+// upsert with "ON CONFLICT DO UPDATE command cannot affect row a second
+// time" — so an in-feed duplicate wasn't just a redundant row, it could
+// fail that city's whole sync run for the day. Deduping by url here,
+// before the slice, closes that gap without changing output for the
+// (overwhelmingly common) case of no duplicates.
 export function filterAndRankNewsItems(items: NewsItem[], now: number, limit = 8): NewsItem[] {
+  const seenUrls = new Set<string>()
   return items
     .filter(i => i.headline && i.url)
     .filter(i => !isFalsePositive(i))
     .filter(i => isFreshEnough(i.publishedAt, now))
+    .filter(i => {
+      if (seenUrls.has(i.url)) return false
+      seenUrls.add(i.url)
+      return true
+    })
     .sort((a, b) => new Date(b.publishedAt!).getTime() - new Date(a.publishedAt!).getTime())
     .slice(0, limit)
 }

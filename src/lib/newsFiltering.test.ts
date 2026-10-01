@@ -149,6 +149,17 @@ describe('filterAndRankNewsItems (single-feed city path)', () => {
     filterAndRankNewsItems(items, NOW)
     assert.deepEqual(items, copy)
   })
+
+  test('dedupes an in-feed duplicate url, keeping the first occurrence (requirement 2: duplicate prevention)', () => {
+    const items = [
+      item({ headline: 'Derby arena announces new tour', url: 'https://a.com/1', publishedAt: new Date(NOW - 1000).toISOString() }),
+      item({ headline: 'Derby arena announces new tour (syndicated)', url: 'https://a.com/1', publishedAt: new Date(NOW - 2000).toISOString() }),
+      item({ headline: 'Derby arena second story', url: 'https://a.com/2' }),
+    ]
+    const result = filterAndRankNewsItems(items, NOW)
+    assert.equal(result.filter(i => i.url === 'https://a.com/1').length, 1)
+    assert.equal(result.find(i => i.url === 'https://a.com/1')?.headline, 'Derby arena announces new tour')
+  })
 })
 
 describe('mergeNationalFeedResults (multi-outlet national feed path)', () => {
