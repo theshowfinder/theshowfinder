@@ -2,6 +2,12 @@ import Parser from 'rss-parser'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
 import { selectStaleCityNewsIds } from './newsPublishing.ts'
+import {
+  type NewsItem,
+  NEWS_EXCLUDE_TERMS,
+  filterAndRankNewsItems,
+  mergeNationalFeedResults,
+} from './newsFiltering.ts'
 
 type DbClient = ReturnType<typeof createAdminClient>
 
@@ -41,13 +47,6 @@ interface RawItem {
   sourceTag?: unknown
 }
 
-interface NewsItem {
-  headline: string
-  url: string
-  source: string | null
-  publishedAt: string | null
-}
-
 function resolveSource(item: RawItem): string | null {
   if (typeof item.creator === 'string' && item.creator.trim()) return item.creator.trim()
 
@@ -70,162 +69,16 @@ function resolveSource(item: RawItem): string | null {
 
 const RSS_PER_ITEM_TIMEOUT_MS = 15000
 
-// Chris, 2026-09-30: nothing older than 3-4 days — this is meant to read
-// as "what's happening right now", not a stale digest.
-const MAX_NEWS_AGE_MS = 4 * 24 * 60 * 60 * 1000
-
-// Query-level excludes: a best-effort hint to Google News. These reduce
-// volume but are NOT a reliable filter — Google's "-term" operators are a
-// soft relevance signal, not a hard match rule, and the exact same query has
-// been observed to return a clean result set on one run and a contaminated
-// one (e.g. "AC MILAN vs. INTER: AN UNMISSABLE DERBY") a few hours later with
-// no change to the query at all. Kept because it does reduce noise, but the
-// HEADLINE_BLOCKLIST below is the actual guarantee.
-const NEWS_EXCLUDE_TERMS =
-  '-football+-soccer+-%22Serie+A%22+-%22Premier+League%22+-EFL+-Championship+' +
-  '-%22horse+racing%22+-racecourse+-jockey+-racehorse+' +
-  '-%22Kentucky+Derby%22+-%22Epsom+Derby%22+-%22Irish+Derby%22+-%22Dubai+World+Cup%22+' +
-  '-%22University+of+Kentucky%22+-UKNow+-commencement+-Wildcats+-alumni'
-
-// Deterministic backstop applied to every fetched headline, regardless of
-// what the Google News query itself returned. This is what actually
-// guarantees a city whose name doubles as sporting vocabulary (Derby above
-// all: a football/rugby rivalry fixture anywhere in the world, and a family
-// of horse races) never shows football or horse-racing results as "local
-// entertainment news". Applied to every city — a no-op for names that were
-// never ambiguous, since none of these terms would otherwise appear.
-const HEADLINE_BLOCKLIST: RegExp[] = [
-  /\bfootball\b/i, /\bsoccer\b/i,
-  /\bfa cup\b/i, /\bcarabao cup\b/i, /\bleague cup\b/i, /\bplay-?off(s)?\b/i,
-  /\bpremier league\b/i, /\befl\b/i, /\bchampionship\b/i,
-  /\bserie a\b/i, /\bla liga\b/i, /\bbundesliga\b/i, /\bligue 1\b/i,
-  /\brugby\b/i, /\bfixture(s)?\b/i,
-  /\bvs\.?\b/i, /\(\s*[ah]\s*\)/i, // "X vs Y" / "Team (A)" / "Team (H)" fixture notation
-  /\bafc\b/i, /\bf\.?c\.?\b/i,
-  /\bhorse racing\b/i, /\bracecourse\b/i, /\bracehorse\b/i, /\bjockey\b/i, /\bthoroughbred\b/i,
-  /\bracing post\b/i, /\bracing tv\b/i, /\bgrand national\b/i, /\bnon-runner\b/i, /\bbetting ring\b/i,
-  /\bkentucky derby\b/i, /\bepsom derby\b/i, /\birish derby\b/i,
-  /\bdubai world cup\b/i, /\bdubai duty free\b/i,
-  // "Derby"/"Derby race" as a generic American event TYPE (soap box derby,
-  // demolition derby, pinewood derby) rather than the English city — this is
-  // what actually let the Colorado/Oklahoma stories through, since neither
-  // mentions football or horse racing.
-  /\bsoap box derby\b/i, /\bdemolition derby\b/i, /\bpinewood derby\b/i,
-  /\bderby race\b/i, /\bderby days\b/i,
-  // The national feed's query anchors on the bare word "UK" to bias results
-  // toward Britain — but Google News resolves "UK" to the University of
-  // Kentucky's "UKNow" news site just as readily as "United Kingdom", and
-  // its commencement/alumni/recital stories never spell out "Kentucky", so
-  // the US-state-name blocklist below never caught them. These are the
-  // actual giveaway terms confirmed from real contaminated results.
-  /\buknow\b/i, /\buniversity of kentucky\b/i, /\bcommencement\b/i,
-  /\bwildcats\b/i, /\brupp arena\b/i, /\bdanceblue\b/i, /\blexington\b/i,
-  // The national feed's "British" anchor (see fetchNationalNews) still lets
-  // through stories that merely mention a British person/company doing
-  // something abroad -- e.g. a US regional outlet's tourism-boosting piece
-  // about a British TOUR COMPANY (coach holidays, not concert tours)
-  // praising an American town. "tour company" is the generic giveaway
-  // (a real concert story says "UK tour", never "tour company"), plus the
-  // specific outlet/place confirmed from a real contaminated result.
-  /\btour compan(y|ies)\b/i, /\bcowboy state daily\b/i, /\bcheyenne\b/i,
-]
-
-// Positive backstop -- the mirror image of HEADLINE_BLOCKLIST. Google's OR
-// query matching is a loose relevance signal, not a hard requirement, and
-// once "when:4d" narrows the fresh result pool it will happily fill
-// remaining slots with any story that merely contains the anchor word --
-// confirmed live with "British Jews back calls to ban Australian academic
-// Randa Abdel-Fattah" (AFR), a political story with zero connection to
-// music/entertainment. Every kept item must itself read like real
-// entertainment/live-events coverage, checked against the headline alone
-// (not source, which is just the publisher's name).
-const ENTERTAINMENT_TERMS: RegExp[] = [
-  /\bconcert(s)?\b/i, /\bgig(s)?\b/i, /\btour(s)?\b/i, /\bfestival(s)?\b/i,
-  /\barena\b/i, /\bticket(s)?\b/i, /\bpresale\b/i, /\bon sale\b/i,
-  /\balbum\b/i, /\bsingle\b/i, /\bep\b/i, /\bband\b/i, /\bsinger\b/i,
-  /\brapper\b/i, /\bdj\b/i, /\bmusical\b/i, /\btheatre\b/i, /\btheater\b/i,
-  /\bcomedy\b/i, /\bcomedian\b/i, /\bsetlist\b/i, /\blineup\b/i, /\bheadliner\b/i,
-  /\bstadium\b/i, /\bperformance\b/i, /\borchestra\b/i, /\bsymphony\b/i,
-  /\bstand-?up\b/i, /\bshow(s)?\b/i, /\bvenue\b/i, /\bmusic\b/i,
-  /\bartist(s)?\b/i, /\bsold out\b/i, /\bencore\b/i, /\bentertainment\b/i,
-  /\bopera\b/i, /\bballet\b/i, /\bpanto(mime)?\b/i,
-]
-
-// Several of the 36 UK cities share a name with a US or Canadian town
-// (Derby CT/KS, Manchester NH, Cambridge MA, Bristol CT/TN/VA, Plymouth MA,
-// Newport RI, Richmond VA, Oxford MS, Reading PA, Norwich CT, London
-// Ontario, and more) — a plain city-name search picks up their local news
-// too. Two independent, low-false-negative-risk signals catch almost all of
-// it: the standard American/Canadian "City, ST" dateline format (never
-// occurs organically in UK press), and the full state/province name spelled
-// out (safe to blocklist outright — no legitimate "concert in Derby"
-// headline is going to organically contain "Oklahoma").
-const US_STATE_ABBR =
-  'AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|' +
-  'MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY'
-const CA_PROVINCE_ABBR = 'ON|BC|QC|AB|MB|SK|NS|NB|NL|PE'
-const US_STATE_NAMES = [
-  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut',
-  'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa',
-  'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan',
-  'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada',
-  'New Hampshire', 'New Jersey', 'New Mexico', 'North Carolina', 'North Dakota',
-  'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina',
-  'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington',
-  'West Virginia', 'Wisconsin', 'Wyoming',
-]
-const CA_PROVINCE_NAMES = [
-  'Ontario', 'Quebec', 'British Columbia', 'Alberta', 'Manitoba', 'Saskatchewan',
-  'Nova Scotia', 'New Brunswick', 'Newfoundland and Labrador', 'Prince Edward Island',
-]
-const NORTH_AMERICA_BLOCKLIST: RegExp[] = [
-  new RegExp(`,\\s*(?:${US_STATE_ABBR}|${CA_PROVINCE_ABBR})\\b`), // "Lawton, OK" dateline
-  ...[...US_STATE_NAMES, ...CA_PROVINCE_NAMES].map(
-    name => new RegExp(`\\b${name.replace(/\s+/g, '\\s+')}\\b`, 'i')
-  ),
-]
-
-// US government sites (.gov) are a near-certain non-UK signal — UK
-// government sites are under .gov.uk, a different TLD entirely.
-function isUsGovHost(url: string): boolean {
-  try {
-    const host = new URL(url).hostname.toLowerCase()
-    return host.endsWith('.gov') && !host.endsWith('.gov.uk')
-  } catch {
-    return false
-  }
-}
-
-// Same idea for American universities: .edu is a US-specific TLD (the
-// University of Kentucky's "UKNow" news site is exactly the kind of source
-// this exists to catch — see the HEADLINE_BLOCKLIST comment above). UK
-// universities are under .ac.uk, never .edu.
-function isUsEduHost(url: string): boolean {
-  try {
-    const host = new URL(url).hostname.toLowerCase()
-    return host.endsWith('.edu')
-  } catch {
-    return false
-  }
-}
-
-function isFalsePositive(item: { headline: string; source: string | null; url: string }): boolean {
-  const text = `${item.headline} ${item.source ?? ''}`
-  if (HEADLINE_BLOCKLIST.some(re => re.test(text))) return true
-  if (NORTH_AMERICA_BLOCKLIST.some(re => re.test(text))) return true
-  if (isUsGovHost(item.url)) return true
-  if (isUsEduHost(item.url)) return true
-  if (!ENTERTAINMENT_TERMS.some(re => re.test(item.headline))) return true
-  return false
-}
-
 // Shared low-level fetch: takes an already-encoded Google News query string,
-// parses the RSS feed, and applies the same deterministic false-positive
-// backstop every feed goes through — city-scoped and national alike.
+// parses the RSS feed, maps raw items to NewsItem, and hands off to
+// filterAndRankNewsItems (newsFiltering.ts) for the deterministic
+// false-positive/freshness/ranking backstop every feed goes through — city-
+// scoped and national alike.
 async function fetchNewsForQuery(q: string): Promise<NewsItem[]> {
   // "when:4d" scopes the Google News search itself to the last 4 days —
   // a soft hint (like the -exclude terms), not a hard guarantee, which is
-  // why MAX_NEWS_AGE_MS below still enforces it deterministically.
+  // why filterAndRankNewsItems's freshness check still enforces it
+  // deterministically.
   const feedUrl = `https://news.google.com/rss/search?q=${q}+when:4d&hl=en-GB&gl=GB&ceid=GB:en`
 
   const parser = new Parser<Record<string, unknown>, RawItem>({
@@ -233,23 +86,15 @@ async function fetchNewsForQuery(q: string): Promise<NewsItem[]> {
     customFields: { item: [['source', 'sourceTag']] },
   })
   const feed = await parser.parseURL(feedUrl)
-  const now = Date.now()
 
-  return (feed.items ?? [])
-    .map(item => ({
-      headline:    (item.title ?? '').trim(),
-      url:         item.link ?? '',
-      source:      resolveSource(item),
-      publishedAt: item.pubDate && !Number.isNaN(Date.parse(item.pubDate)) ? new Date(item.pubDate).toISOString() : null,
-    }))
-    .filter(i => i.headline && i.url)
-    .filter(i => !isFalsePositive(i))
-    // No parseable date means we can't verify it's fresh, so it doesn't
-    // get the benefit of the doubt -- drop it rather than risk another
-    // stale item slipping in the way the UKNow ones did.
-    .filter(i => i.publishedAt !== null && now - new Date(i.publishedAt).getTime() <= MAX_NEWS_AGE_MS)
-    .sort((a, b) => new Date(b.publishedAt!).getTime() - new Date(a.publishedAt!).getTime())
-    .slice(0, 8)
+  const items: NewsItem[] = (feed.items ?? []).map(item => ({
+    headline:    (item.title ?? '').trim(),
+    url:         item.link ?? '',
+    source:      resolveSource(item),
+    publishedAt: item.pubDate && !Number.isNaN(Date.parse(item.pubDate)) ? new Date(item.pubDate).toISOString() : null,
+  }))
+
+  return filterAndRankNewsItems(items, Date.now())
 }
 
 function fetchCityNews(cityName: string): Promise<NewsItem[]> {
@@ -312,26 +157,8 @@ async function fetchNamedFeed(feed: { source: string; url: string }): Promise<Ne
 }
 
 async function fetchNationalNews(): Promise<NewsItem[]> {
-  const now = Date.now()
   const perFeed = await Promise.all(NATIONAL_FEEDS.map(fetchNamedFeed))
-  const seenUrls = new Set<string>()
-
-  return perFeed
-    .flat()
-    .filter(i => !isFalsePositive(i))
-    .filter(i => ENTERTAINMENT_TERMS.some(re => re.test(i.headline)))
-    // No parseable date means we can't verify it's fresh, so it doesn't
-    // get the benefit of the doubt -- drop it rather than risk another
-    // stale item slipping in the way the UKNow ones did.
-    .filter(i => i.publishedAt !== null && now - new Date(i.publishedAt).getTime() <= MAX_NEWS_AGE_MS)
-    .filter(i => {
-      // The rare story two of these desks both cover.
-      if (seenUrls.has(i.url)) return false
-      seenUrls.add(i.url)
-      return true
-    })
-    .sort((a, b) => new Date(b.publishedAt!).getTime() - new Date(a.publishedAt!).getTime())
-    .slice(0, 8)
+  return mergeNationalFeedResults(perFeed, Date.now())
 }
 
 // ── Logging (reuses sync_log, same as the Ticketmaster sync — one row per
