@@ -17,7 +17,7 @@ interface EventSchemaInput {
   description?: string | null
   image?: string | null
   status: 'upcoming' | 'on_sale' | 'sold_out' | 'cancelled' | string
-  venue?: { name: string; address: string; city: string; postcode: string } | null
+  venue?: { name: string; address: string; city: string; postcode: string; website?: string | null } | null
   priceFrom?: number | null
   priceCurrency?: string
   offerUrl?: string | null
@@ -62,8 +62,15 @@ export function buildEventSchema(input: EventSchemaInput) {
     // feed doesn't supply a promoter/production-company name, and the venue
     // is genuinely the party that booked and is hosting the show. Falls back
     // to TheShowFinder itself only on the rare event with no venue at all.
+    // `url` is only added when the venues table actually has a website for
+    // that venue (a real, looked-up fact) — never invented or filled with a
+    // placeholder when it's missing, which is still the common case today.
     organizer: input.venue
-      ? { '@type': 'Organization', name: input.venue.name }
+      ? {
+          '@type': 'Organization',
+          name:    input.venue.name,
+          ...(input.venue.website ? { url: input.venue.website } : {}),
+        }
       : { '@type': 'Organization', name: 'TheShowFinder', url: BASE_URL },
     ...(input.performers && input.performers.length
       ? { performer: input.performers.map(name => ({ '@type': 'PerformingGroup', name })) }
@@ -72,8 +79,14 @@ export function buildEventSchema(input: EventSchemaInput) {
     // to (the real tickets_url, or the event page itself as a fallback) and
     // this site is UK-only so priceCurrency is always correctly 'GBP'. Only
     // `price` is conditional: Ticketmaster's UK feed supplies almost no
-    // price_from data, and a missing number is honest where a guessed one
-    // would not be — never fabricate a price.
+    // price_from data (and when it does, it's the real lowest listed price
+    // — exactly what Google's Event guidance wants for this field), and a
+    // missing number is honest where a guessed one would not be — never
+    // fabricate a price. Checked against `null`/`undefined` rather than
+    // truthiness so a genuinely free event (priceFrom === 0) still reports
+    // its real price instead of being silently treated as "unknown" and
+    // dropped. Also guards out a negative value, which would only ever be
+    // bad data, never a real price.
     offers: {
       '@type':      'Offer',
       url:           input.offerUrl ?? input.url,
@@ -82,7 +95,7 @@ export function buildEventSchema(input: EventSchemaInput) {
         ? 'https://schema.org/SoldOut'
         : 'https://schema.org/InStock',
       validFrom:     new Date().toISOString(),
-      ...(input.priceFrom ? { price: input.priceFrom } : {}),
+      ...(input.priceFrom != null && input.priceFrom >= 0 ? { price: input.priceFrom } : {}),
     },
   }
 }

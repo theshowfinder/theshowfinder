@@ -72,6 +72,17 @@ describe('buildEventSchema', () => {
     const schema = buildEventSchema(base)
     assert.equal(schema.location.name, 'United Kingdom')
     assert.equal(schema.organizer.name, 'TheShowFinder')
+    assert.equal(schema.organizer.url, 'https://www.theshowfinder.com')
+  })
+
+  test('includes organizer.url when the venue has a real website on file', () => {
+    const schema = buildEventSchema({ ...base, venue: { name: 'O2 Arena', address: '1 Arena St', city: 'London', postcode: 'SE10', website: 'https://www.theo2.co.uk' } })
+    assert.equal(schema.organizer.url, 'https://www.theo2.co.uk')
+  })
+
+  test('omits organizer.url rather than inventing one when the venue has no website on file', () => {
+    const schema = buildEventSchema({ ...base, venue: { name: 'O2 Arena', address: '1 Arena St', city: 'London', postcode: 'SE10', website: null } })
+    assert.equal('url' in schema.organizer, false)
   })
 
   test('never fabricates a price when priceFrom is missing', () => {
@@ -80,6 +91,16 @@ describe('buildEventSchema', () => {
 
   test('includes a price when priceFrom is provided', () => {
     assert.equal(buildEventSchema({ ...base, priceFrom: 45 }).offers.price, 45)
+  })
+
+  test('includes a genuinely free event\'s price (0), rather than treating 0 as "no data"', () => {
+    const schema = buildEventSchema({ ...base, priceFrom: 0 })
+    assert.equal('price' in schema.offers, true)
+    assert.equal(schema.offers.price, 0)
+  })
+
+  test('never reports a negative price — that can only be bad data, not a real one', () => {
+    assert.equal('price' in buildEventSchema({ ...base, priceFrom: -5 }).offers, false)
   })
 
   test('offer URL falls back to the event URL when no offerUrl is given', () => {
