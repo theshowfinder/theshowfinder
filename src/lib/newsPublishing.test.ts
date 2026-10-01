@@ -38,7 +38,11 @@ import {
   buildDefaultHashtags,
   buildShareKitDefaults,
   destinationDisplayLimit,
+  sortNewsCandidatesForQueue,
+  matchesNewsQueueFilters,
+  RECENT_QUEUE_WINDOW_MS,
 } from './newsPublishing.ts'
+import type { NewsCandidate } from './types/database.ts'
 
 const NOW = '2026-09-30T12:00:00.000Z'
 const LATER = '2026-09-30T13:00:00.000Z'
@@ -966,5 +970,99 @@ describe('destinationDisplayLimit', () => {
 
   test('any other slug (a real city) is 5, matching src/app/cities/[city]/page.tsx', () => {
     assert.equal(destinationDisplayLimit('derby'), 5)
+  })
+})
+
+describe('sortNewsCandidatesForQueue', () => {
+  const c = (overrides: Partial<{ id: string; review_status: NewsCandidate['review_status']; priority: NewsCandidate['priority']; discovered_at: string }>) => ({
+    id: 'x', review_status: 'pending' as const, priority: 'normal' as const, discovered_at: '2026-09-28T00:00:00.000Z', ...overrides,
+  })
+
+  test('pending sorts before approved, before published, before rejected', () => {
+    const rows = [
+      c({ id: 'a', review_status: 'rejected' }),
+      c({ id: 'b', review_status: 'published' }),
+      c({ id: 'c', review_status: 'approved' }),
+      c({ id: 'd', review_status: 'pending' }),
+    ]
+    assert.deepEqual(sortNewsCandidatesForQueue(rows).map(r => r.id), ['d', 'c', 'b', 'a'])
+  })
+
+  test('within the same status, high priority sorts before normal, before low', () => {
+    const rows = [
+      c({ id: 'a', priority: 'low' }),
+      c({ id: 'b', priority: 'high' }),
+      c({ id: 'c', priority: 'normal' }),
+    ]
+    assert.deepEqual(sortNewsCandidatesForQueue(rows).map(r => r.id), ['b', 'c', 'a'])
+  })
+
+  test('within the same status and priority, newest discovered_at sorts first', () => {
+    const rows = [
+      c({ id: 'a', discovered_at: '2026-09-27T00:00:00.000Z' }),
+      c({ id: 'b', discovered_at: '2026-09-29T00:00:00.000Z' }),
+      c({ id: 'c', discovered_at: '2026-09-28T00:00:00.000Z' }),
+    ]
+    assert.deepEqual(sortNewsCandidatesForQueue(rows).map(r => r.id), ['b', 'c', 'a'])
+  })
+
+  test('does not mutate the input array', () => {
+    const rows = [c({ id: 'a', review_status: 'published' }), c({ id: 'b', review_status: 'pending' })]
+    const copy = [...rows]
+    sortNewsCandidatesForQueue(rows)
+    assert.deepEqual(rows, copy)
+  })
+})
+
+describe('matchesNewsQueueFilters', () => {
+  const NOW_MS = new Date('2026-09-30T12:00:00.000Z').getTime()
+  const candidate = (overrides: Partial<{ review_status: NewsCandidate['review_status']; intake_method: NewsCandidate['intake_method']; priority: NewsCandidate['priority']; discovered_at: string }> = {}) => ({
+    review_status: 'pending' as const, intake_method: 'manual' as const, priority: 'normal' as const, discovered_at: '2026-09-30T06:00:00.000Z', ...overrides,
+  })
+
+  test('no params set — everything matches', () => {
+    assert.equal(matchesNewsQueueFilters(candidate(), [], {}, NOW_MS), true)
+  })
+
+  test('status filter excludes a non-matching status', () => {
+    assert.equal(matchesNewsQueueFilters(candidate({ review_status: 'approved' }), [], { status: 'pending' }, NOW_MS), false)
+  })
+
+  test('status filter includes a matching status', () => {
+    assert.equal(matchesNewsQueueFilters(candidate({ review_status: 'pending' }), [], { status: 'pending' }, NOW_MS), true)
+  })
+
+  test('provenance filter matches intake_method', () => {
+    assert.equal(matchesNewsQueueFilters(candidate({ intake_method: 'url_import' }), [], { provenance: 'manual' }, NOW_MS), false)
+    assert.equal(matchesNewsQueueFilters(candidate({ intake_method: 'manual' }), [], { provenance: 'manual' }, NOW_MS), true)
+  })
+
+  test('priority filter matches priority', () => {
+    assert.equal(matchesNewsQueueFilters(candidate({ priority: 'high' }), [], { priority: 'high' }, NOW_MS), true)
+    assert.equal(matchesNewsQueueFilters(candidate({ priority: 'low' }), [], { priority: 'high' }, NOW_MS), false)
+  })
+
+  test('recent=1 excludes anything discovered more than 7 days ago', () => {
+    const old = candidate({ discovered_at: new Date(NOW_MS - RECENT_QUEUE_WINDOW_MS - 1000).toISOString() })
+    assert.equal(matchesNewsQueueFilters(old, [], { recent: '1' }, NOW_MS), false)
+  })
+
+  test('recent=1 includes anything discovered within the last 7 days', () => {
+    const fresh = candidate({ discovered_at: new Date(NOW_MS - 1000).toISOString() })
+    assert.equal(matchesNewsQueueFilters(fresh, [], { recent: '1' }, NOW_MS), true)
+  })
+
+  test('attention=1 excludes a row with no attention reasons', () => {
+    assert.equal(matchesNewsQueueFilters(candidate(), [], { attention: '1' }, NOW_MS), false)
+  })
+
+  test('attention=1 includes a row with at least one attention reason', () => {
+    assert.equal(matchesNewsQueueFilters(candidate(), ['no_destination'], { attention: '1' }, NOW_MS), true)
+  })
+
+  test('multiple active filters combine (AND, not OR)', () => {
+    const c = candidate({ review_status: 'pending', priority: 'high' })
+    assert.equal(matchesNewsQueueFilters(c, [], { status: 'pending', priority: 'high' }, NOW_MS), true)
+    assert.equal(matchesNewsQueueFilters(c, [], { status: 'pending', priority: 'low' }, NOW_MS), false)
   })
 })

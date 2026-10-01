@@ -8,6 +8,8 @@ import {
   resolveCityNewsTargets,
   isCandidateVisibleAtDestination,
   destinationDisplayLimit,
+  sortNewsCandidatesForQueue,
+  matchesNewsQueueFilters,
   type NewsCandidateAttentionReason,
 } from '@/lib/newsPublishing'
 import type { NewsCandidate } from '@/lib/types/database'
@@ -48,25 +50,14 @@ const ATTENTION_LABEL: Record<NewsCandidateAttentionReason, string> = {
 // are shown, they never change how the shown rows are ordered, so the
 // mental model stays simple: "find the thing, then look at it in a
 // consistent place".
-const STATUS_RANK: Record<string, number> = { pending: 0, approved: 1, published: 2, rejected: 3 }
-const PRIORITY_RANK: Record<string, number> = { high: 0, normal: 1, low: 2 }
-
-function sortCandidates(rows: NewsCandidate[]): NewsCandidate[] {
-  return [...rows].sort((a, b) => {
-    const statusDiff = STATUS_RANK[a.review_status] - STATUS_RANK[b.review_status]
-    if (statusDiff !== 0) return statusDiff
-    const priorityDiff = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
-    if (priorityDiff !== 0) return priorityDiff
-    return new Date(b.discovered_at).getTime() - new Date(a.discovered_at).getTime()
-  })
-}
+// Ordering and filtering rules live in src/lib/newsPublishing.ts
+// (sortNewsCandidatesForQueue / matchesNewsQueueFilters) so they're
+// unit-tested rather than only inline here.
 
 function fmtDate(value: string | null): string {
   if (!value) return '—'
   return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
 }
-
-const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 
 function Chip({ label, active, href, tone }: { label: string; active: boolean; href: string; tone?: 'amber' }) {
   const activeClasses = tone === 'amber'
@@ -104,7 +95,7 @@ export default async function NewsCandidatesAdminPage({ searchParams }: { search
     .order('discovered_at', { ascending: false })
     .limit(200) as unknown as { data: NewsCandidate[] | null }
 
-  const allRows = sortCandidates(candidates ?? [])
+  const allRows = sortNewsCandidatesForQueue(candidates ?? [])
 
   // One extra query for every candidate's target cities (Phase 2 —
   // supersedes the single city_name column for anything beyond display).
@@ -196,14 +187,7 @@ export default async function NewsCandidatesAdminPage({ searchParams }: { search
   const attentionCount = rowsWithAttention.filter(r => r.reasons.length > 0).length
 
   // ── Filters (narrow which rows are shown; never change row order) ──────
-  const filtered = rowsWithAttention.filter(({ item, reasons }) => {
-    if (params.status && item.review_status !== params.status) return false
-    if (params.provenance && item.intake_method !== params.provenance) return false
-    if (params.priority && item.priority !== params.priority) return false
-    if (params.recent === '1' && now - new Date(item.discovered_at).getTime() > RECENT_WINDOW_MS) return false
-    if (params.attention === '1' && reasons.length === 0) return false
-    return true
-  })
+  const filtered = rowsWithAttention.filter(({ item, reasons }) => matchesNewsQueueFilters(item, reasons, params, now))
 
   // Builds a filter-chip href that toggles one query param on/off while
   // preserving every other active filter — so chips combine (e.g. "Pending

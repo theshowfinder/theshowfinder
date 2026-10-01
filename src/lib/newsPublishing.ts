@@ -524,3 +524,65 @@ export function buildShareKitDefaults(
     hashtags: buildDefaultHashtags(candidate, cityNames),
   }
 }
+
+
+// ── Admin queue sort/filter (Phase 4, requirement 1 & 7) ─────────────────
+//
+// Pulled out of src/app/admin/news/page.tsx so the queue's ordering and
+// filtering rules are unit-tested the same way every other piece of this
+// phase is, rather than living only as inline logic in a server component
+// (which the rest of this file's header explains can't be imported by
+// `node --test` — it has '@/' path-alias and JSX dependencies the plain
+// test runner can't resolve).
+
+// Review-queue ordering: pending stories surface first (the actual inbox),
+// then approved (waiting to publish), then the two resolved states. Within
+// a status, highest priority and newest-discovered sort first. This is the
+// queue's one fixed row order — filters narrow which rows are shown, they
+// never change how shown rows are ordered.
+const QUEUE_STATUS_RANK: Record<NewsCandidate['review_status'], number> = { pending: 0, approved: 1, published: 2, rejected: 3 }
+const QUEUE_PRIORITY_RANK: Record<NewsCandidate['priority'], number> = { high: 0, normal: 1, low: 2 }
+
+type QueueSortableCandidate = Pick<NewsCandidate, 'review_status' | 'priority' | 'discovered_at'>
+
+export function sortNewsCandidatesForQueue<T extends QueueSortableCandidate>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const statusDiff = QUEUE_STATUS_RANK[a.review_status] - QUEUE_STATUS_RANK[b.review_status]
+    if (statusDiff !== 0) return statusDiff
+    const priorityDiff = QUEUE_PRIORITY_RANK[a.priority] - QUEUE_PRIORITY_RANK[b.priority]
+    if (priorityDiff !== 0) return priorityDiff
+    return new Date(b.discovered_at).getTime() - new Date(a.discovered_at).getTime()
+  })
+}
+
+// "Recently added" filter chip window — 7 days, matching the chip's own
+// "(7d)" label in the admin UI.
+export const RECENT_QUEUE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+export interface NewsQueueFilterParams {
+  status?: string
+  provenance?: string
+  priority?: string
+  recent?: string
+  attention?: string
+}
+
+type QueueFilterableCandidate = Pick<NewsCandidate, 'review_status' | 'intake_method' | 'priority' | 'discovered_at'>
+
+// `reasons` is the same per-row attention-reasons list candidateAttentionReasons
+// (plus the page's own async 'not_visible' check) already produced — passed
+// in rather than recomputed, so this stays a pure function of already-known
+// facts with one definition of what "needs attention" means.
+export function matchesNewsQueueFilters(
+  candidate: QueueFilterableCandidate,
+  reasons: NewsCandidateAttentionReason[],
+  params: NewsQueueFilterParams,
+  now: number
+): boolean {
+  if (params.status && candidate.review_status !== params.status) return false
+  if (params.provenance && candidate.intake_method !== params.provenance) return false
+  if (params.priority && candidate.priority !== params.priority) return false
+  if (params.recent === '1' && now - new Date(candidate.discovered_at).getTime() > RECENT_QUEUE_WINDOW_MS) return false
+  if (params.attention === '1' && reasons.length === 0) return false
+  return true
+}
