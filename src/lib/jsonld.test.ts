@@ -164,7 +164,7 @@ describe('buildOrganizationSchema', () => {
 
   test('sameAs contains the exact Instagram, Facebook and TikTok URLs', () => {
     const schema = buildOrganizationSchema()
-    assert.ok(schema.sameAs.includes('https://www.instagram.com/the_show_finder/'))
+    assert.ok(schema.sameAs.includes('https://www.instagram.com/theshow_finder/'))
     assert.ok(schema.sameAs.includes('https://www.facebook.com/profile.php?id=61592305512592'))
     assert.ok(schema.sameAs.includes('https://www.tiktok.com/@theshowfinder'))
   })

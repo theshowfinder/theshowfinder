@@ -10,7 +10,7 @@ describe('SOCIAL_LINKS', () => {
 
   test('Instagram points to the exact confirmed account URL', () => {
     const link = SOCIAL_LINKS.find(l => l.platform === 'Instagram')
-    assert.equal(link?.href, 'https://www.instagram.com/the_show_finder/')
+    assert.equal(link?.href, 'https://www.instagram.com/theshow_finder/')
   })
 
   test('TikTok points to the exact confirmed account URL', () => {

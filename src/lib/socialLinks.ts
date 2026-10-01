@@ -19,7 +19,7 @@ export interface SocialLink {
 }
 
 export const SOCIAL_LINKS: SocialLink[] = [
-  { platform: 'Instagram', label: 'Follow TheShowFinder on Instagram', href: 'https://www.instagram.com/the_show_finder/' },
+  { platform: 'Instagram', label: 'Follow TheShowFinder on Instagram', href: 'https://www.instagram.com/theshow_finder/' },
   { platform: 'TikTok',    label: 'Follow TheShowFinder on TikTok',    href: 'https://www.tiktok.com/@theshowfinder' },
   { platform: 'Facebook',  label: 'Follow TheShowFinder on Facebook',  href: 'https://www.facebook.com/profile.php?id=61592305512592' },
 ]
