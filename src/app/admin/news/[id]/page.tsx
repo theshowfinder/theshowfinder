@@ -65,6 +65,13 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
       ]
     : []
 
+  // Saving with no destination is always allowed (a candidate can sit in
+  // the queue indefinitely with nothing selected); this is purely a
+  // heads-up shown before the admin clicks Publish — the actual block is
+  // server-side in publishNewsCandidateAction, which refuses to publish a
+  // candidate with zero resolved targets.
+  const hasNoDestinations = !candidate.publish_to_homepage && !candidate.publish_to_news_page && cityNames.length === 0
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4">
@@ -97,6 +104,13 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
 
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
           <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Review actions</h2>
+
+          {hasNoDestinations && candidate.review_status === 'approved' && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm font-semibold mb-4">
+              ⚠ No publishing destination selected (no Homepage, no Main News page, no cities). Publishing now will be blocked — edit the story below and choose at least one destination first.
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-3">
             {candidate.review_status === 'pending' && (
               <>

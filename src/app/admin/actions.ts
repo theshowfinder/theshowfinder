@@ -798,32 +798,50 @@ async function fetchCandidateWithCities(db: ReturnType<typeof createAdminClient>
 export async function publishNewsCandidateAction(id: string) {
   await checkAuth()
   const db = createAdminClient()
-  const { candidate, cityTargets } = await fetchCandidateWithCities(db, id)
 
-  if (!canPublishCandidate(candidate.review_status)) {
-    throw new Error('Only an approved candidate can be published — approve it first.')
+  try {
+    const { candidate, cityTargets } = await fetchCandidateWithCities(db, id)
+
+    if (!canPublishCandidate(candidate.review_status)) {
+      throw new Error('Only an approved candidate can be published — approve it first.')
+    }
+
+    const targets = resolveCityNewsTargets(candidate, cityTargets)
+    // migration_029 safeguard: a candidate with no Homepage, no Main News
+    // page and no city targets would upsert zero city_news rows — i.e.
+    // "publish" successfully while appearing nowhere on the public site.
+    // Blocked here with a clear, redirect-based message (matching the
+    // create/update error pattern below) rather than letting it either
+    // silently no-op or throw into Next's generic crash screen. Saving a
+    // candidate with no destinations selected is still always allowed —
+    // this check only ever runs at the point of publishing.
+    if (!targets.length) {
+      throw new Error('This candidate has no publishing destination selected — it won’t appear anywhere on the site. Choose Homepage, Main News page, or at least one city before publishing.')
+    }
+
+    const now = new Date().toISOString()
+    const upsertRows = buildPublishUpsertRows(candidate, targets, now)
+
+    const { error: upsertError } = await db
+      .from('city_news')
+      .upsert(upsertRows, { onConflict: 'city_slug,url' })
+    if (upsertError) throw new Error(upsertError.message)
+
+    const { error: updateError } = await db
+      .from('news_candidates')
+      .update(buildPublishCandidatePatch(now))
+      .eq('id', id)
+    if (updateError) throw new Error(updateError.message)
+
+    revalidatePath('/admin/news')
+    revalidatePath('/admin/news/' + id)
+    for (const path of revalidatePathsForCandidate(candidate, targets)) revalidatePath(path)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Something went wrong while publishing.'
+    redirect('/admin/news/' + id + '?error=' + encodeURIComponent(message))
   }
 
-  const targets = resolveCityNewsTargets(candidate, cityTargets)
-  if (!targets.length) throw new Error('Candidate is missing a city — cannot publish.')
-
-  const now = new Date().toISOString()
-  const upsertRows = buildPublishUpsertRows(candidate, targets, now)
-
-  const { error: upsertError } = await db
-    .from('city_news')
-    .upsert(upsertRows, { onConflict: 'city_slug,url' })
-  if (upsertError) throw new Error(upsertError.message)
-
-  const { error: updateError } = await db
-    .from('news_candidates')
-    .update(buildPublishCandidatePatch(now))
-    .eq('id', id)
-  if (updateError) throw new Error(updateError.message)
-
-  revalidatePath('/admin/news')
-  revalidatePath('/admin/news/' + id)
-  for (const path of revalidatePathsForCandidate(candidate, targets)) revalidatePath(path)
+  redirect('/admin/news/' + id + '?saved=1')
 }
 
 // Removes every city_news row a published candidate created (one per
@@ -837,34 +855,42 @@ export async function publishNewsCandidateAction(id: string) {
 export async function unpublishNewsCandidateAction(id: string) {
   await checkAuth()
   const db = createAdminClient()
-  const { candidate, cityTargets } = await fetchCandidateWithCities(db, id)
 
-  if (!canUnpublishCandidate(candidate.review_status)) {
-    throw new Error('This candidate isn\'t currently published.')
+  try {
+    const { candidate, cityTargets } = await fetchCandidateWithCities(db, id)
+
+    if (!canUnpublishCandidate(candidate.review_status)) {
+      throw new Error('This candidate isn\'t currently published.')
+    }
+
+    const targets = resolveCityNewsTargets(candidate, cityTargets)
+    const deleteFilter = buildUnpublishDeleteFilter(candidate, targets)
+    if (!deleteFilter) throw new Error('Candidate has no publishing destination recorded — nothing to unpublish.')
+
+    const { error: deleteError } = await db
+      .from('city_news')
+      .delete()
+      .in('city_slug', deleteFilter.city_slugs)
+      .eq('url', deleteFilter.url)
+      .eq('is_editorial', deleteFilter.is_editorial)
+    if (deleteError) throw new Error(deleteError.message)
+
+    const now = new Date().toISOString()
+    const { error: updateError } = await db
+      .from('news_candidates')
+      .update(buildUnpublishCandidatePatch(now))
+      .eq('id', id)
+    if (updateError) throw new Error(updateError.message)
+
+    revalidatePath('/admin/news')
+    revalidatePath('/admin/news/' + id)
+    for (const path of revalidatePathsForCandidate(candidate, targets)) revalidatePath(path)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Something went wrong while unpublishing.'
+    redirect('/admin/news/' + id + '?error=' + encodeURIComponent(message))
   }
 
-  const targets = resolveCityNewsTargets(candidate, cityTargets)
-  const deleteFilter = buildUnpublishDeleteFilter(candidate, targets)
-  if (!deleteFilter) throw new Error('Candidate is missing a city — cannot unpublish.')
-
-  const { error: deleteError } = await db
-    .from('city_news')
-    .delete()
-    .in('city_slug', deleteFilter.city_slugs)
-    .eq('url', deleteFilter.url)
-    .eq('is_editorial', deleteFilter.is_editorial)
-  if (deleteError) throw new Error(deleteError.message)
-
-  const now = new Date().toISOString()
-  const { error: updateError } = await db
-    .from('news_candidates')
-    .update(buildUnpublishCandidatePatch(now))
-    .eq('id', id)
-  if (updateError) throw new Error(updateError.message)
-
-  revalidatePath('/admin/news')
-  revalidatePath('/admin/news/' + id)
-  for (const path of revalidatePathsForCandidate(candidate, targets)) revalidatePath(path)
+  redirect('/admin/news/' + id + '?saved=1')
 }
 
 // Delete stays in the queue only — a published candidate already has

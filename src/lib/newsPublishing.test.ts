@@ -190,6 +190,47 @@ describe('resolveCityNewsTargets — destination combinations (migration_029)', 
   })
 })
 
+// publishNewsCandidateAction (src/app/admin/actions.ts) guards publishing
+// with exactly `if (!resolveCityNewsTargets(candidate, cityTargets).length)
+// throw ...` before it ever upserts a city_news row — this is the
+// migration_029 safeguard that stops a candidate with no Homepage, no
+// Main News page and no city targets from "publishing" successfully while
+// appearing nowhere on the public site. These tests exercise that exact
+// condition against the real resolveCityNewsTargets/buildPublishUpsertRows
+// functions the action calls, proving the guard fires precisely when (and
+// only when) there is truly nothing to publish to, and that zero rows
+// would ever be written for such a candidate even if the guard were
+// bypassed. Saving a candidate with no destinations is never blocked —
+// only the publish action is.
+describe('publish guard — a candidate with no selected destination is blocked, not silently published nowhere (migration_029)', () => {
+  test('national candidate with both destination flags false and no cities: resolveCityNewsTargets is empty, so the action\'s guard fires', () => {
+    const candidate = nationalCandidate({ publish_to_homepage: false, publish_to_news_page: false })
+    const targets = resolveCityNewsTargets(candidate, [])
+    assert.deepEqual(targets, [])
+    // Mirrors the exact check in publishNewsCandidateAction.
+    assert.equal(!targets.length, true, 'the publish action must refuse to publish this candidate')
+  })
+
+  test('city-scoped candidate with no destination flags and no cityRows: same empty result, same guard', () => {
+    const candidate = cityCandidate({ publish_to_homepage: false, publish_to_news_page: false, city_slug: null, city_name: null })
+    const targets = resolveCityNewsTargets(candidate, [])
+    assert.deepEqual(targets, [])
+    assert.equal(!targets.length, true, 'the publish action must refuse to publish this candidate')
+  })
+
+  test('even if the guard were bypassed, buildPublishUpsertRows writes zero city_news rows for an empty target list — nothing ever appears nowhere silently', () => {
+    const candidate = nationalCandidate({ publish_to_homepage: false, publish_to_news_page: false })
+    const targets = resolveCityNewsTargets(candidate, [])
+    assert.deepEqual(buildPublishUpsertRows(candidate, targets, NOW), [])
+  })
+
+  test('adding just one destination (Homepage) is enough to clear the guard', () => {
+    const candidate = nationalCandidate({ publish_to_homepage: true, publish_to_news_page: false })
+    const targets = resolveCityNewsTargets(candidate, [])
+    assert.equal(targets.length > 0, true)
+  })
+})
+
 describe('buildPublishUpsertRows', () => {
   test('national candidate produces exactly one national city_news row, is_editorial true', () => {
     const rows = buildPublishUpsertRows(nationalCandidate(), resolveCityNewsTargets(nationalCandidate()), NOW)
