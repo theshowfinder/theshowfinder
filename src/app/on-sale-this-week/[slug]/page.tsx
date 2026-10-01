@@ -5,6 +5,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
+import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 import {
   getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
@@ -228,15 +229,16 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
                         </p>
                       )}
                       {event.tickets_url && !isPast ? (
-                        <a
+                        <TrackedTicketLink
                           href={getTicketmasterAffiliateLink(event.tickets_url)}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          provider="Ticketmaster"
+                          section="primary"
+                          context={slug}
                           className="inline-block text-xs font-bold text-white px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity"
                           style={{ backgroundColor: '#E8003D' }}
                         >
                           Get Tickets
-                        </a>
+                        </TrackedTicketLink>
                       ) : (
                         <Link
                           href={`/events/${event.slug}`}
@@ -259,43 +261,44 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
 
               {/* Primary ticket sources */}
               {(dbArtist?.tickets_url ?? firstTicketUrl) && (
-                <a
+                <TrackedTicketLink
                   href={getTicketmasterAffiliateLink(dbArtist?.tickets_url ?? firstTicketUrl!)}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  provider="Ticketmaster"
+                  section="primary"
+                  context={slug}
                   className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: '#E8003D' }}
                 >
                   Get Tickets
-                </a>
+                </TrackedTicketLink>
               )}
               {dbArtist?.see_tickets_url && (
-                <a href={getSeeTicketsAffiliateLink(dbArtist.see_tickets_url)} target="_blank" rel="noopener noreferrer"
+                <TrackedTicketLink href={getSeeTicketsAffiliateLink(dbArtist.see_tickets_url)} provider="See Tickets" section="primary" context={slug}
                   className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: '#e4022d' }}>
                   See Tickets
-                </a>
+                </TrackedTicketLink>
               )}
               {dbArtist?.eventim_url && (
-                <a href={dbArtist.eventim_url} target="_blank" rel="noopener noreferrer"
+                <TrackedTicketLink href={dbArtist.eventim_url} provider="Eventim" section="primary" context={slug}
                   className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: '#00a4e0' }}>
                   Eventim
-                </a>
+                </TrackedTicketLink>
               )}
               {dbArtist?.axs_url && (
-                <a href={dbArtist.axs_url} target="_blank" rel="noopener noreferrer"
+                <TrackedTicketLink href={dbArtist.axs_url} provider="AXS" section="primary" context={slug}
                   className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: '#000000' }}>
                   AXS
-                </a>
+                </TrackedTicketLink>
               )}
               {dbArtist?.gigantic_url && (
-                <a href={dbArtist.gigantic_url} target="_blank" rel="noopener noreferrer"
+                <TrackedTicketLink href={dbArtist.gigantic_url} provider="Gigantic" section="primary" context={slug}
                   className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: '#e4022d' }}>
                   Gigantic
-                </a>
+                </TrackedTicketLink>
               )}
 
               {/* Tour info box */}
@@ -323,16 +326,17 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
                 <p className="text-xs text-slate-400 mb-4">Tickets available on secondary market</p>
                 <div className="space-y-2">
                   {secondaryMarket.map(({ name, bg, href }) => (
-                    <a
+                    <TrackedTicketLink
                       key={name}
                       href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      provider={name}
+                      section="secondary_market"
+                      context={slug}
                       className="block w-full text-center font-bold text-white py-2.5 px-4 rounded-xl text-sm hover:opacity-90 transition-opacity"
                       style={{ backgroundColor: bg }}
                     >
                       {name}
-                    </a>
+                    </TrackedTicketLink>
                   ))}
                 </div>
               </div>

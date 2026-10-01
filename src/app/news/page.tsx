@@ -92,7 +92,7 @@ export default async function NewsPage() {
             <p className="text-sm text-slate-500 mb-6">
               {items.length} stor{items.length !== 1 ? 'ies' : 'y'}
             </p>
-            <NewsCardGrid items={items} />
+            <NewsCardGrid items={items} context="news-page" />
           </>
         )}
       </div>

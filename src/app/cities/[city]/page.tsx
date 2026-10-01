@@ -306,7 +306,7 @@ export default async function CityPage({
                 {cityName} Entertainment News
               </h2>
             </div>
-            <NewsCardGrid items={cityNews} />
+            <NewsCardGrid items={cityNews} context={`city:${city}`} />
           </section>
         )}
 

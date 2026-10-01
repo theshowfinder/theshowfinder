@@ -8,6 +8,7 @@ import {
   getStubHubAffiliateLink, getGigsbergAffiliateLink, getVividSeatsAffiliateLink,
 } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
+import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { jsonLdScript, buildBreadcrumbSchema } from '@/lib/jsonld'
 
 export const dynamic = 'force-dynamic'
@@ -250,15 +251,16 @@ export default async function ArtistPage({ params }: PageProps) {
             <div className="sticky top-6 space-y-4">
               {artist.tickets_url && (
                 <div>
-                  <a
+                  <TrackedTicketLink
                     href={getTicketmasterAffiliateLink(artist.tickets_url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    provider="Ticketmaster"
+                    section="primary"
+                    context={artist.slug}
                     className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
                     style={{ backgroundColor: '#E8003D' }}
                   >
                     Get Tickets
-                  </a>
+                  </TrackedTicketLink>
                   <div className="mt-2 flex justify-center">
                     <CopyLinkButton link={getTicketmasterAffiliateLink(artist.tickets_url)} label="Share with friends" />
                   </div>
@@ -266,52 +268,56 @@ export default async function ArtistPage({ params }: PageProps) {
               )}
               {artist.see_tickets_url && (
                 <div>
-                  <a
+                  <TrackedTicketLink
                     href={getSeeTicketsAffiliateLink(artist.see_tickets_url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    provider="See Tickets"
+                    section="primary"
+                    context={artist.slug}
                     className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
                     style={{ backgroundColor: '#e4022d' }}
                   >
                     See Tickets
-                  </a>
+                  </TrackedTicketLink>
                   <div className="mt-2 flex justify-center">
                     <CopyLinkButton link={getSeeTicketsAffiliateLink(artist.see_tickets_url)} label="Share with friends" />
                   </div>
                 </div>
               )}
               {artist.eventim_url && (
-                <a
+                <TrackedTicketLink
                   href={artist.eventim_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  provider="Eventim"
+                  section="primary"
+                  context={artist.slug}
                   className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: '#00a4e0' }}
                 >
                   Eventim
-                </a>
+                </TrackedTicketLink>
               )}
               {artist.axs_url && (
-                <a
+                <TrackedTicketLink
                   href={artist.axs_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  provider="AXS"
+                  section="primary"
+                  context={artist.slug}
                   className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: '#000000' }}
                 >
                   AXS
-                </a>
+                </TrackedTicketLink>
               )}
               {artist.gigantic_url && (
-                <a
+                <TrackedTicketLink
                   href={artist.gigantic_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  provider="Gigantic"
+                  section="primary"
+                  context={artist.slug}
                   className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: '#e4022d' }}
                 >
                   Gigantic
-                </a>
+                </TrackedTicketLink>
               )}
 
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
@@ -347,16 +353,17 @@ export default async function ArtistPage({ params }: PageProps) {
                     { name: 'StubHub',     bg: '#400078', href: getStubHubAffiliateLink(artist.stubhub_url     ?? `https://www.stubhub.co.uk/srp/?q=${encodeURIComponent(artist.name)}`) },
                     { name: 'Vivid Seats', bg: '#02044a', href: getVividSeatsAffiliateLink(artist.vivid_seats_url ?? `https://www.vividseats.com/search?searchTerm=${encodeURIComponent(artist.name)}`) },
                   ].map(({ name, bg, href }) => (
-                    <a
+                    <TrackedTicketLink
                       key={name}
                       href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      provider={name}
+                      section="secondary_market"
+                      context={artist.slug}
                       className="block w-full text-center font-bold text-white py-2.5 px-4 rounded-xl text-sm hover:opacity-90 transition-opacity"
                       style={{ backgroundColor: bg }}
                     >
                       {name}
-                    </a>
+                    </TrackedTicketLink>
                   ))}
                 </div>
               </div>

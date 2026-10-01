@@ -14,6 +14,7 @@ import {
   getSeatUniqueAffiliateLink,
 } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
+import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { jsonLdScript, buildEventSchema, buildBreadcrumbSchema } from '@/lib/jsonld'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -253,29 +254,41 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
           {/* Desktop primary CTA */}
           {!isSoldOut ? (
-            <a
-              href={event.tickets_url ? getTicketmasterAffiliateLink(event.tickets_url) : '#tickets'}
-              target={event.tickets_url ? '_blank' : undefined}
-              rel={event.tickets_url ? 'noopener noreferrer' : undefined}
-              className="hidden md:inline-flex items-center gap-2 text-white font-extrabold text-lg px-8 py-4 rounded-xl hover:opacity-90 transition-opacity shadow-lg"
-              style={{ backgroundColor: '#E8003D' }}
-            >
-              Get Tickets ↗
-            </a>
+            event.tickets_url ? (
+              <TrackedTicketLink
+                href={getTicketmasterAffiliateLink(event.tickets_url)}
+                provider="Ticketmaster"
+                section="hero_cta"
+                context={event.slug}
+                className="hidden md:inline-flex items-center gap-2 text-white font-extrabold text-lg px-8 py-4 rounded-xl hover:opacity-90 transition-opacity shadow-lg"
+                style={{ backgroundColor: '#E8003D' }}
+              >
+                Get Tickets ↗
+              </TrackedTicketLink>
+            ) : (
+              <a
+                href="#tickets"
+                className="hidden md:inline-flex items-center gap-2 text-white font-extrabold text-lg px-8 py-4 rounded-xl hover:opacity-90 transition-opacity shadow-lg"
+                style={{ backgroundColor: '#E8003D' }}
+              >
+                Get Tickets ↗
+              </a>
+            )
           ) : event.status === 'cancelled' ? (
             <div className="hidden md:inline-flex items-center bg-slate-700 text-white/60 font-bold text-lg px-8 py-4 rounded-xl cursor-not-allowed">
               Event Cancelled
             </div>
           ) : (
-            <a
+            <TrackedTicketLink
               href={resale[0].href}
-              target="_blank"
-              rel="noopener noreferrer"
+              provider={resale[0].name}
+              section="hero_cta"
+              context={event.slug}
               className="hidden md:inline-flex items-center gap-2 text-white font-extrabold text-lg px-8 py-4 rounded-xl hover:opacity-90 transition-opacity shadow-lg"
               style={{ backgroundColor: resale[0].bg }}
             >
               Find Resale Tickets ↗
-            </a>
+            </TrackedTicketLink>
           )}
         </div>
       </section>
@@ -289,15 +302,26 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <p className="text-base font-extrabold text-slate-900 truncate">{priceLabel}</p>
             </div>
           )}
-          <a
-            href={event.tickets_url ? getTicketmasterAffiliateLink(event.tickets_url) : '#tickets'}
-            target={event.tickets_url ? '_blank' : undefined}
-            rel={event.tickets_url ? 'noopener noreferrer' : undefined}
-            className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm"
-            style={{ backgroundColor: '#E8003D' }}
-          >
-            Get Tickets ↗
-          </a>
+          {event.tickets_url ? (
+            <TrackedTicketLink
+              href={getTicketmasterAffiliateLink(event.tickets_url)}
+              provider="Ticketmaster"
+              section="hero_cta"
+              context={event.slug}
+              className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm"
+              style={{ backgroundColor: '#E8003D' }}
+            >
+              Get Tickets ↗
+            </TrackedTicketLink>
+          ) : (
+            <a
+              href="#tickets"
+              className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm"
+              style={{ backgroundColor: '#E8003D' }}
+            >
+              Get Tickets ↗
+            </a>
+          )}
         </div>
       )}
       {isSoldOut && event.status !== 'cancelled' && (
@@ -306,15 +330,16 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             <p className="text-xs text-slate-500 leading-none mb-0.5">Sold out</p>
             <p className="text-base font-extrabold text-slate-900 truncate">Check resale</p>
           </div>
-          <a
+          <TrackedTicketLink
             href={resale[0].href}
-            target="_blank"
-            rel="noopener noreferrer"
+            provider={resale[0].name}
+            section="hero_cta"
+            context={event.slug}
             className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm"
             style={{ backgroundColor: resale[0].bg }}
           >
             Find Resale ↗
-          </a>
+          </TrackedTicketLink>
         </div>
       )}
 
@@ -403,15 +428,16 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                   Buy Direct
                 </h3>
                 <p className="text-xs text-slate-400 mb-4">We hold tickets for this event</p>
-                <a
+                <TrackedTicketLink
                   href={event.own_ticket_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  provider="TheShowFinder Direct"
+                  section="buy_direct"
+                  context={event.slug}
                   className="flex items-center justify-center font-extrabold text-white rounded-xl px-5 py-4 hover:opacity-90 transition-opacity min-h-[56px] mb-3"
                   style={{ backgroundColor: '#E8003D' }}
                 >
                   Buy Direct →
-                </a>
+                </TrackedTicketLink>
                 <div className="flex justify-center">
                   <CopyLinkButton
                     link={`https://theshowfinder.com/go/${event.slug}`}
@@ -436,10 +462,11 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 <div className="flex flex-col gap-3">
                   {primary.map(({ name, tagline, bg, href }) => (
                     <div key={name}>
-                      <a
+                      <TrackedTicketLink
                         href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        provider={name}
+                        section="primary"
+                        context={event.slug}
                         className="flex items-center justify-between text-white rounded-xl px-5 py-4 hover:opacity-90 transition-opacity min-h-[60px]"
                         style={{ backgroundColor: bg }}
                       >
@@ -448,7 +475,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                           <p className="text-xs mt-0.5 opacity-70">{tagline}</p>
                         </div>
                         <span className="text-xl ml-3">→</span>
-                      </a>
+                      </TrackedTicketLink>
                       {(name === 'Ticketmaster' || name === 'See Tickets') && (
                         <div className="mt-2 flex justify-end">
                           <CopyLinkButton link={href} label="Share with friends" />
@@ -466,16 +493,17 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <p className="text-xs text-slate-400 mb-4">Compare prices across resale platforms</p>
               <div className="grid grid-cols-2 gap-3">
                 {resale.map(({ name, bg, href }) => (
-                  <a
+                  <TrackedTicketLink
                     key={name}
                     href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    provider={name}
+                    section="more_options"
+                    context={event.slug}
                     className="flex items-center justify-center font-bold text-sm text-white rounded-xl py-3.5 hover:opacity-90 transition-opacity min-h-[48px]"
                     style={{ backgroundColor: bg }}
                   >
                     {name}
-                  </a>
+                  </TrackedTicketLink>
                 ))}
               </div>
               <p className="text-xs text-slate-400 mt-4 leading-relaxed">
@@ -488,16 +516,17 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-4">Also Available</h3>
               <div className="grid grid-cols-2 gap-3">
                 {also.map(({ name, bg, color, href }) => (
-                  <a
+                  <TrackedTicketLink
                     key={name}
                     href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    provider={name}
+                    section="also_available"
+                    context={event.slug}
                     className="flex items-center justify-center font-bold text-sm rounded-xl py-3.5 hover:opacity-90 transition-opacity min-h-[48px]"
                     style={{ backgroundColor: bg, color: color ?? '#ffffff' }}
                   >
                     {name}
-                  </a>
+                  </TrackedTicketLink>
                 ))}
               </div>
             </div>

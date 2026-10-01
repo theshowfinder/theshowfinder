@@ -314,7 +314,7 @@ async function NationalNews() {
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Entertainment News</h2>
           </div>
         </div>
-        <NewsCardGrid items={items} />
+        <NewsCardGrid items={items} context="homepage" />
       </div>
     </section>
   )
