@@ -42,6 +42,22 @@ export const metadata: Metadata = {
     description: 'Discover and compare tickets for concerts, theatre, comedy and live events across the UK.',
     images:      [OG_IMAGE],
   },
+  icons: {
+    // App Router also auto-serves src/app/favicon.ico, src/app/icon.png
+    // and src/app/apple-icon.png by filename convention, but these are
+    // listed explicitly too — matching how the rest of this file's
+    // metadata is hand-specified rather than left to convention — so the
+    // full icon set survives even if a crawler or client only reads
+    // <link rel> tags rather than resolving Next's file-based icons.
+    icon: [
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icon.png', sizes: '512x512', type: 'image/png' },
+    ],
+    shortcut: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
+  },
+  manifest: '/site.webmanifest',
   other: {
     'impact-site-verification': 'c168f3c5-519c-42fa-a56a-61a670276ba4',
   },
