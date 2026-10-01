@@ -841,7 +841,11 @@ export async function publishNewsCandidateAction(id: string) {
     redirect('/admin/news/' + id + '?error=' + encodeURIComponent(message))
   }
 
-  redirect('/admin/news/' + id + '?saved=1')
+  // A distinct query param from plain '?saved=1' (used by update/unpublish)
+  // so the candidate page can show a specific "live at: ..." confirmation
+  // rather than the generic "saved" banner — requirement 4's "show the
+  // resulting live URLs after publication".
+  redirect('/admin/news/' + id + '?published=1')
 }
 
 // Removes every city_news row a published candidate created (one per

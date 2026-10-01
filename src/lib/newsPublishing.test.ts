@@ -34,6 +34,7 @@ import {
   isCandidateVisibleAtDestination,
   STALE_PENDING_MS,
   STALE_APPROVED_MS,
+  describeDestinations,
 } from './newsPublishing.ts'
 
 const NOW = '2026-09-30T12:00:00.000Z'
@@ -827,5 +828,28 @@ describe('isCandidateVisibleAtDestination', () => {
   test('false when the candidate url is not present in the destination rows at all', () => {
     const rows = [row('https://b.com/other', '2026-10-01T09:00:00.000Z')]
     assert.equal(isCandidateVisibleAtDestination('https://a.com/story', rows, 5), false)
+  })
+})
+
+describe('describeDestinations', () => {
+  test('both flags off, no cities — empty list', () => {
+    assert.deepEqual(describeDestinations({ publish_to_homepage: false, publish_to_news_page: false }, []), [])
+  })
+
+  test('Homepage only', () => {
+    assert.deepEqual(describeDestinations({ publish_to_homepage: true, publish_to_news_page: false }, []), ['Homepage'])
+  })
+
+  test('Main News page only', () => {
+    assert.deepEqual(describeDestinations({ publish_to_homepage: false, publish_to_news_page: true }, []), ['Main News page'])
+  })
+
+  test('Homepage + Main News page + multiple cities, in a fixed order', () => {
+    const result = describeDestinations({ publish_to_homepage: true, publish_to_news_page: true }, ['Derby', 'Nottingham'])
+    assert.deepEqual(result, ['Homepage', 'Main News page', 'Derby', 'Nottingham'])
+  })
+
+  test('cities only, no homepage/news page', () => {
+    assert.deepEqual(describeDestinations({ publish_to_homepage: false, publish_to_news_page: false }, ['Leicester']), ['Leicester'])
   })
 })

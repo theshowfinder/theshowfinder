@@ -15,11 +15,12 @@ import {
 } from '../../actions'
 import NewsCandidateForm from '../NewsCandidateForm'
 import ConfirmSubmitButton from '../ConfirmSubmitButton'
+import { describeDestinations } from '@/lib/newsPublishing'
 import type { NewsCandidate } from '@/lib/types/database'
 
 interface PageProps {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ created?: string; saved?: string; error?: string }>
+  searchParams: Promise<{ created?: string; saved?: string; published?: string; error?: string }>
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -32,7 +33,7 @@ const STATUS_STYLE: Record<string, string> = {
 export default async function EditNewsCandidatePage({ params, searchParams }: PageProps) {
   await requireAdmin()
   const { id } = await params
-  const { created, saved, error } = await searchParams
+  const { created, saved, published, error } = await searchParams
   const db = createAdminClient()
 
   const [{ data: candidate }, { data: artists }, { data: cityRows }] = await Promise.all([
@@ -72,6 +73,13 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
   // candidate with zero resolved targets.
   const hasNoDestinations = !candidate.publish_to_homepage && !candidate.publish_to_news_page && cityNames.length === 0
 
+  // Exactly what resolveCityNewsTargets would resolve to if published right
+  // now — used for both the "this will publish to..." summary and the
+  // confirm-dialog message, so neither can drift from what Publish actually
+  // does (requirement 4: "visibly confirm the destinations").
+  const destinations = describeDestinations(candidate, cityNames)
+  const destinationsSummary = destinations.join(', ')
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4">
@@ -96,6 +104,19 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
             ✓ Saved successfully
           </div>
         )}
+        {published && (
+          <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm">
+            <p className="font-semibold">✓ Published — now live at:</p>
+            <p className="mt-1">
+              {liveNewsPaths.map((path, i) => (
+                <span key={path}>
+                  {i > 0 && ', '}
+                  <Link href={path} target="_blank" className="text-blue-700 hover:underline font-semibold">{path}</Link>
+                </span>
+              ))}
+            </p>
+          </div>
+        )}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-3 text-sm font-semibold">
             ⚠ {error}
@@ -108,6 +129,12 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
           {hasNoDestinations && candidate.review_status === 'approved' && (
             <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm font-semibold mb-4">
               ⚠ No publishing destination selected (no Homepage, no Main News page, no cities). Publishing now will be blocked — edit the story below and choose at least one destination first.
+            </div>
+          )}
+
+          {!hasNoDestinations && candidate.review_status === 'approved' && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-xl px-4 py-3 text-sm mb-4">
+              This will publish to: <span className="font-semibold">{destinationsSummary}</span>
             </div>
           )}
 
@@ -129,11 +156,17 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
 
             {candidate.review_status === 'approved' && (
               <>
-                <form action={publishAction}>
-                  <button type="submit" className="text-sm font-bold px-4 py-2 rounded-xl bg-green-600 text-white hover:opacity-90 transition-opacity">
-                    Publish to site
-                  </button>
-                </form>
+                <ConfirmSubmitButton
+                  action={publishAction}
+                  confirmMessage={
+                    hasNoDestinations
+                      ? `Publish "${candidate.headline}"? No destination is selected, so this will be blocked — add a destination first.`
+                      : `Publish "${candidate.headline}" to: ${destinationsSummary}? It will appear on the live site immediately.`
+                  }
+                  className="text-sm font-bold px-4 py-2 rounded-xl bg-green-600 text-white hover:opacity-90 transition-opacity"
+                >
+                  Publish to site
+                </ConfirmSubmitButton>
                 <form action={rejectAction}>
                   <button type="submit" className="text-sm font-bold px-4 py-2 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
                     Reject
@@ -157,11 +190,13 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
 
             {candidate.review_status === 'published' && (
               <>
-                <form action={publishAction}>
-                  <button type="submit" className="text-sm font-semibold px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
-                    Re-publish (refresh live card{cityNames.length > 1 ? 's' : ''})
-                  </button>
-                </form>
+                <ConfirmSubmitButton
+                  action={publishAction}
+                  confirmMessage={`Re-publish "${candidate.headline}" to: ${destinationsSummary}? This refreshes the live card${cityNames.length > 1 ? 's' : ''} immediately.`}
+                  className="text-sm font-semibold px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                >
+                  Re-publish (refresh live card{cityNames.length > 1 ? 's' : ''})
+                </ConfirmSubmitButton>
                 <ConfirmSubmitButton
                   action={unpublishAction}
                   confirmMessage={`Unpublish "${candidate.headline}"? This removes it from the live site immediately${cityNames.length > 1 ? ` (all ${cityNames.length} cities)` : ''}. The story stays in the queue as Approved, so you can publish it again later.`}

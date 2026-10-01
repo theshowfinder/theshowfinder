@@ -375,3 +375,22 @@ export function isCandidateVisibleAtDestination(
 ): boolean {
   return rankCityNewsForDisplay(destinationRows, limit).some(r => r.url === candidateUrl)
 }
+
+// ── Publish destination summary (Phase 4, requirement 4) ────────────────
+//
+// Human-readable list of exactly where a candidate will appear if
+// published right now — used both for the "this will publish to..."
+// summary shown before publishing and the confirm-dialog message, so both
+// are built from the exact same facts resolveCityNewsTargets itself uses
+// (Homepage/Main News page flags plus the real target city list), not a
+// second hand-written description that could drift out of sync.
+export function describeDestinations(
+  candidate: Pick<NewsCandidate, 'publish_to_homepage' | 'publish_to_news_page'>,
+  cityNames: string[]
+): string[] {
+  const parts: string[] = []
+  if (candidate.publish_to_homepage) parts.push('Homepage')
+  if (candidate.publish_to_news_page) parts.push('Main News page')
+  parts.push(...cityNames)
+  return parts
+}
