@@ -4,16 +4,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { Bars3Icon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { useRouter } from 'next/navigation'
-
-const nav = [
-  { label: 'News',     href: '/news' },
-  { label: 'On Sale',  href: '/on-sale-this-week' },
-  { label: 'Concerts', href: '/events?category=concert' },
-  { label: 'Theatre',  href: '/events?category=theatre' },
-  { label: 'Comedy',   href: '/events?category=comedy'  },
-  { label: 'Sports',   href: '/events?category=sports'  },
-  { label: 'Family',   href: '/events?category=family'  },
-]
+import { NAV_LINKS, PRIMARY_CTA } from '@/lib/headerLinks'
 
 export default function Header() {
   const [menuOpen,   setMenuOpen]   = useState(false)
@@ -45,7 +36,7 @@ export default function Header() {
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1">
-            {nav.map(({ label, href }) => (
+            {NAV_LINKS.map(({ label, href }) => (
               <Link
                 key={label}
                 href={href}
@@ -65,15 +56,12 @@ export default function Header() {
             >
               <MagnifyingGlassIcon className="h-5 w-5" />
             </button>
-            <Link href="/login" className="text-sm font-medium text-white/80 hover:text-white transition-colors px-3 py-2">
-              Sign in
-            </Link>
             <Link
-              href="/signup"
+              href={PRIMARY_CTA.href}
               className="text-sm font-bold text-white px-4 py-2 rounded-lg hover:opacity-90 transition-opacity min-h-[40px] flex items-center"
               style={{ backgroundColor: '#E8003D' }}
             >
-              Sign up free
+              {PRIMARY_CTA.label}
             </Link>
           </div>
 
@@ -124,7 +112,7 @@ export default function Header() {
       {/* Mobile nav menu */}
       {menuOpen && (
         <div className="md:hidden border-t border-white/10 px-4 py-3 space-y-1" style={{ backgroundColor: '#1A1A2E' }}>
-          {nav.map(({ label, href }) => (
+          {NAV_LINKS.map(({ label, href }) => (
             <Link
               key={label}
               href={href}
@@ -134,22 +122,16 @@ export default function Header() {
               {label}
             </Link>
           ))}
-          <div className="pt-3 border-t border-white/10 flex gap-3">
+          <div className="pt-3 border-t border-white/10">
             <Link
-              href="/login"
+              href={PRIMARY_CTA.href}
               onClick={() => setMenuOpen(false)}
-              className="flex-1 text-center text-sm font-semibold text-white border border-white/30 py-3 rounded-xl hover:bg-white/10 transition-colors min-h-[48px] flex items-center justify-center"
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/signup"
-              onClick={() => setMenuOpen(false)}
-              className="flex-1 text-center text-sm font-bold text-white py-3 rounded-xl hover:opacity-90 transition-opacity min-h-[48px] flex items-center justify-center"
+              className="text-center text-sm font-bold text-white py-3 rounded-xl hover:opacity-90 transition-opacity min-h-[48px] flex items-center justify-center"
               style={{ backgroundColor: '#E8003D' }}
             >
-              Sign up free
+              {PRIMARY_CTA.label}
             </Link>
+            <p className="text-center text-white/50 text-xs mt-2">Just your email — no password, no account needed.</p>
           </div>
         </div>
       )}

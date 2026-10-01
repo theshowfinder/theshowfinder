@@ -37,7 +37,10 @@ export default function NewsletterSignup() {
   }
 
   return (
-    <section className="w-full py-20 px-4" style={{ backgroundColor: '#E8003D' }}>
+    // scroll-mt-20 keeps this section clear of the sticky header (h-16 /
+    // 64px) when visitors land here via the header's "Get Ticket Alerts"
+    // CTA (href="/#newsletter") rather than scrolling down manually.
+    <section id="newsletter" className="w-full py-20 px-4 scroll-mt-20" style={{ backgroundColor: '#E8003D' }}>
       <div className="max-w-2xl mx-auto text-center">
 
         <h2 className="text-4xl sm:text-5xl font-extrabold text-white mb-4 leading-tight tracking-tight">
@@ -82,7 +85,7 @@ export default function NewsletterSignup() {
           </>
         )}
 
-        <p className="mt-5 text-white/50 text-sm">No spam. Unsubscribe any time.</p>
+        <p className="mt-5 text-white/50 text-sm">Just your email — no password or account needed. No spam, unsubscribe any time.</p>
       </div>
     </section>
   )
