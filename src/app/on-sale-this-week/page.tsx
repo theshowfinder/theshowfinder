@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/server'
 import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 
+const OSW_OG_IMAGE = 'https://www.theshowfinder.com/og-image.png'
+
 export const metadata: Metadata = {
   title:       'Tickets On Sale This Week',
   description: 'See which concerts and live events just went on sale this week in the UK. Be first to grab tickets before they sell out.',
@@ -14,6 +16,13 @@ export const metadata: Metadata = {
     title:       'Tickets On Sale This Week | TheShowFinder',
     description: 'See which concerts and live events just went on sale this week in the UK. Be first to grab tickets before they sell out.',
     url:         'https://www.theshowfinder.com/on-sale-this-week',
+    images:      [{ url: OSW_OG_IMAGE, width: 1200, height: 630, alt: 'Tickets On Sale This Week | TheShowFinder' }],
+  },
+  twitter: {
+    card:        'summary_large_image',
+    title:       'Tickets On Sale This Week | TheShowFinder',
+    description: 'See which concerts and live events just went on sale this week in the UK. Be first to grab tickets before they sell out.',
+    images:      [OSW_OG_IMAGE],
   },
 }
 

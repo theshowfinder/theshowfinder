@@ -5,15 +5,24 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 
+const HOME_OG_DESCRIPTION = 'Discover and compare tickets for concerts, theatre, comedy and live events across the UK. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.'
+const HOME_OG_IMAGE = 'https://www.theshowfinder.com/og-image.png'
+
 export const metadata: Metadata = {
   title: { absolute: 'TheShowFinder | Find Concerts & Live Events in the UK' },
-  description:
-    'Discover and compare tickets for concerts, theatre, comedy and live events across the UK. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.',
+  description: HOME_OG_DESCRIPTION,
   alternates: { canonical: 'https://www.theshowfinder.com' },
   openGraph: {
     title:       'TheShowFinder | Find Concerts & Live Events in the UK',
-    description: 'Discover and compare tickets for concerts, theatre, comedy and live events across the UK. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.',
+    description: HOME_OG_DESCRIPTION,
     url:         'https://www.theshowfinder.com',
+    images:      [{ url: HOME_OG_IMAGE, width: 1200, height: 630, alt: 'TheShowFinder — Find Your Next Unforgettable Show' }],
+  },
+  twitter: {
+    card:        'summary_large_image',
+    title:       'TheShowFinder | Find Concerts & Live Events in the UK',
+    description: HOME_OG_DESCRIPTION,
+    images:      [HOME_OG_IMAGE],
   },
 }
 import EventCard from '@/components/EventCard'

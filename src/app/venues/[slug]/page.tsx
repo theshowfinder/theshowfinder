@@ -38,14 +38,28 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!venue) return { title: 'Venue Not Found' }
 
-  const capStr = venue.capacity ? ` — Capacity ${venue.capacity.toLocaleString('en-GB')}` : ''
+  const capStr      = venue.capacity ? ` — Capacity ${venue.capacity.toLocaleString('en-GB')}` : ''
+  const title        = `${venue.name}, ${venue.city} | TheShowFinder`
+  const ogDescription = `Upcoming events at ${venue.name} in ${venue.city}${capStr}.`
+  const canonical     = `https://www.theshowfinder.com/venues/${slug}`
+  const ogImage       = 'https://www.theshowfinder.com/og-image.png'
+
   return {
-    title:       `${venue.name}, ${venue.city} | TheShowFinder`,
+    title,
     description: `Upcoming events at ${venue.name} in ${venue.city}${capStr}. Find tickets for all shows.`,
+    alternates:  { canonical },
     openGraph: {
-      title:       `${venue.name}, ${venue.city} | TheShowFinder`,
-      description: `Upcoming events at ${venue.name} in ${venue.city}${capStr}.`,
+      title,
+      description: ogDescription,
       type:        'website',
+      url:         canonical,
+      images:      [{ url: ogImage, width: 1200, height: 630, alt: title }],
+    },
+    twitter: {
+      card:        'summary_large_image',
+      title,
+      description: ogDescription,
+      images:      [ogImage],
     },
   }
 }

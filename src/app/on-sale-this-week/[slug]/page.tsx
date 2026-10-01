@@ -41,9 +41,29 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const merged = mergeEventResults(broadResult.data, targetedResult.data)
   const group  = groupEventsByArtist(merged, arResult.data ?? []).find(g => g.slug === slug)
   if (!group) return { title: 'On Sale This Week' }
+
+  const title       = `${group.artistName} — On Sale This Week | TheShowFinder`
+  const description = `${group.events.length} UK date${group.events.length !== 1 ? 's' : ''} going on sale ${fmtOnSaleLabel(group.onsale_date)}`
+  const canonical    = `https://www.theshowfinder.com/on-sale-this-week/${slug}`
+  const ogImage      = 'https://www.theshowfinder.com/og-image.png'
+
   return {
-    title: `${group.artistName} — On Sale This Week | TheShowFinder`,
-    description: `${group.events.length} UK date${group.events.length !== 1 ? 's' : ''} going on sale ${fmtOnSaleLabel(group.onsale_date)}`,
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      title,
+      description,
+      type:   'website',
+      url:    canonical,
+      images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [ogImage],
+    },
   }
 }
 

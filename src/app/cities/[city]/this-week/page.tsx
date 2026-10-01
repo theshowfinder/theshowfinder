@@ -32,11 +32,23 @@ export async function generateMetadata(
   const canonical = `https://www.theshowfinder.com/cities/${encodeURIComponent(cityName)}/this-week`
   const title     = `Events This Week in ${cityName}`
   const desc      = `What's on in ${cityName} this week — concerts, theatre, comedy, sport and family events. Compare ticket prices across every major provider.`
+  const ogImage   = 'https://www.theshowfinder.com/og-image.png'
   return {
     title,
     description: desc,
     alternates:  { canonical },
-    openGraph:   { title, description: desc, url: canonical },
+    openGraph: {
+      title,
+      description: desc,
+      url:    canonical,
+      images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
+    },
+    twitter: {
+      card:        'summary_large_image',
+      title,
+      description: desc,
+      images:      [ogImage],
+    },
   }
 }
 

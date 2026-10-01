@@ -4,6 +4,7 @@ import Link from 'next/link'
 export const metadata: Metadata = {
   title: 'Cookie Policy',
   description: 'How TheShowFinder uses cookies and similar tracking technologies.',
+  alternates: { canonical: 'https://www.theshowfinder.com/cookies' },
 }
 
 export default function CookiesPage() {

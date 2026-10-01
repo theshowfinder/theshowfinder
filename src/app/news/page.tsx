@@ -5,7 +5,10 @@ import { createClient } from '@/lib/supabase/server'
 import { NEWS_HUB_SLUG } from '@/lib/cityNews'
 import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 import NewsCardGrid from '@/components/NewsCardGrid'
+import { jsonLdScript, buildItemListSchema } from '@/lib/jsonld'
 import type { CityNews } from '@/lib/types/database'
+
+const NEWS_OG_IMAGE = 'https://www.theshowfinder.com/og-image.png'
 
 export const metadata: Metadata = {
   title:       'Latest News — Tour Announcements & Ticket News',
@@ -15,6 +18,13 @@ export const metadata: Metadata = {
     title:       'Latest News | TheShowFinder',
     description: 'The latest UK concert, theatre, comedy and sports news — presale windows, on-sale dates and tour announcements, curated by TheShowFinder.',
     url:         'https://www.theshowfinder.com/news',
+    images:      [{ url: NEWS_OG_IMAGE, width: 1200, height: 630, alt: 'Latest News | TheShowFinder' }],
+  },
+  twitter: {
+    card:        'summary_large_image',
+    title:       'Latest News | TheShowFinder',
+    description: 'The latest UK concert, theatre, comedy and sports news — presale windows, on-sale dates and tour announcements, curated by TheShowFinder.',
+    images:      [NEWS_OG_IMAGE],
   },
 }
 
@@ -46,8 +56,16 @@ export default async function NewsPage() {
   // and unit-tested rather than implicit in a Supabase query string.
   const items = rankCityNewsForDisplay(data ?? [], 100)
 
+  const itemListSchema = buildItemListSchema(items.map(i => ({ name: i.headline, url: i.url })))
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
+      {items.length > 0 && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdScript(itemListSchema) }}
+        />
+      )}
       <div style={{ backgroundColor: '#1A1A2E' }} className="py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <p className="font-bold text-xs uppercase tracking-widest mb-2" style={{ color: '#026CDF' }}>

@@ -4,6 +4,7 @@ import Link from 'next/link'
 export const metadata: Metadata = {
   title: 'Privacy Policy',
   description: 'How TheShowFinder collects, uses, and protects your personal data.',
+  alternates: { canonical: 'https://www.theshowfinder.com/privacy-policy' },
 }
 
 export default function PrivacyPolicyPage() {

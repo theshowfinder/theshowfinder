@@ -4,6 +4,7 @@ import Link from 'next/link'
 export const metadata: Metadata = {
   title: 'Terms of Service',
   description: 'Terms of Service for TheShowFinder — UK events discovery platform.',
+  alternates: { canonical: 'https://www.theshowfinder.com/terms' },
 }
 
 export default function TermsPage() {

@@ -33,11 +33,24 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
     ? `https://www.theshowfinder.com/events?city=${encodeURIComponent(city)}`
     : `https://www.theshowfinder.com/events`
 
+  const ogImage = 'https://www.theshowfinder.com/og-image.png'
+
   return {
     title,
     description: BASE_DESCRIPTION,
     alternates:  { canonical },
-    openGraph:   { title, description: BASE_DESCRIPTION, url: canonical },
+    openGraph: {
+      title,
+      description: BASE_DESCRIPTION,
+      url:    canonical,
+      images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
+    },
+    twitter: {
+      card:        'summary_large_image',
+      title,
+      description: BASE_DESCRIPTION,
+      images:      [ogImage],
+    },
   }
 }
 
