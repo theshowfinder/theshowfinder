@@ -355,6 +355,7 @@ export interface Database {
           email: string
           confirmed: boolean
           city: string | null
+          unsubscribed_at: string | null
           created_at: string
         }
         Insert: {
@@ -362,11 +363,52 @@ export interface Database {
           email: string
           confirmed?: boolean
           city?: string | null
+          unsubscribed_at?: string | null
           created_at?: string
         }
         Update: {
           confirmed?: boolean
           city?: string | null
+          unsubscribed_at?: string | null
+        }
+      }
+      newsletters: {
+        Row: {
+          id: string
+          subject: string
+          intro: string
+          article_ids: string[]
+          status: 'draft' | 'sent'
+          test_sent_at: string | null
+          test_sent_to: string | null
+          sent_at: string | null
+          sent_count: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          subject: string
+          intro?: string
+          article_ids?: string[]
+          status?: 'draft' | 'sent'
+          test_sent_at?: string | null
+          test_sent_to?: string | null
+          sent_at?: string | null
+          sent_count?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          subject?: string
+          intro?: string
+          article_ids?: string[]
+          status?: 'draft' | 'sent'
+          test_sent_at?: string | null
+          test_sent_to?: string | null
+          sent_at?: string | null
+          sent_count?: number | null
+          updated_at?: string
         }
       }
       local_businesses: {
@@ -615,3 +657,5 @@ export type LocalBusiness = Database['public']['Tables']['local_businesses']['Ro
 export type CityNews = Database['public']['Tables']['city_news']['Row']
 export type NewsCandidate = Database['public']['Tables']['news_candidates']['Row']
 export type NewsCandidateCity = Database['public']['Tables']['news_candidate_cities']['Row']
+export type Subscriber = Database['public']['Tables']['subscribers']['Row']
+export type Newsletter = Database['public']['Tables']['newsletters']['Row']
