@@ -279,3 +279,99 @@ export function describeDuplicateUrl(
   }
   return null
 }
+
+// ── Admin queue health (Phase 4: "Fresh News & Editorial Operations") ──────
+//
+// Pure "does this candidate need an admin's attention right now" logic for
+// the /admin/news queue — factored out so the queue page can both render a
+// per-row badge and compute an aggregate count/filter from the exact same
+// rules, and so the rules themselves are unit-tested rather than living
+// only as inline JSX conditionals.
+
+export type NewsCandidateAttentionReason =
+  | 'no_destination'          // approved/pending with nowhere to publish to
+  | 'stale_pending'           // sat in 'pending' too long, nobody's looked at it
+  | 'approved_not_published'  // reviewed and approved, but never actually published
+  | 'ai_suggestion_failed'    // a URL import's AI call ran but produced nothing usable
+
+// 2 days unreviewed is long enough that it's not "just added this morning"
+// but short enough that it still means something actionable today.
+export const STALE_PENDING_MS = 2 * 24 * 60 * 60 * 1000
+// 1 day approved-but-not-published usually means it was approved and then
+// forgotten, not that someone's still actively deciding on it.
+export const STALE_APPROVED_MS = 24 * 60 * 60 * 1000
+
+type CandidateAttentionFields = Pick<
+  NewsCandidate,
+  'review_status' | 'discovered_at' | 'reviewed_at' | 'intake_method' | 'ai_model' | 'ai_suggestions'
+>
+
+// A URL-imported candidate's AI call is only counted as having *failed*
+// (as opposed to "no suggestion was ever attempted", e.g. a manual
+// candidate, or "not configured", e.g. ANTHROPIC_API_KEY unset site-wide —
+// that's a one-time configuration fact, not a per-candidate problem, and
+// is surfaced separately where it's actually actionable) when: it's a
+// url_import candidate, a model was actually invoked (ai_model is set —
+// requestAiSuggestions in newsAiSuggestions.ts leaves this null only when
+// no API key was configured at all), and the suggestion that came back has
+// no usable headline despite having warnings recorded against it — the
+// exact shape requestAiSuggestions produces on a non-2xx response, a
+// timeout, a network error, an empty response body, or unparseable JSON.
+export function didAiSuggestionFail(candidate: Pick<NewsCandidate, 'intake_method' | 'ai_model' | 'ai_suggestions'>): boolean {
+  if (candidate.intake_method !== 'url_import') return false
+  if (!candidate.ai_model) return false
+  const ai = candidate.ai_suggestions as { headline?: string | null; warnings?: string[] } | null
+  if (!ai) return false
+  if (ai.headline) return false
+  return Array.isArray(ai.warnings) && ai.warnings.length > 0
+}
+
+// `hasNoDestination` is the caller's own `!resolveCityNewsTargets(candidate,
+// cityRows).length` result — passed in rather than recomputed here so this
+// stays a pure function of already-known facts, with no second definition
+// of what counts as a destination to keep in sync.
+export function candidateAttentionReasons(
+  candidate: CandidateAttentionFields,
+  hasNoDestination: boolean,
+  now: number
+): NewsCandidateAttentionReason[] {
+  const reasons: NewsCandidateAttentionReason[] = []
+
+  if ((candidate.review_status === 'pending' || candidate.review_status === 'approved') && hasNoDestination) {
+    reasons.push('no_destination')
+  }
+
+  if (candidate.review_status === 'pending' && now - new Date(candidate.discovered_at).getTime() > STALE_PENDING_MS) {
+    reasons.push('stale_pending')
+  }
+
+  if (
+    candidate.review_status === 'approved' &&
+    candidate.reviewed_at &&
+    now - new Date(candidate.reviewed_at).getTime() > STALE_APPROVED_MS
+  ) {
+    reasons.push('approved_not_published')
+  }
+
+  if (didAiSuggestionFail(candidate)) {
+    reasons.push('ai_suggestion_failed')
+  }
+
+  return reasons
+}
+
+// Did a published candidate's own city_news row actually make it into the
+// visible top-N for one of its destinations? A story can be live
+// (published_to_city_news_at set, is_editorial row present) and still be
+// invisible to a real visitor once enough newer content — RSS or other
+// editorial — has pushed it out of rankCityNewsForDisplay's slice. Takes
+// the already-fetched rows for one destination (one city_news.city_slug)
+// and the real page limit that destination renders with (5 for a city
+// page, 6 for the homepage, effectively unbounded for /news).
+export function isCandidateVisibleAtDestination(
+  candidateUrl: string,
+  destinationRows: { url: string; published_at: string | null }[],
+  limit: number
+): boolean {
+  return rankCityNewsForDisplay(destinationRows, limit).some(r => r.url === candidateUrl)
+}

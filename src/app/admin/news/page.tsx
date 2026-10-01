@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { candidateAttentionReasons, resolveCityNewsTargets, type NewsCandidateAttentionReason } from '@/lib/newsPublishing'
 import type { NewsCandidate } from '@/lib/types/database'
 
 const STATUS_STYLE: Record<string, string> = {
@@ -26,9 +27,20 @@ const STORY_TYPE_LABEL: Record<string, string> = {
   general_entertainment: 'General',
 }
 
+const ATTENTION_LABEL: Record<NewsCandidateAttentionReason, string> = {
+  no_destination:         'No publishing destination selected',
+  stale_pending:          'Pending review for 2+ days',
+  approved_not_published: 'Approved but not published for 24h+',
+  ai_suggestion_failed:   'AI suggestion failed',
+}
+
 // Review-queue ordering: pending stories surface first (that's the actual
 // inbox), then approved (waiting to publish), then the two resolved states.
-// Within a status, highest priority and newest-discovered sort first.
+// Within a status, highest priority and newest-discovered sort first. This
+// is the queue's one fixed row order — filters (below) narrow which rows
+// are shown, they never change how the shown rows are ordered, so the
+// mental model stays simple: "find the thing, then look at it in a
+// consistent place".
 const STATUS_RANK: Record<string, number> = { pending: 0, approved: 1, published: 2, rejected: 3 }
 const PRIORITY_RANK: Record<string, number> = { high: 0, normal: 1, low: 2 }
 
@@ -47,9 +59,37 @@ function fmtDate(value: string | null): string {
   return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
 }
 
-export default async function NewsCandidatesAdminPage() {
+const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+function Chip({ label, active, href, tone }: { label: string; active: boolean; href: string; tone?: 'amber' }) {
+  const activeClasses = tone === 'amber'
+    ? 'bg-amber-600 text-white border-amber-600'
+    : 'bg-slate-900 text-white border-slate-900'
+  return (
+    <Link
+      href={href}
+      className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+        active ? activeClasses : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+      }`}
+    >
+      {label}
+    </Link>
+  )
+}
+
+interface SearchParams {
+  status?: string
+  provenance?: string
+  priority?: string
+  recent?: string
+  attention?: string
+}
+
+export default async function NewsCandidatesAdminPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   await requireAdmin()
+  const params = await searchParams
   const db = createAdminClient()
+  const now = new Date().getTime()
 
   const { data: candidates } = await db
     .from('news_candidates')
@@ -57,36 +97,38 @@ export default async function NewsCandidatesAdminPage() {
     .order('discovered_at', { ascending: false })
     .limit(200) as unknown as { data: NewsCandidate[] | null }
 
-  const rows = sortCandidates(candidates ?? [])
-  const pendingCount = rows.filter(r => r.review_status === 'pending').length
+  const allRows = sortCandidates(candidates ?? [])
 
   // One extra query for every candidate's target cities (Phase 2 —
   // supersedes the single city_name column for anything beyond display).
-  const { data: cityRows } = rows.length
+  const { data: cityRows } = allRows.length
     ? await db
         .from('news_candidate_cities')
-        .select('candidate_id, city_name')
-        .in('candidate_id', rows.map(r => r.id)) as unknown as { data: { candidate_id: string; city_name: string }[] | null }
-    : { data: [] as { candidate_id: string; city_name: string }[] }
+        .select('candidate_id, city_slug, city_name')
+        .in('candidate_id', allRows.map(r => r.id)) as unknown as { data: { candidate_id: string; city_slug: string; city_name: string }[] | null }
+    : { data: [] as { candidate_id: string; city_slug: string; city_name: string }[] }
 
-  const citiesByCandidate = new Map<string, string[]>()
+  const citiesByCandidate = new Map<string, { city_slug: string; city_name: string }[]>()
   for (const row of cityRows ?? []) {
     const list = citiesByCandidate.get(row.candidate_id) ?? []
-    list.push(row.city_name)
+    list.push({ city_slug: row.city_slug, city_name: row.city_name })
     citiesByCandidate.set(row.candidate_id, list)
+  }
+
+  function cityNamesFor(item: NewsCandidate): string[] {
+    const rows = citiesByCandidate.get(item.id) ?? (item.city_name ? [{ city_slug: item.city_slug ?? '', city_name: item.city_name }] : [])
+    return rows.map(r => r.city_name)
   }
 
   function scopeLabel(item: NewsCandidate): string {
     if (item.scope_type === 'national') return 'National'
-    const cities = citiesByCandidate.get(item.id) ?? (item.city_name ? [item.city_name] : [])
+    const cities = cityNamesFor(item)
     if (cities.length === 0) return '—'
     if (cities.length === 1) return cities[0]
     return `${cities[0]} +${cities.length - 1} more`
   }
 
-  // Publishing destinations (migration_029) are independent of scope_type
-  // — this is purely a display hint next to the Scope/City column, not a
-  // reflection of what scope_type itself means.
+  // Publishing destinations (migration_029) are independent of scope_type.
   function destinationBadges(item: NewsCandidate): string {
     const badges: string[] = []
     if (item.publish_to_homepage) badges.push('🏠')
@@ -94,9 +136,45 @@ export default async function NewsCandidatesAdminPage() {
     return badges.join(' ')
   }
 
+  // Attach computed attention reasons to every row once, up front — reused
+  // by both the aggregate banner/counts and the per-row badge/filter below.
+  const rowsWithAttention = allRows.map(item => {
+    const targets = resolveCityNewsTargets(item, citiesByCandidate.get(item.id) ?? [])
+    const reasons = candidateAttentionReasons(item, targets.length === 0, now)
+    return { item, reasons }
+  })
+
+  const pendingCount = allRows.filter(r => r.review_status === 'pending').length
+  const attentionCount = rowsWithAttention.filter(r => r.reasons.length > 0).length
+
+  // ── Filters (narrow which rows are shown; never change row order) ──────
+  const filtered = rowsWithAttention.filter(({ item, reasons }) => {
+    if (params.status && item.review_status !== params.status) return false
+    if (params.provenance && item.intake_method !== params.provenance) return false
+    if (params.priority && item.priority !== params.priority) return false
+    if (params.recent === '1' && now - new Date(item.discovered_at).getTime() > RECENT_WINDOW_MS) return false
+    if (params.attention === '1' && reasons.length === 0) return false
+    return true
+  })
+
+  // Builds a filter-chip href that toggles one query param on/off while
+  // preserving every other active filter — so chips combine (e.g. "Pending
+  // review" + "High priority" together) rather than replacing each other.
+  function chipHref(key: keyof SearchParams, value: string): string {
+    const next = new URLSearchParams()
+    for (const [k, v] of Object.entries(params)) {
+      if (v && k !== key) next.set(k, v)
+    }
+    if (params[key] !== value) next.set(key, value)
+    const qs = next.toString()
+    return '/admin/news' + (qs ? `?${qs}` : '')
+  }
+
+  const hasActiveFilters = Object.values(params).some(Boolean)
+
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4">
+      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4 flex-wrap">
         <Link href="/admin" className="text-slate-400 hover:text-slate-600 text-sm">← Admin</Link>
         <h1 className="text-xl font-extrabold text-slate-900">News Intelligence Inbox</h1>
         {pendingCount > 0 && (
@@ -104,6 +182,17 @@ export default async function NewsCandidatesAdminPage() {
             {pendingCount} pending
           </span>
         )}
+        {attentionCount > 0 && (
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-700">
+            ⚠ {attentionCount} need attention
+          </span>
+        )}
+        <Link
+          href="/admin/news/feeds"
+          className="text-sm text-slate-400 hover:text-slate-600 ml-2"
+        >
+          RSS feed health →
+        </Link>
         <Link
           href="/admin/news/from-url"
           className="inline-block font-semibold text-slate-600 px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors text-sm ml-auto"
@@ -119,19 +208,38 @@ export default async function NewsCandidatesAdminPage() {
         </Link>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
-        <p className="text-sm text-slate-500 mb-6">
-          Manually queued presale, tour-announcement and ticket news the RSS feeds haven&rsquo;t found yet. Approve and publish a
-          story to add it to the same news cards shown on the homepage / city pages.
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+        <p className="text-sm text-slate-500 mb-4">
+          Manually queued presale, tour-announcement and ticket news, plus AI-assisted URL imports. RSS-sourced stories publish
+          automatically straight to the public site (not reviewed here) — see{' '}
+          <Link href="/admin/news/feeds" className="text-blue-600 hover:underline">RSS feed health</Link> for that pipeline.
+          Approve and publish a story here to add it to the same news cards shown on the homepage, Main News page and city pages.
         </p>
 
-        {rows.length === 0 ? (
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          <Chip label="Pending review" active={params.status === 'pending'} href={chipHref('status', 'pending')} />
+          <Chip label="Already published" active={params.status === 'published'} href={chipHref('status', 'published')} />
+          <Chip label="Recently added (7d)" active={params.recent === '1'} href={chipHref('recent', '1')} />
+          <Chip label="High priority" active={params.priority === 'high'} href={chipHref('priority', 'high')} />
+          <Chip label="URL imports" active={params.provenance === 'url_import'} href={chipHref('provenance', 'url_import')} />
+          <Chip label="Manual entries" active={params.provenance === 'manual'} href={chipHref('provenance', 'manual')} />
+          <Chip label="⚠ Needs attention" active={params.attention === '1'} href={chipHref('attention', '1')} tone="amber" />
+          {hasActiveFilters && (
+            <Link href="/admin/news" className="text-xs font-semibold text-slate-400 hover:text-slate-600 px-2">
+              Clear filters
+            </Link>
+          )}
+        </div>
+
+        {filtered.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
             <p className="text-slate-400 text-4xl mb-3">📰</p>
-            <p className="text-slate-500 mb-4">No candidates yet.</p>
-            <Link href="/admin/news/new" className="text-blue-600 font-semibold hover:underline">
-              Add the first one →
-            </Link>
+            <p className="text-slate-500 mb-4">{hasActiveFilters ? 'No candidates match these filters.' : 'No candidates yet.'}</p>
+            {hasActiveFilters ? (
+              <Link href="/admin/news" className="text-blue-600 font-semibold hover:underline">Clear filters →</Link>
+            ) : (
+              <Link href="/admin/news/new" className="text-blue-600 font-semibold hover:underline">Add the first one →</Link>
+            )}
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto">
@@ -140,31 +248,48 @@ export default async function NewsCandidatesAdminPage() {
                 <tr className="border-b border-slate-100 bg-slate-50 text-left">
                   <th className="px-4 py-3 font-semibold text-slate-600">Headline</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">Source</th>
-                  <th className="px-4 py-3 font-semibold text-slate-600">Scope / City</th>
-                  <th className="px-4 py-3 font-semibold text-slate-600">Story type</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600">Provenance</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600">AI</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600">Destinations</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">Priority</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">Status</th>
-                  <th className="px-4 py-3 font-semibold text-slate-600">Published</th>
-                  <th className="px-4 py-3 font-semibold text-slate-600">Created</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600">Article date</th>
+                  <th className="px-4 py-3 font-semibold text-slate-600">Added</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
-                {rows.map(item => (
-                  <tr key={item.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                {filtered.map(({ item, reasons }) => (
+                  <tr key={item.id} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50 ${reasons.length > 0 ? 'bg-amber-50/40' : ''}`}>
                     <td className="px-4 py-3 max-w-xs">
-                      <p className="font-bold text-slate-900 line-clamp-2">{item.headline}</p>
+                      <p className="font-bold text-slate-900 line-clamp-2">
+                        {reasons.length > 0 && <span title={reasons.map(r => ATTENTION_LABEL[r]).join(' · ')}>⚠ </span>}
+                        {item.headline}
+                      </p>
                       {item.artist_name && <p className="text-slate-400 text-xs mt-0.5">{item.artist_name}</p>}
-                      {item.intake_method === 'url_import' && (
-                        <p className="text-slate-400 text-xs mt-0.5">🔗 via URL{item.ai_review_status === 'unreviewed' ? ' — AI suggestion not yet reviewed' : ''}</p>
-                      )}
+                      <p className="text-slate-400 text-xs mt-0.5">{STORY_TYPE_LABEL[item.story_type] ?? item.story_type}</p>
                     </td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{item.source ?? '—'}</td>
+                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                      {item.intake_method === 'url_import' ? '🔗 URL import' : '✎ Manual'}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                      {item.intake_method !== 'url_import' ? (
+                        <span className="text-slate-300">—</span>
+                      ) : reasons.includes('ai_suggestion_failed') ? (
+                        <span className="text-red-600 font-semibold">⚠ Failed</span>
+                      ) : item.ai_review_status === 'reviewed' ? (
+                        <span className="text-green-700">✓ Reviewed</span>
+                      ) : item.ai_review_status === 'unreviewed' ? (
+                        <span className="text-amber-600">⏳ Unreviewed</span>
+                      ) : (
+                        <span className="text-slate-300">n/a</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
                       {scopeLabel(item)}
                       {destinationBadges(item) && <span className="ml-1.5" title="Publishing destinations">{destinationBadges(item)}</span>}
                     </td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{STORY_TYPE_LABEL[item.story_type] ?? item.story_type}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs font-bold px-2.5 py-1 rounded-full capitalize ${PRIORITY_STYLE[item.priority] ?? PRIORITY_STYLE.normal}`}>
                         {item.priority}
@@ -176,7 +301,7 @@ export default async function NewsCandidatesAdminPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{fmtDate(item.published_at)}</td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{fmtDate(item.created_at)}</td>
+                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{fmtDate(item.discovered_at)}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <Link href={`/admin/news/${item.id}`} className="text-blue-600 font-semibold hover:underline">
                         Edit

@@ -29,6 +29,11 @@ import {
   NATIONAL_NAME,
   NEWS_HUB_SLUG,
   NEWS_HUB_NAME,
+  didAiSuggestionFail,
+  candidateAttentionReasons,
+  isCandidateVisibleAtDestination,
+  STALE_PENDING_MS,
+  STALE_APPROVED_MS,
 } from './newsPublishing.ts'
 
 const NOW = '2026-09-30T12:00:00.000Z'
@@ -690,5 +695,137 @@ describe('selectStaleCityNewsIds (requirement 8 carried forward: editorial rows 
     ]
     const freshUrls = new Set(['https://example.com/fresh'])
     assert.deepEqual(selectStaleCityNewsIds(existing, freshUrls), ['rss-stale'])
+  })
+})
+
+// ── Admin queue health (Phase 4) ────────────────────────────────────────
+
+describe('didAiSuggestionFail', () => {
+  test('manual candidates never count, regardless of fields', () => {
+    assert.equal(didAiSuggestionFail({ intake_method: 'manual', ai_model: null, ai_suggestions: null }), false)
+  })
+
+  test('no API key configured (ai_model null) is not counted as a per-candidate failure', () => {
+    assert.equal(didAiSuggestionFail({ intake_method: 'url_import', ai_model: null, ai_suggestions: null }), false)
+  })
+
+  test('a successful suggestion (has a headline) is not a failure, even with warnings present', () => {
+    assert.equal(didAiSuggestionFail({
+      intake_method: 'url_import',
+      ai_model: 'claude-haiku-4-5-20251001',
+      ai_suggestions: { headline: 'Oasis add second date', warnings: ['AI suggested unsupported cities, ignored: Paris.'] },
+    }), false)
+  })
+
+  test('a model was invoked but produced no usable headline, with warnings recorded — a real failure', () => {
+    assert.equal(didAiSuggestionFail({
+      intake_method: 'url_import',
+      ai_model: 'claude-haiku-4-5-20251001',
+      ai_suggestions: { headline: null, warnings: ['AI suggestion request failed (HTTP 529) — fields left blank for manual entry.'] },
+    }), true)
+  })
+
+  test('ai_suggestions present but no warnings array at all is not flagged (malformed data, not a known failure shape)', () => {
+    assert.equal(didAiSuggestionFail({
+      intake_method: 'url_import',
+      ai_model: 'claude-haiku-4-5-20251001',
+      ai_suggestions: { headline: null },
+    }), false)
+  })
+
+  test('ai_suggestions is null entirely (model ran somehow with nothing stored) is not flagged — nothing to report', () => {
+    assert.equal(didAiSuggestionFail({ intake_method: 'url_import', ai_model: 'claude-haiku-4-5-20251001', ai_suggestions: null }), false)
+  })
+})
+
+describe('candidateAttentionReasons', () => {
+  const NOW = new Date('2026-10-01T12:00:00.000Z').getTime()
+
+  function candidate(overrides: Record<string, unknown> = {}) {
+    return {
+      review_status: 'pending' as const,
+      discovered_at: '2026-10-01T10:00:00.000Z', // 2h ago — fresh
+      reviewed_at: null,
+      intake_method: 'manual' as const,
+      ai_model: null,
+      ai_suggestions: null,
+      ...overrides,
+    }
+  }
+
+  test('a freshly-added pending candidate with a destination needs no attention', () => {
+    assert.deepEqual(candidateAttentionReasons(candidate(), false, NOW), [])
+  })
+
+  test('no_destination fires for pending with nowhere to publish', () => {
+    assert.deepEqual(candidateAttentionReasons(candidate(), true, NOW), ['no_destination'])
+  })
+
+  test('no_destination fires for approved too', () => {
+    const c = candidate({ review_status: 'approved', reviewed_at: '2026-10-01T11:50:00.000Z' })
+    assert.deepEqual(candidateAttentionReasons(c, true, NOW), ['no_destination'])
+  })
+
+  test('no_destination never fires for a published or rejected candidate (destinations are moot once resolved)', () => {
+    assert.deepEqual(candidateAttentionReasons(candidate({ review_status: 'published' }), true, NOW), [])
+    assert.deepEqual(candidateAttentionReasons(candidate({ review_status: 'rejected' }), true, NOW), [])
+  })
+
+  test('stale_pending fires once a pending candidate has sat for longer than STALE_PENDING_MS', () => {
+    const c = candidate({ discovered_at: new Date(NOW - STALE_PENDING_MS - 1).toISOString() })
+    assert.deepEqual(candidateAttentionReasons(c, false, NOW), ['stale_pending'])
+  })
+
+  test('stale_pending does not fire right at the boundary or under it', () => {
+    const c = candidate({ discovered_at: new Date(NOW - STALE_PENDING_MS + 1000).toISOString() })
+    assert.deepEqual(candidateAttentionReasons(c, false, NOW), [])
+  })
+
+  test('approved_not_published fires once an approved candidate has sat unpublished past STALE_APPROVED_MS', () => {
+    const c = candidate({ review_status: 'approved', reviewed_at: new Date(NOW - STALE_APPROVED_MS - 1).toISOString() })
+    assert.deepEqual(candidateAttentionReasons(c, false, NOW), ['approved_not_published'])
+  })
+
+  test('approved_not_published never fires with no reviewed_at recorded (nothing to measure against)', () => {
+    const c = candidate({ review_status: 'approved', reviewed_at: null })
+    assert.deepEqual(candidateAttentionReasons(c, false, NOW), [])
+  })
+
+  test('ai_suggestion_failed combines with other reasons when multiple apply at once', () => {
+    const c = candidate({
+      review_status: 'pending',
+      discovered_at: new Date(NOW - STALE_PENDING_MS - 1).toISOString(),
+      intake_method: 'url_import',
+      ai_model: 'claude-haiku-4-5-20251001',
+      ai_suggestions: { headline: null, warnings: ['AI returned no suggestion text — fields left blank for manual entry.'] },
+    })
+    assert.deepEqual(candidateAttentionReasons(c, true, NOW), ['no_destination', 'stale_pending', 'ai_suggestion_failed'])
+  })
+
+  test('a fully healthy published candidate needs no attention at all', () => {
+    const c = candidate({ review_status: 'published', reviewed_at: '2026-09-29T09:00:00.000Z' })
+    assert.deepEqual(candidateAttentionReasons(c, false, NOW), [])
+  })
+})
+
+describe('isCandidateVisibleAtDestination', () => {
+  function row(url: string, published_at: string) {
+    return { url, published_at }
+  }
+
+  test('true when the candidate url is within the top-N for that destination', () => {
+    const rows = [row('https://a.com/story', '2026-10-01T09:00:00.000Z'), row('https://b.com/older', '2026-09-28T09:00:00.000Z')]
+    assert.equal(isCandidateVisibleAtDestination('https://a.com/story', rows, 5), true)
+  })
+
+  test('false once enough newer rows push it out of the visible slice', () => {
+    const newer = Array.from({ length: 5 }, (_, i) => row(`https://newer.com/${i}`, `2026-10-0${i + 1}T09:00:00.000Z`))
+    const rows = [...newer, row('https://a.com/story', '2026-09-20T09:00:00.000Z')]
+    assert.equal(isCandidateVisibleAtDestination('https://a.com/story', rows, 5), false)
+  })
+
+  test('false when the candidate url is not present in the destination rows at all', () => {
+    const rows = [row('https://b.com/other', '2026-10-01T09:00:00.000Z')]
+    assert.equal(isCandidateVisibleAtDestination('https://a.com/story', rows, 5), false)
   })
 })

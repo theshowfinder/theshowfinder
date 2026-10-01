@@ -135,7 +135,17 @@ const NATIONAL_FEEDS: { source: string; url: string }[] = [
   { source: 'Sky News',       url: 'https://feeds.skynews.com/feeds/rss/entertainment.xml' },
 ]
 
-async function fetchNamedFeed(feed: { source: string; url: string }): Promise<NewsItem[]> {
+// NATIONAL_OUTLET_LOG_PREFIX: the sync_log `city` label prefix used for a
+// single national-feed outlet's own failure row (see fetchNamedFeed below).
+// Exported so the admin Feed Health page (src/app/admin/news/feeds/page.tsx)
+// can recognise and group these rows separately from the 37 primary feeds
+// (36 cities + the aggregate "UK National" row), which each get a routine
+// row every run regardless of outcome — these per-outlet rows are written
+// on failure only, so there's no routine "last successful run" to compare
+// against the way there is for a primary feed.
+export const NATIONAL_OUTLET_LOG_PREFIX = 'National — '
+
+async function fetchNamedFeed(feed: { source: string; url: string }, db: DbClient): Promise<NewsItem[]> {
   const parser = new Parser<Record<string, unknown>, RawItem>({ timeout: RSS_PER_ITEM_TIMEOUT_MS })
   try {
     const parsed = await parser.parseURL(feed.url)
@@ -150,14 +160,27 @@ async function fetchNamedFeed(feed: { source: string; url: string }): Promise<Ne
   } catch (err) {
     // One outlet's feed hiccuping (a timeout, a redesign) should never take
     // out the other four -- this is why each feed gets its own try/catch
-    // instead of one Promise.all that fails as a whole.
+    // instead of one Promise.all that fails as a whole. Still worth a
+    // sync_log row so a persistently-broken outlet is actually visible
+    // somewhere (previously this was console.error only — invisible
+    // outside Vercel's function logs). Logged on failure only: a routine
+    // success here would just be noise five times a day against the
+    // aggregate "UK National" row that already captures the real outcome.
+    const message = err instanceof Error ? err.message : String(err)
     console.error(`[city-news] national feed "${feed.source}" failed (non-fatal):`, err)
+    await logCityRun(db, {
+      city: NATIONAL_OUTLET_LOG_PREFIX + feed.source,
+      startedAt: new Date().toISOString(),
+      itemsSynced: 0,
+      status: 'error',
+      error: message,
+    })
     return []
   }
 }
 
-async function fetchNationalNews(): Promise<NewsItem[]> {
-  const perFeed = await Promise.all(NATIONAL_FEEDS.map(fetchNamedFeed))
+async function fetchNationalNews(db: DbClient): Promise<NewsItem[]> {
+  const perFeed = await Promise.all(NATIONAL_FEEDS.map(feed => fetchNamedFeed(feed, db)))
   return mergeNationalFeedResults(perFeed, Date.now())
 }
 
@@ -286,7 +309,7 @@ export async function syncCityNews(): Promise<CityNewsSyncResult> {
 
   const feeds: NewsFeed[] = [
     ...CITIES.map(city => ({ slug: citySlug(city.name), name: city.name, fetch: () => fetchCityNews(city.name) })),
-    { slug: NATIONAL_SLUG, name: NATIONAL_NAME, fetch: fetchNationalNews },
+    { slug: NATIONAL_SLUG, name: NATIONAL_NAME, fetch: () => fetchNationalNews(db) },
   ]
 
   let totalFetched = 0, totalUpserted = 0, totalDeleted = 0, errors = 0
@@ -316,5 +339,5 @@ export async function syncCityNews(): Promise<CityNewsSyncResult> {
 // Same fetch → upsert → prune pipeline as every other feed via syncOneFeed.
 export async function syncNationalNewsOnly(): Promise<{ fetched: number; upserted: number; deleted: number; status: 'ok' | 'error'; error?: string }> {
   const db = createAdminClient()
-  return syncOneFeed(db, { slug: NATIONAL_SLUG, name: NATIONAL_NAME, fetch: fetchNationalNews })
+  return syncOneFeed(db, { slug: NATIONAL_SLUG, name: NATIONAL_NAME, fetch: () => fetchNationalNews(db) })
 }
