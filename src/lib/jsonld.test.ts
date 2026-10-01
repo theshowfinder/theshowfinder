@@ -8,6 +8,7 @@ import {
   buildWebsiteSchema,
   buildOrganizationSchema,
 } from './jsonld.ts'
+import { SOCIAL_LINKS } from './socialLinks.ts'
 
 describe('jsonLdScript', () => {
   test('serializes an object to JSON', () => {
@@ -132,5 +133,18 @@ describe('buildOrganizationSchema', () => {
     assert.equal(schema['@type'], 'Organization')
     assert.equal(schema.name, 'TheShowFinder')
     assert.ok(schema.logo.startsWith('https://'))
+  })
+
+  test('includes sameAs with all three social profile URLs, sourced from socialLinks.ts', () => {
+    const schema = buildOrganizationSchema()
+    assert.deepEqual(schema.sameAs, SOCIAL_LINKS.map((link) => link.href))
+    assert.equal(schema.sameAs.length, 3)
+  })
+
+  test('sameAs contains the exact Instagram, Facebook and TikTok URLs', () => {
+    const schema = buildOrganizationSchema()
+    assert.ok(schema.sameAs.includes('https://www.instagram.com/the_show_finder/'))
+    assert.ok(schema.sameAs.includes('https://www.facebook.com/profile.php?id=61592305512592'))
+    assert.ok(schema.sameAs.includes('https://www.tiktok.com/@theshowfinder'))
   })
 })

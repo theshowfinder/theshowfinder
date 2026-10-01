@@ -1,6 +1,8 @@
 // Shared Schema.org JSON-LD helpers. Server-rendered <script type="application/ld+json">
 // tags — no client JS needed. `</` is escaped so a title/description containing a
 // closing script tag can't break out of the <script> element.
+import { SOCIAL_LINKS } from './socialLinks.ts'
+
 export function jsonLdScript(data: Record<string, unknown>): string {
   return JSON.stringify(data).replace(/</g, '\\u003c')
 }
@@ -125,6 +127,11 @@ export function buildWebsiteSchema() {
   }
 }
 
+// `sameAs` lists TheShowFinder's official social profile URLs — the
+// standard Schema.org way to link an Organization to its verified
+// social accounts (feeds Google's knowledge-panel/entity understanding).
+// Sourced from socialLinks.ts so the three URLs live in exactly one
+// place, matching the footer's "Follow TheShowFinder" links.
 export function buildOrganizationSchema() {
   return {
     '@context': 'https://schema.org',
@@ -132,5 +139,6 @@ export function buildOrganizationSchema() {
     name:       'TheShowFinder',
     url:        BASE_URL,
     logo:       `${BASE_URL}/og-image.png`,
+    sameAs:     SOCIAL_LINKS.map((link) => link.href),
   }
 }
