@@ -293,6 +293,14 @@ export type NewsCandidateAttentionReason =
   | 'stale_pending'           // sat in 'pending' too long, nobody's looked at it
   | 'approved_not_published'  // reviewed and approved, but never actually published
   | 'ai_suggestion_failed'    // a URL import's AI call ran but produced nothing usable
+  | 'not_visible'             // published, but pushed out of a destination's visible
+                               // slice by newer rows — see isCandidateVisibleAtDestination
+                               // and destinationDisplayLimit below. Unlike the other
+                               // reasons, candidateAttentionReasons() never returns this
+                               // one itself (it would need a live city_news fetch per
+                               // destination, which isn't pure) — the admin queue page
+                               // computes it separately and merges it into the same
+                               // reasons list for display.
 
 // 2 days unreviewed is long enough that it's not "just added this morning"
 // but short enough that it still means something actionable today.
@@ -374,6 +382,21 @@ export function isCandidateVisibleAtDestination(
   limit: number
 ): boolean {
   return rankCityNewsForDisplay(destinationRows, limit).some(r => r.url === candidateUrl)
+}
+
+// The real page-rendering limit for a given city_news destination slug —
+// a single source of truth for isCandidateVisibleAtDestination callers,
+// matching the actual .limit(...) each live page queries with: the
+// homepage reads NATIONAL_SLUG with .limit(6) (src/app/page.tsx), /news
+// reads NEWS_HUB_SLUG with .limit(100) (src/app/news/page.tsx — in
+// practice unbounded, a city page reads its own slug with .limit(5)
+// (src/app/cities/[city]/page.tsx). If any of those page limits ever
+// change, update this function to match — nothing enforces the two stay
+// in sync automatically.
+export function destinationDisplayLimit(citySlug: string): number {
+  if (citySlug === NATIONAL_SLUG) return 6
+  if (citySlug === NEWS_HUB_SLUG) return 100
+  return 5
 }
 
 // ── Publish destination summary (Phase 4, requirement 4) ────────────────

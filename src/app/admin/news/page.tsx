@@ -3,7 +3,13 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { candidateAttentionReasons, resolveCityNewsTargets, type NewsCandidateAttentionReason } from '@/lib/newsPublishing'
+import {
+  candidateAttentionReasons,
+  resolveCityNewsTargets,
+  isCandidateVisibleAtDestination,
+  destinationDisplayLimit,
+  type NewsCandidateAttentionReason,
+} from '@/lib/newsPublishing'
 import type { NewsCandidate } from '@/lib/types/database'
 
 const STATUS_STYLE: Record<string, string> = {
@@ -32,6 +38,7 @@ const ATTENTION_LABEL: Record<NewsCandidateAttentionReason, string> = {
   stale_pending:          'Pending review for 2+ days',
   approved_not_published: 'Approved but not published for 24h+',
   ai_suggestion_failed:   'AI suggestion failed',
+  not_visible:            'Published but no longer visible on a destination (pushed out by newer stories)',
 }
 
 // Review-queue ordering: pending stories surface first (that's the actual
@@ -138,10 +145,51 @@ export default async function NewsCandidatesAdminPage({ searchParams }: { search
 
   // Attach computed attention reasons to every row once, up front — reused
   // by both the aggregate banner/counts and the per-row badge/filter below.
-  const rowsWithAttention = allRows.map(item => {
+  // Targets are kept alongside so the visibility check below can reuse
+  // them without resolving a second time.
+  const rowsWithTargets = allRows.map(item => {
     const targets = resolveCityNewsTargets(item, citiesByCandidate.get(item.id) ?? [])
     const reasons = candidateAttentionReasons(item, targets.length === 0, now)
-    return { item, reasons }
+    return { item, targets, reasons }
+  })
+
+  // ── "Published but no longer visible" check (requirement 6) ────────────
+  // A published candidate's city_news row can still fail to show up on its
+  // own destination page once enough newer rows (RSS or other editorial)
+  // have pushed it out of that page's visible slice — see
+  // destinationDisplayLimit for the real per-destination page limits. This
+  // needs a live read of each destination's actual current rows, so unlike
+  // the other attention reasons it can't live inside the pure
+  // candidateAttentionReasons; it's computed here, once, as one extra
+  // query across every unique destination slug any published candidate
+  // targets, then merged into the same `reasons` list every row already
+  // carries so the rest of the page (badges, tooltip, filter chip) doesn't
+  // need to know this check is a separate code path.
+  const publishedWithTargets = rowsWithTargets.filter(r => r.item.review_status === 'published' && r.targets.length > 0)
+  const destinationSlugs = [...new Set(publishedWithTargets.flatMap(r => r.targets.map(t => t.city_slug)))]
+
+  const rowsByDestinationSlug = new Map<string, { url: string; published_at: string | null }[]>()
+  if (destinationSlugs.length > 0) {
+    const { data: destinationRows } = await db
+      .from('city_news')
+      .select('city_slug, url, published_at')
+      .in('city_slug', destinationSlugs)
+      .order('published_at', { ascending: false })
+      .limit(2000) as unknown as { data: { city_slug: string; url: string; published_at: string | null }[] | null }
+    for (const row of destinationRows ?? []) {
+      const list = rowsByDestinationSlug.get(row.city_slug) ?? []
+      list.push({ url: row.url, published_at: row.published_at })
+      rowsByDestinationSlug.set(row.city_slug, list)
+    }
+  }
+
+  const rowsWithAttention = rowsWithTargets.map(({ item, targets, reasons }) => {
+    if (item.review_status !== 'published' || targets.length === 0) return { item, reasons }
+    const invisibleSomewhere = targets.some(t => {
+      const rows = rowsByDestinationSlug.get(t.city_slug) ?? []
+      return !isCandidateVisibleAtDestination(item.url, rows, destinationDisplayLimit(t.city_slug))
+    })
+    return invisibleSomewhere ? { item, reasons: [...reasons, 'not_visible' as const] } : { item, reasons }
   })
 
   const pendingCount = allRows.filter(r => r.review_status === 'pending').length

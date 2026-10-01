@@ -37,6 +37,7 @@ import {
   describeDestinations,
   buildDefaultHashtags,
   buildShareKitDefaults,
+  destinationDisplayLimit,
 } from './newsPublishing.ts'
 
 const NOW = '2026-09-30T12:00:00.000Z'
@@ -951,5 +952,19 @@ describe('buildShareKitDefaults', () => {
   test('hashtags come from buildDefaultHashtags for the same candidate/cities', () => {
     const kit = buildShareKitDefaults(base, ['Derby'], null)
     assert.deepEqual(kit.hashtags, buildDefaultHashtags(base, ['Derby']))
+  })
+})
+
+describe('destinationDisplayLimit', () => {
+  test('homepage (NATIONAL_SLUG) is 6, matching src/app/page.tsx', () => {
+    assert.equal(destinationDisplayLimit(NATIONAL_SLUG), 6)
+  })
+
+  test('Main News page (NEWS_HUB_SLUG) is 100, matching src/app/news/page.tsx', () => {
+    assert.equal(destinationDisplayLimit(NEWS_HUB_SLUG), 100)
+  })
+
+  test('any other slug (a real city) is 5, matching src/app/cities/[city]/page.tsx', () => {
+    assert.equal(destinationDisplayLimit('derby'), 5)
   })
 })
