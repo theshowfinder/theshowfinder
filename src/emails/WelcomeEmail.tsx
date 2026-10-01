@@ -96,8 +96,21 @@ export default function WelcomeEmail({ email }: Props) {
                         </table>
 
                         <p style={{ margin: 0, fontSize: '14px', color: '#94a3b8', lineHeight: '1.5' }}>
-                          We sent this to <strong>{email}</strong> because you signed up at theshowfinder.com.
-                          If this wasn&apos;t you, you can safely ignore this email.
+                          {/* Explicit mailto anchor, not bare text — several mail clients
+                              (confirmed: Outlook/Hotmail webmail) auto-linkify a bare email
+                              address in the rendered HTML and can swallow the next word into
+                              the link itself if they lose track of the tag boundary (observed:
+                              "chris@hotmail.com" + "because" rendered as one link to
+                              "chris@hotmail.combecause"). An explicit, already-formed <a
+                              href="mailto:..."> tag containing only the address removes the
+                              ambiguity entirely — auto-linkifiers skip text that's already
+                              inside a link. The {' '} on both sides guarantees a real space
+                              character survives regardless of any HTML whitespace collapsing. */}
+                          We sent this to{' '}
+                          <a href={`mailto:${email}`} style={{ color: '#475569', fontWeight: 700, textDecoration: 'none' }}>
+                            {email}
+                          </a>
+                          {' '}because you signed up at theshowfinder.com. If this wasn&apos;t you, you can safely ignore this email.
                         </p>
                       </td>
                     </tr>
