@@ -1,5 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { resolveCityEventCount, normalizeCityFilterValue } from '@/lib/cityEventCount'
 
 const CITIES = [
   { name: 'London',          emoji: '🎡',  gradient: 'linear-gradient(135deg, #E8003D, #8B001F)'  },
@@ -57,14 +59,30 @@ export default async function CitiesGrid() {
       supabase
         .from('events_with_venue')
         .select('*', { count: 'exact', head: true })
-        .ilike('venue_city', name)
-        .gte('start_date', nowISO) as unknown as Promise<{ count: number | null }>
+        .ilike('venue_city', normalizeCityFilterValue(name))
+        // Same live-status criteria as every shared event-pool helper
+        // (Tonight/This Week/Top Events/On Sale) — without this, a city
+        // whose only "upcoming" rows are cancelled/postponed would show
+        // a nonzero count here while every real section of its own page
+        // correctly shows nothing.
+        .in('status', LIVE_EVENT_STATUSES)
+        .gte('start_date', nowISO) as unknown as Promise<{ count: number | null; error: unknown }>
     )
   )
 
+  // A query error (count: null + error set) must never be presented the
+  // same way as a genuine zero-event city — see cityEventCount.ts for
+  // why that conflation is exactly what caused the intermittent "Coming
+  // soon" bug on a city (London) that plainly has upcoming events.
   const countMap: Record<string, number> = {}
+  const countErrorMap: Record<string, boolean> = {}
   CITIES.forEach(({ name }, i) => {
-    countMap[name] = countResults[i].count ?? 0
+    const outcome = resolveCityEventCount(countResults[i])
+    if (outcome.ok) {
+      countMap[name] = outcome.count
+    } else {
+      countErrorMap[name] = true
+    }
   })
 
   // One real photo per city — the highest-capacity venue with a
@@ -89,6 +107,7 @@ export default async function CitiesGrid() {
     <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2 md:grid md:grid-cols-4 lg:grid-cols-6 md:gap-4 md:pb-0">
       {CITIES.map(({ name, gradient, emoji }) => {
         const count = countMap[name] ?? 0
+        const hasCountError = countErrorMap[name] ?? false
         const photo = imageMap[name.toLowerCase()]
 
         return (
@@ -123,7 +142,11 @@ export default async function CitiesGrid() {
             <div className="relative z-10">
               <p className="font-extrabold text-white text-base leading-tight drop-shadow-sm">{name}</p>
               <p className="text-white/70 text-xs mt-0.5">
-                {count > 0 ? `${count} event${count !== 1 ? 's' : ''}` : 'Coming soon'}
+                {hasCountError
+                  ? 'View events'
+                  : count > 0
+                    ? `${count} event${count !== 1 ? 's' : ''}`
+                    : 'Coming soon'}
               </p>
             </div>
 

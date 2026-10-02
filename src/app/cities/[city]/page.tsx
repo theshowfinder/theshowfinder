@@ -22,7 +22,8 @@ import { citySlug } from '@/lib/cityNews'
 import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import CityNewsletterForm from '@/components/CityNewsletterForm'
-import { fetchEventsThisWeek, fetchTopEvents, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek } from '@/lib/eventPools'
+import { fetchEventsThisWeek, fetchTopEvents, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { resolveCityEventCount, normalizeCityFilterValue } from '@/lib/cityEventCount'
 import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
@@ -152,8 +153,11 @@ export default async function CityPage({
     supabase
       .from('events_with_venue')
       .select('*', { count: 'exact', head: true })
-      .ilike('venue_city', cityName)
-      .gte('start_date', nowISO) as unknown as Promise<{ count: number | null }>,
+      .ilike('venue_city', normalizeCityFilterValue(cityName))
+      // Same live-status criteria as the shared event-pool helpers above
+      // (Tonight/This Week/Top Events/On Sale) — see cityEventCount.ts.
+      .in('status', LIVE_EVENT_STATUSES)
+      .gte('start_date', nowISO) as unknown as Promise<{ count: number | null; error: unknown }>,
 
     // Venues in this city sorted by capacity
     supabase
@@ -190,7 +194,13 @@ export default async function CityPage({
   // compete fairly (not permanently) against RSS rows for one of these 5
   // slots.
   const cityNews = rankCityNewsForDisplay(cityNewsResult.data ?? [], 5)
-  const totalCount     = totalCountResult.count ?? 0
+  // A query error must not be presented the same way as a genuine
+  // zero-event city — see cityEventCount.ts for the intermittent
+  // "Coming soon"-style bug this was found causing on the navigation
+  // card (CitiesGrid.tsx), which this hero count shares the exact same
+  // query shape with.
+  const totalCountOutcome = resolveCityEventCount(totalCountResult)
+  const totalCount        = totalCountOutcome.ok ? totalCountOutcome.count : 0
 
   // Exact upcoming-event counts for each candidate venue, queried one venue
   // at a time with count:'exact', head:true rather than sampling all of the
