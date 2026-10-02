@@ -1,4 +1,5 @@
 import type { EventWithVenue, Artist } from './types/database'
+import { londonCalendarWeekWindow } from './intelligence.ts'
 
 export type SaleType = 'presale' | 'onsale'
 
@@ -92,6 +93,68 @@ export function groupEventsByArtist(
   )
 }
 
+// ── Series diversity (Manchester-pilot requirement: don't let one team/
+// artist/tour flood "On Sale This Week") ───────────────────────────────
+//
+// groupEventsByArtist already gives each genuinely distinct fixture its
+// own OnSaleGroup/card — "Manchester Storm v Cardiff Devils" and
+// "...v Belfast Giants" don't share a pipe/colon/dash delimiter, so
+// extractArtistName leaves each fixture's full title intact and they
+// never collapse into one group (correct — they're separate events, see
+// requirement 14). But that also means a team whose whole home-fixture
+// batch happens to go on sale in the same window can fill every slot in
+// a limited card list with nothing but that one team. extractSeriesKey
+// additionally strips a " v " / " vs" / " versus " opponent suffix,
+// purely so capGroupsBySeries (below) has a stable "same team" key to
+// cap against — it is never used for grouping/card identity itself.
+
+export function extractSeriesKey(artistOrTitle: string): string {
+  const base = extractArtistName(artistOrTitle)
+  const vsMatch = base.match(/^(.*?)\s+(?:v|vs\.?|versus)\s+.+$/i)
+  return toSlug(vsMatch ? vsMatch[1].trim() : base)
+}
+
+// How many cards from the same series key are allowed into a capped
+// "On Sale This Week" list — 2, so a team/tour's existence is still
+// visible without being able to flood the whole section. Exported so
+// the rule is transparent and the exact number is visible to anyone
+// reading the code, not a magic literal buried in a slice() call.
+export const ON_SALE_MAX_PER_SERIES = 2
+
+// Deterministic: walks `groups` in whatever order they're already
+// sorted in (onsale_date ascending, from groupEventsByArtist) and keeps
+// the first `maxPerSeries` encountered per series key, dropping the
+// rest. Never merges or deletes a group from the underlying data — a
+// dropped fixture is simply not promoted into this particular capped
+// display; it's still its own resolvable group everywhere else (e.g.
+// the /on-sale-this-week/[slug] detail page, which resolves against the
+// full merged pool, not this capped list).
+export function capGroupsBySeries(groups: OnSaleGroup[], maxPerSeries: number = ON_SALE_MAX_PER_SERIES): OnSaleGroup[] {
+  const counts = new Map<string, number>()
+  const kept: OnSaleGroup[] = []
+  for (const group of groups) {
+    const key = extractSeriesKey(group.artistName)
+    const count = counts.get(key) ?? 0
+    if (count >= maxPerSeries) continue
+    counts.set(key, count + 1)
+    kept.push(group)
+  }
+  return kept
+}
+
+// ── On-sale date reliability (requirement: never infer from start_date) ──
+//
+// States the rule as a plain, testable predicate. The actual exclusion
+// of an event with no genuine on-sale date happens for free in the DB
+// query itself (events.ts/eventPools.ts filter with .gte/.lte against
+// the onsale_date column — a null column value never satisfies a range
+// comparison in Postgres), so this isn't called from that query path,
+// but it documents and tests the rule explicitly rather than leaving it
+// as an implicit side effect of how Postgres nulls behave.
+export function hasReliableOnSaleDate(event: Pick<EventWithVenue, 'onsale_date'>): boolean {
+  return Boolean(event.onsale_date)
+}
+
 export function fmtOnSaleLabel(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', {
     weekday: 'short', day: 'numeric', month: 'short',
@@ -122,15 +185,19 @@ export interface DateWindow {
   ceilISO:  string
 }
 
-// "On Sale This Week": public on-sale OR presale window that opened within
-// the last 3 days (an event stays visible for a few days after going on
-// sale, rather than vanishing from the section the instant "now" passes
-// it) through 7 days ahead.
+// "On Sale This Week": the literal Monday-Sunday UK calendar week
+// containing `now` — not a rolling lookback. An event that genuinely
+// went on public sale last Saturday drops out of "this week" the moment
+// Monday turns over, same as a person would read the phrase. Delegates
+// to intelligence.ts's londonCalendarWeekWindow (the Europe/London-
+// correct Mon-Sun calculation, shared with the admin dashboard) rather
+// than re-deriving calendar-week arithmetic a second time here; this
+// function's own {floorISO, ceilISO} shape is kept stable since it's
+// the public contract every caller (eventPools.ts, linkHealth.ts, the
+// city page, every page/test importing it) already depends on.
 export function onSaleThisWeekWindow(now: Date = new Date()): DateWindow {
-  return {
-    floorISO: new Date(now.getTime() - 3 * DAY_MS).toISOString(),
-    ceilISO:  new Date(now.getTime() + 7 * DAY_MS).toISOString(),
-  }
+  const { startISO, endISO } = londonCalendarWeekWindow(now)
+  return { floorISO: startISO, ceilISO: endISO }
 }
 
 // "Presales Open Now": presale_start any time in the last 21 days through

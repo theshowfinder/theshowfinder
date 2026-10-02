@@ -3,7 +3,7 @@ export const revalidate = 3600
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { fmtOnSaleLabel, type OnSaleGroup } from '@/lib/on-sale'
+import { fmtOnSaleLabel, onSaleThisWeekWindow, type OnSaleGroup } from '@/lib/on-sale'
 import { fetchOnSaleThisWeek } from '@/lib/eventPools'
 import type { Artist } from '@/lib/types/database'
 
@@ -28,8 +28,14 @@ export const metadata: Metadata = {
 }
 
 export default async function OnSaleThisWeekPage() {
-  const supabase  = await createClient()
-  const weekAhead = new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000)
+  const supabase = await createClient()
+  // "This week" means the literal Monday-Sunday UK week, not a rolling
+  // 7-day lookahead from today — see on-sale.ts's onSaleThisWeekWindow.
+  // ceilISO is the exclusive start of next Monday, so the week's own
+  // last day (Sunday) is one millisecond before it.
+  const { floorISO, ceilISO } = onSaleThisWeekWindow()
+  const weekStart = new Date(floorISO)
+  const weekEnd    = new Date(new Date(ceilISO).getTime() - 1)
 
   // fetchOnSaleThisWeek (src/lib/eventPools.ts) is the single source of
   // truth for this window/sort/dedupe — the /on-sale-this-week/[slug]
@@ -55,8 +61,9 @@ export default async function OnSaleThisWeekPage() {
             On Sale This Week
           </h1>
           <p className="text-white/60 text-base">
-            Tickets going on sale between today and{' '}
-            {weekAhead.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}.
+            Tickets that went on general sale this week ({weekStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}
+            {' '}–{' '}
+            {weekEnd.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}).
           </p>
         </div>
       </div>

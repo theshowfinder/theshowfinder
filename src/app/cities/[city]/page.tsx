@@ -1,4 +1,11 @@
-export const revalidate = 3600
+export const revalidate = 300
+
+// Shortened from the site's usual 1-hour ISR window specifically because
+// this page now carries two date-sensitive sections — "Tonight" and "On
+// Sale This Week" both need to roll over to the next London day/week
+// promptly rather than serving a stale snapshot for up to an hour after
+// midnight. 5 minutes bounds the worst-case staleness to a small,
+// acceptable window without regenerating on every request.
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -7,15 +14,15 @@ import { createClient } from '@/lib/supabase/server'
 import EventCard from '@/components/EventCard'
 import SearchBarWrapper from '@/components/SearchBarWrapper'
 import { Suspense } from 'react'
-import type { EventWithVenue, Artist } from '@/lib/types/database'
-import { groupEventsByArtist, fmtOnSaleLabel } from '@/lib/on-sale'
+import type { Artist } from '@/lib/types/database'
+import { fmtOnSaleLabel } from '@/lib/on-sale'
 import { CITIES } from '@/lib/cities'
 import { venueCardBlurb } from '@/lib/venueBlurb'
 import { citySlug } from '@/lib/cityNews'
 import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import CityNewsletterForm from '@/components/CityNewsletterForm'
-import { fetchEventsThisWeek, fetchTopEvents, fetchPresalesOpenNow, fetchTonightEvents } from '@/lib/eventPools'
+import { fetchEventsThisWeek, fetchTopEvents, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek } from '@/lib/eventPools'
 import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
@@ -81,15 +88,13 @@ export default async function CityPage({
   const cityConfig = CITIES.find(c => c.name === cityName)
   if (!cityConfig) notFound()
 
-  const supabase     = await createClient()
-  const now          = new Date()
-  const nowISO       = now.toISOString()
-  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString()
-  const weekAhead    = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  const supabase = await createClient()
+  const now       = new Date()
+  const nowISO    = now.toISOString()
 
-  // Artists fetched up front — fetchPresalesOpenNow groups its pool by
-  // artist and needs the list to do it, so it can't run inside the
-  // Promise.all below alongside the query it groups.
+  // Artists fetched up front — fetchPresalesOpenNow and fetchOnSaleThisWeek
+  // both group their pool by artist and need the list to do it, so neither
+  // can run inside the Promise.all below alongside the query it groups.
   const { data: artistsData } = await supabase.from('artists').select('*') as unknown as { data: Artist[] | null }
   const artists = artistsData ?? []
 
@@ -98,7 +103,7 @@ export default async function CityPage({
     eventsThisWeek,
     topEvents,
     presaleGroups,
-    onsalePoolResult,
+    onsaleGroups,
     totalCountResult,
     venuesResult,
     localBusinessesResult,
@@ -109,11 +114,13 @@ export default async function CityPage({
     // already-finished shows excluded).
     fetchTonightEvents(supabase, { city: cityName, fetchLimit: 50 }),
 
-    // Everything happening in the city in the next 7 days, biggest venues
-    // first — ticketed shows and hand-curated local events (markets,
-    // community stuff) together in one list. Shared with the homepage's
-    // national version of this section (src/lib/eventPools.ts) so the two
-    // never drift the way the old per-page copies did.
+    // Tomorrow through the following 7 London days, biggest venues first
+    // — ticketed shows and hand-curated local events (markets, community
+    // stuff) together in one list. Starts tomorrow, not today, so nothing
+    // here duplicates a card already shown in Tonight above. Shared with
+    // the homepage's national version of this section (src/lib/
+    // eventPools.ts) so the two never drift the way the old per-page
+    // copies did.
     fetchEventsThisWeek(supabase, { city: cityName, limit: 30 }),
 
     // The biggest shows beyond this week, out to ~2 months — same shared
@@ -127,16 +134,16 @@ export default async function CityPage({
     // active presale isn't shown twice.
     fetchPresalesOpenNow(supabase, artists, { city: cityName, limit: 6 }),
 
-    // On sale this week — public on-sale date only (see note above on why
-    // this doesn't also match on presale_start).
-    supabase
-      .from('events_with_venue')
-      .select('*')
-      .ilike('venue_city', cityName)
-      .gte('onsale_date', threeDaysAgo)
-      .lte('onsale_date', weekAhead)
-      .order('onsale_date', { ascending: true })
-      .limit(50) as unknown as Promise<{ data: EventWithVenue[] | null }>,
+    // On sale this week — the genuine public on-sale date (onsale_date)
+    // falling within the current Monday-Sunday UK week, never the
+    // presale window (kept as a separate section above), via the same
+    // shared helper the homepage and /on-sale-this-week listing use —
+    // this used to be a hand-rolled, differently-windowed query unique to
+    // this page; routing it through fetchOnSaleThisWeek means this city
+    // page can never drift from those again, and it now also gets the
+    // same cancelled/postponed exclusion and per-series diversity cap
+    // (capGroupsBySeries, on-sale.ts) those pages already have.
+    fetchOnSaleThisWeek(supabase, artists, { city: cityName, limit: 6 }),
 
     // Total upcoming count for the hero stat line — a head:true count query,
     // not a full events fetch (the "All Events" grid this used to feed has
@@ -183,7 +190,6 @@ export default async function CityPage({
   // compete fairly (not permanently) against RSS rows for one of these 5
   // slots.
   const cityNews = rankCityNewsForDisplay(cityNewsResult.data ?? [], 5)
-  const onsalePool     = onsalePoolResult.data ?? []
   const totalCount     = totalCountResult.count ?? 0
 
   // Exact upcoming-event counts for each candidate venue, queried one venue
@@ -210,9 +216,6 @@ export default async function CityPage({
         .gte('start_date', nowISO) as unknown as Promise<{ count: number | null }>
     )
   )
-
-  // Group on-sale events by artist, limit 6 cards
-  const onsaleGroups = groupEventsByArtist(onsalePool, artists).slice(0, 6)
 
   // Build venue event count map and filter to venues with upcoming events
   const countByVenue: Record<string, number> = {}
@@ -322,7 +325,7 @@ export default async function CityPage({
             </h2>
           </div>
           {tonightEvents.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm divide-y divide-slate-100">
               {tonightEvents.map(event => (
                 <TonightEventCard key={event.id} event={event} artists={artists} />
               ))}
@@ -394,25 +397,25 @@ export default async function CityPage({
         )}
 
         {/* ── ON SALE THIS WEEK ── */}
-        {onsaleGroups.length > 0 && (
-          <section>
-            <div className="flex items-end justify-between mb-7">
-              <div>
-                <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
-                  Tickets just released
-                </p>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                  On Sale This Week in {cityName}
-                </h2>
-              </div>
-              <Link
-                href="/on-sale-this-week"
-                className="text-sm font-semibold hover:underline hidden sm:block"
-                style={{ color: '#026CDF' }}
-              >
-                View all →
-              </Link>
+        <section>
+          <div className="flex items-end justify-between mb-7">
+            <div>
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
+                Tickets just released
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                On Sale This Week in {cityName}
+              </h2>
             </div>
+            <Link
+              href="/on-sale-this-week"
+              className="text-sm font-semibold hover:underline hidden sm:block"
+              style={{ color: '#026CDF' }}
+            >
+              View all →
+            </Link>
+          </div>
+          {onsaleGroups.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {onsaleGroups.map(group => (
                 <Link
@@ -453,8 +456,19 @@ export default async function CityPage({
                 </Link>
               ))}
             </div>
-          </section>
-        )}
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center">
+              <p className="text-3xl mb-2">🎟️</p>
+              <p className="text-slate-500">
+                Nothing has gone on sale in {cityName} this week yet — check{' '}
+                <Link href={`/cities/${encodeURIComponent(cityName)}/this-week`} className="font-semibold hover:underline" style={{ color: '#026CDF' }}>
+                  what&rsquo;s already on
+                </Link>{' '}
+                or come back Monday for the new week.
+              </p>
+            </div>
+          )}
+        </section>
 
         {/* ── TOP EVENTS (beyond this week, up to ~2 months out) ── */}
         {topEvents.length > 0 && (

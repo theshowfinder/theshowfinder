@@ -12,13 +12,13 @@
 // it finds.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Artist, EventWithVenue } from './types/database'
+import type { Artist } from './types/database'
 import {
   fetchEventsThisWeek, fetchTopEvents,
   fetchPresalesOpenNow, fetchPresalesOpenNowEvents,
   fetchOnSaleThisWeek, fetchOnSaleThisWeekEvents,
 } from './eventPools'
-import { groupEventsByArtist, mergeEventsById, onSaleThisWeekWindow } from './on-sale'
+import { groupEventsByArtist, mergeEventsById } from './on-sale'
 
 export interface BrokenLink {
   surface: string
@@ -84,25 +84,14 @@ export async function checkOnSaleLinkHealth(
 
   // Checked concurrently (N cities x 2 queries) rather than one at a time
   // — this is a read-only report, not a page render for an end user, so
-  // there's no benefit to serializing it.
-  const { floorISO, ceilISO } = onSaleThisWeekWindow()
+  // there's no benefit to serializing it. The city page now renders its
+  // On Sale This Week section through fetchOnSaleThisWeek directly (it
+  // used to run its own hand-rolled replica of this query, which this
+  // function had to separately duplicate to stay accurate — routing both
+  // through the same shared helper removes that duplication entirely).
   await Promise.all(cities.map(async city => {
     const presaleSlugs = (await fetchPresalesOpenNow(supabase, artists, { city, limit: 500 })).map(g => g.slug)
-
-    // Replicates the city page's own on-sale-this-week query verbatim
-    // (src/app/cities/[city]/page.tsx) — deliberately NOT routed through
-    // fetchOnSaleThisWeek, since the city page filters on the onsale_date
-    // column directly (a safe subset — see that file's comments) rather
-    // than the public_onsale_start/presale_start OR used elsewhere.
-    const { data: cityOnSale } = await supabase
-      .from('events_with_venue')
-      .select('*')
-      .ilike('venue_city', city)
-      .gte('onsale_date', floorISO)
-      .lte('onsale_date', ceilISO)
-      .order('onsale_date', { ascending: true })
-      .limit(500) as unknown as { data: EventWithVenue[] | null }
-    const citySlugs = groupEventsByArtist(cityOnSale ?? [], artists).map(g => g.slug)
+    const citySlugs = (await fetchOnSaleThisWeek(supabase, artists, { city, limit: 500 })).map(g => g.slug)
 
     checkOnSaleSlugs(`City page — ${city} — Presales Open Now`, presaleSlugs)
     checkOnSaleSlugs(`City page — ${city} — On Sale This Week`, citySlugs)

@@ -10,8 +10,9 @@ import type { EventWithVenue, Artist } from './types/database'
 import {
   groupEventsByArtist, type OnSaleGroup,
   onSaleThisWeekWindow, presaleOpenNowWindow,
+  capGroupsBySeries,
 } from './on-sale.ts'
-import { londonDayWindow } from './intelligence.ts'
+import { londonDayWindow, londonDaysAheadWindow, type DateWindow } from './intelligence.ts'
 import { isTonightEvent, sortTonightEvents } from './tonight.ts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -56,19 +57,36 @@ interface EventsThisWeekOpts {
 // rows are excluded (LIVE_EVENT_STATUSES) — a cancelled show was never a
 // genuine "happening this week" opportunity. Pass `city` to scope to one
 // city's page; omit it for the national homepage section.
+// Pure window boundary for "This Week" — exported (and pulled out of
+// fetchEventsThisWeek below) specifically so it's directly unit-testable
+// without a live SupabaseClient, matching tonight.ts's own pure/DB split.
+// Starts tomorrow's London midnight, not "now": today's events belong
+// only in Tonight (fetchTonightEvents below) — showing them here too
+// would duplicate every one of tonight's cards into This Week as well.
+// Spans 7 London calendar days from there (tomorrow through 7 days after
+// that). Built from the same londonDaysAheadWindow Tonight and the admin
+// dashboard already use, so "today"/"tomorrow" can never drift between
+// the two sections — and because it's a pure function of `now`, the
+// boundary rolls forward automatically on every call after midnight
+// London time, with no separate "rollover" code path to maintain.
+export function eventsThisWeekWindow(now: Date = new Date()): DateWindow {
+  return {
+    startISO: londonDaysAheadWindow(now, 1).endISO, // tomorrow's London midnight
+    endISO:   londonDaysAheadWindow(now, 8).endISO, // 8 days ahead's London midnight
+  }
+}
+
 export async function fetchEventsThisWeek(
   supabase: SupabaseClient,
   { city, limit, fetchLimit = 60 }: EventsThisWeekOpts,
 ): Promise<EventWithVenue[]> {
-  const now       = new Date()
-  const nowISO    = now.toISOString()
-  const weekAhead = new Date(now.getTime() + 7 * DAY_MS).toISOString()
+  const { startISO, endISO } = eventsThisWeekWindow()
 
   let query = supabase
     .from('events_with_venue')
     .select('*')
-    .gte('start_date', nowISO)
-    .lte('start_date', weekAhead)
+    .gte('start_date', startISO)
+    .lt('start_date', endISO)
     .in('status', LIVE_EVENT_STATUSES)
     .order('start_date',     { ascending: true })
     .order('is_featured',    { ascending: false })
@@ -177,14 +195,18 @@ export async function fetchTopEvents(
   supabase: SupabaseClient,
   { city, limit, fetchLimit = 60, horizonDays = 60 }: TopEventsOpts,
 ): Promise<EventWithVenue[]> {
-  const now       = new Date()
-  const weekAhead = new Date(now.getTime() + 7 * DAY_MS).toISOString()
-  const horizon   = new Date(now.getTime() + horizonDays * DAY_MS).toISOString()
+  const now = new Date()
+  // Starts exactly where fetchEventsThisWeek's own window ends, rather
+  // than a separately-computed "+7 days" — these two pools must never
+  // gap or overlap, or the same show could either go missing from both
+  // sections or double up in both.
+  const weekEnd = eventsThisWeekWindow(now).endISO
+  const horizon = new Date(now.getTime() + horizonDays * DAY_MS).toISOString()
 
   let query = supabase
     .from('events_with_venue')
     .select('*')
-    .gt('start_date', weekAhead)
+    .gte('start_date', weekEnd)
     .lte('start_date', horizon)
     .in('status', LIVE_EVENT_STATUSES)
     .order('is_featured',    { ascending: false })
@@ -253,23 +275,44 @@ interface OnSaleThisWeekOpts {
   fetchLimit?: number
 }
 
-// Events going on sale (public on-sale) OR into presale within
-// onSaleThisWeekWindow() — "Tickets just released" content for the
-// homepage, the /on-sale-this-week listing, and each city page's On Sale
-// This Week section. Queries public_onsale_start / presale_start directly
-// rather than the on_sale_this_week / presale_this_week flag columns: the
-// nightly DB function meant to keep those in sync isn't actually running,
-// so they're stuck at false.
+// Events whose genuine general (public) on-sale date falls within the
+// current Monday-Sunday UK week (onSaleThisWeekWindow — see on-sale.ts)
+// — "Tickets just released" content for the homepage, the
+// /on-sale-this-week listing, and each city page's On Sale This Week
+// section. Deliberately queries onsale_date ONLY, never presale_start:
+// mixing the two here would make "On Sale This Week" partly duplicate
+// "Presales Open Now" (they're meant to stay two separate sections — an
+// artist whose presale opens this week but whose public on-sale hasn't
+// belongs only in Presales Open Now until that public date actually
+// arrives). onsale_date is also the more complete column of the two
+// genuine-date fields: the sync always writes it alongside
+// public_onsale_start with the same value, but a one-off backfill
+// (scripts/backfill-onsale-dates.ts) has also populated onsale_date
+// alone for some older rows — querying it directly picks those up too,
+// rather than only the subset that also has public_onsale_start set.
+// Never infers a date from the event's own start_date (see
+// hasReliableOnSaleDate in on-sale.ts) — an event with no onsale_date at
+// all simply can't satisfy a .gte/.lte range filter against a null
+// column, so it's excluded for free, not guessed at.
+//
+// Also excludes cancelled/postponed rows (LIVE_EVENT_STATUSES) and
+// anything whose start_date has already passed — a show that's already
+// happened, or been pulled, was never a genuine "on sale" opportunity
+// regardless of what its onsale_date says.
 export async function fetchOnSaleThisWeekEvents(
   supabase: SupabaseClient,
   { city, fetchLimit = 500 }: { city?: string; fetchLimit?: number },
 ): Promise<EventWithVenue[]> {
   const { floorISO, ceilISO } = onSaleThisWeekWindow()
+  const nowISO = new Date().toISOString()
 
   let query = supabase
     .from('events_with_venue')
     .select('*')
-    .or(`and(public_onsale_start.gte.${floorISO},public_onsale_start.lte.${ceilISO}),and(presale_start.gte.${floorISO},presale_start.lte.${ceilISO})`)
+    .gte('onsale_date', floorISO)
+    .lte('onsale_date', ceilISO)
+    .gte('start_date', nowISO)
+    .in('status', LIVE_EVENT_STATUSES)
     .order('onsale_date', { ascending: true })
     .limit(fetchLimit)
 
@@ -281,13 +324,21 @@ export async function fetchOnSaleThisWeekEvents(
 
 // Grouped, deduped version of the above — one card per artist/promoter
 // rather than one per Ticketmaster SKU row ("Standard Entry" / "Venue
-// Premium" / etc. sharing a title).
+// Premium" / etc. sharing a title) — with a deterministic per-series cap
+// (capGroupsBySeries, on-sale.ts) applied before the final limit, so a
+// team or artist with many fixtures/dates going on sale in the same
+// window can't fill every slot in the capped list. The cap is applied to
+// the FULL sorted candidate pool, before slicing to `limit`, so it's the
+// pool's own diversity that's capped, not just whatever happened to
+// survive an earlier arbitrary cut.
 export async function fetchOnSaleThisWeek(
   supabase: SupabaseClient,
   artists: Artist[],
   { city, limit, fetchLimit = 500 }: OnSaleThisWeekOpts,
 ): Promise<OnSaleGroup[]> {
-  const data    = await fetchOnSaleThisWeekEvents(supabase, { city, fetchLimit })
-  const deduped = dedupeEventsByTitle(data, fetchLimit)
-  return groupEventsByArtist(deduped, artists).slice(0, limit)
+  const data        = await fetchOnSaleThisWeekEvents(supabase, { city, fetchLimit })
+  const deduped      = dedupeEventsByTitle(data, fetchLimit)
+  const groups        = groupEventsByArtist(deduped, artists)
+  const diversified   = capGroupsBySeries(groups)
+  return diversified.slice(0, limit)
 }

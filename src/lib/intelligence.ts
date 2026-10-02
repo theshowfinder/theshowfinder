@@ -104,6 +104,27 @@ export function londonDaysAheadWindow(now: Date, days: number): DateWindow {
   return { startISO: start.toISOString(), endISO: end.toISOString() }
 }
 
+// Monday 00:00 through the following Monday 00:00 (exclusive) — the
+// literal Mon-Sun UK calendar week containing `now`, not a rolling
+// N-day lookback. "On Sale This Week" (on-sale.ts's onSaleThisWeekWindow)
+// needs this specific meaning of "this week" per the Manchester-pilot
+// requirement: an event that went on sale last Saturday should drop out
+// of "this week" the moment Monday turns over, not linger for a rolling
+// 3 more days the way a lookback window would have it. Computed the same
+// way as the day-window functions above (per-date offset lookup), so it
+// stays correct even when the BST/GMT transition falls inside the week.
+export function londonCalendarWeekWindow(now: Date): DateWindow {
+  const todayParts = londonDateParts(now)
+  // getUTCDay(): 0=Sun..6=Sat. Converted to "days since Monday" (Mon=0..Sun=6)
+  // so Monday's own date can be found by pure calendar subtraction.
+  const dow = new Date(Date.UTC(todayParts.year, todayParts.month - 1, todayParts.day)).getUTCDay()
+  const daysSinceMonday = (dow + 6) % 7
+  const mondayParts = addCalendarDays(todayParts, -daysSinceMonday)
+  const start = londonMidnightUTCForDate(mondayParts)
+  const end = londonMidnightUTCForDate(addCalendarDays(mondayParts, 7))
+  return { startISO: start.toISOString(), endISO: end.toISOString() }
+}
+
 // ── Quality checks ───────────────────────────────────────────────────────
 
 export interface TicketLinkableEvent {

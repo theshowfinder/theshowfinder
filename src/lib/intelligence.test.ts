@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   londonDayWindow,
   londonDaysAheadWindow,
+  londonCalendarWeekWindow,
   hasNoUsableTicketLink,
   isBareProviderHomepage,
   findBareProviderHomepages,
@@ -66,6 +67,45 @@ describe('londonDaysAheadWindow', () => {
     const { startISO, endISO } = londonDaysAheadWindow(new Date('2026-03-26T10:00:00.000Z'), 7)
     assert.equal(startISO, '2026-03-26T00:00:00.000Z') // still GMT
     assert.equal(endISO, '2026-04-01T23:00:00.000Z')   // now BST (UTC+1)
+  })
+})
+
+describe('londonCalendarWeekWindow', () => {
+  test('GMT: a Thursday resolves to that week\'s Monday-Monday bounds', () => {
+    // 15 Jan 2026 is a Thursday; that week runs Mon 12 Jan - Sun 18 Jan.
+    const { startISO, endISO } = londonCalendarWeekWindow(new Date('2026-01-15T10:00:00.000Z'))
+    assert.equal(startISO, '2026-01-12T00:00:00.000Z')
+    assert.equal(endISO, '2026-01-19T00:00:00.000Z')
+  })
+
+  test('BST: a Monday resolves to its own date as the week start', () => {
+    // 15 Jun 2026 is itself a Monday.
+    const { startISO, endISO } = londonCalendarWeekWindow(new Date('2026-06-15T10:00:00.000Z'))
+    assert.equal(startISO, '2026-06-14T23:00:00.000Z') // 15 Jun 00:00 BST
+    assert.equal(endISO, '2026-06-21T23:00:00.000Z')   // 22 Jun 00:00 BST
+  })
+
+  test('a Sunday still belongs to the week that is ending, not the next one', () => {
+    // 18 Jan 2026 is the Sunday that closes the 12-18 Jan week.
+    const { startISO, endISO } = londonCalendarWeekWindow(new Date('2026-01-18T22:00:00.000Z'))
+    assert.equal(startISO, '2026-01-12T00:00:00.000Z')
+    assert.equal(endISO, '2026-01-19T00:00:00.000Z')
+  })
+
+  test('a week spanning the BST start (clocks go forward) still has a correct Monday-Monday span', () => {
+    // 26 Mar 2026 is a Thursday in the week Mon 23 Mar - Sun 29 Mar; UK
+    // clocks go forward on Sun 29 Mar, so the week's own end boundary
+    // (the following Monday, 30 Mar) is already in BST.
+    const { startISO, endISO } = londonCalendarWeekWindow(new Date('2026-03-26T10:00:00.000Z'))
+    assert.equal(startISO, '2026-03-23T00:00:00.000Z') // 23 Mar 00:00 GMT
+    assert.equal(endISO, '2026-03-29T23:00:00.000Z')   // 30 Mar 00:00 BST
+  })
+
+  test('an onsale_date just before Monday midnight falls in the previous week, just after falls in the new one', () => {
+    const sundayNight = londonCalendarWeekWindow(new Date('2026-01-18T23:59:00.000Z'))
+    const mondayMorning = londonCalendarWeekWindow(new Date('2026-01-19T00:01:00.000Z'))
+    assert.equal(sundayNight.startISO, '2026-01-12T00:00:00.000Z')
+    assert.equal(mondayMorning.startISO, '2026-01-19T00:00:00.000Z')
   })
 })
 
