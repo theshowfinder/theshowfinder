@@ -277,6 +277,26 @@ describe('capGroupsBySeries', () => {
   test('empty input — empty result, no throw', () => {
     assert.deepEqual(capGroupsBySeries([]), [])
   })
+
+  // Birmingham city-page build-out (2 Oct 2026): capGroupsBySeries is the
+  // same shared helper that already protects Manchester's On Sale This
+  // Week from being dominated by one team's fixtures (Manchester Storm,
+  // above) — this isn't Manchester-specific logic that needed porting,
+  // it's generic series-key extraction (extractSeriesKey strips the
+  // " v "/" vs " opponent suffix off ANY title). Birmingham City FC is
+  // the same shape of risk for Birmingham's own page, so this pins that
+  // the cap already applies there with no city-specific code at all.
+  test('repeated Birmingham City FC fixtures are capped the same way Manchester Storm fixtures are', () => {
+    const groups = [
+      onSaleGroup({ slug: 'birmingham-city-v-coventry-city', artistName: 'Birmingham City v Coventry City', onsale_date: '2026-08-01T09:00:00.000Z' }),
+      onSaleGroup({ slug: 'birmingham-city-v-stoke-city', artistName: 'Birmingham City v Stoke City', onsale_date: '2026-08-02T09:00:00.000Z' }),
+      onSaleGroup({ slug: 'birmingham-city-v-west-brom', artistName: 'Birmingham City v West Brom', onsale_date: '2026-08-03T09:00:00.000Z' }),
+      onSaleGroup({ slug: 'birmingham-city-v-preston', artistName: 'Birmingham City v Preston North End', onsale_date: '2026-08-04T09:00:00.000Z' }),
+    ]
+    const result = capGroupsBySeries(groups)
+    assert.equal(result.length, 2)
+    assert.deepEqual(result.map(g => g.slug), ['birmingham-city-v-coventry-city', 'birmingham-city-v-stoke-city'])
+  })
 })
 
 describe('hasReliableOnSaleDate', () => {

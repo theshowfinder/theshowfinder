@@ -94,6 +94,16 @@ describe('cityNamesMatch — case and whitespace city matching', () => {
     assert.equal(cityNamesMatch('Hull', 'Kingston upon Hull'), false)
   })
 
+  // Birmingham city-page build-out (2 Oct 2026): Birmingham named
+  // explicitly, matching the same case/whitespace coverage every other
+  // city page's count query relies on.
+  test('Birmingham case and whitespace variants match', () => {
+    assert.equal(cityNamesMatch('Birmingham', 'birmingham'), true)
+    assert.equal(cityNamesMatch('BIRMINGHAM', 'Birmingham'), true)
+    assert.equal(cityNamesMatch(' Birmingham ', 'Birmingham'), true)
+    assert.equal(cityNamesMatch('Birmingham', 'Birmingham, UK'), false)
+  })
+
   test('no two cities in the shared 36-city list collide once normalized', async () => {
     const { CITIES } = await import('./cities.ts')
     for (let i = 0; i < CITIES.length; i++) {
