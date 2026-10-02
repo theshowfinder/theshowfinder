@@ -35,7 +35,7 @@ import LocalHeroCopy from '@/components/LocalHeroCopy'
 import CategoryStrip from '@/components/CategoryStrip'
 import type { EventWithVenue, Artist, CityNews } from '@/lib/types/database'
 import { fmtOnSaleLabel, extractArtistName, toSlug } from '@/lib/on-sale'
-import { fetchEventsThisWeek, fetchPresalesOpenNow, fetchOnSaleThisWeek } from '@/lib/eventPools'
+import { fetchEventsThisWeek, fetchPresalesOpenNow, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { NATIONAL_SLUG } from '@/lib/cityNews'
 import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 import PresaleGrid from '@/components/PresaleGrid'
@@ -45,17 +45,45 @@ async function FeaturedEvents() {
   const supabase = await createClient()
   const now = new Date().toISOString()
 
+  // Root cause of the intermittent "blank until refresh" report: this
+  // section used to require a non-null image_url with no status filter
+  // at all, on a page statically rendered with revalidate=3600 (ISR). If
+  // one regeneration happened to land on zero qualifying rows (an image-
+  // backfill timing gap, say), that empty state got cached for up to an
+  // hour — real visitors saw it until the next background regeneration
+  // completed, which looks exactly like "fixed by a refresh". Two fixes
+  // here: (1) image_url is no longer a hard requirement — EventCard
+  // already renders a graceful category-emoji placeholder when it's
+  // missing, so a temporary image gap can no longer zero out the whole
+  // section; (2) cancelled/postponed rows are excluded, matching
+  // LIVE_EVENT_STATUSES everywhere else a "what's on" grid is built.
+  //
   // Fetch more than needed to absorb title deduplication; primary sort is
   // venue_capacity desc so the biggest venues surface first, onsale_date desc
   // as a tiebreaker for venues with unknown capacity (nulls last).
-  const result = await supabase
-    .from('events_with_venue')
-    .select('*')
-    .gte('start_date', now)
-    .not('image_url', 'is', null)
-    .order('venue_capacity', { ascending: false, nullsFirst: false })
-    .order('onsale_date',    { ascending: false, nullsFirst: true  })
-    .limit(100) as unknown as { data: EventWithVenue[] | null }
+  let result: { data: EventWithVenue[] | null; error: { message: string } | null }
+  try {
+    result = await supabase
+      .from('events_with_venue')
+      .select('*')
+      .gte('start_date', now)
+      .in('status', LIVE_EVENT_STATUSES)
+      .order('venue_capacity', { ascending: false, nullsFirst: false })
+      .order('onsale_date',    { ascending: false, nullsFirst: true  })
+      .limit(100) as unknown as { data: EventWithVenue[] | null; error: { message: string } | null }
+  } catch (err) {
+    console.error('[homepage] Featured Shows query threw:', err)
+    result = { data: null, error: { message: err instanceof Error ? err.message : 'unknown error' } }
+  }
+
+  if (result.error) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-5xl mb-4">⚠️</p>
+        <p className="text-slate-500">Couldn&rsquo;t load featured shows right now — try refreshing.</p>
+      </div>
+    )
+  }
 
   const seen = new Set<string>()
   const events: EventWithVenue[] = []
@@ -71,7 +99,7 @@ async function FeaturedEvents() {
     return (
       <div className="text-center py-16">
         <p className="text-5xl mb-4">🎭</p>
-        <p className="text-slate-500">Seeding the database — check back shortly!</p>
+        <p className="text-slate-500">No featured shows right now — check back soon.</p>
       </div>
     )
   }

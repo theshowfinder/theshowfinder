@@ -37,10 +37,11 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
   const { created, saved, published, error } = await searchParams
   const db = createAdminClient()
 
-  const [{ data: candidate }, { data: artists }, { data: cityRows }] = await Promise.all([
+  const [{ data: candidate }, { data: artists }, { data: cityRows }, { data: socialPack }] = await Promise.all([
     db.from('news_candidates').select('*').eq('id', id).single() as unknown as Promise<{ data: NewsCandidate | null }>,
     db.from('artists').select('id, name').order('name', { ascending: true }) as unknown as Promise<{ data: { id: string; name: string }[] | null }>,
     db.from('news_candidate_cities').select('city_slug, city_name').eq('candidate_id', id) as unknown as Promise<{ data: { city_slug: string; city_name: string }[] | null }>,
+    db.from('social_packs').select('id, status').eq('source_type', 'news_candidate').eq('source_id', id).maybeSingle() as unknown as Promise<{ data: { id: string; status: string } | null }>,
   ])
 
   if (!candidate) notFound()
@@ -242,6 +243,18 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
             </p>
           )}
         </section>
+
+        {socialPack && (
+          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Social Pack</h2>
+              <p className="text-sm text-slate-600 capitalize">Status: {socialPack.status.replace(/_/g, ' ')}</p>
+            </div>
+            <Link href={`/admin/social/${socialPack.id}`} className="text-sm font-bold text-blue-600 hover:underline whitespace-nowrap">
+              Open Social Pack →
+            </Link>
+          </section>
+        )}
 
         {shareKitDefaults && platformLinks && <ShareKit defaults={shareKitDefaults} platformLinks={platformLinks} />}
 

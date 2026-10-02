@@ -46,6 +46,12 @@ export default async function AdminPage() {
             News Inbox
           </Link>
           <Link
+            href="/admin/social"
+            className="text-sm text-slate-500 hover:text-slate-700"
+          >
+            Social Packs
+          </Link>
+          <Link
             href="/admin/subscribers"
             className="text-sm text-slate-500 hover:text-slate-700"
           >

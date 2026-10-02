@@ -2,7 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resend, FROM_EMAIL } from '@/lib/resend'
-import { normalizeEmail, isValidEmail } from '@/lib/subscribers'
+import { normalizeEmail, isValidEmail, resolveSubscriberCityTag, shouldBackfillCityTag } from '@/lib/subscribers'
 import { buildWelcomeEmailText } from '@/lib/emailText'
 import WelcomeEmail from '@/emails/WelcomeEmail'
 
@@ -78,7 +78,7 @@ export async function subscribeNewsletter(email: string, city?: string): Promise
   if (!isValidEmail(trimmed)) {
     return { error: 'Please enter a valid email address.' }
   }
-  const cityTag = city?.trim() || null
+  const cityTag = resolveSubscriberCityTag(city)
 
   const db = createAdminClient()
   const { error: dbError } = await db.from('subscribers').insert({ email: trimmed, city: cityTag })
@@ -96,7 +96,7 @@ export async function subscribeNewsletter(email: string, city?: string): Promise
       //   whether a row actually matched (i.e. whether they really were
       //   unsubscribed) — that's how a genuine resubscribe is told apart
       //   from an already-active subscriber submitting the form again.
-      if (cityTag) {
+      if (shouldBackfillCityTag(cityTag)) {
         await db.from('subscribers').update({ city: cityTag }).eq('email', trimmed).is('city', null)
       }
       const { data: resubscribedRows } = await db

@@ -22,6 +22,14 @@ import {
 } from '@/lib/newsPublishing'
 import { fetchArticleHtml, extractArticleMetadata, UnsafeUrlError, FetchArticleError } from '@/lib/urlIntake'
 import { requestAiSuggestions } from '@/lib/newsAiSuggestions'
+import {
+  buildSocialPackDraft,
+  isEligibleForAutoSocialPack,
+  resolveNewsCandidateContext,
+  buildEventContext,
+  canAdvanceSocialPackStatus,
+} from '@/lib/socialPack'
+import type { SocialPackStatus } from '@/lib/types/database'
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -786,6 +794,40 @@ async function fetchCandidateWithCities(db: ReturnType<typeof createAdminClient>
   return { candidate, cityTargets: (cityRows ?? []) as CandidateCityTarget[] }
 }
 
+// Creates a Draft Social Pack for a just-published candidate, only when
+// it targets at least one city (isEligibleForAutoSocialPack) — a
+// national-only story has no single city for the pack's "city name"
+// field, so it's left out rather than guessing one. Uses the city page
+// itself as the destination (TheShowFinder's own property, not the
+// external source article) so tracked clicks actually land back on the
+// site. `ignoreDuplicates: true` on the upsert is what makes this safe
+// to call on every publish/re-publish without ever overwriting an
+// admin's own edits to a pack that already exists for this candidate.
+async function findOrCreateSocialPackForCandidate(
+  db: ReturnType<typeof createAdminClient>,
+  candidate: { id: string; headline: string; summary: string | null },
+  cityTargets: CandidateCityTarget[],
+): Promise<void> {
+  const cityNames = cityTargets.map(t => t.city_name)
+  if (!isEligibleForAutoSocialPack(cityNames)) return
+
+  const cityName = cityNames[0]
+  const draft = buildSocialPackDraft({
+    sourceType: 'news_candidate',
+    sourceId: candidate.id,
+    cityName,
+    headline: candidate.headline,
+    context: resolveNewsCandidateContext(candidate),
+    destinationPath: `/cities/${encodeURIComponent(cityName)}`,
+    hashtagSeed: cityNames,
+  })
+
+  const { error } = await db
+    .from('social_packs')
+    .upsert(draft, { onConflict: 'source_type,source_id', ignoreDuplicates: true })
+  if (error) throw new Error(error.message)
+}
+
 // Publishes an approved candidate into the existing city_news table — one
 // row per target city (or the single national row) — so it renders
 // through the exact same public card design as an RSS story, no second
@@ -832,6 +874,19 @@ export async function publishNewsCandidateAction(id: string) {
       .update(buildPublishCandidatePatch(now))
       .eq('id', id)
     if (updateError) throw new Error(updateError.message)
+
+    // Social Pack (Phase 7) — best-effort, never fatal to the publish
+    // itself: a city-targeted story gets a Draft-status pack prepared for
+    // manual review, exactly the "connect approved content to a manual-
+    // review Social Pack" requirement. Idempotent via the
+    // (source_type, source_id) unique constraint — re-publishing never
+    // creates a second pack or overwrites an admin's edits to an
+    // existing one.
+    try {
+      await findOrCreateSocialPackForCandidate(db, candidate, targets)
+    } catch (err) {
+      console.error('[social-pack] auto-create on publish failed (non-fatal):', err)
+    }
 
     revalidatePath('/admin/news')
     revalidatePath('/admin/news/' + id)
@@ -922,4 +977,153 @@ export async function deleteNewsCandidateAction(id: string) {
 
   revalidatePath('/admin/news')
   redirect('/admin/news?deleted=1')
+}
+
+// ── Social Pack (Phase 7) ───────────────────────────────────────────────────
+//
+// Manual-review only, same as everywhere else in this file calling
+// buildSocialPackDraft: nothing here posts to Facebook/Instagram/TikTok,
+// and a fresh pack always starts at status 'draft' (see socialPack.ts's
+// own comment on buildSocialPackDraft for why that's structurally
+// guaranteed, not just a convention).
+
+interface SocialPackEventRow {
+  id: string; title: string; slug: string; start_date: string
+  venue: { name: string; city: string } | null
+}
+
+// The manual trigger for "an important Manchester event update" — there's
+// no reliable automatic signal for "important" in the data (see the
+// Phase 7 pre-coding report), so this is a judgement call an admin makes
+// on a specific event, from its own admin page, rather than a fabricated
+// significance score.
+export async function createSocialPackForEventAction(eventId: string) {
+  await checkAuth()
+  const db = createAdminClient()
+
+  // redirect() throws internally (a NEXT_REDIRECT control-flow signal) —
+  // it must never be called from inside this try block, or the catch
+  // below would swallow it and misreport it as a generic failure. So the
+  // success path only computes the pack id here and redirects after the
+  // try/catch, matching publishNewsCandidateAction's own structure.
+  let packId: string
+  try {
+    const { data: event, error: fetchError } = await db
+      .from('events')
+      .select('id, title, slug, start_date, venue:venues(name, city)')
+      .eq('id', eventId)
+      .single() as unknown as { data: SocialPackEventRow | null; error: { message: string } | null }
+
+    if (fetchError || !event) throw new Error(fetchError?.message || 'Event not found.')
+    if (!event.venue) throw new Error('This event has no venue on record — cannot build a Social Pack without one.')
+
+    const cityName = event.venue.city
+    const dateLabel = new Date(event.start_date).toLocaleDateString('en-GB', {
+      timeZone: 'Europe/London', day: 'numeric', month: 'long', year: 'numeric',
+    })
+
+    const draft = buildSocialPackDraft({
+      sourceType: 'event',
+      sourceId: event.id,
+      cityName,
+      headline: event.title,
+      context: buildEventContext({ title: event.title, venueName: event.venue.name, startDateLabel: dateLabel }),
+      destinationPath: `/events/${event.slug}`,
+      hashtagSeed: [cityName, event.title],
+      imageDateLabel: dateLabel,
+    })
+
+    const { data: pack, error: upsertError } = await db
+      .from('social_packs')
+      .upsert(draft, { onConflict: 'source_type,source_id', ignoreDuplicates: false })
+      .select('id')
+      .single()
+    if (upsertError) throw new Error(upsertError.message)
+
+    revalidatePath('/admin/social')
+    packId = pack.id
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Something went wrong while preparing the Social Pack.'
+    redirect('/admin/events/' + eventId + '?error=' + encodeURIComponent(message))
+  }
+
+  redirect('/admin/social/' + packId)
+}
+
+// Edits the three platform drafts, hashtags and headline/context by hand
+// before approval — the same "editable text before approval" requirement
+// the existing Share Kit already meets for news copy, just persisted
+// this time. Links/UTM parameters are not editable here (they're derived
+// from the source and destination, not free text) — regenerate the pack
+// instead if the destination genuinely needs to change.
+export async function updateSocialPackAction(id: string, formData: FormData) {
+  await checkAuth()
+  const db = createAdminClient()
+
+  const headline = (formData.get('headline') as string)?.trim()
+  const context = (formData.get('context') as string)?.trim()
+  const facebookText = (formData.get('facebook_text') as string) ?? ''
+  const instagramText = (formData.get('instagram_text') as string) ?? ''
+  const tiktokText = (formData.get('tiktok_text') as string) ?? ''
+  const hashtagsRaw = (formData.get('hashtags') as string) ?? ''
+  const hashtags = hashtagsRaw.split(/\s+/).map(h => h.trim()).filter(Boolean)
+
+  if (!headline || !context) {
+    redirect('/admin/social/' + id + '?error=' + encodeURIComponent('Headline and context cannot be empty.'))
+  }
+
+  const { error } = await db
+    .from('social_packs')
+    .update({
+      headline, context,
+      facebook_text: facebookText, instagram_text: instagramText, tiktok_text: tiktokText,
+      hashtags,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+
+  if (error) {
+    redirect('/admin/social/' + id + '?error=' + encodeURIComponent(error.message))
+  }
+
+  revalidatePath('/admin/social/' + id)
+  redirect('/admin/social/' + id + '?saved=1')
+}
+
+// Draft -> Ready for review -> Approved -> Posted, one step at a time, or
+// freely backward to correct a mistake (canAdvanceSocialPackStatus).
+// 'posted' is only ever reached by an admin confirming here, by hand,
+// that they posted it themselves — this action makes no network call to
+// any platform.
+export async function advanceSocialPackStatusAction(id: string, to: SocialPackStatus) {
+  await checkAuth()
+  const db = createAdminClient()
+
+  const { data: pack, error: fetchError } = await db
+    .from('social_packs')
+    .select('status')
+    .eq('id', id)
+    .single()
+  if (fetchError || !pack) {
+    redirect('/admin/social/' + id + '?error=' + encodeURIComponent('Social Pack not found.'))
+  }
+
+  if (!canAdvanceSocialPackStatus(pack.status, to)) {
+    redirect('/admin/social/' + id + '?error=' + encodeURIComponent(`Can't move from "${pack.status}" to "${to}" directly.`))
+  }
+
+  const now = new Date().toISOString()
+  const patch: Record<string, unknown> = { status: to, updated_at: now }
+  if (to === 'approved') patch.approved_at = now
+  if (to === 'posted') patch.posted_at = now
+  if (to === 'draft' || to === 'ready_for_review') { patch.approved_at = null; patch.posted_at = null }
+
+  const { error: updateError } = await db.from('social_packs').update(patch).eq('id', id)
+  if (updateError) {
+    redirect('/admin/social/' + id + '?error=' + encodeURIComponent(updateError.message))
+  }
+
+  revalidatePath('/admin/social')
+  revalidatePath('/admin/social/' + id)
+  redirect('/admin/social/' + id + '?saved=1')
 }

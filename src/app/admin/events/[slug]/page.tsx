@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { updateEventOwnTicketUrlAction } from '../../actions'
+import { updateEventOwnTicketUrlAction, createSocialPackForEventAction } from '../../actions'
 import { getTicketmasterAffiliateLink } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 import type { Event } from '@/lib/types/database'
@@ -28,7 +28,15 @@ export default async function EditEventPage({ params, searchParams }: PageProps)
 
   if (!event) notFound()
 
+  const { data: socialPack } = await db
+    .from('social_packs')
+    .select('id, status')
+    .eq('source_type', 'event')
+    .eq('source_id', event.id)
+    .maybeSingle() as unknown as { data: { id: string; status: string } | null }
+
   const updateAction = updateEventOwnTicketUrlAction.bind(null, event.id, slug)
+  const prepareSocialPackAction = createSocialPackForEventAction.bind(null, event.id)
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -88,6 +96,32 @@ export default async function EditEventPage({ params, searchParams }: PageProps)
               <p className="text-sm font-semibold text-slate-700 mb-2">Shareable link</p>
               <CopyLinkButton link={`https://theshowfinder.com/go/${event.slug}`} />
             </div>
+          )}
+        </section>
+
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <h2 className="text-lg font-extrabold text-slate-900 mb-1">Social Pack</h2>
+          <p className="text-sm text-slate-500 mb-4">
+            For an important update on this event — flag it here to prepare a manual-review Facebook/Instagram/TikTok
+            draft. Nothing posts automatically; it just prepares a Draft you review at /admin/social.
+          </p>
+          {socialPack ? (
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm text-slate-600 capitalize">Status: {socialPack.status.replace(/_/g, ' ')}</p>
+              <Link href={`/admin/social/${socialPack.id}`} className="text-sm font-bold text-blue-600 hover:underline whitespace-nowrap">
+                Open Social Pack →
+              </Link>
+            </div>
+          ) : (
+            <form action={prepareSocialPackAction}>
+              <button
+                type="submit"
+                className="font-bold text-white px-6 py-2.5 rounded-xl hover:opacity-90 transition-opacity"
+                style={{ backgroundColor: '#E8003D' }}
+              >
+                Prepare Social Pack
+              </button>
+            </form>
           )}
         </section>
       </main>

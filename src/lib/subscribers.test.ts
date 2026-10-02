@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeEmail, isValidEmail } from './subscribers.ts'
+import { normalizeEmail, isValidEmail, resolveSubscriberCityTag, shouldBackfillCityTag } from './subscribers.ts'
 
 describe('normalizeEmail', () => {
   test('trims surrounding whitespace', () => {
@@ -64,5 +64,37 @@ describe('isValidEmail', () => {
 
   test('rejects a single-character top-level domain', () => {
     assert.equal(isValidEmail('chris@theshowfinder.c'), false)
+  })
+})
+
+describe('resolveSubscriberCityTag (Manchester newsletter tagging)', () => {
+  test('a Manchester city-page signup resolves to "Manchester"', () => {
+    assert.equal(resolveSubscriberCityTag('Manchester'), 'Manchester')
+  })
+
+  test('the national homepage form (no city passed at all) resolves to null', () => {
+    assert.equal(resolveSubscriberCityTag(undefined), null)
+  })
+
+  test('an empty string resolves to null, not an empty string', () => {
+    assert.equal(resolveSubscriberCityTag(''), null)
+  })
+
+  test('a whitespace-only city resolves to null', () => {
+    assert.equal(resolveSubscriberCityTag('   '), null)
+  })
+
+  test('surrounding whitespace is trimmed off a real city name', () => {
+    assert.equal(resolveSubscriberCityTag('  Manchester  '), 'Manchester')
+  })
+})
+
+describe('shouldBackfillCityTag', () => {
+  test('a Manchester tag should be backfilled onto an untagged existing subscriber', () => {
+    assert.equal(shouldBackfillCityTag('Manchester'), true)
+  })
+
+  test('no city tag at all — nothing to backfill', () => {
+    assert.equal(shouldBackfillCityTag(null), false)
   })
 })

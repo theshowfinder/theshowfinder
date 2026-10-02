@@ -37,3 +37,32 @@ export function isValidEmail(email: string): boolean {
   if (email.startsWith('.')) return false
   return EMAIL_RE.test(email)
 }
+
+// ── City tagging (Manchester pilot phase) ─────────────────────────────────
+//
+// CityNewsletterForm already passes the city a signup came from (e.g.
+// "Manchester") into subscribeNewsletter, which writes it to
+// subscribers.city — this was already working before this phase, these
+// two functions just pull the decision logic itself out of the action so
+// it's unit-tested directly rather than only exercised through a live
+// Supabase call (same reasoning as newsPublishing.ts's
+// buildPublishCandidatePatch/buildUnpublishDeleteFilter).
+
+// What city tag (if any) a signup should be written with. Mirrors the
+// action's own inline `city?.trim() || null` exactly — an empty or
+// whitespace-only city (e.g. the national homepage form, which passes no
+// city at all) always resolves to null, never an empty string.
+export function resolveSubscriberCityTag(city?: string | null): string | null {
+  const trimmed = city?.trim()
+  return trimmed ? trimmed : null
+}
+
+// Whether a duplicate signup (unique-constraint conflict on email) is
+// even worth attempting a city backfill for — only when this signup
+// actually supplied a city tag. The action itself still guards
+// `.is('city', null)` at the database layer, so a subscriber's existing
+// city is never overwritten by a later, untagged or differently-tagged
+// signup — this is only the "is there anything to even try" gate.
+export function shouldBackfillCityTag(newCityTag: string | null): boolean {
+  return newCityTag !== null
+}

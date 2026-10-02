@@ -15,10 +15,11 @@ import { citySlug } from '@/lib/cityNews'
 import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import CityNewsletterForm from '@/components/CityNewsletterForm'
-import { fetchEventsThisWeek, fetchTopEvents, fetchPresalesOpenNow } from '@/lib/eventPools'
+import { fetchEventsThisWeek, fetchTopEvents, fetchPresalesOpenNow, fetchTonightEvents } from '@/lib/eventPools'
 import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
+import TonightEventCard from '@/components/TonightEventCard'
 import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 
 export async function generateStaticParams() {
@@ -93,6 +94,7 @@ export default async function CityPage({
   const artists = artistsData ?? []
 
   const [
+    tonightEvents,
     eventsThisWeek,
     topEvents,
     presaleGroups,
@@ -102,6 +104,11 @@ export default async function CityPage({
     localBusinessesResult,
     cityNewsResult,
   ] = await Promise.all([
+    // Today only, Europe/London calendar day, soonest first — see
+    // src/lib/tonight.ts for the exact rules (cancelled/postponed and
+    // already-finished shows excluded).
+    fetchTonightEvents(supabase, { city: cityName, fetchLimit: 50 }),
+
     // Everything happening in the city in the next 7 days, biggest venues
     // first — ticketed shows and hand-curated local events (markets,
     // community stuff) together in one list. Shared with the homepage's
@@ -214,6 +221,15 @@ export default async function CityPage({
   })
   const cityVenues = candidateVenues.filter(v => countByVenue[v.id] > 0)
 
+  // Booking.com/Trainline cards (Getting There & Staying, below) are
+  // gated on their own affiliate template being configured — showing
+  // either as a live, clickable link before the tracking template exists
+  // would send real visitors through an untracked destination with no
+  // commission and no disclosure. See affiliateUrl()'s own comment for
+  // how the template env var is set once an application is approved.
+  const hasBookingAffiliate   = !!process.env.BOOKING_AFFILIATE_TEMPLATE
+  const hasTrainlineAffiliate = !!process.env.TRAINLINE_AFFILIATE_TEMPLATE
+
   const canonical = `https://www.theshowfinder.com/cities/${encodeURIComponent(cityName)}`
   const breadcrumbSchema = buildBreadcrumbSchema([
     { name: 'Home', url: 'https://www.theshowfinder.com' },
@@ -239,7 +255,7 @@ export default async function CityPage({
         />
       )}
 
-      {/* ── HERO ── */}
+        {/* ── HERO ── */}
       <div
         className="relative py-14 px-4 sm:px-6 lg:px-8 overflow-hidden"
         style={{ backgroundColor: '#1A1A2E' }}
@@ -295,6 +311,58 @@ export default async function CityPage({
         {/* ── NEWSLETTER (city-scoped) ── */}
         <CityNewsletterForm cityName={cityName} />
 
+        {/* ── TONIGHT ── */}
+        <section>
+          <div className="mb-7">
+            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+              Happening now
+            </p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+              Tonight in {cityName}
+            </h2>
+          </div>
+          {tonightEvents.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {tonightEvents.map(event => (
+                <TonightEventCard key={event.id} event={event} artists={artists} />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center">
+              <p className="text-3xl mb-2">🌙</p>
+              <p className="text-slate-500">Nothing on tonight in {cityName} — check what&rsquo;s coming up this week below.</p>
+            </div>
+          )}
+        </section>
+
+        {/* ── EVENTS THIS WEEK (ticketed shows + local events, merged) ── */}
+        {eventsThisWeek.length > 0 && (
+          <section>
+            <div className="flex items-end justify-between mb-7">
+              <div>
+                <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+                  Next 7 days
+                </p>
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                  Events This Week in {cityName}
+                </h2>
+              </div>
+              <Link
+                href={`/cities/${encodeURIComponent(cityName)}/this-week`}
+                className="text-sm font-semibold whitespace-nowrap hover:underline"
+                style={{ color: '#E8003D' }}
+              >
+                See all →
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {eventsThisWeek.map(event => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ── LOCAL ENTERTAINMENT NEWS (hidden if no rows yet) ── */}
         {cityNews.length > 0 && (
           <section>
@@ -307,6 +375,21 @@ export default async function CityPage({
               </h2>
             </div>
             <NewsCardGrid items={cityNews} context={`city:${city}`} />
+          </section>
+        )}
+
+        {/* ── PRESALES OPEN NOW ── */}
+        {presaleGroups.length > 0 && (
+          <section>
+            <div className="mb-7">
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFB800' }}>
+                Buy before everyone else
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                Presales Open Now in {cityName}
+              </h2>
+            </div>
+            <PresaleGrid groups={presaleGroups} />
           </section>
         )}
 
@@ -368,49 +451,6 @@ export default async function CityPage({
                     </div>
                   </div>
                 </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ── PRESALES OPEN NOW ── */}
-        {presaleGroups.length > 0 && (
-          <section>
-            <div className="mb-7">
-              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFB800' }}>
-                Buy before everyone else
-              </p>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                Presales Open Now in {cityName}
-              </h2>
-            </div>
-            <PresaleGrid groups={presaleGroups} />
-          </section>
-        )}
-
-        {/* ── EVENTS THIS WEEK (ticketed shows + local events, merged) ── */}
-        {eventsThisWeek.length > 0 && (
-          <section>
-            <div className="flex items-end justify-between mb-7">
-              <div>
-                <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
-                  Next 7 days
-                </p>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                  Events This Week in {cityName}
-                </h2>
-              </div>
-              <Link
-                href={`/cities/${encodeURIComponent(cityName)}/this-week`}
-                className="text-sm font-semibold whitespace-nowrap hover:underline"
-                style={{ color: '#E8003D' }}
-              >
-                See all →
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {eventsThisWeek.map(event => (
-                <EventCard key={event.id} event={event} />
               ))}
             </div>
           </section>
@@ -478,43 +518,52 @@ export default async function CityPage({
           </section>
         )}
 
-        {/* ── GETTING THERE & STAYING ── */}
-        <section>
-          <div className="mb-7">
-            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
-              Plan your trip
-            </p>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-              Getting to {cityName} & Staying Over
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <a
-              href={affiliateUrl(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(`${cityName}, United Kingdom`)}`, 'BOOKING_AFFILIATE_TEMPLATE')}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6"
-            >
-              <div>
-                <p className="font-extrabold text-slate-900 text-lg mb-1">🏨 Hotels in {cityName}</p>
-                <p className="text-sm text-slate-500">Staying over for the show? Search hotels via Booking.com</p>
-              </div>
-              <span className="text-xl text-slate-300">→</span>
-            </a>
-            <a
-              href={affiliateUrl('https://www.thetrainline.com/', 'TRAINLINE_AFFILIATE_TEMPLATE')}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6"
-            >
-              <div>
-                <p className="font-extrabold text-slate-900 text-lg mb-1">🚆 Trains to {cityName}</p>
-                <p className="text-sm text-slate-500">Book UK train tickets via Trainline</p>
-              </div>
-              <span className="text-xl text-slate-300">→</span>
-            </a>
-          </div>
-        </section>
+        {/* ── GETTING THERE & STAYING (hidden entirely if neither affiliate
+             template env var is configured — see hasBookingAffiliate/
+             hasTrainlineAffiliate above: an untracked placeholder link is
+             never shown in its place) ── */}
+        {(hasBookingAffiliate || hasTrainlineAffiliate) && (
+          <section>
+            <div className="mb-7">
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+                Plan your trip
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                Getting to {cityName} & Staying Over
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {hasBookingAffiliate && (
+                <a
+                  href={affiliateUrl(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(`${cityName}, United Kingdom`)}`, 'BOOKING_AFFILIATE_TEMPLATE')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6"
+                >
+                  <div>
+                    <p className="font-extrabold text-slate-900 text-lg mb-1">🏨 Hotels in {cityName}</p>
+                    <p className="text-sm text-slate-500">Staying over for the show? Search hotels via Booking.com</p>
+                  </div>
+                  <span className="text-xl text-slate-300">→</span>
+                </a>
+              )}
+              {hasTrainlineAffiliate && (
+                <a
+                  href={affiliateUrl('https://www.thetrainline.com/', 'TRAINLINE_AFFILIATE_TEMPLATE')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6"
+                >
+                  <div>
+                    <p className="font-extrabold text-slate-900 text-lg mb-1">🚆 Trains to {cityName}</p>
+                    <p className="text-sm text-slate-500">Book UK train tickets via Trainline</p>
+                  </div>
+                  <span className="text-xl text-slate-300">→</span>
+                </a>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* ── LOCAL GUIDE (hidden until businesses are added) ── */}
         {localBusinesses.length > 0 && (

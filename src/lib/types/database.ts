@@ -9,6 +9,10 @@ export type NewsReviewStatus = 'pending' | 'approved' | 'rejected' | 'published'
 export type NewsIntakeMethod = 'manual' | 'url_import'
 export type NewsAiReviewStatus = 'not_applicable' | 'unreviewed' | 'reviewed'
 
+// Social Pack (Phase 7) — see supabase/migration_031_social_packs.sql
+export type SocialPackSourceType = 'news_candidate' | 'event'
+export type SocialPackStatus = 'draft' | 'ready_for_review' | 'approved' | 'posted'
+
 export interface Database {
   public: {
     Tables: {
@@ -597,6 +601,73 @@ export interface Database {
           city_name?: string
         }
       }
+      social_packs: {
+        Row: {
+          id: string
+          source_type: SocialPackSourceType
+          source_id: string
+          city_name: string | null
+          headline: string
+          context: string
+          facebook_text: string
+          instagram_text: string
+          tiktok_text: string
+          hashtags: string[]
+          destination_url: string
+          utm_campaign: string
+          facebook_link: string
+          instagram_link: string
+          tiktok_link: string
+          image_params: Record<string, unknown>
+          status: SocialPackStatus
+          created_at: string
+          updated_at: string
+          approved_at: string | null
+          posted_at: string | null
+        }
+        Insert: {
+          id?: string
+          source_type: SocialPackSourceType
+          source_id: string
+          city_name?: string | null
+          headline: string
+          context: string
+          facebook_text?: string
+          instagram_text?: string
+          tiktok_text?: string
+          hashtags?: string[]
+          destination_url: string
+          utm_campaign: string
+          facebook_link?: string
+          instagram_link?: string
+          tiktok_link?: string
+          image_params?: Record<string, unknown>
+          status?: SocialPackStatus
+          created_at?: string
+          updated_at?: string
+          approved_at?: string | null
+          posted_at?: string | null
+        }
+        Update: {
+          city_name?: string | null
+          headline?: string
+          context?: string
+          facebook_text?: string
+          instagram_text?: string
+          tiktok_text?: string
+          hashtags?: string[]
+          destination_url?: string
+          utm_campaign?: string
+          facebook_link?: string
+          instagram_link?: string
+          tiktok_link?: string
+          image_params?: Record<string, unknown>
+          status?: SocialPackStatus
+          updated_at?: string
+          approved_at?: string | null
+          posted_at?: string | null
+        }
+      }
     }
     Views: {
       events_with_venue: {
@@ -659,3 +730,4 @@ export type NewsCandidate = Database['public']['Tables']['news_candidates']['Row
 export type NewsCandidateCity = Database['public']['Tables']['news_candidate_cities']['Row']
 export type Subscriber = Database['public']['Tables']['subscribers']['Row']
 export type Newsletter = Database['public']['Tables']['newsletters']['Row']
+export type SocialPack = Database['public']['Tables']['social_packs']['Row']
