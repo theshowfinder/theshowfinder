@@ -32,11 +32,11 @@ export default function AdvertisePage() {
               To discuss advertising opportunities, email us and we&apos;ll come back to you shortly.
             </p>
             <a
-              href="mailto:advertise@theshowfinder.com"
+              href="mailto:hello@theshowfinder.com"
               className="inline-flex items-center gap-2 font-bold text-sm hover:underline"
               style={{ color: '#E8003D' }}
             >
-              advertise@theshowfinder.com
+              hello@theshowfinder.com
             </a>
           </div>
 
