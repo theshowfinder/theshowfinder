@@ -6,10 +6,12 @@
  * listing) linking to /on-sale-this-week/[slug] or /events/[slug] when
  * that destination's own query logic doesn't actually resolve it — i.e.
  * the card-producing query and the destination-resolving query have drifted
- * out of sync. Imports the *real* site functions (src/lib/eventPools.ts,
- * src/lib/on-sale.ts) rather than re-implementing the queries, so this
- * check has the same logic as the live site and can't itself drift out of
- * date with it.
+ * out of sync.
+ *
+ * The actual checking logic lives in src/lib/linkHealth.ts and is shared
+ * with the admin Daily Intelligence Dashboard's Quality Checks section —
+ * this script is just the CLI wrapper: env loading, the connectivity
+ * guard, and printing the report.
  *
  * Uses the anon (public, RLS-respecting) Supabase key — the same one the
  * site itself queries with — never the service-role key. Makes no writes.
@@ -24,13 +26,8 @@
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { createClient } from '@supabase/supabase-js'
-import type { EventWithVenue, Artist } from '../src/lib/types/database'
-import {
-  fetchEventsThisWeek, fetchTopEvents,
-  fetchPresalesOpenNow, fetchPresalesOpenNowEvents,
-  fetchOnSaleThisWeek, fetchOnSaleThisWeekEvents,
-} from '../src/lib/eventPools'
-import { groupEventsByArtist, mergeEventsById, onSaleThisWeekWindow } from '../src/lib/on-sale'
+import type { Artist } from '../src/lib/types/database'
+import { checkOnSaleLinkHealth } from '../src/lib/linkHealth'
 
 // ── Load .env.local ──────────────────────────────────────────────────────
 
@@ -72,16 +69,7 @@ const CITIES = [
   'Aberdeen',
 ]
 
-interface Broken {
-  surface: string
-  slug:    string
-  url:     string
-}
-
 async function main() {
-  const broken: Broken[] = []
-  let checked = 0
-
   // Fail loudly on a connectivity/query error instead of silently treating
   // it as "no data, therefore no broken links" — a network failure must
   // never be reported as a clean health check.
@@ -97,107 +85,20 @@ async function main() {
     process.exit(1)
   }
 
-  // ── 1. The resolving pool: exactly what the fixed
-  //    /on-sale-this-week/[slug] detail page checks a slug against. ────────
-  const [onSaleEvents, presaleEvents] = await Promise.all([
-    fetchOnSaleThisWeekEvents(supabase, { fetchLimit: 1000 }),
-    fetchPresalesOpenNowEvents(supabase, { fetchLimit: 1000 }),
-  ])
-  const resolvableSlugs = new Set(
-    groupEventsByArtist(mergeEventsById(onSaleEvents, presaleEvents), artists).map(g => g.slug)
-  )
-  console.log(`Resolvable /on-sale-this-week/[slug] pool: ${resolvableSlugs.size} slugs`)
+  const report = await checkOnSaleLinkHealth(supabase, artists, CITIES)
 
-  function checkOnSaleSlugs(surface: string, slugs: string[]) {
-    for (const slug of slugs) {
-      checked++
-      if (!resolvableSlugs.has(slug)) {
-        broken.push({ surface, slug, url: `/on-sale-this-week/${slug}` })
-      }
-    }
-  }
+  console.log(`Resolvable /on-sale-this-week/[slug] pool: ${report.resolvableSlugCount} slugs`)
+  console.log(`\nChecked ${report.checked} internal link targets across ${CITIES.length} city pages + homepage + listing page.`)
+  console.log(`Empty event slugs in sampled pools: ${report.emptyEventSlugs}`)
+  console.log(`Empty artist slugs: ${report.emptyArtistSlugs}`)
 
-  // ── 2. Every surface that renders an on-sale-this-week / presale card ──
-
-  checkOnSaleSlugs(
-    'Homepage — On Sale This Week',
-    (await fetchOnSaleThisWeek(supabase, artists, { limit: 500 })).map(g => g.slug),
-  )
-  checkOnSaleSlugs(
-    'On Sale This Week listing page',
-    (await fetchOnSaleThisWeek(supabase, artists, { limit: 500 })).map(g => g.slug),
-  )
-  checkOnSaleSlugs(
-    'Homepage — Presales Open Now',
-    (await fetchPresalesOpenNow(supabase, artists, { limit: 500 })).map(g => g.slug),
-  )
-
-  // Checked concurrently (36 cities x 2 queries) rather than one city at a
-  // time — this is a read-only reporting script, not a page render, so
-  // there's no benefit to serializing it, and serial execution made a full
-  // run too slow to be practical to re-run often.
-  const { floorISO, ceilISO } = onSaleThisWeekWindow()
-  await Promise.all(CITIES.map(async city => {
-    const presaleSlugs = (await fetchPresalesOpenNow(supabase, artists, { city, limit: 500 })).map(g => g.slug)
-
-    // Replicates the city page's own on-sale-this-week query verbatim
-    // (src/app/cities/[city]/page.tsx) — deliberately NOT routed through
-    // fetchOnSaleThisWeek, since the city page filters on the onsale_date
-    // column directly (a safe subset — see that file's comments) rather
-    // than the public_onsale_start/presale_start OR used elsewhere.
-    const { data: cityOnSale } = await supabase
-      .from('events_with_venue')
-      .select('*')
-      .ilike('venue_city', city)
-      .gte('onsale_date', floorISO)
-      .lte('onsale_date', ceilISO)
-      .order('onsale_date', { ascending: true })
-      .limit(500) as unknown as { data: EventWithVenue[] | null }
-    const citySlugs = groupEventsByArtist(cityOnSale ?? [], artists).map(g => g.slug)
-
-    checkOnSaleSlugs(`City page — ${city} — Presales Open Now`, presaleSlugs)
-    checkOnSaleSlugs(`City page — ${city} — On Sale This Week`, citySlugs)
-  }))
-
-  // ── 3. Lightweight sanity check on /events/[slug] and /artists/[slug] — ─
-  //    these resolve by a DB-stored slug column rather than a derived one,
-  //    so the only failure mode here is a null/empty slug on a row that's
-  //    otherwise being surfaced in a card.
-  const sampleEvents = mergeEventsById(
-    await fetchEventsThisWeek(supabase, { limit: 100 }),
-    await fetchTopEvents(supabase, { limit: 100 }),
-  )
-  let emptyEventSlugs = 0
-  for (const event of sampleEvents) {
-    checked++
-    if (!event.slug || event.slug.trim() === '') {
-      emptyEventSlugs++
-      broken.push({ surface: 'Event card (homepage pools)', slug: event.id, url: '/events/(missing slug)' })
-    }
-  }
-
-  let emptyArtistSlugs = 0
-  for (const artist of artists) {
-    checked++
-    if (!artist.slug || artist.slug.trim() === '') {
-      emptyArtistSlugs++
-      broken.push({ surface: 'Artist row', slug: artist.name, url: '/artists/(missing slug)' })
-    }
-  }
-
-  // ── Report ────────────────────────────────────────────────────────────
-
-  console.log(`\nChecked ${checked} internal link targets across ${CITIES.length} city pages + homepage + listing page.`)
-  console.log(`Empty event slugs in sampled pools: ${emptyEventSlugs}`)
-  console.log(`Empty artist slugs: ${emptyArtistSlugs}`)
-
-  if (broken.length === 0) {
+  if (report.broken.length === 0) {
     console.log('\n✅ No broken internal links found.')
     process.exit(0)
   }
 
-  console.log(`\n❌ ${broken.length} broken internal link(s) found:\n`)
-  for (const b of broken) {
+  console.log(`\n❌ ${report.broken.length} broken internal link(s) found:\n`)
+  for (const b of report.broken) {
     console.log(`  [${b.surface}] ${b.url}  (slug: ${b.slug})`)
   }
   process.exit(1)

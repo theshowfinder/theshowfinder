@@ -22,6 +22,12 @@ export default async function AdminPage() {
         <h1 className="text-xl font-extrabold text-slate-900">TheShowFinder Admin</h1>
         <div className="flex items-center gap-4">
           <Link
+            href="/admin/intelligence"
+            className="text-sm font-bold text-slate-700 hover:text-slate-900"
+          >
+            Intelligence
+          </Link>
+          <Link
             href="/admin/events"
             className="text-sm text-slate-500 hover:text-slate-700"
           >
