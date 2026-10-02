@@ -260,11 +260,15 @@ export async function updateEventOwnTicketUrlAction(id: string, slug: string, fo
   await checkAuth()
   const db = createAdminClient()
 
-  const own_ticket_url = ((formData.get('own_ticket_url') as string) || '').trim() || null
+  const cleanUrl = (name: string) => ((formData.get(name) as string) || '').trim() || null
+  const own_ticket_url = cleanUrl('own_ticket_url')
+  const viagogo_url = cleanUrl('viagogo_url')
+  const stubhub_url = cleanUrl('stubhub_url')
+  const gigsberg_url = cleanUrl('gigsberg_url')
 
   const { error } = await db
     .from('events')
-    .update({ own_ticket_url })
+    .update({ own_ticket_url, viagogo_url, stubhub_url, gigsberg_url })
     .eq('id', id)
 
   if (error) throw new Error(error.message)
@@ -273,6 +277,28 @@ export async function updateEventOwnTicketUrlAction(id: string, slug: string, fo
   revalidatePath('/admin/events/' + slug)
   revalidatePath('/events/' + slug)
   redirect('/admin/events/' + slug + '?saved=1')
+}
+
+export async function updateEventTicketLinksFromQueueAction(id: string, formData: FormData) {
+  await checkAuth()
+  const db = createAdminClient()
+  const cleanUrl = (name: string) => ((formData.get(name) as string) || '').trim() || null
+
+  const { error } = await db
+    .from('events')
+    .update({
+      own_ticket_url: cleanUrl('own_ticket_url'),
+      viagogo_url: cleanUrl('viagogo_url'),
+      stubhub_url: cleanUrl('stubhub_url'),
+      gigsberg_url: cleanUrl('gigsberg_url'),
+    })
+    .eq('id', id)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin/ticket-links')
+  revalidatePath('/admin/events')
+  redirect('/admin/ticket-links?saved=1')
 }
 
 // Local events (markets, art fairs, community events) — hand-curated, not

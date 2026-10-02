@@ -47,11 +47,12 @@ describe('event detail page and EventCard disable every purchase CTA for a postp
     assert.ok(!eventCard.includes("event.status === 'sold_out' || event.status === 'cancelled'"), 'the old hand-rolled check (missing postponed) should be gone')
   })
 
-  test('Buy Direct, More Options (resale) and Also Available are all gated on isCancelledOrPostponed, not rendered unconditionally', () => {
+  test('Buy Direct and exact resale options are gated on isCancelledOrPostponed, not rendered unconditionally', () => {
     assert.ok(detailPage.includes('isCancelledOrPostponed'), 'the detail page should define/use an isCancelledOrPostponed guard')
-    // Each of the three sections' opening tag should be preceded by the guard somewhere on the same line or the one before it —
-    // a looser but still meaningful check: the guard must appear more than once (once per gated section) given it's used 3 times below.
+    // The guard protects the direct offer and exact resale section. Generic
+    // "Also Available" marketplace searches were removed entirely because
+    // they were not event-specific destinations.
     const occurrences = detailPage.split('isCancelledOrPostponed').length - 1
-    assert.ok(occurrences >= 4, 'expected isCancelledOrPostponed to be defined once and referenced at least 3 more times (Buy Direct, More Options, Also Available)')
+    assert.ok(occurrences >= 3, 'expected isCancelledOrPostponed to be defined and used for the direct and resale sections')
   })
 })

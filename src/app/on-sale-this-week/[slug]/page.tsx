@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { groupEventsByArtist, fmtOnSaleLabel, mergeEventsById } from '@/lib/on-sale'
 import { fetchOnSaleThisWeekEvents, fetchPresalesOpenNowEvents } from '@/lib/eventPools'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
+import { isBareProviderHomepage } from '@/lib/intelligence'
 import type { Artist } from '@/lib/types/database'
 import {
   getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
@@ -98,11 +99,11 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
 
   // Secondary market links using artist name
   const secondaryMarket = [
-    { name: 'Gigsberg',    bg: '#1a1f6e', href: getGigsbergAffiliateLink(dbArtist?.gigsberg_url    ?? `https://www.gigsberg.com/search?q=${encodeURIComponent(artistName)}`) },
-    { name: 'Viagogo',     bg: '#00a650', href: getViagogoAffiliateLink(dbArtist?.viagogo_url ?? `https://www.viagogo.co.uk/ww/SearchResults?q=${encodeURIComponent(artistName)}`) },
-    { name: 'StubHub',     bg: '#400078', href: getStubHubAffiliateLink(dbArtist?.stubhub_url     ?? `https://www.stubhub.co.uk/srp/?q=${encodeURIComponent(artistName)}`) },
-    { name: 'Vivid Seats', bg: '#02044a', href: getVividSeatsAffiliateLink(dbArtist?.vivid_seats_url ?? `https://www.vividseats.com/search?searchTerm=${encodeURIComponent(artistName)}`) },
-  ]
+    dbArtist?.gigsberg_url && !isBareProviderHomepage(dbArtist.gigsberg_url) ? { name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(dbArtist.gigsberg_url) } : null,
+    dbArtist?.viagogo_url && !isBareProviderHomepage(dbArtist.viagogo_url) ? { name: 'Viagogo', bg: '#00a650', href: getViagogoAffiliateLink(dbArtist.viagogo_url) } : null,
+    dbArtist?.stubhub_url && !isBareProviderHomepage(dbArtist.stubhub_url) ? { name: 'StubHub', bg: '#400078', href: getStubHubAffiliateLink(dbArtist.stubhub_url) } : null,
+    dbArtist?.vivid_seats_url && !isBareProviderHomepage(dbArtist.vivid_seats_url) ? { name: 'Vivid Seats', bg: '#02044a', href: getVividSeatsAffiliateLink(dbArtist.vivid_seats_url) } : null,
+  ].filter((offer): offer is { name: string; bg: string; href: string } => offer !== null)
 
   return (
     <div className="min-h-screen bg-[#F5F5F0]">
@@ -284,7 +285,7 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
               </div>
 
               {/* Secondary market */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              {secondaryMarket.length > 0 && <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                 <h3 className="font-bold text-slate-900 mb-0.5">Available Now</h3>
                 <p className="text-xs text-slate-400 mb-4">Tickets available on secondary market</p>
                 <div className="space-y-2">
@@ -302,7 +303,7 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
                     </TrackedTicketLink>
                   ))}
                 </div>
-              </div>
+              </div>}
 
               <Link
                 href="/on-sale-this-week"

@@ -8,15 +8,14 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import type { EventCategory, EventStatus } from '@/lib/types/database'
 import {
-  getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
-  getEventimAffiliateLink, getStubHubAffiliateLink, getGigsbergAffiliateLink,
-  getVividSeatsAffiliateLink, getEventbriteAffiliateLink, getSkiddleAffiliateLink,
-  getSeatUniqueAffiliateLink,
+  getTicketmasterAffiliateLink, getViagogoAffiliateLink,
+  getStubHubAffiliateLink, getGigsbergAffiliateLink,
 } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { jsonLdScript, buildEventSchema, buildBreadcrumbSchema } from '@/lib/jsonld'
 import { ticketPurchaseDisabledStatus } from '@/lib/eventPools'
+import { isBareProviderHomepage } from '@/lib/intelligence'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -41,6 +40,9 @@ interface EventDetail {
   currency: string
   tickets_url: string | null
   own_ticket_url: string | null
+  viagogo_url: string | null
+  stubhub_url: string | null
+  gigsberg_url: string | null
   status: EventStatus
   tags: string[] | null
   venue: {
@@ -59,7 +61,7 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
       id, title, slug, description, category,
       start_date, end_date, doors_time,
       image_url, price_from, price_to, currency,
-      tickets_url, own_ticket_url, status, tags,
+      tickets_url, own_ticket_url, viagogo_url, stubhub_url, gigsberg_url, status, tags,
       venue:venues(id, name, slug, address, city, postcode, website),
       artists:event_artists(
         is_headliner, order,
@@ -75,25 +77,16 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
 
 // ── Ticket providers ────────────────────────────────────────────────────────
 
-function buildProviders(title: string, directUrl: string | null) {
-  const q = encodeURIComponent(title)
-  const primary = [
-    { name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: getTicketmasterAffiliateLink(directUrl ?? `https://www.ticketmaster.co.uk/search?q=${q}`) },
-    { name: 'See Tickets',  tagline: 'Official tickets',    bg: '#e4022d', href: getSeeTicketsAffiliateLink(`https://www.seetickets.com/search?q=${q}`) },
-    { name: 'Eventim',      tagline: 'Book direct',         bg: '#00a4e0', href: getEventimAffiliateLink('https://www.eventim.co.uk') },
-  ]
+function buildProviders(event: Pick<EventDetail, 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url'>) {
+  const primary = event.tickets_url
+    ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: getTicketmasterAffiliateLink(event.tickets_url) }]
+    : []
   const resale = [
-    { name: 'Viagogo',     bg: '#00a650', href: getViagogoAffiliateLink(`https://www.viagogo.co.uk/ww/SearchResults?q=${q}`) },
-    { name: 'StubHub',     bg: '#400078', href: getStubHubAffiliateLink(`https://www.stubhub.co.uk/srp/?q=${q}`) },
-    { name: 'Gigsberg',    bg: '#1a1f6e', href: getGigsbergAffiliateLink(`https://www.gigsberg.com/tickets?q=${q}`) },
-    { name: 'Vivid Seats', bg: '#02044a', href: getVividSeatsAffiliateLink(`https://www.vividseats.com/search?searchTerm=${q}`) },
+    ...(event.viagogo_url && !isBareProviderHomepage(event.viagogo_url) ? [{ name: 'Viagogo', bg: '#00a650', href: getViagogoAffiliateLink(event.viagogo_url) }] : []),
+    ...(event.stubhub_url && !isBareProviderHomepage(event.stubhub_url) ? [{ name: 'StubHub', bg: '#400078', href: getStubHubAffiliateLink(event.stubhub_url) }] : []),
+    ...(event.gigsberg_url && !isBareProviderHomepage(event.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(event.gigsberg_url) }] : []),
   ]
-  const also = [
-    { name: 'Eventbrite',  bg: '#f05537',              href: getEventbriteAffiliateLink(`https://www.eventbrite.co.uk/d/united-kingdom/${q}/`) },
-    { name: 'Skiddle',     bg: '#ffcc00', color: '#111111', href: getSkiddleAffiliateLink('https://www.skiddle.com') },
-    { name: 'Seat Unique', bg: '#1e3a5f', href: getSeatUniqueAffiliateLink(`https://www.seatunique.com/search?q=${q}`) },
-  ]
-  return { primary, resale, also }
+  return { primary, resale }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -188,7 +181,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   // shows none of them.
   const isCancelledOrPostponed = event.status === 'cancelled' || event.status === 'postponed'
   const priceLabel = fmtPrice(event.price_from, event.price_to, event.currency)
-  const { primary, resale, also } = buildProviders(event.title, event.tickets_url)
+  const { primary, resale } = buildProviders(event)
   const headliners = event.artists
     .filter(a => a.is_headliner && a.artist)
     .sort((a, b) => a.order - b.order)
@@ -296,7 +289,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             <div className="hidden md:inline-flex items-center bg-slate-700 text-white/60 font-bold text-lg px-8 py-4 rounded-xl cursor-not-allowed">
               Event Postponed
             </div>
-          ) : (
+          ) : resale.length > 0 ? (
             <TrackedTicketLink
               href={resale[0].href}
               provider={resale[0].name}
@@ -307,6 +300,10 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             >
               Find Resale Tickets ↗
             </TrackedTicketLink>
+          ) : (
+            <div className="hidden md:inline-flex items-center bg-slate-700 text-white/60 font-bold text-lg px-8 py-4 rounded-xl cursor-not-allowed">
+              Sold Out
+            </div>
           )}
         </div>
       </section>
@@ -342,7 +339,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           )}
         </div>
       )}
-      {event.status === 'sold_out' && (
+      {event.status === 'sold_out' && resale.length > 0 && (
         <div className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t-2 px-4 py-3 flex items-center gap-3 shadow-2xl" style={{ borderColor: resale[0].bg }}>
           <div className="flex-1 min-w-0">
             <p className="text-xs text-slate-500 leading-none mb-0.5">Sold out</p>
@@ -509,7 +506,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
             {/* Resale — never for a cancelled/postponed show; still shown
                 for a genuinely sold_out one, since resale is the point. */}
-            {!isCancelledOrPostponed && (
+            {!isCancelledOrPostponed && resale.length > 0 && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">More Options</h3>
               <p className="text-xs text-slate-400 mb-4">Compare prices across resale platforms</p>
@@ -531,28 +528,6 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <p className="text-xs text-slate-400 mt-4 leading-relaxed">
                 Resale tickets may be priced above face value. Always check the seller&apos;s terms.
               </p>
-            </div>
-            )}
-
-            {/* Also available — same cancelled/postponed exclusion as Resale above. */}
-            {!isCancelledOrPostponed && (
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-4">Also Available</h3>
-              <div className="grid grid-cols-2 gap-3">
-                {also.map(({ name, bg, color, href }) => (
-                  <TrackedTicketLink
-                    key={name}
-                    href={href}
-                    provider={name}
-                    section="also_available"
-                    context={event.slug}
-                    className="flex items-center justify-center font-bold text-sm rounded-xl py-3.5 hover:opacity-90 transition-opacity min-h-[48px]"
-                    style={{ backgroundColor: bg, color: color ?? '#ffffff' }}
-                  >
-                    {name}
-                  </TrackedTicketLink>
-                ))}
-              </div>
             </div>
             )}
 

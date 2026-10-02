@@ -82,6 +82,30 @@ export default async function EditEventPage({ params, searchParams }: PageProps)
                 className="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+            <div className="border-t border-slate-100 pt-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">Exact resale listings</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Add only the listing for this exact event. Do not paste a provider homepage or a general artist search.
+                </p>
+              </div>
+              {([
+                ['viagogo_url', 'Viagogo', 'https://www.viagogo.co.uk/...'],
+                ['stubhub_url', 'StubHub', 'https://www.stubhub.co.uk/...'],
+                ['gigsberg_url', 'Gigsberg', 'https://www.gigsberg.com/...'],
+              ] as const).map(([name, label, placeholder]) => (
+                <div key={name}>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">{label} exact event URL</label>
+                  <input
+                    name={name}
+                    type="url"
+                    placeholder={placeholder}
+                    defaultValue={event[name] ?? ''}
+                    className="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              ))}
+            </div>
             <button
               type="submit"
               className="font-bold text-white px-6 py-2.5 rounded-xl hover:opacity-90 transition-opacity"

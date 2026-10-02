@@ -244,6 +244,9 @@ export interface Database {
           currency: string
           tickets_url: string | null
           own_ticket_url: string | null
+          viagogo_url: string | null
+          stubhub_url: string | null
+          gigsberg_url: string | null
           status: EventStatus
           is_featured: boolean
           tags: string[] | null
@@ -280,6 +283,9 @@ export interface Database {
           currency?: string
           tickets_url?: string | null
           own_ticket_url?: string | null
+          viagogo_url?: string | null
+          stubhub_url?: string | null
+          gigsberg_url?: string | null
           status?: EventStatus
           is_featured?: boolean
           tags?: string[] | null
@@ -315,6 +321,9 @@ export interface Database {
           currency?: string
           tickets_url?: string | null
           own_ticket_url?: string | null
+          viagogo_url?: string | null
+          stubhub_url?: string | null
+          gigsberg_url?: string | null
           status?: EventStatus
           is_featured?: boolean
           tags?: string[] | null

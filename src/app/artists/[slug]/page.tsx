@@ -10,6 +10,7 @@ import {
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { jsonLdScript, buildBreadcrumbSchema } from '@/lib/jsonld'
+import { isBareProviderHomepage } from '@/lib/intelligence'
 
 export const dynamic = 'force-dynamic'
 
@@ -343,15 +344,20 @@ export default async function ArtistPage({ params }: PageProps) {
               </div>
 
               {/* Secondary market */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              {[
+                artist.gigsberg_url && !isBareProviderHomepage(artist.gigsberg_url) ? { name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(artist.gigsberg_url) } : null,
+                artist.viagogo_url && !isBareProviderHomepage(artist.viagogo_url) ? { name: 'Viagogo', bg: '#00a650', href: getViagogoAffiliateLink(artist.viagogo_url) } : null,
+                artist.stubhub_url && !isBareProviderHomepage(artist.stubhub_url) ? { name: 'StubHub', bg: '#400078', href: getStubHubAffiliateLink(artist.stubhub_url) } : null,
+                artist.vivid_seats_url && !isBareProviderHomepage(artist.vivid_seats_url) ? { name: 'Vivid Seats', bg: '#02044a', href: getVividSeatsAffiliateLink(artist.vivid_seats_url) } : null,
+              ].filter(Boolean).length > 0 && <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                 <h3 className="font-bold text-slate-900 mb-0.5">Available Now</h3>
                 <p className="text-xs text-slate-400 mb-4">Tickets available on secondary market</p>
                 <div className="space-y-2">
                   {[
-                    { name: 'Gigsberg',    bg: '#1a1f6e', href: getGigsbergAffiliateLink(artist.gigsberg_url    ?? `https://www.gigsberg.com/search?q=${encodeURIComponent(artist.name)}`) },
-                    { name: 'Viagogo',     bg: '#00a650', href: getViagogoAffiliateLink(artist.viagogo_url ?? `https://www.viagogo.co.uk/ww/SearchResults?q=${encodeURIComponent(artist.name)}`) },
-                    { name: 'StubHub',     bg: '#400078', href: getStubHubAffiliateLink(artist.stubhub_url     ?? `https://www.stubhub.co.uk/srp/?q=${encodeURIComponent(artist.name)}`) },
-                    { name: 'Vivid Seats', bg: '#02044a', href: getVividSeatsAffiliateLink(artist.vivid_seats_url ?? `https://www.vividseats.com/search?searchTerm=${encodeURIComponent(artist.name)}`) },
+                    ...(artist.gigsberg_url && !isBareProviderHomepage(artist.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(artist.gigsberg_url) }] : []),
+                    ...(artist.viagogo_url && !isBareProviderHomepage(artist.viagogo_url) ? [{ name: 'Viagogo', bg: '#00a650', href: getViagogoAffiliateLink(artist.viagogo_url) }] : []),
+                    ...(artist.stubhub_url && !isBareProviderHomepage(artist.stubhub_url) ? [{ name: 'StubHub', bg: '#400078', href: getStubHubAffiliateLink(artist.stubhub_url) }] : []),
+                    ...(artist.vivid_seats_url && !isBareProviderHomepage(artist.vivid_seats_url) ? [{ name: 'Vivid Seats', bg: '#02044a', href: getVividSeatsAffiliateLink(artist.vivid_seats_url) }] : []),
                   ].map(({ name, bg, href }) => (
                     <TrackedTicketLink
                       key={name}
@@ -366,7 +372,7 @@ export default async function ArtistPage({ params }: PageProps) {
                     </TrackedTicketLink>
                   ))}
                 </div>
-              </div>
+              </div>}
 
               <Link
                 href="/on-sale-this-week"
