@@ -23,6 +23,8 @@ import {
   isMajorTourAnnouncement,
   summarizeNewsQueue,
   newsCandidateDashboardStatus,
+  classifyStaleEventsContext,
+  STALE_SYNC_THRESHOLD_MS,
   type IntelligenceItemStatus,
   type BareHomepageFinding,
 } from '@/lib/intelligence'
@@ -89,6 +91,7 @@ const ATTENTION_LABEL: Record<NewsCandidateAttentionReason, string> = {
   stale_pending:          'Pending 2+ days',
   approved_not_published: 'Approved, not published 24h+',
   ai_suggestion_failed:   'AI suggestion failed',
+  blocked_test_content:   'Blocked: test/internal content',
   not_visible:            'Published but not visible',
 }
 
@@ -206,7 +209,7 @@ export default async function IntelligenceDashboardPage() {
     const targets = resolveCityNewsTargets(c, citiesByCandidate.get(c.id) ?? [])
     const hasNoDestination = targets.length === 0
     const reasons = candidateAttentionReasons(c, hasNoDestination, nowMs)
-    const status = newsCandidateDashboardStatus(c, reasons.includes('no_destination'))
+    const status = newsCandidateDashboardStatus(c, reasons.includes('no_destination') || reasons.includes('blocked_test_content'))
     return { candidate: c, targets, hasNoDestination, reasons, status }
   })
 
@@ -248,7 +251,11 @@ export default async function IntelligenceDashboardPage() {
 
   const feedSummaries = summarizeFeedHealth([...CITIES.map(c => c.name), NATIONAL_NAME], syncLog, nowMs)
   const feedsAttention = feedsNeedingAttention(feedSummaries)
-  const tmSyncStale = !syncState?.last_completed_at || nowMs - new Date(syncState.last_completed_at).getTime() > 36 * 60 * 60 * 1000
+  const tmSyncStale = !syncState?.last_completed_at || nowMs - new Date(syncState.last_completed_at).getTime() > STALE_SYNC_THRESHOLD_MS
+  // Distinguishes a genuine per-event data gap from transient "sync is
+  // mid-run" noise or an actually-unhealthy sync job — see
+  // classifyStaleEventsContext's own comment in intelligence.ts.
+  const staleEventsContext = classifyStaleEventsContext(syncState, nowMs)
 
   const generatedAt = now.toLocaleString('en-GB', {
     timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
@@ -428,10 +435,30 @@ export default async function IntelligenceDashboardPage() {
               ) : null}
             </SectionCard>
 
-            <SectionCard title="Stale or missing event records" subtitle="Ticketmaster-sourced, not re-synced in 36h+, or cancelled/postponed but still upcoming">
+            <SectionCard
+              title="Stale or missing event records"
+              subtitle={
+                staleEventsContext === 'sync_running'
+                  ? 'Ticketmaster sync is running right now — stale counts below may just be events it hasn\u2019t reached yet this run.'
+                  : staleEventsContext === 'sync_unhealthy'
+                    ? 'The Ticketmaster sync itself hasn\u2019t completed successfully in 36h+ — treat everything below as suspect, not just these rows.'
+                    : 'Sync is healthy and up to date — anything below is a genuine per-event gap (likely dropped from Ticketmaster\u2019s feed), worth checking individually.'
+              }
+            >
               {staleEvents.length === 0 && cancelledUpcoming.length === 0 ? <Empty label="Nothing stale or flagged." /> : (
                 <>
-                  {staleEvents.length > 0 && <EventList events={staleEvents.slice(0, 6)} note={() => 'not re-synced in 36h+'} />}
+                  {staleEvents.length > 0 && (
+                    <EventList
+                      events={staleEvents.slice(0, 6)}
+                      note={() =>
+                        staleEventsContext === 'sync_running'
+                          ? 'not re-synced yet this run'
+                          : staleEventsContext === 'sync_unhealthy'
+                            ? 'not re-synced in 36h+ (sync itself unhealthy)'
+                            : 'not re-synced in 36h+ despite a healthy sync'
+                      }
+                    />
+                  )}
                   {cancelledUpcoming.length > 0 && <EventList events={cancelledUpcoming.slice(0, 6)} note={e => e.status} />}
                 </>
               )}

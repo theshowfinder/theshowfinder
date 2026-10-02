@@ -7,6 +7,7 @@ import CategoryPills from '@/components/CategoryPills'
 import SearchBarWrapper from '@/components/SearchBarWrapper'
 import Pagination from '@/components/Pagination'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
+import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import type { Metadata } from 'next'
 
 interface SearchParams {
@@ -129,6 +130,9 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
     .from('events_with_venue')
     .select('*', { count: 'exact' })
     .gte('start_date', new Date().toISOString())
+    // A cancelled/postponed show is never a genuine browse/search result
+    // — see eventPools.ts's LIVE_EVENT_STATUSES comment.
+    .in('status', LIVE_EVENT_STATUSES)
     .order('start_date', { ascending: true })
     .range(from, to)
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { CITIES } from '@/lib/cities'
 import type { EventWithVenue } from '@/lib/types/database'
+import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,9 @@ export async function GET(request: Request) {
     .select('slug, title, start_date, venue_name, image_url, price_from, currency, category')
     .ilike('venue_city', match.name)
     .gte('start_date', nowISO)
+    // A cancelled/postponed show is never a genuine local spotlight pick
+    // — see eventPools.ts's LIVE_EVENT_STATUSES comment.
+    .in('status', LIVE_EVENT_STATUSES)
     .order('start_date', { ascending: true })
     .limit(8) as unknown as {
       data: Pick<EventWithVenue, 'slug' | 'title' | 'start_date' | 'venue_name' | 'image_url' | 'price_from' | 'currency' | 'category'>[] | null

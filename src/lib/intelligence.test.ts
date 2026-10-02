@@ -13,6 +13,7 @@ import {
   isMajorTourAnnouncement,
   summarizeNewsQueue,
   newsCandidateDashboardStatus,
+  classifyStaleEventsContext,
   STALE_SYNC_THRESHOLD_MS,
   RECENT_CHANGE_WINDOW_MS,
 } from './intelligence.ts'
@@ -249,6 +250,57 @@ describe('isCancelledOrPostponedButUpcoming', () => {
 
   test('does not flag an upcoming on-sale event', () => {
     assert.equal(isCancelledOrPostponedButUpcoming({ start_date: '2026-07-01T00:00:00.000Z', status: 'on_sale' }, now), false)
+  })
+})
+
+// Daily Intelligence investigation, 2 Oct 2026: the six "stale" events the
+// dashboard reported were real (last_synced_at 36h+ old), but the warning
+// itself gave no way to tell a genuine per-event data gap apart from the
+// sync job simply being mid-run or actually unhealthy. These pin the three
+// contexts classifyStaleEventsContext distinguishes.
+describe('classifyStaleEventsContext', () => {
+  const now = new Date('2026-10-02T12:00:00.000Z').getTime()
+
+  test('a run in progress right now is "sync_running", regardless of last_completed_at', () => {
+    const result = classifyStaleEventsContext(
+      { status: 'running', last_completed_at: new Date(now - 1000).toISOString() },
+      now,
+    )
+    assert.equal(result, 'sync_running')
+  })
+
+  test('no completed run ever recorded is "sync_unhealthy"', () => {
+    const result = classifyStaleEventsContext({ status: 'idle', last_completed_at: null }, now)
+    assert.equal(result, 'sync_unhealthy')
+  })
+
+  test('a completed run older than STALE_SYNC_THRESHOLD_MS is "sync_unhealthy"', () => {
+    const result = classifyStaleEventsContext(
+      { status: 'idle', last_completed_at: new Date(now - STALE_SYNC_THRESHOLD_MS - 1).toISOString() },
+      now,
+    )
+    assert.equal(result, 'sync_unhealthy')
+  })
+
+  test('a completed run just inside STALE_SYNC_THRESHOLD_MS is "sync_healthy"', () => {
+    const result = classifyStaleEventsContext(
+      { status: 'idle', last_completed_at: new Date(now - STALE_SYNC_THRESHOLD_MS + 1000).toISOString() },
+      now,
+    )
+    assert.equal(result, 'sync_healthy')
+  })
+
+  test('a recently-completed run is "sync_healthy" even though it is not currently running', () => {
+    const result = classifyStaleEventsContext(
+      { status: 'idle', last_completed_at: new Date(now - 60 * 60 * 1000).toISOString() },
+      now,
+    )
+    assert.equal(result, 'sync_healthy')
+  })
+
+  test('no sync_state row at all (null/undefined) is "sync_unhealthy", never silently treated as healthy', () => {
+    assert.equal(classifyStaleEventsContext(null, now), 'sync_unhealthy')
+    assert.equal(classifyStaleEventsContext(undefined, now), 'sync_unhealthy')
   })
 })
 

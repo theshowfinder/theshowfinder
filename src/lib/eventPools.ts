@@ -26,6 +26,27 @@ const DAY_MS = 24 * 60 * 60 * 1000
 // from every query already — nothing to filter for that case.
 export const LIVE_EVENT_STATUSES = ['upcoming', 'on_sale', 'sold_out']
 
+// Daily Intelligence investigation, 2 Oct 2026: every pool query above
+// already excludes cancelled/postponed via LIVE_EVENT_STATUSES, but
+// several public pages queried 'events'/'events_with_venue' directly
+// (browse/search, a venue's own upcoming list, the homepage's "Just
+// Announced" section, the city-spotlight widget) with no status filter
+// at all — cancelled/postponed events could appear in those listings.
+// Those call sites now filter with LIVE_EVENT_STATUSES too, same as here.
+//
+// Separately, a status can still be reached directly — a bookmarked or
+// shared /events/[slug] link to a since-cancelled/postponed show. That
+// page must keep resolving (never 404 — event history isn't deleted),
+// but every actual ticket-purchase CTA on it (and on EventCard) must be
+// disabled for exactly these three statuses. 'sold_out' and 'cancelled'
+// were already handled this way at most call sites; 'postponed' was not
+// handled ANYWHERE until this fix — a postponed event's detail page
+// rendered a fully live "Get Tickets" buy flow, identical to a normal
+// on-sale show.
+export function ticketPurchaseDisabledStatus(status: string): boolean {
+  return status === 'sold_out' || status === 'cancelled' || status === 'postponed'
+}
+
 // Drops repeat rows of the same real-world show (multiple Ticketmaster SKUs
 // — "Standard Entry" / "Venue Premium" / etc. — share a title) and caps the
 // result. Pool is expected to already be sorted the way callers want it.

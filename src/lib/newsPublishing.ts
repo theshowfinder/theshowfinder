@@ -41,6 +41,31 @@ export function canUnpublishCandidate(reviewStatus: NewsCandidate['review_status
   return reviewStatus === 'published'
 }
 
+// ── Test/internal content guard (Daily Intelligence, 2 Oct 2026) ────────
+//
+// The Daily Intelligence Dashboard flagged a leftover seed/test row
+// ("Showfinder Phase 1 Test — Do Not Share") sitting at review_status
+// 'approved'. canPublishCandidate above correctly allows publishing any
+// approved candidate — that's its whole job — but nothing distinguished
+// this specific row as something that must never actually go out, so an
+// admin clicking Publish on it (today, or on some future similarly-
+// named test row) would succeed and make it genuinely public.
+//
+// There's no dedicated "is_test" column, and adding one is a schema
+// change this fix deliberately avoids (see the project notes on this
+// investigation for why). Instead: a headline that itself says not to
+// publish it is treated as binding — "approved" only means a human
+// marked it reviewed, it doesn't override the content's own "don't
+// share this" instruction. Deliberately narrow (explicit opt-out
+// phrases only) so a genuine editorial headline is never accidentally
+// blocked.
+const BLOCKED_TEST_CONTENT_MARKERS = ['do not share', 'do not publish']
+
+export function isBlockedTestContent(headline: string): boolean {
+  const lower = headline.toLowerCase()
+  return BLOCKED_TEST_CONTENT_MARKERS.some(marker => lower.includes(marker))
+}
+
 export interface CandidateCityTarget { city_slug: string; city_name: string }
 
 // Builds the full list of city_news targets across all three independent
@@ -294,6 +319,7 @@ export type NewsCandidateAttentionReason =
   | 'stale_pending'           // sat in 'pending' too long, nobody's looked at it
   | 'approved_not_published'  // reviewed and approved, but never actually published
   | 'ai_suggestion_failed'    // a URL import's AI call ran but produced nothing usable
+  | 'blocked_test_content'    // headline itself says not to publish it (isBlockedTestContent)
   | 'not_visible'             // published, but pushed out of a destination's visible
                                // slice by newer rows — see isCandidateVisibleAtDestination
                                // and destinationDisplayLimit below. Unlike the other
@@ -312,7 +338,7 @@ export const STALE_APPROVED_MS = 24 * 60 * 60 * 1000
 
 type CandidateAttentionFields = Pick<
   NewsCandidate,
-  'review_status' | 'discovered_at' | 'reviewed_at' | 'intake_method' | 'ai_model' | 'ai_suggestions'
+  'review_status' | 'discovered_at' | 'reviewed_at' | 'intake_method' | 'ai_model' | 'ai_suggestions' | 'headline'
 >
 
 // A URL-imported candidate's AI call is only counted as having *failed*
@@ -364,6 +390,15 @@ export function candidateAttentionReasons(
 
   if (didAiSuggestionFail(candidate)) {
     reasons.push('ai_suggestion_failed')
+  }
+
+  // Flagged regardless of review_status — a test row sitting in 'pending'
+  // is just as much a trap for a future "approve everything" pass as one
+  // already 'approved'. isBlockedTestContent (and the hard block in
+  // publishNewsCandidateAction) are the two layers: this makes it visible
+  // in the queue, that makes it impossible to actually publish.
+  if (isBlockedTestContent(candidate.headline)) {
+    reasons.push('blocked_test_content')
   }
 
   return reasons

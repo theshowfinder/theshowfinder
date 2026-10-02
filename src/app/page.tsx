@@ -403,6 +403,10 @@ async function JustAnnounced() {
     .gte('created_at', sevenDaysAgoISO)
     .or(`public_onsale_start.is.null,public_onsale_start.gt.${nowISO}`)
     .gte('start_date', nowISO)
+    // A newly-synced event that's already cancelled/postponed within its
+    // first week is never a genuine "Just Announced" show — see
+    // eventPools.ts's LIVE_EVENT_STATUSES comment.
+    .in('status', LIVE_EVENT_STATUSES)
     .order('created_at', { ascending: false })
     .limit(8) as unknown as {
       data: (Record<string, unknown> & {

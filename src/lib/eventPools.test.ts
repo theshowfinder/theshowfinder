@@ -1,14 +1,16 @@
-// Only dedupeEventsByTitle is tested directly here — every other export
-// in eventPools.ts takes a live SupabaseClient and queries the database,
+// dedupeEventsByTitle, eventsThisWeekWindow and ticketPurchaseDisabledStatus
+// are the pure exports tested directly here — every other export in
+// eventPools.ts takes a live SupabaseClient and queries the database,
 // which this plain `node --test` runner has no way to provide (same
 // reasoning as linkHealth.ts/newsPublishing.ts's DB-touching exports).
-// dedupeEventsByTitle itself is pure, so it's exercised directly —
-// this is the "duplicate prevention" coverage for the Manchester phase
-// (This Week / Top Events never show the same real-world show twice,
-// even though Ticketmaster syncs it as several SKU rows sharing a title).
+// dedupeEventsByTitle is the "duplicate prevention" coverage for the
+// Manchester phase (This Week / Top Events never show the same real-world
+// show twice, even though Ticketmaster syncs it as several SKU rows
+// sharing a title). ticketPurchaseDisabledStatus is the Daily Intelligence
+// investigation (2 Oct 2026) fix — see its own comment in eventPools.ts.
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { dedupeEventsByTitle, eventsThisWeekWindow } from './eventPools.ts'
+import { dedupeEventsByTitle, eventsThisWeekWindow, ticketPurchaseDisabledStatus, LIVE_EVENT_STATUSES } from './eventPools.ts'
 
 function row(title: string, id: string) {
   return { id, title } as unknown as Parameters<typeof dedupeEventsByTitle>[0][number]
@@ -77,5 +79,30 @@ describe('eventsThisWeekWindow', () => {
     // Yesterday's "today" (the 15th) is now excluded from This Week either
     // side of the rollover — it was never in the window to begin with,
     // since the window always starts at tomorrow relative to `now`.
+  })
+})
+
+describe('ticketPurchaseDisabledStatus', () => {
+  test('sold_out disables the buy CTA', () => {
+    assert.equal(ticketPurchaseDisabledStatus('sold_out'), true)
+  })
+
+  test('cancelled disables the buy CTA', () => {
+    assert.equal(ticketPurchaseDisabledStatus('cancelled'), true)
+  })
+
+  test('postponed disables the buy CTA — this was the actual bug: a postponed event used to render a fully live "Get Tickets" flow, identical to an on-sale show', () => {
+    assert.equal(ticketPurchaseDisabledStatus('postponed'), true)
+  })
+
+  test('upcoming and on_sale do not disable the buy CTA', () => {
+    assert.equal(ticketPurchaseDisabledStatus('upcoming'), false)
+    assert.equal(ticketPurchaseDisabledStatus('on_sale'), false)
+  })
+
+  test('every disabled status is still a member of LIVE_EVENT_STATUSES except cancelled/postponed — sold_out stays listable (visible, just not buyable), cancelled/postponed are excluded from listings entirely', () => {
+    assert.ok(LIVE_EVENT_STATUSES.includes('sold_out'))
+    assert.ok(!LIVE_EVENT_STATUSES.includes('cancelled'))
+    assert.ok(!LIVE_EVENT_STATUSES.includes('postponed'))
   })
 })

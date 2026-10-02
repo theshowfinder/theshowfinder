@@ -8,6 +8,7 @@ import EventCard from '@/components/EventCard'
 import Pagination from '@/components/Pagination'
 import type { EventWithVenue } from '@/lib/types/database'
 import { venuePageDescription } from '@/lib/venueBlurb'
+import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 
 const PAGE_SIZE = 24
 
@@ -93,6 +94,9 @@ export default async function VenuePage({ params, searchParams }: PageProps) {
     .select('*', { count: 'exact' })
     .eq('venue_id', venue.id)
     .gte('start_date', now)
+    // A cancelled/postponed show is never a genuine upcoming listing —
+    // see eventPools.ts's LIVE_EVENT_STATUSES comment.
+    .in('status', LIVE_EVENT_STATUSES)
     .order('start_date', { ascending: true })
     .range(from, to) as unknown as { data: EventWithVenue[] | null; count: number | null }
 

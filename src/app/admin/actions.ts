@@ -10,6 +10,7 @@ import type { NewsStoryType, NewsPriority, NewsReviewStatus } from '@/lib/types/
 import {
   canPublishCandidate,
   canUnpublishCandidate,
+  isBlockedTestContent,
   resolveCityNewsTargets,
   buildPublishUpsertRows,
   buildUnpublishDeleteFilter,
@@ -846,6 +847,13 @@ export async function publishNewsCandidateAction(id: string) {
 
     if (!canPublishCandidate(candidate.review_status)) {
       throw new Error('Only an approved candidate can be published — approve it first.')
+    }
+
+    // Blocks a leftover seed/test row (e.g. "Showfinder Phase 1 Test —
+    // Do Not Share") from ever actually going public, regardless of its
+    // review_status — see isBlockedTestContent's own comment.
+    if (isBlockedTestContent(candidate.headline)) {
+      throw new Error('This candidate\u2019s headline marks it as internal/test content ("Do Not Share"/"Do Not Publish") and has been blocked from publishing. Rename it first if this is genuine editorial content.')
     }
 
     const targets = resolveCityNewsTargets(candidate, cityTargets)

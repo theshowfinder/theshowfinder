@@ -251,6 +251,46 @@ export function isCancelledOrPostponedButUpcoming(
   return event.status === 'cancelled' || event.status === 'postponed'
 }
 
+// ── Stale-event context (Daily Intelligence, 2 Oct 2026) ────────────────
+//
+// isStaleUpcomingEvent above is a per-event check — one row's own
+// last_synced_at against "now" — and that threshold (36h, a bit more than
+// the daily sync's 24h cadence) was already reasonably calibrated, not
+// the bug. What was missing is any awareness of what the *overall* sync
+// job is doing right now, which is what actually tells you whether a
+// stale event is a real data problem or just transient noise:
+//
+//  - a run is currently in progress: events not yet reached by it are
+//    expected to look "stale" for the next few minutes — nothing to
+//    alarm on.
+//  - the job itself hasn't completed successfully within the threshold:
+//    that's the serious failure case — everything downstream of it is
+//    suspect, not just the handful of events this dashboard happens to
+//    sample.
+//  - the job is healthy (completed recently) and specific events are
+//    STILL stale: that's the genuine, narrower signal — those particular
+//    events weren't returned by Ticketmaster's API in the most recent
+//    run(s), most likely because they were pulled from its feed
+//    entirely (not status-flagged, just gone) or fell outside every
+//    sync band. Worth a human look at those specific rows, but it says
+//    nothing bad about the sync job itself.
+export interface SyncStateForStaleContext {
+  status:            string | null
+  last_completed_at: string | null
+}
+
+export type StaleEventsContext = 'sync_running' | 'sync_unhealthy' | 'sync_healthy'
+
+export function classifyStaleEventsContext(
+  syncState: SyncStateForStaleContext | null | undefined,
+  now: number,
+): StaleEventsContext {
+  if (syncState?.status === 'running') return 'sync_running'
+  if (!syncState?.last_completed_at) return 'sync_unhealthy'
+  if (now - new Date(syncState.last_completed_at).getTime() > STALE_SYNC_THRESHOLD_MS) return 'sync_unhealthy'
+  return 'sync_healthy'
+}
+
 export interface ChangeTrackedEvent {
   updated_at: string
   created_at: string

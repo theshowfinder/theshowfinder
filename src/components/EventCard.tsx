@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import type { EventWithVenue } from '@/lib/types/database'
+import { ticketPurchaseDisabledStatus } from '@/lib/eventPools'
 
 const categoryConfig: Record<string, { label: string; colour: string }> = {
   concert:  { label: 'Concert',  colour: 'bg-red-100    text-red-700'    },
@@ -43,7 +44,10 @@ export default function EventCard({ event }: Props) {
   const cat       = categoryConfig[event.category] ?? categoryConfig.concert
   const status    = statusConfig[event.status]     ?? statusConfig.upcoming
   const eventHref = `/events/${event.slug}`
-  const isSoldOut = event.status === 'sold_out' || event.status === 'cancelled'
+  // Same shared predicate as the event detail page (eventPools.ts) —
+  // a postponed event's card must not look identically buyable to an
+  // on-sale one.
+  const isSoldOut = ticketPurchaseDisabledStatus(event.status)
 
   return (
     <div className="group flex flex-col rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
@@ -103,7 +107,9 @@ export default function EventCard({ event }: Props) {
 
         {isSoldOut ? (
           <div className="w-full bg-slate-200 text-slate-500 font-bold py-3 rounded-xl text-center text-sm cursor-not-allowed">
-            {event.status === 'cancelled' ? 'Cancelled' : 'Sold Out'}
+            {event.status === 'cancelled'  ? 'Cancelled'
+              : event.status === 'postponed' ? 'Postponed'
+              : 'Sold Out'}
           </div>
         ) : (
           <Link

@@ -16,6 +16,7 @@ import {
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { jsonLdScript, buildEventSchema, buildBreadcrumbSchema } from '@/lib/jsonld'
+import { ticketPurchaseDisabledStatus } from '@/lib/eventPools'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -174,7 +175,18 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const event    = await getEvent(slug)
   if (!event) notFound()
 
-  const isSoldOut  = event.status === 'sold_out' || event.status === 'cancelled'
+  // Daily Intelligence investigation, 2 Oct 2026: this used to be
+  // `status === 'sold_out' || status === 'cancelled'`, which left a
+  // postponed event's buy flow fully live (identical to a normal
+  // on-sale show) everywhere on this page. Now the same shared
+  // predicate every other call site uses (eventPools.ts).
+  const isSoldOut  = ticketPurchaseDisabledStatus(event.status)
+  // Narrower than isSoldOut (which also covers genuinely sold_out) —
+  // gates the sections where resale/our-own-stock genuinely makes no
+  // sense at all: Buy Direct, More Options (resale), Also Available.
+  // A sold_out show still shows all three; a cancelled/postponed one
+  // shows none of them.
+  const isCancelledOrPostponed = event.status === 'cancelled' || event.status === 'postponed'
   const priceLabel = fmtPrice(event.price_from, event.price_to, event.currency)
   const { primary, resale, also } = buildProviders(event.title, event.tickets_url)
   const headliners = event.artists
@@ -238,8 +250,10 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             <span className="text-xs font-bold uppercase tracking-wider text-white px-3 py-1 rounded-full" style={{ backgroundColor: '#E8003D' }}>
               {categoryEmoji[event.category]} {categoryLabel[event.category]}
             </span>
-            {event.status === 'on_sale'  && <span className="text-xs font-bold uppercase tracking-wider bg-emerald-500 text-white px-3 py-1 rounded-full">On Sale</span>}
-            {event.status === 'sold_out' && <span className="text-xs font-bold uppercase tracking-wider bg-red-600 text-white px-3 py-1 rounded-full">Sold Out</span>}
+            {event.status === 'on_sale'   && <span className="text-xs font-bold uppercase tracking-wider bg-emerald-500 text-white px-3 py-1 rounded-full">On Sale</span>}
+            {event.status === 'sold_out'  && <span className="text-xs font-bold uppercase tracking-wider bg-red-600 text-white px-3 py-1 rounded-full">Sold Out</span>}
+            {event.status === 'cancelled' && <span className="text-xs font-bold uppercase tracking-wider bg-red-600 text-white px-3 py-1 rounded-full">Cancelled</span>}
+            {event.status === 'postponed' && <span className="text-xs font-bold uppercase tracking-wider bg-orange-500 text-white px-3 py-1 rounded-full">Postponed</span>}
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight mb-6 max-w-3xl">
@@ -277,6 +291,10 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           ) : event.status === 'cancelled' ? (
             <div className="hidden md:inline-flex items-center bg-slate-700 text-white/60 font-bold text-lg px-8 py-4 rounded-xl cursor-not-allowed">
               Event Cancelled
+            </div>
+          ) : event.status === 'postponed' ? (
+            <div className="hidden md:inline-flex items-center bg-slate-700 text-white/60 font-bold text-lg px-8 py-4 rounded-xl cursor-not-allowed">
+              Event Postponed
             </div>
           ) : (
             <TrackedTicketLink
@@ -324,7 +342,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           )}
         </div>
       )}
-      {isSoldOut && event.status !== 'cancelled' && (
+      {event.status === 'sold_out' && (
         <div className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t-2 px-4 py-3 flex items-center gap-3 shadow-2xl" style={{ borderColor: resale[0].bg }}>
           <div className="flex-1 min-w-0">
             <p className="text-xs text-slate-500 leading-none mb-0.5">Sold out</p>
@@ -416,7 +434,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           {/* Right: tickets ─────────────────────────────────────── */}
           <div id="tickets" className="space-y-5 lg:sticky lg:top-24 self-start">
             {/* Buy Direct — our own listing, shown above the standard provider sections */}
-            {event.own_ticket_url && (
+            {event.own_ticket_url && !isCancelledOrPostponed && (
               <div className="relative bg-white border-2 rounded-2xl p-5 pt-6 shadow-sm" style={{ borderColor: '#E8003D' }}>
                 <span
                   className="absolute -top-3 left-5 text-[10px] font-extrabold uppercase tracking-widest text-white px-3 py-1 rounded-full"
@@ -452,7 +470,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <div className="bg-slate-100 border border-slate-200 rounded-2xl p-6 text-center">
                 <p className="text-4xl mb-3">😔</p>
                 <p className="font-bold text-slate-700 text-lg">
-                  {event.status === 'cancelled' ? 'Event Cancelled' : 'Sold Out'}
+                  {event.status === 'cancelled'  ? 'Event Cancelled'
+                    : event.status === 'postponed' ? 'Event Postponed'
+                    : 'Sold Out'}
                 </p>
                 <p className="text-slate-500 text-sm mt-2">Check below for resale options</p>
               </div>
@@ -487,7 +507,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               </div>
             )}
 
-            {/* Resale */}
+            {/* Resale — never for a cancelled/postponed show; still shown
+                for a genuinely sold_out one, since resale is the point. */}
+            {!isCancelledOrPostponed && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">More Options</h3>
               <p className="text-xs text-slate-400 mb-4">Compare prices across resale platforms</p>
@@ -510,8 +532,10 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 Resale tickets may be priced above face value. Always check the seller&apos;s terms.
               </p>
             </div>
+            )}
 
-            {/* Also available */}
+            {/* Also available — same cancelled/postponed exclusion as Resale above. */}
+            {!isCancelledOrPostponed && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-4">Also Available</h3>
               <div className="grid grid-cols-2 gap-3">
@@ -530,6 +554,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 ))}
               </div>
             </div>
+            )}
 
             {event.tags && event.tags.length > 0 && (
               <div className="flex flex-wrap gap-2">

@@ -40,6 +40,7 @@ const ATTENTION_LABEL: Record<NewsCandidateAttentionReason, string> = {
   stale_pending:          'Pending review for 2+ days',
   approved_not_published: 'Approved but not published for 24h+',
   ai_suggestion_failed:   'AI suggestion failed',
+  blocked_test_content:   'Blocked: looks like test/internal content',
   not_visible:            'Published but no longer visible on a destination (pushed out by newer stories)',
 }
 

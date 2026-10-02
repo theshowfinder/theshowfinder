@@ -15,6 +15,7 @@ import assert from 'node:assert/strict'
 import {
   canPublishCandidate,
   canUnpublishCandidate,
+  isBlockedTestContent,
   resolveCityNewsTargets,
   buildPublishUpsertRows,
   buildUnpublishDeleteFilter,
@@ -109,6 +110,34 @@ describe('canPublishCandidate / canUnpublishCandidate', () => {
     assert.equal(canUnpublishCandidate('approved'), false)
     assert.equal(canUnpublishCandidate('pending'), false)
     assert.equal(canUnpublishCandidate('rejected'), false)
+  })
+})
+
+// Daily Intelligence investigation, 2 Oct 2026: a leftover seed/test row
+// ("Showfinder Phase 1 Test — Do Not Share") was sitting at review_status
+// 'approved' — canPublishCandidate correctly allows that, so this is the
+// separate, content-level guard that actually blocks it (wired into
+// publishNewsCandidateAction in src/app/admin/actions.ts).
+describe('isBlockedTestContent', () => {
+  test('blocks the exact reported test headline', () => {
+    assert.equal(isBlockedTestContent('Showfinder Phase 1 Test — Do Not Share'), true)
+  })
+
+  test('is case-insensitive', () => {
+    assert.equal(isBlockedTestContent('showfinder phase 1 test — DO NOT SHARE'), true)
+  })
+
+  test('also blocks the "do not publish" variant', () => {
+    assert.equal(isBlockedTestContent('Internal seed row — do not publish'), true)
+  })
+
+  test('a genuine editorial headline is never blocked', () => {
+    assert.equal(isBlockedTestContent('Oasis announce surprise Manchester reunion show'), false)
+    assert.equal(isBlockedTestContent('Birmingham Hippodrome unveils 2027 panto lineup'), false)
+  })
+
+  test('the word "test" alone, with no opt-out phrase, is not blocked — stays narrow to avoid false positives on genuine headlines', () => {
+    assert.equal(isBlockedTestContent('Taste Test: five festival food stalls worth queuing for'), false)
   })
 })
 
@@ -758,6 +787,7 @@ describe('candidateAttentionReasons', () => {
       intake_method: 'manual' as const,
       ai_model: null,
       ai_suggestions: null,
+      headline: 'A perfectly normal headline',
       ...overrides,
     }
   }
@@ -814,6 +844,20 @@ describe('candidateAttentionReasons', () => {
   test('a fully healthy published candidate needs no attention at all', () => {
     const c = candidate({ review_status: 'published', reviewed_at: '2026-09-29T09:00:00.000Z' })
     assert.deepEqual(candidateAttentionReasons(c, false, NOW), [])
+  })
+
+  test('blocked_test_content fires for a "Do Not Share" headline regardless of review_status', () => {
+    const c = candidate({ headline: 'Showfinder Phase 1 Test — Do Not Share' })
+    assert.deepEqual(candidateAttentionReasons(c, false, NOW), ['blocked_test_content'])
+  })
+
+  test('blocked_test_content combines with other reasons when multiple apply at once', () => {
+    const c = candidate({ headline: 'Showfinder Phase 1 Test — Do Not Share' })
+    assert.deepEqual(candidateAttentionReasons(c, true, NOW), ['no_destination', 'blocked_test_content'])
+  })
+
+  test('a normal headline never triggers blocked_test_content', () => {
+    assert.deepEqual(candidateAttentionReasons(candidate(), false, NOW), [])
   })
 })
 
