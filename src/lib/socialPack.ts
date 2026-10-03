@@ -8,7 +8,7 @@
 // and that record's own status always starts at 'draft'.
 
 import { buildUtmUrl } from './analytics.ts'
-import type { SocialPackSourceType, SocialPackStatus } from './types/database'
+import type { SocialPackSourceType, SocialPackStatus, NewsStoryType, EventStatus } from './types/database'
 
 const SITE_ORIGIN = 'https://www.theshowfinder.com'
 
@@ -93,20 +93,149 @@ export function buildTikTokCaption(headline: string, context: string): string {
   return base.length > TIKTOK_MAX_LENGTH ? base.slice(0, TIKTOK_MAX_LENGTH - 3) + '...' : base
 }
 
+// ── Branded image: kind + vibrant themes ──────────────────────────────────
+// Five distinct visual templates, matched to the kinds of posts
+// TheShowFinder actually makes — tour announcements, onsales, presales,
+// city-wide roundups and "tonight" posts — instead of one flat, minimal
+// card reused for every story. Each kind gets its own two-colour gradient
+// and accent so the five templates read as genuinely different at a
+// glance, not relabelled copies of one design.
+export type SocialImageKind = 'tour_announcement' | 'onsale' | 'presale' | 'city_event' | 'tonight'
+
+const SOCIAL_IMAGE_KINDS: SocialImageKind[] = ['tour_announcement', 'onsale', 'presale', 'city_event', 'tonight']
+
+export function isSocialImageKind(value: unknown): value is SocialImageKind {
+  return typeof value === 'string' && (SOCIAL_IMAGE_KINDS as string[]).includes(value)
+}
+
+// A pack prepared before this template system existed (or one whose
+// stored kind is somehow missing/invalid) always falls back to the
+// generic city-wide template rather than the image route erroring or
+// guessing — "safe fallback" applies to the template itself, not only
+// to the background photo.
+export function resolveStoredImageKind(stored: unknown): SocialImageKind {
+  return isSocialImageKind(stored) ? stored : 'city_event'
+}
+
+export interface SocialImageTheme {
+  badgeLabel:   string
+  gradientFrom: string
+  gradientTo:   string
+  accent:       string
+}
+
+export const SOCIAL_IMAGE_THEMES: Record<SocialImageKind, SocialImageTheme> = {
+  tour_announcement: { badgeLabel: 'TOUR ANNOUNCEMENT', gradientFrom: '#4c1d95', gradientTo: '#db2777', accent: '#fbbf24' },
+  onsale:             { badgeLabel: 'ON SALE NOW',       gradientFrom: '#b91c1c', gradientTo: '#f97316', accent: '#fef08a' },
+  presale:            { badgeLabel: 'PRESALE ACCESS',    gradientFrom: '#0e7490', gradientTo: '#4338ca', accent: '#5eead4' },
+  city_event:         { badgeLabel: 'LIVE IN THE UK',    gradientFrom: '#be123c', gradientTo: '#1e1b4b', accent: '#fca5a5' },
+  tonight:            { badgeLabel: 'TONIGHT',           gradientFrom: '#18181b', gradientTo: '#dc2626', accent: '#facc15' },
+}
+
+// A news story's existing editorial classification maps onto one of the
+// five visual kinds — reusing newsPublishing.ts's own NewsStoryType
+// rather than inventing a second taxonomy. "New dates" is announcement-
+// shaped (an artist/venue just confirmed something), so it shares the
+// tour-announcement template; venue news and general entertainment have
+// no sharper fit than the generic city-wide template.
+export function resolveSocialImageKindFromStoryType(storyType: NewsStoryType): SocialImageKind {
+  switch (storyType) {
+    case 'presale':             return 'presale'
+    case 'tour_announcement':   return 'tour_announcement'
+    case 'new_dates':           return 'tour_announcement'
+    case 'venue_news':          return 'city_event'
+    case 'general_entertainment': return 'city_event'
+    default:                    return 'city_event'
+  }
+}
+
+// An event-sourced pack has no story_type, so its kind is derived from
+// the event's own live status instead. Deliberately neutral for
+// cancelled/postponed/sold_out — this never claims tickets are "on sale"
+// for a show that isn't, matching ticketLinkPolicy.ts's own wording
+// rules elsewhere on the site.
+export function resolveSocialImageKindFromEventStatus(status: EventStatus): SocialImageKind {
+  switch (status) {
+    case 'on_sale':   return 'onsale'
+    case 'upcoming':  return 'tour_announcement'
+    case 'sold_out':  return 'city_event'
+    case 'cancelled': return 'city_event'
+    case 'postponed': return 'city_event'
+    default:          return 'city_event'
+  }
+}
+
+// ── Approved image sources ─────────────────────────────────────────────────
+// The branded graphic may use an event's or artist's own photo as a
+// background — but ONLY when it came through TheShowFinder's existing,
+// licensed Ticketmaster/Live Nation/Universe ingestion pipeline. This is
+// deliberately the exact same host allow-list next.config.js already
+// grants to next/image site-wide — kept in sync with that file rather
+// than inventing a second, looser one. Anything else (a manually pasted
+// URL, a scraped press photo, any other host) is rejected and the caller
+// falls back to the vibrant gradient-only design. This is what makes
+// "never use a copyrighted press image without an approved source"
+// structural rather than just a policy note.
+const APPROVED_IMAGE_HOSTS = [
+  's1.ticketm.net',
+  'resizing.ticketmaster.com',
+  'media.ticketmaster.com',
+  '**.ticketmaster.com',
+  '**.livenation.com',
+  'images.universe.com',
+]
+
+function hostMatchesPattern(hostname: string, pattern: string): boolean {
+  if (pattern.startsWith('**.')) {
+    const apex = pattern.slice(3)
+    return hostname === apex || hostname.endsWith('.' + apex)
+  }
+  return hostname === pattern
+}
+
+export function isApprovedImageSource(url: string | null | undefined): boolean {
+  if (!url) return false
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== 'https:') return false
+  return APPROVED_IMAGE_HOSTS.some(pattern => hostMatchesPattern(parsed.hostname, pattern))
+}
+
+// Loosely-typed read of a stored image_params.imageUrl (jsonb has no
+// schema at the DB level) that applies the same approved-source gate —
+// used when re-reading a previously-saved pack, so a row written before
+// this gate existed (or corrupted in some other way) can never paint an
+// unapproved image just because it's already sitting in the database.
+export function resolveApprovedImageUrl(stored: unknown): string | null {
+  return typeof stored === 'string' && isApprovedImageSource(stored) ? stored : null
+}
+
 // ── Branded image parameters ─────────────────────────────────────────────
 // What the on-demand graphic (/admin/social/[id]/image, built with
 // next/og's ImageResponse) needs to render — a recipe, not a stored file.
-// Never pulls a real photo from a third party; this is the only "image"
-// a pack ever has unless an admin later swaps in their own.
+// Never pulls a real photo from a third party; the only photo it can ever
+// use is one that already passed isApprovedImageSource above.
 
 export interface SocialImageParams {
-  headline: string
-  city:     string | null
+  headline:  string
+  city:      string | null
   dateLabel: string | null
+  kind:      SocialImageKind
+  imageUrl:  string | null
 }
 
-export function buildSocialImageParams(headline: string, city: string | null, dateLabel: string | null): SocialImageParams {
-  return { headline, city, dateLabel }
+export function buildSocialImageParams(
+  headline: string,
+  city: string | null,
+  dateLabel: string | null,
+  kind: SocialImageKind,
+  imageUrl: string | null,
+): SocialImageParams {
+  return { headline, city, dateLabel, kind, imageUrl: isApprovedImageSource(imageUrl) ? imageUrl : null }
 }
 
 // ── Context strings ───────────────────────────────────────────────────────
@@ -133,6 +262,8 @@ export interface SocialPackDraftInput {
   context:          string
   destinationPath:  string
   hashtagSeed:      string[]
+  kind:             SocialImageKind
+  imageUrl?:        string | null
   imageDateLabel?:  string | null
 }
 
@@ -180,7 +311,7 @@ export function buildSocialPackDraft(input: SocialPackDraftInput): SocialPackDra
     facebook_link: links.facebookLink,
     instagram_link: links.instagramLink,
     tiktok_link: links.tiktokLink,
-    image_params: buildSocialImageParams(input.headline, input.cityName, input.imageDateLabel ?? null),
+    image_params: buildSocialImageParams(input.headline, input.cityName, input.imageDateLabel ?? null, input.kind, input.imageUrl ?? null),
     status: 'draft',
   }
 }

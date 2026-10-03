@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { citySlug } from '@/lib/cityNews'
 import { CITIES } from '@/lib/cities'
-import type { NewsStoryType, NewsPriority, NewsReviewStatus } from '@/lib/types/database'
+import type { NewsStoryType, NewsPriority, NewsReviewStatus, EventStatus } from '@/lib/types/database'
 import {
   canPublishCandidate,
   canUnpublishCandidate,
@@ -25,10 +25,15 @@ import { fetchArticleHtml, extractArticleMetadata, UnsafeUrlError, FetchArticleE
 import { requestAiSuggestions } from '@/lib/newsAiSuggestions'
 import {
   buildSocialPackDraft,
+  buildSocialImageParams,
   isEligibleForAutoSocialPack,
   resolveNewsCandidateContext,
   buildEventContext,
   canAdvanceSocialPackStatus,
+  resolveSocialImageKindFromStoryType,
+  resolveSocialImageKindFromEventStatus,
+  isSocialImageKind,
+  type SocialImageKind,
 } from '@/lib/socialPack'
 import type { SocialPackStatus } from '@/lib/types/database'
 
@@ -832,7 +837,7 @@ async function fetchCandidateWithCities(db: ReturnType<typeof createAdminClient>
 // admin's own edits to a pack that already exists for this candidate.
 async function findOrCreateSocialPackForCandidate(
   db: ReturnType<typeof createAdminClient>,
-  candidate: { id: string; headline: string; summary: string | null },
+  candidate: { id: string; headline: string; summary: string | null; story_type: NewsStoryType },
   cityTargets: CandidateCityTarget[],
 ): Promise<void> {
   const cityNames = cityTargets.map(t => t.city_name)
@@ -847,6 +852,13 @@ async function findOrCreateSocialPackForCandidate(
     context: resolveNewsCandidateContext(candidate),
     destinationPath: `/cities/${encodeURIComponent(cityName)}`,
     hashtagSeed: cityNames,
+    // A news story never gets a photo in its branded graphic — there's
+    // no event/artist image to draw on here, and this module never
+    // scrapes the source article's own imagery (see socialPack.ts's
+    // isApprovedImageSource comment). Its visual template is still
+    // vibrant and distinct, just text/gradient-only.
+    kind: resolveSocialImageKindFromStoryType(candidate.story_type),
+    imageUrl: null,
   })
 
   const { error } = await db
@@ -1022,8 +1034,24 @@ export async function deleteNewsCandidateAction(id: string) {
 // guaranteed, not just a convention).
 
 interface SocialPackEventRow {
-  id: string; title: string; slug: string; start_date: string
+  id: string; title: string; slug: string; start_date: string; status: EventStatus
+  image_url: string | null
   venue: { name: string; city: string } | null
+  artists: { is_headliner: boolean; order: number; artist: { image_url: string | null } | null }[]
+}
+
+// The event's own Ticketmaster photo is preferred; failing that, the
+// first headliner's own artist photo (also Ticketmaster-sourced) is a
+// reasonable stand-in — e.g. a brand-new tour-date announcement that
+// doesn't have its own event image yet. Neither is trusted blindly:
+// buildSocialImageParams re-validates through isApprovedImageSource
+// before it's ever stored.
+function resolveEventImageCandidate(event: SocialPackEventRow): string | null {
+  if (event.image_url) return event.image_url
+  const headliner = [...event.artists]
+    .filter(a => a.is_headliner)
+    .sort((a, b) => a.order - b.order)[0]
+  return headliner?.artist?.image_url ?? null
 }
 
 // The manual trigger for "an important Manchester event update" — there's
@@ -1044,7 +1072,7 @@ export async function createSocialPackForEventAction(eventId: string) {
   try {
     const { data: event, error: fetchError } = await db
       .from('events')
-      .select('id, title, slug, start_date, venue:venues(name, city)')
+      .select('id, title, slug, start_date, status, image_url, venue:venues(name, city), artists:event_artists(is_headliner, order, artist:artists(image_url))')
       .eq('id', eventId)
       .single() as unknown as { data: SocialPackEventRow | null; error: { message: string } | null }
 
@@ -1065,6 +1093,8 @@ export async function createSocialPackForEventAction(eventId: string) {
       destinationPath: `/events/${event.slug}`,
       hashtagSeed: [cityName, event.title],
       imageDateLabel: dateLabel,
+      kind: resolveSocialImageKindFromEventStatus(event.status),
+      imageUrl: resolveEventImageCandidate(event),
     })
 
     const { data: pack, error: upsertError } = await db
@@ -1160,4 +1190,100 @@ export async function advanceSocialPackStatusAction(id: string, to: SocialPackSt
   revalidatePath('/admin/social')
   revalidatePath('/admin/social/' + id)
   redirect('/admin/social/' + id + '?saved=1')
+}
+
+// Local shape of the event row re-fetched when regenerating a pack's
+// image below — only the fields the image recipe actually needs,
+// distinct from SocialPackEventRow (which also carries title/slug for
+// building the pack in the first place).
+interface RegenerateEventImageRow {
+  status: EventStatus
+  image_url: string | null
+  start_date: string
+  artists: { is_headliner: boolean; order: number; artist: { image_url: string | null } | null }[]
+}
+
+// Recomputes just the branded-image recipe (date, status-derived
+// template kind, and any approved event/artist photo) from the pack's
+// live source record — the headline and city shown still come from the
+// pack row itself, so an admin's own edit via updateSocialPackAction is
+// always respected rather than overwritten. Useful when an event's date
+// moves, it goes on sale, or a photo becomes available after the pack
+// was first prepared. An optional `kind` field in the form overrides the
+// auto-derived template, for a case nothing here derives automatically —
+// a "tonight" post, for instance, has no automatic trigger at all yet.
+export async function regenerateSocialPackImageAction(id: string, formData: FormData) {
+  await checkAuth()
+  const db = createAdminClient()
+
+  const { data: pack, error: fetchError } = await db
+    .from('social_packs')
+    .select('id, source_type, source_id, headline, city_name, image_params')
+    .eq('id', id)
+    .single()
+
+  if (fetchError || !pack) {
+    redirect('/admin/social/' + id + '?error=' + encodeURIComponent('Social Pack not found.'))
+  }
+
+  const existingParams = (pack.image_params ?? {}) as Record<string, unknown>
+  const kindField = formData.get('kind')
+  const kindOverride = isSocialImageKind(kindField) ? kindField : null
+
+  let kind: SocialImageKind = kindOverride ?? (isSocialImageKind(existingParams.kind) ? existingParams.kind : 'city_event')
+  let dateLabel: string | null = typeof existingParams.dateLabel === 'string' ? existingParams.dateLabel : null
+  let imageUrl: string | null = null
+
+  try {
+    if (pack.source_type === 'event') {
+      const { data: event } = await db
+        .from('events')
+        .select('status, image_url, start_date, artists:event_artists(is_headliner, order, artist:artists(image_url))')
+        .eq('id', pack.source_id)
+        .single() as unknown as { data: RegenerateEventImageRow | null }
+
+      if (event) {
+        dateLabel = new Date(event.start_date).toLocaleDateString('en-GB', {
+          timeZone: 'Europe/London', day: 'numeric', month: 'long', year: 'numeric',
+        })
+        const headliner = [...event.artists]
+          .filter(a => a.is_headliner)
+          .sort((a, b) => a.order - b.order)[0]
+        imageUrl = event.image_url ?? headliner?.artist?.image_url ?? null
+        if (!kindOverride) kind = resolveSocialImageKindFromEventStatus(event.status)
+      }
+    } else {
+      const { data: candidate } = await db
+        .from('news_candidates')
+        .select('story_type')
+        .eq('id', pack.source_id)
+        .single()
+      // Deliberately still never an image — a news story's own article
+      // imagery is never pulled in here (see socialPack.ts's
+      // isApprovedImageSource comment); only the template kind refreshes.
+      if (candidate && !kindOverride) {
+        kind = resolveSocialImageKindFromStoryType(candidate.story_type)
+      }
+    }
+  } catch (err) {
+    // Best-effort refresh: if the source lookup fails for any reason,
+    // fall through and re-save with whatever was already there (plus
+    // any explicit kind override), rather than failing the regenerate
+    // outright.
+    console.error('[social-pack] regenerate image source lookup failed:', err)
+  }
+
+  const image_params = buildSocialImageParams(pack.headline, pack.city_name, dateLabel, kind, imageUrl)
+
+  const { error: updateError } = await db
+    .from('social_packs')
+    .update({ image_params, updated_at: new Date().toISOString() })
+    .eq('id', id)
+
+  if (updateError) {
+    redirect('/admin/social/' + id + '?error=' + encodeURIComponent(updateError.message))
+  }
+
+  revalidatePath('/admin/social/' + id)
+  redirect('/admin/social/' + id + '?regenerated=1')
 }

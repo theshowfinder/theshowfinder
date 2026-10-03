@@ -4,14 +4,16 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { updateSocialPackAction, advanceSocialPackStatusAction } from '../../actions'
+import { updateSocialPackAction, advanceSocialPackStatusAction, regenerateSocialPackImageAction } from '../../actions'
 import SocialPackEditor from '../SocialPackEditor'
-import { canAdvanceSocialPackStatus } from '@/lib/socialPack'
+import { canAdvanceSocialPackStatus, isSocialImageKind, SOCIAL_IMAGE_THEMES, type SocialImageKind } from '@/lib/socialPack'
 import type { SocialPack, SocialPackStatus } from '@/lib/types/database'
+
+const IMAGE_KIND_OPTIONS: SocialImageKind[] = ['tour_announcement', 'onsale', 'presale', 'city_event', 'tonight']
 
 interface PageProps {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ saved?: string; error?: string }>
+  searchParams: Promise<{ saved?: string; error?: string; regenerated?: string }>
 }
 
 const STATUS_STYLE: Record<SocialPackStatus, string> = {
@@ -45,7 +47,7 @@ const BACK_STEPS: Record<SocialPackStatus, SocialPackStatus[]> = {
 export default async function SocialPackDetailPage({ params, searchParams }: PageProps) {
   await requireAdmin()
   const { id } = await params
-  const { saved, error } = await searchParams
+  const { saved, error, regenerated } = await searchParams
   const db = createAdminClient()
 
   const { data: pack } = await db
@@ -57,6 +59,13 @@ export default async function SocialPackDetailPage({ params, searchParams }: Pag
   if (!pack) notFound()
 
   const updateAction = updateSocialPackAction.bind(null, pack.id)
+  const regenerateImageAction = regenerateSocialPackImageAction.bind(null, pack.id)
+  const storedKind = (pack.image_params as Record<string, unknown> | null)?.kind
+  const currentImageKind: SocialImageKind = isSocialImageKind(storedKind) ? storedKind : 'city_event'
+  // Cache-busts the <img> below so "Regenerate image" visibly updates the
+  // preview instead of the browser quietly serving its old cached bytes
+  // for an unchanged URL.
+  const imageVersion = encodeURIComponent(pack.updated_at)
   const forwardTo = FORWARD_STEP[pack.status]
   const forwardAction = forwardTo ? advanceSocialPackStatusAction.bind(null, pack.id, forwardTo) : null
   const backSteps = BACK_STEPS[pack.status].filter(to => canAdvanceSocialPackStatus(pack.status, to))
@@ -75,6 +84,11 @@ export default async function SocialPackDetailPage({ params, searchParams }: Pag
         {saved && (
           <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">
             ✓ Saved successfully
+          </div>
+        )}
+        {regenerated && (
+          <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">
+            ✓ Image regenerated
           </div>
         )}
         {error && (
@@ -113,27 +127,51 @@ export default async function SocialPackDetailPage({ params, searchParams }: Pag
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
           <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Branded image</h2>
           <p className="text-xs text-slate-400">
-            Always a TheShowFinder-branded graphic — never a photo pulled from Ticketmaster, a venue, or a third-party
-            article. Preview below, right-click (or long-press) to save, or use the download link.
+            Always a TheShowFinder-branded graphic, in one of five vibrant templates — never a photo scraped or pasted
+            from a third-party article. When the event or artist has its own Ticketmaster photo it&rsquo;s used as the
+            background; otherwise the template falls back to its own gradient design. Preview below, right-click (or
+            long-press) to save, or use the download link.
           </p>
           <div className="flex flex-wrap gap-6">
             <div className="space-y-2">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Square (Facebook / Instagram)</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/admin/social/${pack.id}/image?format=square`} alt="Square social graphic" className="w-56 h-56 rounded-xl border border-slate-200 object-cover" />
-              <a href={`/admin/social/${pack.id}/image?format=square`} download={`social-${pack.id}-square.png`} className="block text-xs font-semibold text-blue-600 hover:underline">
+              <img src={`/admin/social/${pack.id}/image?format=square&v=${imageVersion}`} alt="Square social graphic" className="w-56 h-56 rounded-xl border border-slate-200 object-cover" />
+              <a href={`/admin/social/${pack.id}/image?format=square&v=${imageVersion}`} download={`social-${pack.id}-square.png`} className="block text-xs font-semibold text-blue-600 hover:underline">
                 Download square
               </a>
             </div>
             <div className="space-y-2">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Vertical (TikTok / Story)</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/admin/social/${pack.id}/image?format=vertical`} alt="Vertical social graphic" className="w-32 h-56 rounded-xl border border-slate-200 object-cover" />
-              <a href={`/admin/social/${pack.id}/image?format=vertical`} download={`social-${pack.id}-vertical.png`} className="block text-xs font-semibold text-blue-600 hover:underline">
+              <img src={`/admin/social/${pack.id}/image?format=vertical&v=${imageVersion}`} alt="Vertical social graphic" className="w-32 h-56 rounded-xl border border-slate-200 object-cover" />
+              <a href={`/admin/social/${pack.id}/image?format=vertical&v=${imageVersion}`} download={`social-${pack.id}-vertical.png`} className="block text-xs font-semibold text-blue-600 hover:underline">
                 Download vertical
               </a>
             </div>
           </div>
+
+          <form action={regenerateImageAction} className="flex flex-wrap items-end gap-3 pt-2 border-t border-slate-100">
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Template</label>
+              <select
+                name="kind"
+                defaultValue={currentImageKind}
+                className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                {IMAGE_KIND_OPTIONS.map(kind => (
+                  <option key={kind} value={kind}>{SOCIAL_IMAGE_THEMES[kind].badgeLabel}</option>
+                ))}
+              </select>
+            </div>
+            <button type="submit" className="text-sm font-bold px-4 py-2 rounded-xl bg-slate-900 text-white hover:opacity-90 transition-opacity">
+              Regenerate image
+            </button>
+            <p className="text-xs text-slate-400 basis-full">
+              Re-reads the date, status and any approved photo from the source record. Pick a different template
+              above first if the automatic one isn&rsquo;t right for this post (e.g. a &ldquo;Tonight&rdquo; post).
+            </p>
+          </form>
         </section>
 
         <SocialPackEditor pack={pack} updateAction={updateAction} />

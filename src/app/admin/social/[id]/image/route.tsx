@@ -2,13 +2,21 @@
 // on-demand graphic with next/og's ImageResponse. There is no file
 // storage anywhere in this project (no Supabase Storage bucket, no
 // Vercel Blob), so nothing is ever uploaded or persisted here: this is a
-// pure render of social_packs.image_params (a small JSON "recipe" —
-// headline/city/dateLabel) every time the route is hit. It NEVER pulls a
-// photo from Ticketmaster, a venue, or a third-party article — the image
-// is always this branded TheShowFinder graphic, satisfying "if no safe
-// image exists, use a branded graphic containing the headline, city,
-// artist/event and date." No ticket-availability claim is ever rendered
-// here, matching the Tonight/ticket-link wording rules elsewhere.
+// pure render of social_packs.image_params (a small JSON "recipe") every
+// time the route is hit.
+//
+// Five vibrant, distinct templates (src/lib/socialPack.ts's
+// SOCIAL_IMAGE_KINDS/SOCIAL_IMAGE_THEMES) replace the single flat dark
+// design this route used to render for every pack — tour announcements,
+// onsales, presales, city-wide roundups and "tonight" posts each get
+// their own gradient + accent + badge. When the pack's own event or
+// artist has a photo, it's used as a full-bleed background behind a
+// brand-coloured wash; otherwise the template falls back to its vibrant
+// gradient alone. Either way this NEVER pulls a photo from anywhere
+// other than TheShowFinder's own Ticketmaster/Live Nation/Universe
+// ingestion pipeline — isApprovedImageSource is re-checked here, not
+// just trusted from storage, so a row written before that gate existed
+// (or edited some other way) can never paint an unapproved image.
 //
 // ?format=square  → 1080x1080  (Facebook / Instagram feed)
 // ?format=vertical → 1080x1920 (Instagram Story / TikTok)
@@ -23,7 +31,11 @@ import { ImageResponse } from 'next/og'
 import { cookies } from 'next/headers'
 import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { SocialImageParams } from '@/lib/socialPack'
+import {
+  SOCIAL_IMAGE_THEMES,
+  resolveStoredImageKind,
+  resolveApprovedImageUrl,
+} from '@/lib/socialPack'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,8 +48,6 @@ async function isAdminAuthed(): Promise<boolean> {
   const token = store.get('admin_token')?.value
   return Boolean(token) && token === process.env.ADMIN_PASSWORD
 }
-
-const BRAND_RED = '#E8003D'
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   if (!(await isAdminAuthed())) {
@@ -54,13 +64,26 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     .from('social_packs')
     .select('image_params')
     .eq('id', id)
-    .single() as unknown as { data: { image_params: SocialImageParams } | null }
+    .single() as unknown as { data: { image_params: Record<string, unknown> } | null }
 
   if (!pack) {
     return new Response('Social Pack not found', { status: 404 })
   }
 
-  const { headline, city, dateLabel } = pack.image_params
+  const storedParams = pack.image_params ?? {}
+
+  // Safe fallbacks for every field: a pack prepared before this template
+  // system existed has no `kind`/`imageUrl` in its stored params at all,
+  // and even headline/city/dateLabel are defended here rather than
+  // trusted blindly, since image_params is an untyped jsonb column.
+  const headline = typeof storedParams.headline === 'string' && storedParams.headline.trim()
+    ? storedParams.headline
+    : 'TheShowFinder'
+  const city = typeof storedParams.city === 'string' && storedParams.city.trim() ? storedParams.city : null
+  const dateLabel = typeof storedParams.dateLabel === 'string' && storedParams.dateLabel.trim() ? storedParams.dateLabel : null
+  const kind = resolveStoredImageKind(storedParams.kind)
+  const imageUrl = resolveApprovedImageUrl(storedParams.imageUrl)
+  const theme = SOCIAL_IMAGE_THEMES[kind]
 
   return new ImageResponse(
     (
@@ -69,61 +92,113 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           width: '100%',
           height: '100%',
           display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: '#0f172a',
-          padding: 64,
+          position: 'relative',
+          backgroundColor: theme.gradientFrom,
+          backgroundImage: imageUrl ? undefined : `linear-gradient(135deg, ${theme.gradientFrom} 0%, ${theme.gradientTo} 100%)`,
           fontFamily: 'sans-serif',
         }}
       >
-        <div style={{ display: 'flex', width: 56, height: 8, backgroundColor: BRAND_RED, borderRadius: 4, marginBottom: 48 }} />
+        {imageUrl && (
+          // An approved event/artist photo as a full-bleed background.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageUrl}
+            alt=""
+            width={width}
+            height={height}
+            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'flex' }}
+          />
+        )}
 
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 'auto' }}>
-          <span style={{ color: '#ffffff', fontSize: 30, fontWeight: 800, letterSpacing: 2 }}>THE</span>
-          <span style={{ color: BRAND_RED, fontSize: 30, fontWeight: 800, letterSpacing: 2 }}>SHOWFINDER</span>
-        </div>
+        {/* Legibility wash in the template's own colours over a photo
+            background; a soft darkening gradient (no photo to wash) when
+            the template is already the vibrant gradient on its own. */}
+        <div
+          style={{
+            position: 'absolute', top: 0, left: 0,
+            width: '100%', height: '100%',
+            display: 'flex',
+            backgroundImage: imageUrl
+              ? `linear-gradient(180deg, ${theme.gradientFrom}33 0%, #000000a6 60%, #000000f0 100%)`
+              : 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.35) 100%)',
+          }}
+        />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {city && (
+        <div
+          style={{
+            position: 'relative',
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: 64,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span style={{ color: '#ffffff', fontSize: 30, fontWeight: 800, letterSpacing: 2 }}>THE</span>
+            <span style={{ color: theme.accent, fontSize: 30, fontWeight: 800, letterSpacing: 2 }}>SHOWFINDER</span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 'auto' }}>
             <div
               style={{
                 display: 'flex',
                 alignSelf: 'flex-start',
-                backgroundColor: BRAND_RED,
-                color: '#ffffff',
-                fontSize: 28,
-                fontWeight: 700,
+                backgroundColor: theme.accent,
+                color: '#111111',
+                fontSize: 26,
+                fontWeight: 800,
                 letterSpacing: 3,
                 textTransform: 'uppercase',
-                padding: '10px 24px',
+                padding: '10px 22px',
                 borderRadius: 999,
               }}
             >
-              {city}
+              {theme.badgeLabel}
             </div>
-          )}
 
-          <div
-            style={{
-              display: 'flex',
-              color: '#ffffff',
-              fontSize: headline.length > 60 ? 56 : 72,
-              fontWeight: 800,
-              lineHeight: 1.15,
-              maxWidth: 900,
-            }}
-          >
-            {headline}
+            {city && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignSelf: 'flex-start',
+                  backgroundColor: 'rgba(255,255,255,0.16)',
+                  color: '#ffffff',
+                  fontSize: 26,
+                  fontWeight: 700,
+                  letterSpacing: 2,
+                  textTransform: 'uppercase',
+                  padding: '8px 20px',
+                  borderRadius: 999,
+                }}
+              >
+                {city}
+              </div>
+            )}
+
+            <div
+              style={{
+                display: 'flex',
+                color: '#ffffff',
+                fontSize: headline.length > 60 ? 56 : 72,
+                fontWeight: 800,
+                lineHeight: 1.12,
+                maxWidth: 920,
+              }}
+            >
+              {headline}
+            </div>
+
+            {dateLabel && (
+              <div style={{ display: 'flex', color: '#ffffff', fontSize: 34, fontWeight: 600, opacity: 0.85 }}>
+                {dateLabel}
+              </div>
+            )}
           </div>
 
-          {dateLabel && (
-            <div style={{ display: 'flex', color: '#94a3b8', fontSize: 34, fontWeight: 600 }}>
-              {dateLabel}
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', marginTop: 48, color: '#64748b', fontSize: 24, fontWeight: 600 }}>
-          theshowfinder.com
+          <div style={{ display: 'flex', marginTop: 40, color: '#ffffff', fontSize: 24, fontWeight: 600, opacity: 0.7 }}>
+            theshowfinder.com
+          </div>
         </div>
       </div>
     ),
