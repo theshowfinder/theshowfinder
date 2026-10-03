@@ -17,18 +17,37 @@ interface TicketLinkQueueEvent {
   venue: { name: string; city: string } | null
 }
 
+async function fetchAllUpcomingEvents(db: ReturnType<typeof createAdminClient>) {
+  const pageSize = 1000
+  const allEvents: TicketLinkQueueEvent[] = []
+  let offset = 0
+
+  while (true) {
+    const { data, error } = await db
+      .from('events')
+      .select('id, title, slug, start_date, own_ticket_url, viagogo_url, stubhub_url, gigsberg_url, venue:venues(name, city)')
+      .in('status', ['upcoming', 'on_sale', 'sold_out'])
+      .gte('start_date', new Date().toISOString())
+      .order('start_date', { ascending: true })
+      .range(offset, offset + pageSize - 1) as unknown as { data: TicketLinkQueueEvent[] | null; error: { message: string } | null }
+
+    if (error) return { data: null, error }
+
+    const page = data ?? []
+    allEvents.push(...page)
+    if (page.length < pageSize) break
+    offset += pageSize
+  }
+
+  return { data: allEvents, error: null }
+}
+
 export default async function TicketLinksPage({ searchParams }: { searchParams: Promise<{ saved?: string; q?: string }> }) {
   await requireAdmin()
   const { saved, q } = await searchParams
   const db = createAdminClient()
 
-  const { data: events, error } = await db
-    .from('events')
-    .select('id, title, slug, start_date, own_ticket_url, viagogo_url, stubhub_url, gigsberg_url, venue:venues(name, city)')
-    .in('status', ['upcoming', 'on_sale', 'sold_out'])
-    .gte('start_date', new Date().toISOString())
-    .order('start_date', { ascending: true })
-    .limit(300) as unknown as { data: TicketLinkQueueEvent[] | null; error: { message: string } | null }
+  const { data: events, error } = await fetchAllUpcomingEvents(db)
 
   const rows = events ?? []
   const query = q?.trim() ?? ''
