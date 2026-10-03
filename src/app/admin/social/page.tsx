@@ -17,6 +17,7 @@ const STATUS_STYLE: Record<SocialPackStatus, string> = {
   ready_for_review: 'bg-amber-100 text-amber-700',
   approved:         'bg-blue-100 text-blue-700',
   posted:           'bg-green-100 text-green-700',
+  skipped:          'bg-slate-200 text-slate-500',
 }
 
 const STATUS_LABEL: Record<SocialPackStatus, string> = {
@@ -24,9 +25,10 @@ const STATUS_LABEL: Record<SocialPackStatus, string> = {
   ready_for_review: 'Ready for review',
   approved:         'Approved',
   posted:           'Posted',
+  skipped:          'Skipped',
 }
 
-const ALL_STATUSES: SocialPackStatus[] = ['draft', 'ready_for_review', 'approved', 'posted']
+const ALL_STATUSES: SocialPackStatus[] = ['draft', 'ready_for_review', 'approved', 'posted', 'skipped']
 
 function Chip({ label, active, href }: { label: string; active: boolean; href: string }) {
   return (

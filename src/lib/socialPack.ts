@@ -52,13 +52,32 @@ export interface SocialPackLinks {
   tiktokLink:     string
 }
 
+// A slug-ish form (lowercase, non-alphanumeric runs collapsed to a single
+// hyphen, no leading/trailing hyphen) for embedding free text like a city
+// name into a utm_campaign value — self-contained rather than importing
+// cityNews.ts's own citySlug(), which pulls in an rss-parser dependency
+// that doesn't resolve under plain `node --test` (see newsPublishing.ts's
+// own comment on NATIONAL_SLUG for the same reasoning).
+function slugifyForCampaign(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
 export function buildSocialPackLinks(
   destinationPath: string,
   sourceType: SocialPackSourceType,
   sourceId: string,
+  // Distinguishes separate per-city campaigns for the same source (e.g.
+  // one news story generating a Manchester post and a Leeds post) so
+  // GA4 can tell them apart, not just by destination URL. Omitted
+  // entirely keeps the exact original campaign format — existing
+  // event-sourced packs and any pack already in the database are
+  // unaffected.
+  campaignSuffix?: string,
 ): SocialPackLinks {
   const destinationUrl = destinationPath.startsWith('http') ? destinationPath : `${SITE_ORIGIN}${destinationPath}`
-  const utmCampaign = `social-${sourceType}-${sourceId}`
+  const utmCampaign = campaignSuffix
+    ? `social-${sourceType}-${sourceId}-${slugifyForCampaign(campaignSuffix)}`
+    : `social-${sourceType}-${sourceId}`
   return {
     destinationUrl,
     utmCampaign,
@@ -221,11 +240,19 @@ export function resolveApprovedImageUrl(stored: unknown): string | null {
 // use is one that already passed isApprovedImageSource above.
 
 export interface SocialImageParams {
-  headline:  string
-  city:      string | null
-  dateLabel: string | null
-  kind:      SocialImageKind
-  imageUrl:  string | null
+  headline:      string
+  city:          string | null
+  dateLabel:     string | null
+  kind:          SocialImageKind
+  imageUrl:      string | null
+  // false means the venue/date (and therefore the destination/photo too)
+  // could not be confirmed against a real event — "never invent dates,
+  // venues, ticket availability" means this pack's content must say so
+  // rather than pretend to be as complete as a verified one. Defaults to
+  // true for a pack built before this field existed (see
+  // resolveStoredVenueVerified) — only new code paths that actually know
+  // they skipped verification ever set it false.
+  venueVerified: boolean
 }
 
 export function buildSocialImageParams(
@@ -234,8 +261,18 @@ export function buildSocialImageParams(
   dateLabel: string | null,
   kind: SocialImageKind,
   imageUrl: string | null,
+  venueVerified: boolean,
 ): SocialImageParams {
-  return { headline, city, dateLabel, kind, imageUrl: isApprovedImageSource(imageUrl) ? imageUrl : null }
+  return { headline, city, dateLabel, kind, imageUrl: isApprovedImageSource(imageUrl) ? imageUrl : null, venueVerified }
+}
+
+// Defensive read of a stored image_params.venueVerified (jsonb has no
+// schema at the DB level) — a pack saved before this field existed has
+// no such key at all, and that absence means "we never checked", not
+// "we checked and it failed", so it defaults to true rather than
+// retroactively flagging every historical pack for review.
+export function resolveStoredVenueVerified(stored: unknown): boolean {
+  return typeof stored === 'boolean' ? stored : true
 }
 
 // ── Context strings ───────────────────────────────────────────────────────
@@ -265,6 +302,13 @@ export interface SocialPackDraftInput {
   kind:             SocialImageKind
   imageUrl?:        string | null
   imageDateLabel?:  string | null
+  // See SocialImageParams.venueVerified. Defaults to true — only a
+  // caller that actually attempted (and failed) a venue/date lookup
+  // passes false.
+  venueVerified?:   boolean
+  // See buildSocialPackLinks's own comment — distinguishes per-city
+  // campaigns for the same source.
+  campaignSuffix?:  string
 }
 
 export interface SocialPackDraft {
@@ -293,7 +337,7 @@ export interface SocialPackDraft {
 // an explicit admin action calling advanceSocialPackStatus (below) on an
 // existing row.
 export function buildSocialPackDraft(input: SocialPackDraftInput): SocialPackDraft {
-  const links = buildSocialPackLinks(input.destinationPath, input.sourceType, input.sourceId)
+  const links = buildSocialPackLinks(input.destinationPath, input.sourceType, input.sourceId, input.campaignSuffix)
   const hashtags = buildSocialPackHashtags(input.hashtagSeed)
 
   return {
@@ -311,9 +355,81 @@ export function buildSocialPackDraft(input: SocialPackDraftInput): SocialPackDra
     facebook_link: links.facebookLink,
     instagram_link: links.instagramLink,
     tiktok_link: links.tiktokLink,
-    image_params: buildSocialImageParams(input.headline, input.cityName, input.imageDateLabel ?? null, input.kind, input.imageUrl ?? null),
+    image_params: buildSocialImageParams(
+      input.headline, input.cityName, input.imageDateLabel ?? null, input.kind, input.imageUrl ?? null,
+      input.venueVerified ?? true,
+    ),
     status: 'draft',
   }
+}
+
+// ── City posts ────────────────────────────────────────────────────────────
+// "Create city posts" (3 Oct 2026) — one Social Pack per city a
+// published, city-targeted news story actually reaches, instead of the
+// single first-city pack the original auto-create produced. The one
+// genuinely new decision this adds, factored out so it's directly
+// testable: what a city's pack looks like when a real event (venue +
+// date) for this artist in this city was found, versus when it wasn't —
+// "never invent dates, venues, ticket availability" means the unverified
+// case must read as unverified, not as a slightly-less-detailed version
+// of the verified one.
+
+// A real, looked-up event — never fabricated. eventSlug/venueName/
+// dateLabel all come from an actual events/venues row.
+export interface CityPostVerifiedMatch {
+  eventSlug: string
+  venueName: string
+  dateLabel: string
+  imageUrl:  string | null
+}
+
+export interface CityPostDraftInput {
+  candidateId:     string
+  headline:        string
+  // resolveNewsCandidateContext(candidate)'s result — used verbatim when
+  // no verified match exists, so an unverified city pack still reads as
+  // a real sentence, never a half-filled template.
+  fallbackContext: string
+  cityName:        string
+  kind:            SocialImageKind
+  // null when no artist name was on the story, the city has no matching
+  // event, or the lookup itself failed — every one of those is treated
+  // identically as "not verified", never guessed at.
+  verified:        CityPostVerifiedMatch | null
+}
+
+export function buildCityPostDraft(input: CityPostDraftInput): SocialPackDraft {
+  const { verified } = input
+
+  const context = verified
+    ? buildEventContext({ title: input.headline, venueName: verified.venueName, startDateLabel: verified.dateLabel })
+    : input.fallbackContext
+
+  // A verified match points the tracked link at the specific event page
+  // (the most relevant, most useful destination); otherwise it falls
+  // back to the city page — TheShowFinder's own property either way,
+  // never the source article.
+  const destinationPath = verified
+    ? `/events/${verified.eventSlug}`
+    : `/cities/${encodeURIComponent(input.cityName)}`
+
+  return buildSocialPackDraft({
+    sourceType: 'news_candidate',
+    sourceId: input.candidateId,
+    cityName: input.cityName,
+    headline: input.headline,
+    context,
+    destinationPath,
+    // Per-city hashtags, not every target city on the story — a Leeds
+    // post should never carry #Manchester just because the same news
+    // story also targets Manchester.
+    hashtagSeed: [input.cityName, input.headline],
+    kind: input.kind,
+    imageUrl: verified?.imageUrl ?? null,
+    imageDateLabel: verified?.dateLabel ?? null,
+    venueVerified: verified !== null,
+    campaignSuffix: input.cityName,
+  })
 }
 
 // ── Status transitions ────────────────────────────────────────────────────
@@ -325,13 +441,40 @@ export function buildSocialPackDraft(input: SocialPackDraftInput): SocialPackDra
 // posted it themselves on the real platform — nothing here ever reaches
 // out to Facebook/Instagram/TikTok to check or set that.
 
+// Deliberately only the four linear statuses — 'skipped' is handled by
+// its own dedicated canSkipSocialPack/canUnskipSocialPack below, not
+// folded into this one-step-forward/any-step-back ladder. Calling this
+// with 'skipped' as either argument always returns false, explicitly
+// guarded below rather than left to indexOf's incidental -1 behaviour
+// (an unguarded `-1 < fromIdx` is true for every real fromIdx, which
+// would wrongly treat 'skipped' as reachable "backward" from anywhere):
+// skipping/unskipping is a separate action, never a move "along" this
+// status line.
 const STATUS_ORDER: SocialPackStatus[] = ['draft', 'ready_for_review', 'approved', 'posted']
 
 export function canAdvanceSocialPackStatus(from: SocialPackStatus, to: SocialPackStatus): boolean {
   const fromIdx = STATUS_ORDER.indexOf(from)
   const toIdx = STATUS_ORDER.indexOf(to)
+  if (fromIdx === -1 || toIdx === -1) return false
   if (toIdx < fromIdx) return true
   return toIdx === fromIdx + 1
+}
+
+// A pack can be skipped any time before it's actually been posted — a
+// city whose venue/date couldn't be verified, or one an admin simply
+// decides not to run, without deleting the row (it stays editable and
+// visible, same as any other pack). Already-skipped is excluded too —
+// skip the skip button, use Unskip instead.
+export function canSkipSocialPack(status: SocialPackStatus): boolean {
+  return status === 'draft' || status === 'ready_for_review' || status === 'approved'
+}
+
+// The only way back from 'skipped' — always to 'draft' (a full re-review
+// from the top), never straight back into 'ready_for_review' or
+// 'approved', since skipping it means that earlier review no longer
+// stands.
+export function canUnskipSocialPack(status: SocialPackStatus): boolean {
+  return status === 'skipped'
 }
 
 // ── Eligibility ────────────────────────────────────────────────────────────

@@ -7,8 +7,12 @@ import {
   buildInstagramCaption,
   buildTikTokCaption,
   buildSocialImageParams,
+  resolveStoredVenueVerified,
   buildSocialPackDraft,
+  buildCityPostDraft,
   canAdvanceSocialPackStatus,
+  canSkipSocialPack,
+  canUnskipSocialPack,
   isEligibleForAutoSocialPack,
   resolveNewsCandidateContext,
   buildEventContext,
@@ -67,6 +71,24 @@ describe('buildSocialPackLinks — city-specific links with UTM parameters', () 
     assert.ok(links.instagramLink.includes('utm_campaign=social-news_candidate-abc-123'))
     assert.ok(links.tiktokLink.includes('utm_campaign=social-news_candidate-abc-123'))
   })
+
+  test('an optional campaignSuffix distinguishes per-city campaigns for the same source', () => {
+    const manchester = buildSocialPackLinks('/cities/Manchester', 'news_candidate', 'abc-123', 'Manchester')
+    const leeds = buildSocialPackLinks('/cities/Leeds', 'news_candidate', 'abc-123', 'Leeds')
+    assert.equal(manchester.utmCampaign, 'social-news_candidate-abc-123-manchester')
+    assert.equal(leeds.utmCampaign, 'social-news_candidate-abc-123-leeds')
+    assert.notEqual(manchester.utmCampaign, leeds.utmCampaign)
+  })
+
+  test('campaignSuffix is slugified (lowercase, non-alphanumeric collapsed) for a multi-word or punctuated city name', () => {
+    const links = buildSocialPackLinks('/cities/Stoke-on-Trent', 'news_candidate', 'abc-123', 'Stoke-on-Trent')
+    assert.equal(links.utmCampaign, 'social-news_candidate-abc-123-stoke-on-trent')
+  })
+
+  test('omitting campaignSuffix keeps the exact original campaign format — backward compatible with existing packs', () => {
+    const links = buildSocialPackLinks('/cities/Manchester', 'news_candidate', 'abc-123')
+    assert.equal(links.utmCampaign, 'social-news_candidate-abc-123')
+  })
 })
 
 describe('platform caption rules', () => {
@@ -97,41 +119,71 @@ describe('platform caption rules', () => {
 })
 
 describe('buildSocialImageParams', () => {
-  test('carries headline, city, date and kind through for the branded graphic', () => {
-    const params = buildSocialImageParams('Tonight in Manchester', 'Manchester', '14 June', 'tonight', null)
-    assert.deepEqual(params, { headline: 'Tonight in Manchester', city: 'Manchester', dateLabel: '14 June', kind: 'tonight', imageUrl: null })
+  test('carries headline, city, date, kind and venueVerified through for the branded graphic', () => {
+    const params = buildSocialImageParams('Tonight in Manchester', 'Manchester', '14 June', 'tonight', null, true)
+    assert.deepEqual(params, { headline: 'Tonight in Manchester', city: 'Manchester', dateLabel: '14 June', kind: 'tonight', imageUrl: null, venueVerified: true })
   })
 
   test('a national story with no single city — city is null, not a guess', () => {
-    const params = buildSocialImageParams('Big UK tour announced', null, null, 'tour_announcement', null)
+    const params = buildSocialImageParams('Big UK tour announced', null, null, 'tour_announcement', null, true)
     assert.equal(params.city, null)
   })
 
   test('an approved Ticketmaster image URL is carried through', () => {
-    const params = buildSocialImageParams('Coldplay', 'Manchester', '14 June', 'onsale', 'https://media.ticketmaster.com/coldplay.jpg')
+    const params = buildSocialImageParams('Coldplay', 'Manchester', '14 June', 'onsale', 'https://media.ticketmaster.com/coldplay.jpg', true)
     assert.equal(params.imageUrl, 'https://media.ticketmaster.com/coldplay.jpg')
   })
 
   test('fallback behaviour: an unapproved image URL is dropped to null, never stored', () => {
-    const params = buildSocialImageParams('Coldplay', 'Manchester', '14 June', 'onsale', 'https://some-press-site.example.com/coldplay.jpg')
+    const params = buildSocialImageParams('Coldplay', 'Manchester', '14 June', 'onsale', 'https://some-press-site.example.com/coldplay.jpg', true)
     assert.equal(params.imageUrl, null)
+  })
+
+  test('venueVerified is carried through as given: true when confirmed against a real event', () => {
+    const params = buildSocialImageParams('Coldplay', 'Manchester', '14 June', 'onsale', null, true)
+    assert.equal(params.venueVerified, true)
+  })
+
+  test('venueVerified is carried through as given: false when the venue/date could not be confirmed', () => {
+    const params = buildSocialImageParams('Coldplay', 'Manchester', null, 'city_event', null, false)
+    assert.equal(params.venueVerified, false)
   })
 })
 
 describe('buildSocialImageParams — city names and dates pass through unchanged', () => {
   test('a city name with punctuation (e.g. a hyphenated city) is carried through exactly, not reformatted', () => {
-    const params = buildSocialImageParams('Robbie Williams', 'Stoke-on-Trent', '12 July 2026', 'onsale', null)
+    const params = buildSocialImageParams('Robbie Williams', 'Stoke-on-Trent', '12 July 2026', 'onsale', null, true)
     assert.equal(params.city, 'Stoke-on-Trent')
   })
 
   test('a date label is carried through exactly as given, not re-parsed or reformatted here', () => {
-    const params = buildSocialImageParams('Robbie Williams', 'Manchester', 'Friday 12 July 2026', 'onsale', null)
+    const params = buildSocialImageParams('Robbie Williams', 'Manchester', 'Friday 12 July 2026', 'onsale', null, true)
     assert.equal(params.dateLabel, 'Friday 12 July 2026')
   })
 
   test('a null date label (no date available) stays null, not an empty string or a guess', () => {
-    const params = buildSocialImageParams('Robbie Williams', 'Manchester', null, 'onsale', null)
+    const params = buildSocialImageParams('Robbie Williams', 'Manchester', null, 'onsale', null, true)
     assert.equal(params.dateLabel, null)
+  })
+})
+
+describe('resolveStoredVenueVerified — defensive re-read of a stored image_params.venueVerified', () => {
+  test('passes through a stored true', () => {
+    assert.equal(resolveStoredVenueVerified(true), true)
+  })
+
+  test('passes through a stored false', () => {
+    assert.equal(resolveStoredVenueVerified(false), false)
+  })
+
+  test('defaults to true when missing (a pack saved before this field existed — "never checked" is not "failed")', () => {
+    assert.equal(resolveStoredVenueVerified(undefined), true)
+    assert.equal(resolveStoredVenueVerified(null), true)
+  })
+
+  test('defaults to true for any non-boolean stored value', () => {
+    assert.equal(resolveStoredVenueVerified('false'), true)
+    assert.equal(resolveStoredVenueVerified(0), true)
   })
 })
 
@@ -400,5 +452,195 @@ describe('buildEventContext', () => {
       buildEventContext({ title: 'Coldplay', venueName: 'Co-op Live', startDateLabel: '14 June 2026' }),
       'Coldplay — Co-op Live, 14 June 2026',
     )
+  })
+})
+
+describe('buildCityPostDraft — per-city Social Pack from a published city news story', () => {
+  const verified = {
+    eventSlug: 'coldplay-manchester-14-june-2026',
+    venueName: 'Co-op Live',
+    dateLabel: '14 June 2026',
+    imageUrl: 'https://media.ticketmaster.com/coldplay.jpg',
+  }
+
+  test('a verified match points the destination at the specific event page, not the city page', () => {
+    const draft = buildCityPostDraft({
+      candidateId: 'cand-1',
+      headline: 'Coldplay announce Manchester date',
+      fallbackContext: 'Coldplay announce Manchester date',
+      cityName: 'Manchester',
+      kind: 'tour_announcement',
+      verified,
+    })
+    assert.equal(draft.destination_url, 'https://www.theshowfinder.com/events/coldplay-manchester-14-june-2026')
+  })
+
+  test('a verified match builds its context from the real venue and date, not the fallback', () => {
+    const draft = buildCityPostDraft({
+      candidateId: 'cand-1',
+      headline: 'Coldplay announce Manchester date',
+      fallbackContext: 'Coldplay announce Manchester date',
+      cityName: 'Manchester',
+      kind: 'tour_announcement',
+      verified,
+    })
+    assert.equal(draft.context, 'Coldplay announce Manchester date — Co-op Live, 14 June 2026')
+  })
+
+  test('a verified match is flagged venueVerified: true and carries the approved image through', () => {
+    const draft = buildCityPostDraft({
+      candidateId: 'cand-1',
+      headline: 'Coldplay announce Manchester date',
+      fallbackContext: 'Coldplay announce Manchester date',
+      cityName: 'Manchester',
+      kind: 'tour_announcement',
+      verified,
+    })
+    assert.equal(draft.image_params.venueVerified, true)
+    assert.equal(draft.image_params.imageUrl, 'https://media.ticketmaster.com/coldplay.jpg')
+    assert.equal(draft.image_params.dateLabel, '14 June 2026')
+  })
+
+  test('no verified match (null) falls back to the city page as destination, never a guessed event', () => {
+    const draft = buildCityPostDraft({
+      candidateId: 'cand-2',
+      headline: 'Coldplay announce UK tour',
+      fallbackContext: 'Coldplay announce UK tour',
+      cityName: 'Leeds',
+      kind: 'tour_announcement',
+      verified: null,
+    })
+    assert.equal(draft.destination_url, 'https://www.theshowfinder.com/cities/Leeds')
+  })
+
+  test('no verified match uses the fallback context verbatim, not a half-filled template', () => {
+    const draft = buildCityPostDraft({
+      candidateId: 'cand-2',
+      headline: 'Coldplay announce UK tour',
+      fallbackContext: 'New UK tour just announced',
+      cityName: 'Leeds',
+      kind: 'tour_announcement',
+      verified: null,
+    })
+    assert.equal(draft.context, 'New UK tour just announced')
+  })
+
+  test('no verified match is flagged venueVerified: false and never carries a photo', () => {
+    const draft = buildCityPostDraft({
+      candidateId: 'cand-2',
+      headline: 'Coldplay announce UK tour',
+      fallbackContext: 'New UK tour just announced',
+      cityName: 'Leeds',
+      kind: 'tour_announcement',
+      verified: null,
+    })
+    assert.equal(draft.image_params.venueVerified, false)
+    assert.equal(draft.image_params.imageUrl, null)
+    assert.equal(draft.image_params.dateLabel, null)
+  })
+
+  test('hashtags are scoped to this city only — a Leeds pack never carries a different city\'s tag', () => {
+    const draft = buildCityPostDraft({
+      candidateId: 'cand-2',
+      headline: 'Coldplay announce UK tour',
+      fallbackContext: 'New UK tour just announced',
+      cityName: 'Leeds',
+      kind: 'tour_announcement',
+      verified: null,
+    })
+    assert.ok(draft.hashtags.includes('#Leeds'))
+    assert.ok(!draft.hashtags.includes('#Manchester'))
+  })
+
+  test('city_name on the record matches the input city, for display/filtering', () => {
+    const draft = buildCityPostDraft({
+      candidateId: 'cand-1',
+      headline: 'Coldplay announce Manchester date',
+      fallbackContext: 'Coldplay announce Manchester date',
+      cityName: 'Manchester',
+      kind: 'tour_announcement',
+      verified,
+    })
+    assert.equal(draft.city_name, 'Manchester')
+  })
+
+  test('two cities for the same story get distinct tracked links (campaignSuffix = city name)', () => {
+    const manchester = buildCityPostDraft({
+      candidateId: 'cand-3',
+      headline: 'Coldplay announce UK tour',
+      fallbackContext: 'New UK tour just announced',
+      cityName: 'Manchester',
+      kind: 'tour_announcement',
+      verified: null,
+    })
+    const leeds = buildCityPostDraft({
+      candidateId: 'cand-3',
+      headline: 'Coldplay announce UK tour',
+      fallbackContext: 'New UK tour just announced',
+      cityName: 'Leeds',
+      kind: 'tour_announcement',
+      verified: null,
+    })
+    assert.notEqual(manchester.utm_campaign, leeds.utm_campaign)
+    assert.ok(manchester.utm_campaign.includes('manchester'))
+    assert.ok(leeds.utm_campaign.includes('leeds'))
+  })
+
+  test('every city pack still starts at status "draft" — manual review, never auto-posted', () => {
+    const draft = buildCityPostDraft({
+      candidateId: 'cand-2',
+      headline: 'Coldplay announce UK tour',
+      fallbackContext: 'New UK tour just announced',
+      cityName: 'Leeds',
+      kind: 'tour_announcement',
+      verified: null,
+    })
+    assert.equal(draft.status, 'draft')
+  })
+
+  test('all three platform drafts (Facebook, Instagram, TikTok) are generated for each city pack', () => {
+    const draft = buildCityPostDraft({
+      candidateId: 'cand-1',
+      headline: 'Coldplay announce Manchester date',
+      fallbackContext: 'Coldplay announce Manchester date',
+      cityName: 'Manchester',
+      kind: 'tour_announcement',
+      verified,
+    })
+    assert.ok(draft.facebook_text.length > 0)
+    assert.ok(draft.instagram_text.length > 0)
+    assert.ok(draft.tiktok_text.length > 0)
+  })
+})
+
+describe('canSkipSocialPack / canUnskipSocialPack — skip without deleting the row', () => {
+  test('a draft, ready_for_review or approved pack can be skipped', () => {
+    assert.equal(canSkipSocialPack('draft'), true)
+    assert.equal(canSkipSocialPack('ready_for_review'), true)
+    assert.equal(canSkipSocialPack('approved'), true)
+  })
+
+  test('an already-posted pack cannot be skipped', () => {
+    assert.equal(canSkipSocialPack('posted'), false)
+  })
+
+  test('an already-skipped pack cannot be skipped again — use Unskip instead', () => {
+    assert.equal(canSkipSocialPack('skipped'), false)
+  })
+
+  test('only a skipped pack can be unskipped', () => {
+    assert.equal(canUnskipSocialPack('skipped'), true)
+    assert.equal(canUnskipSocialPack('draft'), false)
+    assert.equal(canUnskipSocialPack('ready_for_review'), false)
+    assert.equal(canUnskipSocialPack('approved'), false)
+    assert.equal(canUnskipSocialPack('posted'), false)
+  })
+})
+
+describe('canAdvanceSocialPackStatus — unaffected by the new "skipped" status', () => {
+  test('"skipped" is never reachable or leaveable via the forward/back status ladder', () => {
+    assert.equal(canAdvanceSocialPackStatus('draft', 'skipped'), false)
+    assert.equal(canAdvanceSocialPackStatus('skipped', 'draft'), false)
+    assert.equal(canAdvanceSocialPackStatus('skipped', 'skipped'), false)
   })
 })

@@ -35,6 +35,7 @@ import {
   SOCIAL_IMAGE_THEMES,
   resolveStoredImageKind,
   resolveApprovedImageUrl,
+  resolveStoredVenueVerified,
 } from '@/lib/socialPack'
 
 export const dynamic = 'force-dynamic'
@@ -83,6 +84,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const dateLabel = typeof storedParams.dateLabel === 'string' && storedParams.dateLabel.trim() ? storedParams.dateLabel : null
   const kind = resolveStoredImageKind(storedParams.kind)
   const imageUrl = resolveApprovedImageUrl(storedParams.imageUrl)
+  const venueVerified = resolveStoredVenueVerified(storedParams.venueVerified)
   const theme = SOCIAL_IMAGE_THEMES[kind]
 
   return new ImageResponse(
@@ -192,6 +194,29 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             {dateLabel && (
               <div style={{ display: 'flex', color: '#ffffff', fontSize: 34, fontWeight: 600, opacity: 0.85 }}>
                 {dateLabel}
+              </div>
+            )}
+
+            {/* "Never invent dates, venues, ticket availability" — when
+                the venue/date couldn't be verified against a real event,
+                the image says so plainly instead of just quietly having
+                no date line (which could pass for "date not known yet"
+                rather than "unconfirmed, check before posting"). */}
+            {!venueVerified && !dateLabel && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignSelf: 'flex-start',
+                  backgroundColor: 'rgba(255,255,255,0.14)',
+                  color: '#ffffff',
+                  fontSize: 22,
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  padding: '6px 16px',
+                  borderRadius: 999,
+                }}
+              >
+                ⚠ Venue &amp; date to confirm
               </div>
             )}
           </div>

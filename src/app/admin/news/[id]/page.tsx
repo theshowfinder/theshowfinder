@@ -12,16 +12,32 @@ import {
   publishNewsCandidateAction,
   unpublishNewsCandidateAction,
   deleteNewsCandidateAction,
+  createCityPostsForCandidateAction,
 } from '../../actions'
 import NewsCandidateForm from '../NewsCandidateForm'
 import ConfirmSubmitButton from '../ConfirmSubmitButton'
 import ShareKit from '../ShareKit'
-import { describeDestinations, buildShareKitDefaults, buildShareKitPlatformLinks, type ShareKitAiFields } from '@/lib/newsPublishing'
-import type { NewsCandidate } from '@/lib/types/database'
+import {
+  describeDestinations,
+  buildShareKitDefaults,
+  buildShareKitPlatformLinks,
+  resolveCityNewsTargets,
+  filterRealCityTargets,
+  type ShareKitAiFields,
+} from '@/lib/newsPublishing'
+import type { NewsCandidate, SocialPackStatus } from '@/lib/types/database'
+
+const SOCIAL_PACK_STATUS_LABEL: Record<SocialPackStatus, string> = {
+  draft:            'Draft',
+  ready_for_review: 'Ready for review',
+  approved:         'Approved',
+  posted:           'Posted',
+  skipped:          'Skipped',
+}
 
 interface PageProps {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ created?: string; saved?: string; published?: string; error?: string }>
+  searchParams: Promise<{ created?: string; saved?: string; published?: string; error?: string; citypostscreated?: string }>
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -34,20 +50,34 @@ const STATUS_STYLE: Record<string, string> = {
 export default async function EditNewsCandidatePage({ params, searchParams }: PageProps) {
   await requireAdmin()
   const { id } = await params
-  const { created, saved, published, error } = await searchParams
+  const { created, saved, published, error, citypostscreated } = await searchParams
   const db = createAdminClient()
 
-  const [{ data: candidate }, { data: artists }, { data: cityRows }, { data: socialPack }] = await Promise.all([
+  const [{ data: candidate }, { data: artists }, { data: cityRows }, { data: socialPacks }] = await Promise.all([
     db.from('news_candidates').select('*').eq('id', id).single() as unknown as Promise<{ data: NewsCandidate | null }>,
     db.from('artists').select('id, name').order('name', { ascending: true }) as unknown as Promise<{ data: { id: string; name: string }[] | null }>,
     db.from('news_candidate_cities').select('city_slug, city_name').eq('candidate_id', id) as unknown as Promise<{ data: { city_slug: string; city_name: string }[] | null }>,
-    db.from('social_packs').select('id, status').eq('source_type', 'news_candidate').eq('source_id', id).maybeSingle() as unknown as Promise<{ data: { id: string; status: string } | null }>,
+    // One row per city now (migration_032) rather than a single pack —
+    // "Create city posts" can leave several rows here, not at most one.
+    db.from('social_packs').select('id, city_name, status').eq('source_type', 'news_candidate').eq('source_id', id).order('city_name', { ascending: true }) as unknown as Promise<{ data: { id: string; city_name: string | null; status: SocialPackStatus }[] | null }>,
   ])
 
   if (!candidate) notFound()
 
   const cityTargets = cityRows ?? []
   const cityNames = cityTargets.map(c => c.city_name)
+  const socialPackRows = socialPacks ?? []
+
+  // Real, supported-or-not city targets this story reaches — the same
+  // resolution the publish/Create-city-posts actions themselves use, so
+  // this button only ever appears when there's genuinely at least one
+  // city for it to act on. (filterSupportedCityTargets isn't applied
+  // here too — an unsupported city would be vanishingly rare given
+  // save-time validation, and showing the button is harmless either
+  // way since the action itself still re-checks before creating
+  // anything.)
+  const realCityTargets = filterRealCityTargets(resolveCityNewsTargets(candidate, cityTargets))
+  const createCityPostsAction = createCityPostsForCandidateAction.bind(null, candidate.id)
 
   const updateAction = updateNewsCandidateAction.bind(null, candidate.id)
   const approveAction = approveNewsCandidateAction.bind(null, candidate.id)
@@ -114,6 +144,11 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
         {saved && (
           <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">
             ✓ Saved successfully
+          </div>
+        )}
+        {citypostscreated && (
+          <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">
+            ✓ City posts ready — {citypostscreated} {citypostscreated === '1' ? 'city' : 'cities'} now {citypostscreated === '1' ? 'has' : 'have'} a Social Pack
           </div>
         )}
         {published && (
@@ -244,15 +279,42 @@ export default async function EditNewsCandidatePage({ params, searchParams }: Pa
           )}
         </section>
 
-        {socialPack && (
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Social Pack</h2>
-              <p className="text-sm text-slate-600 capitalize">Status: {socialPack.status.replace(/_/g, ' ')}</p>
+        {(socialPackRows.length > 0 || (candidate.review_status === 'published' && realCityTargets.length > 0)) && (
+          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Social Packs</h2>
+              {candidate.review_status === 'published' && realCityTargets.length > 0 && (
+                <form action={createCityPostsAction}>
+                  <button type="submit" className="text-sm font-bold px-4 py-2 rounded-xl bg-slate-900 text-white hover:opacity-90 transition-opacity whitespace-nowrap">
+                    Create city posts
+                  </button>
+                </form>
+              )}
             </div>
-            <Link href={`/admin/social/${socialPack.id}`} className="text-sm font-bold text-blue-600 hover:underline whitespace-nowrap">
-              Open Social Pack →
-            </Link>
+
+            {candidate.review_status === 'published' && realCityTargets.length > 0 && (
+              <p className="text-xs text-slate-400">
+                Creates one separate, manual-review Social Pack per target city ({realCityTargets.map(t => t.city_name).join(', ')}) —
+                each with its own Facebook/Instagram/TikTok drafts, branded image, hashtags and tracked links. Safe to
+                click more than once: a city that already has a pack is left untouched.
+              </p>
+            )}
+
+            {socialPackRows.length > 0 && (
+              <ul className="divide-y divide-slate-100">
+                {socialPackRows.map(pack => (
+                  <li key={pack.id} className="flex items-center justify-between gap-4 py-2.5">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">{pack.city_name ?? 'National'}</p>
+                      <p className="text-xs text-slate-500">{SOCIAL_PACK_STATUS_LABEL[pack.status]}</p>
+                    </div>
+                    <Link href={`/admin/social/${pack.id}`} className="text-sm font-bold text-blue-600 hover:underline whitespace-nowrap">
+                      Open →
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         )}
 

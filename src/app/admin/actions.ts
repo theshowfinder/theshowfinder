@@ -7,11 +7,15 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { citySlug } from '@/lib/cityNews'
 import { CITIES } from '@/lib/cities'
 import type { NewsStoryType, NewsPriority, NewsReviewStatus, EventStatus } from '@/lib/types/database'
+import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { normalizeCityFilterValue } from '@/lib/cityEventCount'
 import {
   canPublishCandidate,
   canUnpublishCandidate,
   isBlockedTestContent,
   resolveCityNewsTargets,
+  filterRealCityTargets,
+  filterSupportedCityTargets,
   buildPublishUpsertRows,
   buildUnpublishDeleteFilter,
   buildPublishCandidatePatch,
@@ -25,15 +29,20 @@ import { fetchArticleHtml, extractArticleMetadata, UnsafeUrlError, FetchArticleE
 import { requestAiSuggestions } from '@/lib/newsAiSuggestions'
 import {
   buildSocialPackDraft,
+  buildCityPostDraft,
   buildSocialImageParams,
   isEligibleForAutoSocialPack,
   resolveNewsCandidateContext,
   buildEventContext,
   canAdvanceSocialPackStatus,
+  canSkipSocialPack,
+  canUnskipSocialPack,
   resolveSocialImageKindFromStoryType,
   resolveSocialImageKindFromEventStatus,
   isSocialImageKind,
+  resolveStoredVenueVerified,
   type SocialImageKind,
+  type CityPostVerifiedMatch,
 } from '@/lib/socialPack'
 import type { SocialPackStatus } from '@/lib/types/database'
 
@@ -826,44 +835,42 @@ async function fetchCandidateWithCities(db: ReturnType<typeof createAdminClient>
   return { candidate, cityTargets: (cityRows ?? []) as CandidateCityTarget[] }
 }
 
-// Creates a Draft Social Pack for a just-published candidate, only when
-// it targets at least one city (isEligibleForAutoSocialPack) — a
-// national-only story has no single city for the pack's "city name"
-// field, so it's left out rather than guessing one. Uses the city page
-// itself as the destination (TheShowFinder's own property, not the
-// external source article) so tracked clicks actually land back on the
-// site. `ignoreDuplicates: true` on the upsert is what makes this safe
-// to call on every publish/re-publish without ever overwriting an
-// admin's own edits to a pack that already exists for this candidate.
+// Creates a Draft Social Pack for a just-published candidate's first
+// target city, only when it has at least one real city target
+// (isEligibleForAutoSocialPack — `cityTargets` here is already filtered
+// to real cities by the caller, see publishNewsCandidateAction, so this
+// never mistakes "UK National"/"TheShowFinder News" for a city). This is
+// the original, minimal "something happens automatically on publish"
+// convenience — for every target city, not just the first, an admin
+// uses the explicit "Create city posts" action below
+// (createCityPostsForCandidateAction), which this function intentionally
+// does not duplicate. `ignoreDuplicates: true` on the upsert (now keyed
+// on source_type+source_id+city_name, migration_032) is what makes this
+// safe to call on every publish/re-publish without overwriting an
+// admin's own edits to a pack that already exists for this city.
 async function findOrCreateSocialPackForCandidate(
   db: ReturnType<typeof createAdminClient>,
-  candidate: { id: string; headline: string; summary: string | null; story_type: NewsStoryType },
+  candidate: { id: string; headline: string; summary: string | null; story_type: NewsStoryType; artist_name: string | null },
   cityTargets: CandidateCityTarget[],
 ): Promise<void> {
   const cityNames = cityTargets.map(t => t.city_name)
   if (!isEligibleForAutoSocialPack(cityNames)) return
 
   const cityName = cityNames[0]
-  const draft = buildSocialPackDraft({
-    sourceType: 'news_candidate',
-    sourceId: candidate.id,
-    cityName,
+  const verified = await findVerifiedEventForArtistInCity(db, candidate.artist_name, cityName)
+
+  const draft = buildCityPostDraft({
+    candidateId: candidate.id,
     headline: candidate.headline,
-    context: resolveNewsCandidateContext(candidate),
-    destinationPath: `/cities/${encodeURIComponent(cityName)}`,
-    hashtagSeed: cityNames,
-    // A news story never gets a photo in its branded graphic — there's
-    // no event/artist image to draw on here, and this module never
-    // scrapes the source article's own imagery (see socialPack.ts's
-    // isApprovedImageSource comment). Its visual template is still
-    // vibrant and distinct, just text/gradient-only.
+    fallbackContext: resolveNewsCandidateContext(candidate),
+    cityName,
     kind: resolveSocialImageKindFromStoryType(candidate.story_type),
-    imageUrl: null,
+    verified,
   })
 
   const { error } = await db
     .from('social_packs')
-    .upsert(draft, { onConflict: 'source_type,source_id', ignoreDuplicates: true })
+    .upsert(draft, { onConflict: 'source_type,source_id,city_name', ignoreDuplicates: true })
   if (error) throw new Error(error.message)
 }
 
@@ -925,11 +932,18 @@ export async function publishNewsCandidateAction(id: string) {
     // itself: a city-targeted story gets a Draft-status pack prepared for
     // manual review, exactly the "connect approved content to a manual-
     // review Social Pack" requirement. Idempotent via the
-    // (source_type, source_id) unique constraint — re-publishing never
-    // creates a second pack or overwrites an admin's edits to an
-    // existing one.
+    // (source_type, source_id, city_name) unique constraint — re-
+    // publishing never creates a second pack or overwrites an admin's
+    // edits to an existing one. filterRealCityTargets here is what
+    // actually matters: `targets` can also contain the Homepage/Main-
+    // News-page pseudo-targets (NATIONAL_SLUG/NEWS_HUB_SLUG) when those
+    // destination flags are set — without this filter, a homepage-only
+    // publish would create a bogus Social Pack for a fake "city" called
+    // "UK National". Real city posts beyond the first target city are
+    // left to the explicit "Create city posts" action, not generated
+    // automatically here.
     try {
-      await findOrCreateSocialPackForCandidate(db, candidate, targets)
+      await findOrCreateSocialPackForCandidate(db, candidate, filterRealCityTargets(targets))
     } catch (err) {
       console.error('[social-pack] auto-create on publish failed (non-fatal):', err)
     }
@@ -1052,6 +1066,73 @@ function resolveEventImageCandidate(event: SocialPackEventRow): string | null {
     .filter(a => a.is_headliner)
     .sort((a, b) => a.order - b.order)[0]
   return headliner?.artist?.image_url ?? null
+}
+
+interface VerifiableEventRow {
+  id: string; slug: string; start_date: string; image_url: string | null
+}
+
+// Looks up a real, live (never cancelled/postponed) event for the given
+// artist in the given city — "verified" means this, and only this: a
+// genuine row in `events`/`venues`, never a guess or a reuse of some
+// other city's date. Used by both the "Create city posts" action and
+// the auto-created-on-publish pack, so a news-story-sourced Social Pack
+// always goes through the exact same verification path regardless of
+// which admin action created it.
+//
+// Deliberately defensive rather than throwing: any failure here (no
+// artist name on the story, no matching artist row, no matching event,
+// or a query error) returns null — "not verified" — and the caller
+// falls back to the city page with no date/photo, never a half-guess.
+async function findVerifiedEventForArtistInCity(
+  db: ReturnType<typeof createAdminClient>,
+  artistName: string | null,
+  cityName: string,
+): Promise<CityPostVerifiedMatch | null> {
+  if (!artistName?.trim()) return null
+
+  try {
+    const { data: artistRows } = await db
+      .from('artists')
+      .select('id, image_url')
+      .ilike('name', artistName)
+      .limit(1)
+    const artist = artistRows?.[0]
+    if (!artist) return null
+
+    const { data: links } = await db
+      .from('event_artists')
+      .select('event_id')
+      .eq('artist_id', artist.id)
+    const eventIds = (links ?? []).map(l => l.event_id)
+    if (!eventIds.length) return null
+
+    const { data: events } = await db
+      .from('events_with_venue')
+      .select('id, slug, start_date, venue_name, venue_city, image_url')
+      .in('id', eventIds)
+      .ilike('venue_city', normalizeCityFilterValue(cityName))
+      .in('status', LIVE_EVENT_STATUSES)
+      .order('start_date', { ascending: true })
+      .limit(1) as unknown as { data: (VerifiableEventRow & { venue_name: string; venue_city: string })[] | null }
+
+    const event = events?.[0]
+    if (!event) return null
+
+    const dateLabel = new Date(event.start_date).toLocaleDateString('en-GB', {
+      timeZone: 'Europe/London', day: 'numeric', month: 'long', year: 'numeric',
+    })
+
+    return {
+      eventSlug: event.slug,
+      venueName: event.venue_name,
+      dateLabel,
+      imageUrl: event.image_url ?? artist.image_url ?? null,
+    }
+  } catch (err) {
+    console.error('[social-pack] verified event lookup failed, treating as unverified:', err)
+    return null
+  }
 }
 
 // The manual trigger for "an important Manchester event update" — there's
@@ -1233,6 +1314,7 @@ export async function regenerateSocialPackImageAction(id: string, formData: Form
   let kind: SocialImageKind = kindOverride ?? (isSocialImageKind(existingParams.kind) ? existingParams.kind : 'city_event')
   let dateLabel: string | null = typeof existingParams.dateLabel === 'string' ? existingParams.dateLabel : null
   let imageUrl: string | null = null
+  let venueVerified = resolveStoredVenueVerified(existingParams.venueVerified)
 
   try {
     if (pack.source_type === 'event') {
@@ -1251,18 +1333,33 @@ export async function regenerateSocialPackImageAction(id: string, formData: Form
           .sort((a, b) => a.order - b.order)[0]
         imageUrl = event.image_url ?? headliner?.artist?.image_url ?? null
         if (!kindOverride) kind = resolveSocialImageKindFromEventStatus(event.status)
+        // An event-sourced pack is always backed by a real event row —
+        // never unverified.
+        venueVerified = true
       }
     } else {
       const { data: candidate } = await db
         .from('news_candidates')
-        .select('story_type')
+        .select('story_type, artist_name')
         .eq('id', pack.source_id)
         .single()
-      // Deliberately still never an image — a news story's own article
-      // imagery is never pulled in here (see socialPack.ts's
-      // isApprovedImageSource comment); only the template kind refreshes.
-      if (candidate && !kindOverride) {
-        kind = resolveSocialImageKindFromStoryType(candidate.story_type)
+
+      if (candidate) {
+        if (!kindOverride) kind = resolveSocialImageKindFromStoryType(candidate.story_type)
+
+        // Re-attempts the same verified venue/date lookup "Create city
+        // posts" uses — a date can move, a show can be added to the
+        // database, or an approved image can appear after this pack was
+        // first prepared, and regenerating is exactly when that should
+        // be picked up. A city-less pack (shouldn't normally happen for
+        // a news_candidate pack, but defends against one anyway) leaves
+        // dateLabel/imageUrl/venueVerified exactly as they already were.
+        if (pack.city_name) {
+          const verified = await findVerifiedEventForArtistInCity(db, candidate.artist_name, pack.city_name)
+          dateLabel = verified?.dateLabel ?? null
+          imageUrl = verified?.imageUrl ?? null
+          venueVerified = verified !== null
+        }
       }
     }
   } catch (err) {
@@ -1273,7 +1370,7 @@ export async function regenerateSocialPackImageAction(id: string, formData: Form
     console.error('[social-pack] regenerate image source lookup failed:', err)
   }
 
-  const image_params = buildSocialImageParams(pack.headline, pack.city_name, dateLabel, kind, imageUrl)
+  const image_params = buildSocialImageParams(pack.headline, pack.city_name, dateLabel, kind, imageUrl, venueVerified)
 
   const { error: updateError } = await db
     .from('social_packs')
@@ -1286,4 +1383,145 @@ export async function regenerateSocialPackImageAction(id: string, formData: Form
 
   revalidatePath('/admin/social/' + id)
   redirect('/admin/social/' + id + '?regenerated=1')
+}
+
+// "Create city posts" — one separate Social Pack per city a published,
+// city-targeted news story reaches, instead of relying on the single
+// first-city pack findOrCreateSocialPackForCandidate prepares
+// automatically on publish. Deliberately gated on review_status
+// 'published' (not just 'approved') — this reads city targets off the
+// live, already-public story, not a draft that might still change scope
+// before it actually goes out.
+//
+// filterRealCityTargets strips the Homepage/Main-News-page pseudo-
+// targets (so a national destination is never mistaken for a city —
+// "keep a national version separate from the city versions");
+// filterSupportedCityTargets is a second, independent check against the
+// real 36-city list, defense in depth beyond the save-time validation
+// every news_candidate_cities row already passed through.
+export async function createCityPostsForCandidateAction(id: string) {
+  await checkAuth()
+  const db = createAdminClient()
+  let cityCount = 0
+
+  try {
+    const { candidate, cityTargets } = await fetchCandidateWithCities(db, id)
+
+    if (candidate.review_status !== 'published') {
+      throw new Error('Only a published story can get city posts — publish it first.')
+    }
+
+    const realTargets = filterRealCityTargets(resolveCityNewsTargets(candidate, cityTargets))
+    const supportedTargets = filterSupportedCityTargets(realTargets, CITIES.map(c => c.name))
+
+    if (!supportedTargets.length) {
+      throw new Error('This story has no supported city targets — nothing to create.')
+    }
+
+    const kind = resolveSocialImageKindFromStoryType(candidate.story_type)
+    const fallbackContext = resolveNewsCandidateContext(candidate)
+
+    // Each city's verified-event lookup is independent — one city having
+    // no matching event never affects any other city's pack.
+    const drafts = await Promise.all(
+      supportedTargets.map(async target => {
+        const verified = await findVerifiedEventForArtistInCity(db, candidate.artist_name, target.city_name)
+        return buildCityPostDraft({
+          candidateId: candidate.id,
+          headline: candidate.headline,
+          fallbackContext,
+          cityName: target.city_name,
+          kind,
+          verified,
+        })
+      })
+    )
+
+    // ignoreDuplicates (onConflict on source_type+source_id+city_name,
+    // migration_032) is what makes clicking this action twice safe: a
+    // city that already has a pack is left completely untouched — its
+    // status, any manual text edits, and its image are never
+    // overwritten — while a city that doesn't yet have one is created
+    // fresh. Nothing here ever updates an existing row.
+    const { error } = await db
+      .from('social_packs')
+      .upsert(drafts, { onConflict: 'source_type,source_id,city_name', ignoreDuplicates: true })
+    if (error) throw new Error(error.message)
+
+    cityCount = supportedTargets.length
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Something went wrong while creating city posts.'
+    redirect('/admin/news/' + id + '?error=' + encodeURIComponent(message))
+  }
+
+  revalidatePath('/admin/social')
+  revalidatePath('/admin/news/' + id)
+  redirect('/admin/news/' + id + '?citypostscreated=' + cityCount)
+}
+
+// Marks one city's pack as skipped — an admin reviewing a batch of
+// per-city packs can decide not to run a particular one (an unverified
+// venue/date they don't want to publish as-is, or simply a city they've
+// decided to leave out this time) without deleting the row: it stays
+// visible and editable, and can be unskipped back to draft at any time
+// before it's posted. This never touches any other pack for the same
+// story — each city's pack is independent.
+export async function skipSocialPackAction(id: string) {
+  await checkAuth()
+  const db = createAdminClient()
+
+  const { data: pack, error: fetchError } = await db
+    .from('social_packs')
+    .select('status')
+    .eq('id', id)
+    .single()
+  if (fetchError || !pack) {
+    redirect('/admin/social/' + id + '?error=' + encodeURIComponent('Social Pack not found.'))
+  }
+  if (!canSkipSocialPack(pack.status)) {
+    redirect('/admin/social/' + id + '?error=' + encodeURIComponent(`Can't skip a pack that's already "${pack.status}".`))
+  }
+
+  const { error: updateError } = await db
+    .from('social_packs')
+    .update({ status: 'skipped', updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (updateError) {
+    redirect('/admin/social/' + id + '?error=' + encodeURIComponent(updateError.message))
+  }
+
+  revalidatePath('/admin/social')
+  revalidatePath('/admin/social/' + id)
+  redirect('/admin/social/' + id + '?saved=1')
+}
+
+// The only way back from 'skipped' — always to 'draft', since skipping
+// it means whatever review stage it was at before no longer stands.
+export async function unskipSocialPackAction(id: string) {
+  await checkAuth()
+  const db = createAdminClient()
+
+  const { data: pack, error: fetchError } = await db
+    .from('social_packs')
+    .select('status')
+    .eq('id', id)
+    .single()
+  if (fetchError || !pack) {
+    redirect('/admin/social/' + id + '?error=' + encodeURIComponent('Social Pack not found.'))
+  }
+  if (!canUnskipSocialPack(pack.status)) {
+    redirect('/admin/social/' + id + '?error=' + encodeURIComponent('This pack is not skipped.'))
+  }
+
+  const { error: updateError } = await db
+    .from('social_packs')
+    .update({ status: 'draft', updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (updateError) {
+    redirect('/admin/social/' + id + '?error=' + encodeURIComponent(updateError.message))
+  }
+
+  revalidatePath('/admin/social')
+  revalidatePath('/admin/social/' + id)
+  redirect('/admin/social/' + id + '?saved=1')
 }

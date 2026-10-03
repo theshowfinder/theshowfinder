@@ -43,6 +43,8 @@ import {
   sortNewsCandidatesForQueue,
   matchesNewsQueueFilters,
   RECENT_QUEUE_WINDOW_MS,
+  filterRealCityTargets,
+  filterSupportedCityTargets,
 } from './newsPublishing.ts'
 import type { NewsCandidate } from './types/database.ts'
 
@@ -1148,5 +1150,67 @@ describe('matchesNewsQueueFilters', () => {
     const c = candidate({ review_status: 'pending', priority: 'high' })
     assert.equal(matchesNewsQueueFilters(c, [], { status: 'pending', priority: 'high' }, NOW_MS), true)
     assert.equal(matchesNewsQueueFilters(c, [], { status: 'pending', priority: 'low' }, NOW_MS), false)
+  })
+})
+
+describe('filterRealCityTargets — strips the Homepage/Main-News-page pseudo-targets, keeps real cities', () => {
+  test('a homepage-only national candidate resolves to no real city targets', () => {
+    const targets = resolveCityNewsTargets({
+      scope_type: 'national', city_slug: null, city_name: null,
+      publish_to_homepage: true, publish_to_news_page: false,
+    })
+    assert.deepEqual(filterRealCityTargets(targets), [])
+  })
+
+  test('a Main-News-page-only candidate also resolves to no real city targets', () => {
+    const targets = resolveCityNewsTargets({
+      scope_type: 'national', city_slug: null, city_name: null,
+      publish_to_homepage: false, publish_to_news_page: true,
+    })
+    assert.deepEqual(filterRealCityTargets(targets), [])
+  })
+
+  test('a single real city target is kept unchanged', () => {
+    assert.deepEqual(filterRealCityTargets([DERBY]), [DERBY])
+  })
+
+  test('a mixed list of national + news-hub + real cities keeps only the real cities', () => {
+    const mixed = [
+      { city_slug: NATIONAL_SLUG, city_name: NATIONAL_NAME },
+      { city_slug: NEWS_HUB_SLUG, city_name: NEWS_HUB_NAME },
+      DERBY,
+      NOTTINGHAM,
+    ]
+    assert.deepEqual(filterRealCityTargets(mixed), [DERBY, NOTTINGHAM])
+  })
+
+  test('an empty list stays empty', () => {
+    assert.deepEqual(filterRealCityTargets([]), [])
+  })
+})
+
+describe('filterSupportedCityTargets — "never invent... unsupported cities"', () => {
+  const SUPPORTED = ['Derby', 'Nottingham']
+
+  test('keeps a city target whose name is in the supported list', () => {
+    assert.deepEqual(filterSupportedCityTargets([DERBY], SUPPORTED), [DERBY])
+  })
+
+  test('drops a city target whose name is not in the supported list (e.g. a city TheShowFinder does not cover)', () => {
+    const unsupported = { city_slug: 'timbuktu', city_name: 'Timbuktu' }
+    assert.deepEqual(filterSupportedCityTargets([unsupported], SUPPORTED), [])
+  })
+
+  test('filters a mixed list down to only the supported cities', () => {
+    const unsupported = { city_slug: 'timbuktu', city_name: 'Timbuktu' }
+    assert.deepEqual(filterSupportedCityTargets([DERBY, unsupported, NOTTINGHAM], SUPPORTED), [DERBY, NOTTINGHAM])
+  })
+
+  test('an empty supported list drops every target', () => {
+    assert.deepEqual(filterSupportedCityTargets([DERBY, NOTTINGHAM], []), [])
+  })
+
+  test('an empty target list stays empty regardless of the supported list', () => {
+    assert.deepEqual(filterSupportedCityTargets([], SUPPORTED), [])
   })
 })

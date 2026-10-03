@@ -102,6 +102,35 @@ export function resolveCityNewsTargets(
   return targets
 }
 
+// resolveCityNewsTargets above deliberately mixes three different kinds
+// of target into one list (Homepage, Main News page, and real cities) —
+// that's the right shape for city_news, which treats all three as rows
+// in the same table. Anything that means "per *city*" specifically (the
+// Social Pack "Create city posts" action, in particular) must not treat
+// NATIONAL_SLUG/NEWS_HUB_SLUG as a city — "UK National" and "TheShowFinder
+// News" are not real places and have no /cities/<name> page to link to.
+// This is also what keeps a national Social Pack (however it's created)
+// genuinely separate from the per-city ones, rather than one of them
+// silently being a fake "city" called "UK National".
+export function filterRealCityTargets(targets: CandidateCityTarget[]): CandidateCityTarget[] {
+  return targets.filter(t => t.city_slug !== NATIONAL_SLUG && t.city_slug !== NEWS_HUB_SLUG)
+}
+
+// A second, independent gate against inventing content for an
+// unsupported city. In normal operation every row in news_candidate_cities
+// was already validated against the real city list at save time
+// (isSupportedCityName in actions.ts) — this exists as defense in depth
+// for anything that reaches this code a different way (legacy data, a
+// direct database edit, a future caller that forgets the save-time
+// check), so a Social Pack can never be generated for a city the site
+// doesn't actually support. Pure and city-list-agnostic — callers pass
+// whatever list of supported names is current (CITIES.map(c => c.name)
+// in practice) rather than this file depending on cities.ts directly.
+export function filterSupportedCityTargets(targets: CandidateCityTarget[], supportedCityNames: string[]): CandidateCityTarget[] {
+  const supported = new Set(supportedCityNames)
+  return targets.filter(t => supported.has(t.city_name))
+}
+
 export interface CityNewsUpsertRow {
   city_slug: string; city_name: string; headline: string; url: string
   source: string | null; published_at: string | null; fetched_at: string; is_editorial: true

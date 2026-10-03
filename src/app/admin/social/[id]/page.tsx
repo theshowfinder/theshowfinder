@@ -4,9 +4,23 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { updateSocialPackAction, advanceSocialPackStatusAction, regenerateSocialPackImageAction } from '../../actions'
+import {
+  updateSocialPackAction,
+  advanceSocialPackStatusAction,
+  regenerateSocialPackImageAction,
+  skipSocialPackAction,
+  unskipSocialPackAction,
+} from '../../actions'
 import SocialPackEditor from '../SocialPackEditor'
-import { canAdvanceSocialPackStatus, isSocialImageKind, SOCIAL_IMAGE_THEMES, type SocialImageKind } from '@/lib/socialPack'
+import {
+  canAdvanceSocialPackStatus,
+  canSkipSocialPack,
+  canUnskipSocialPack,
+  isSocialImageKind,
+  resolveStoredVenueVerified,
+  SOCIAL_IMAGE_THEMES,
+  type SocialImageKind,
+} from '@/lib/socialPack'
 import type { SocialPack, SocialPackStatus } from '@/lib/types/database'
 
 const IMAGE_KIND_OPTIONS: SocialImageKind[] = ['tour_announcement', 'onsale', 'presale', 'city_event', 'tonight']
@@ -21,6 +35,7 @@ const STATUS_STYLE: Record<SocialPackStatus, string> = {
   ready_for_review: 'bg-amber-100 text-amber-700',
   approved:         'bg-blue-100 text-blue-700',
   posted:           'bg-green-100 text-green-700',
+  skipped:          'bg-slate-200 text-slate-500',
 }
 
 const STATUS_LABEL: Record<SocialPackStatus, string> = {
@@ -28,6 +43,7 @@ const STATUS_LABEL: Record<SocialPackStatus, string> = {
   ready_for_review: 'Ready for review',
   approved:         'Approved',
   posted:           'Posted',
+  skipped:          'Skipped',
 }
 
 const FORWARD_STEP: Record<SocialPackStatus, SocialPackStatus | null> = {
@@ -35,6 +51,9 @@ const FORWARD_STEP: Record<SocialPackStatus, SocialPackStatus | null> = {
   ready_for_review: 'approved',
   approved:         'posted',
   posted:           null,
+  // 'skipped' is reached and left only via the dedicated Skip/Unskip
+  // buttons below, never via this forward/back ladder.
+  skipped:          null,
 }
 
 const BACK_STEPS: Record<SocialPackStatus, SocialPackStatus[]> = {
@@ -42,6 +61,7 @@ const BACK_STEPS: Record<SocialPackStatus, SocialPackStatus[]> = {
   ready_for_review: ['draft'],
   approved:         ['draft', 'ready_for_review'],
   posted:           ['draft', 'ready_for_review', 'approved'],
+  skipped:          [],
 }
 
 export default async function SocialPackDetailPage({ params, searchParams }: PageProps) {
@@ -60,8 +80,12 @@ export default async function SocialPackDetailPage({ params, searchParams }: Pag
 
   const updateAction = updateSocialPackAction.bind(null, pack.id)
   const regenerateImageAction = regenerateSocialPackImageAction.bind(null, pack.id)
-  const storedKind = (pack.image_params as Record<string, unknown> | null)?.kind
+  const skipAction = skipSocialPackAction.bind(null, pack.id)
+  const unskipAction = unskipSocialPackAction.bind(null, pack.id)
+  const storedImageParams = pack.image_params as Record<string, unknown> | null
+  const storedKind = storedImageParams?.kind
   const currentImageKind: SocialImageKind = isSocialImageKind(storedKind) ? storedKind : 'city_event'
+  const venueVerified = resolveStoredVenueVerified(storedImageParams?.venueVerified)
   // Cache-busts the <img> below so "Regenerate image" visibly updates the
   // preview instead of the browser quietly serving its old cached bytes
   // for an unchanged URL.
@@ -69,6 +93,8 @@ export default async function SocialPackDetailPage({ params, searchParams }: Pag
   const forwardTo = FORWARD_STEP[pack.status]
   const forwardAction = forwardTo ? advanceSocialPackStatusAction.bind(null, pack.id, forwardTo) : null
   const backSteps = BACK_STEPS[pack.status].filter(to => canAdvanceSocialPackStatus(pack.status, to))
+  const showSkip = canSkipSocialPack(pack.status)
+  const showUnskip = canUnskipSocialPack(pack.status)
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -96,6 +122,12 @@ export default async function SocialPackDetailPage({ params, searchParams }: Pag
             ⚠ {error}
           </div>
         )}
+        {!venueVerified && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-5 py-3 text-sm font-semibold">
+            ⚠ Venue &amp; date not verified against a real event — confirm before posting. The branded image omits the
+            date rather than guessing one.
+          </div>
+        )}
 
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
           <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Status</h2>
@@ -119,6 +151,20 @@ export default async function SocialPackDetailPage({ params, searchParams }: Pag
                 </button>
               </form>
             ))}
+            {showSkip && (
+              <form action={skipAction}>
+                <button type="submit" className="text-sm font-semibold px-4 py-2 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors">
+                  Skip this pack
+                </button>
+              </form>
+            )}
+            {showUnskip && (
+              <form action={unskipAction}>
+                <button type="submit" className="text-sm font-bold px-4 py-2 rounded-xl bg-blue-600 text-white hover:opacity-90 transition-opacity">
+                  Unskip (back to Draft)
+                </button>
+              </form>
+            )}
           </div>
           {pack.approved_at && <p className="text-xs text-slate-400 mt-3">Approved {new Date(pack.approved_at).toLocaleString('en-GB')}</p>}
           {pack.posted_at && <p className="text-xs text-slate-400 mt-1">Posted {new Date(pack.posted_at).toLocaleString('en-GB')}</p>}

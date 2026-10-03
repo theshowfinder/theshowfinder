@@ -11,7 +11,7 @@ export type NewsAiReviewStatus = 'not_applicable' | 'unreviewed' | 'reviewed'
 
 // Social Pack (Phase 7) — see supabase/migration_031_social_packs.sql
 export type SocialPackSourceType = 'news_candidate' | 'event'
-export type SocialPackStatus = 'draft' | 'ready_for_review' | 'approved' | 'posted'
+export type SocialPackStatus = 'draft' | 'ready_for_review' | 'approved' | 'posted' | 'skipped'
 
 export interface Database {
   public: {
