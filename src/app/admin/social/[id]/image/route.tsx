@@ -35,7 +35,6 @@ import {
   SOCIAL_IMAGE_THEMES,
   resolveStoredImageKind,
   resolveApprovedImageUrl,
-  resolveStoredVenueVerified,
 } from '@/lib/socialPack'
 
 export const dynamic = 'force-dynamic'
@@ -84,7 +83,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const dateLabel = typeof storedParams.dateLabel === 'string' && storedParams.dateLabel.trim() ? storedParams.dateLabel : null
   const kind = resolveStoredImageKind(storedParams.kind)
   const imageUrl = resolveApprovedImageUrl(storedParams.imageUrl)
-  const venueVerified = resolveStoredVenueVerified(storedParams.venueVerified)
   const theme = SOCIAL_IMAGE_THEMES[kind]
 
   return new ImageResponse(
@@ -131,6 +129,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         <div style={{ position: 'absolute', top: -170, right: -130, width: 520, height: 520, borderRadius: 999, backgroundColor: `${theme.accent}33`, display: 'flex', transform: 'rotate(18deg)' }} />
         <div style={{ position: 'absolute', top: 250, right: -240, width: 760, height: 70, backgroundColor: `${theme.accent}cc`, display: 'flex', transform: 'rotate(-24deg)' }} />
         <div style={{ position: 'absolute', bottom: 210, left: -260, width: 760, height: 54, backgroundColor: '#ffffff22', display: 'flex', transform: 'rotate(-24deg)' }} />
+        <div
+          style={{
+            position: 'absolute',
+            top: format === 'vertical' ? 250 : 170,
+            right: -24,
+            display: 'flex',
+            color: `${theme.accent}55`,
+            fontSize: format === 'vertical' ? 260 : 190,
+            fontWeight: 900,
+            letterSpacing: -12,
+            transform: 'rotate(-8deg)',
+          }}
+        >
+          SHOW
+        </div>
 
         <div
           style={{
@@ -188,11 +201,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
               style={{
                 display: 'flex',
                 color: '#ffffff',
-                fontSize: headline.length > 60 ? 58 : 86,
+                fontSize: headline.length > 60 ? 58 : 94,
                 fontWeight: 800,
                 lineHeight: 1.04,
                 maxWidth: 920,
                 textShadow: '0 4px 18px rgba(0,0,0,0.35)',
+                borderLeft: `14px solid ${theme.accent}`,
+                paddingLeft: 26,
               }}
             >
               {headline}
@@ -204,28 +219,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
               </div>
             )}
 
-            {/* "Never invent dates, venues, ticket availability" — when
-                the venue/date couldn't be verified against a real event,
-                the image says so plainly instead of just quietly having
-                no date line (which could pass for "date not known yet"
-                rather than "unconfirmed, check before posting"). */}
-            {!venueVerified && !dateLabel && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignSelf: 'flex-start',
-                  backgroundColor: 'rgba(255,255,255,0.14)',
-                  color: '#ffffff',
-                  fontSize: 22,
-                  fontWeight: 700,
-                  letterSpacing: 1,
-                  padding: '6px 16px',
-                  borderRadius: 999,
-                }}
-              >
-                ⚠ Venue &amp; date to confirm
-              </div>
-            )}
           </div>
 
           <div style={{ display: 'flex', marginTop: 40, color: '#ffffff', fontSize: 24, fontWeight: 600, opacity: 0.7 }}>
