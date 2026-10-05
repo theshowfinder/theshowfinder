@@ -84,6 +84,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const kind = resolveStoredImageKind(storedParams.kind)
   const imageUrl = resolveApprovedImageUrl(storedParams.imageUrl)
   const theme = SOCIAL_IMAGE_THEMES[kind]
+  const cityLabel = city ? city.toUpperCase() : 'UK LIVE EVENTS'
+  const ctaLabel = kind === 'presale' ? 'Find presale details' : kind === 'tonight' ? 'Find something tonight' : 'Find your next show'
 
   return new ImageResponse(
     (
@@ -147,6 +149,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
         <div
           style={{
+            position: 'absolute',
+            top: format === 'vertical' ? 170 : 110,
+            left: 54,
+            display: 'flex',
+            color: '#ffffff22',
+            fontSize: format === 'vertical' ? 150 : 116,
+            fontWeight: 900,
+            letterSpacing: -5,
+            lineHeight: 0.9,
+          }}
+        >
+          {cityLabel}
+        </div>
+
+        <div
+          style={{
             position: 'relative',
             width: '100%',
             height: '100%',
@@ -167,7 +185,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                 alignSelf: 'flex-start',
                 backgroundColor: theme.accent,
                 color: '#111111',
-                fontSize: 26,
+                fontSize: 24,
                 fontWeight: 800,
                 letterSpacing: 3,
                 textTransform: 'uppercase',
@@ -183,10 +201,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                 style={{
                   display: 'flex',
                   alignSelf: 'flex-start',
-                  backgroundColor: 'rgba(255,255,255,0.16)',
-                  color: '#ffffff',
-                  fontSize: 26,
-                  fontWeight: 700,
+                  backgroundColor: theme.accent,
+                  color: '#171717',
+                  fontSize: 24,
+                  fontWeight: 900,
                   letterSpacing: 2,
                   textTransform: 'uppercase',
                   padding: '8px 20px',
@@ -218,6 +236,23 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                 {dateLabel}
               </div>
             )}
+
+            <div
+              style={{
+                display: 'flex',
+                alignSelf: 'flex-start',
+                marginTop: 18,
+                backgroundColor: theme.accent,
+                color: '#171717',
+                fontSize: 25,
+                fontWeight: 900,
+                padding: '14px 24px',
+                borderRadius: 999,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.28)',
+              }}
+            >
+              {ctaLabel}  ›
+            </div>
 
           </div>
 
