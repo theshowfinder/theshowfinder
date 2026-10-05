@@ -144,11 +144,11 @@ export interface SocialImageTheme {
 }
 
 export const SOCIAL_IMAGE_THEMES: Record<SocialImageKind, SocialImageTheme> = {
-  tour_announcement: { badgeLabel: 'TOUR ANNOUNCEMENT', gradientFrom: '#4c1d95', gradientTo: '#db2777', accent: '#fbbf24' },
-  onsale:             { badgeLabel: 'ON SALE NOW',       gradientFrom: '#b91c1c', gradientTo: '#f97316', accent: '#fef08a' },
-  presale:            { badgeLabel: 'PRESALE ACCESS',    gradientFrom: '#0e7490', gradientTo: '#4338ca', accent: '#5eead4' },
-  city_event:         { badgeLabel: 'LIVE IN THE UK',    gradientFrom: '#be123c', gradientTo: '#1e1b4b', accent: '#fca5a5' },
-  tonight:            { badgeLabel: 'TONIGHT',           gradientFrom: '#18181b', gradientTo: '#dc2626', accent: '#facc15' },
+  tour_announcement: { badgeLabel: 'TOUR ANNOUNCEMENT', gradientFrom: '#7c3aed', gradientTo: '#ec4899', accent: '#fde047' },
+  onsale:             { badgeLabel: 'ON SALE NOW',       gradientFrom: '#ef4444', gradientTo: '#f97316', accent: '#fef08a' },
+  presale:            { badgeLabel: 'PRESALE ACCESS',    gradientFrom: '#06b6d4', gradientTo: '#4f46e5', accent: '#99f6e4' },
+  city_event:         { badgeLabel: 'LIVE IN THE UK',    gradientFrom: '#f43f5e', gradientTo: '#312e81', accent: '#fecdd3' },
+  tonight:            { badgeLabel: 'TONIGHT',           gradientFrom: '#7c2d12', gradientTo: '#e11d48', accent: '#fef08a' },
 }
 
 // A news story's existing editorial classification maps onto one of the

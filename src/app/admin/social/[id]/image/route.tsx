@@ -96,7 +96,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           display: 'flex',
           position: 'relative',
           backgroundColor: theme.gradientFrom,
-          backgroundImage: imageUrl ? undefined : `linear-gradient(135deg, ${theme.gradientFrom} 0%, ${theme.gradientTo} 100%)`,
+            backgroundImage: imageUrl ? undefined : `radial-gradient(circle at 88% 12%, ${theme.accent}66 0%, transparent 30%), radial-gradient(circle at 8% 86%, #ffffff22 0%, transparent 26%), linear-gradient(135deg, ${theme.gradientFrom} 0%, ${theme.gradientTo} 100%)`,
           fontFamily: 'sans-serif',
         }}
       >
@@ -121,10 +121,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             width: '100%', height: '100%',
             display: 'flex',
             backgroundImage: imageUrl
-              ? `linear-gradient(180deg, ${theme.gradientFrom}33 0%, #000000a6 60%, #000000f0 100%)`
-              : 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.35) 100%)',
+              ? `linear-gradient(135deg, ${theme.gradientFrom}66 0%, transparent 42%), linear-gradient(180deg, #00000022 0%, #000000b8 100%)`
+              : 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.18) 100%)',
           }}
         />
+
+        {/* Bright visual anchors keep the card recognisable in a fast feed,
+            even when a source photo is unavailable. */}
+        <div style={{ position: 'absolute', top: -170, right: -130, width: 520, height: 520, borderRadius: 999, backgroundColor: `${theme.accent}33`, display: 'flex', transform: 'rotate(18deg)' }} />
+        <div style={{ position: 'absolute', top: 250, right: -240, width: 760, height: 70, backgroundColor: `${theme.accent}cc`, display: 'flex', transform: 'rotate(-24deg)' }} />
+        <div style={{ position: 'absolute', bottom: 210, left: -260, width: 760, height: 54, backgroundColor: '#ffffff22', display: 'flex', transform: 'rotate(-24deg)' }} />
 
         <div
           style={{
@@ -182,10 +188,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
               style={{
                 display: 'flex',
                 color: '#ffffff',
-                fontSize: headline.length > 60 ? 56 : 72,
+                fontSize: headline.length > 60 ? 58 : 86,
                 fontWeight: 800,
-                lineHeight: 1.12,
+                lineHeight: 1.04,
                 maxWidth: 920,
+                textShadow: '0 4px 18px rgba(0,0,0,0.35)',
               }}
             >
               {headline}
