@@ -90,11 +90,12 @@ describe('branded social-image route — no scraped or constructed marketplace l
     assert.ok(!content.includes('encodeURIComponent'))
   })
 
-  test('the only remote <img> source is the already-validated imageUrl variable', () => {
+  test('images use only the validated event photo or the fixed local fallback', () => {
     const imgSrcMatches = [...content.matchAll(/<img\s+src=\{([^}]+)\}/g)].map(m => m[1].trim())
     assert.ok(imgSrcMatches.length > 0, 'expected at least one <img> tag')
     for (const src of imgSrcMatches) {
-      assert.equal(src, 'imageUrl')
+      assert.equal(src, 'backgroundImageUrl')
     }
+    assert.ok(content.includes("'/social-backgrounds/concert-city-night.png'"))
   })
 })
