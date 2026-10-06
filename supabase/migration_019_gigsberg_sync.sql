@@ -1,7 +1,7 @@
 -- migration_019_gigsberg_sync.sql
 -- Adds tables for the daily Gigsberg ticket sync, which links Chris's own
--- live Gigsberg listings to matching events via events.own_ticket_url
--- (added in migration_018). Mirrors the sync_state/sync_log pattern used by
+-- live Gigsberg listings to matching events via events.gigsberg_url
+-- (added in migration_018_event_secondary_ticket_urls). Mirrors the sync_state/sync_log pattern used by
 -- the Ticketmaster sync (migration_012), but as separate tables since the
 -- per-city shape of sync_log/sync_state doesn't fit a single-pass run.
 --
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS gigsberg_sync_log (
   error             TEXT
 );
 
--- Tracks which events.own_ticket_url values were set BY THIS SYNC (as opposed
+-- Tracks which events.gigsberg_url values were set BY THIS SYNC (as opposed
 -- to entered manually via /admin/events), so a Gigsberg listing going
 -- inactive/sold-out only clears the URL it set — never a manually-entered one.
 CREATE TABLE IF NOT EXISTS gigsberg_event_links (

@@ -391,10 +391,13 @@ export async function syncGigsbergTickets(): Promise<GigsbergSyncResult> {
     for (const link of matchedLinks) {
       const { error: evErr } = await db
         .from('events')
-        .update({ own_ticket_url: link.url })
+        // This is a provider listing, not a TheShowFinder-owned checkout.
+        // Keep it in the provider-specific column so the public event page
+        // can wrap it with GIGSBERG_AFFILIATE_TEMPLATE.
+        .update({ gigsberg_url: link.url })
         .eq('id', link.eventId)
       if (evErr) {
-        console.error(`[gigsberg] failed to set own_ticket_url on event ${link.eventId}: ${evErr.message}`)
+        console.error(`[gigsberg] failed to set gigsberg_url on event ${link.eventId}: ${evErr.message}`)
         continue
       }
       updated++
@@ -412,7 +415,7 @@ export async function syncGigsbergTickets(): Promise<GigsbergSyncResult> {
       }
     }
 
-    // ── Clear own_ticket_url for links whose listing is no longer sellable ─
+    // ── Clear gigsberg_url for links whose listing is no longer sellable ─
     console.log('[gigsberg] Checking previously-linked events for delisted/sold-out listings…')
     const sellableIdStrings = new Set(sellableEventIds.map(String))
     const { data: existingLinks, error: linksErr } = await db
@@ -428,10 +431,10 @@ export async function syncGigsbergTickets(): Promise<GigsbergSyncResult> {
 
         const { error: clearErr } = await db
           .from('events')
-          .update({ own_ticket_url: null })
+          .update({ gigsberg_url: null })
           .eq('id', row.event_id)
         if (clearErr) {
-          console.error(`[gigsberg] failed to clear own_ticket_url on event ${row.event_id}: ${clearErr.message}`)
+          console.error(`[gigsberg] failed to clear gigsberg_url on event ${row.event_id}: ${clearErr.message}`)
           continue
         }
         await db.from('gigsberg_event_links').delete().eq('event_id', row.event_id)
