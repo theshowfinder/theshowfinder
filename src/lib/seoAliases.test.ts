@@ -26,10 +26,6 @@ describe('SEO aliases', () => {
     expect(getEventSeoAlias('oliver-65wuVVPx')).toBe('oliver-65cVf-xv')
   })
 
-  test('redirects the confirmed duplicate Christopher Hall event URL', () => {
-    expect(getEventSeoAlias('christopher-hall-pizazz-bzCWBJBs')).toBe('christopher-hall-pizazz-dZZIuidJ')
-  })
-
   test('redirects the confirmed duplicate Luanna event URL', () => {
     expect(getEventSeoAlias('luanna-the-big-party-matinee-_1cTkv7s')).toBe('luanna-the-big-party-matinee-_G1qjwz1')
   })

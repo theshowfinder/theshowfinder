@@ -12,7 +12,6 @@ export const ARTIST_SEO_ALIASES: Record<string, string> = {
 
 export const EVENT_SEO_ALIASES: Record<string, string> = {
   'oliver-65wuVVPx': 'oliver-65cVf-xv',
-  'christopher-hall-pizazz-bzCWBJBs': 'christopher-hall-pizazz-dZZIuidJ',
   'luanna-the-big-party-matinee-_1cTkv7s': 'luanna-the-big-party-matinee-_G1qjwz1',
   'bear-mccreary-GkdvKALl': 'bear-mccreary-Gkesyv7j',
 }
