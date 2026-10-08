@@ -17,4 +17,8 @@ describe('SEO aliases', () => {
   test('redirects the confirmed duplicate Jazzy URL', () => {
     expect(getArtistSeoAlias('jazzy-Z917C4xf')).toBe('jazzy-Z917hiQ7')
   })
+
+  test('redirects the confirmed duplicate Anvil URL', () => {
+    expect(getArtistSeoAlias('anvil-Z917j-5f')).toBe('anvil-Z917fHc7')
+  })
 })
