@@ -83,7 +83,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const dateLabel = typeof storedParams.dateLabel === 'string' && storedParams.dateLabel.trim() ? storedParams.dateLabel : null
   const kind = resolveStoredImageKind(storedParams.kind)
   const imageUrl = resolveApprovedImageUrl(storedParams.imageUrl)
-  const backgroundImageUrl = imageUrl ?? new URL('/social-backgrounds/concert-city-night.png', request.url).toString()
   const theme = SOCIAL_IMAGE_THEMES[kind]
   const cityLabel = city ? city.toUpperCase() : 'UK LIVE EVENTS'
   const ctaLabel = kind === 'presale' ? 'Find presale details' : kind === 'tonight' ? 'Find something tonight' : 'Find your next show'
@@ -101,16 +100,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           fontFamily: 'sans-serif',
         }}
       >
-        {/* Use an approved event/artist photo when available; otherwise use
-            the cinematic branded fallback from public/social-backgrounds. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={backgroundImageUrl}
-          alt=""
-          width={width}
-          height={height}
-          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'flex' }}
-        />
+        {/* Only fetch an approved source photo when one exists. The branded
+            gradient below is the reliable fallback: fetching a local public
+            PNG from inside ImageResponse can fail in the deployed renderer. */}
+        {imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageUrl}
+            alt=""
+            width={width}
+            height={height}
+            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'flex' }}
+          />
+        )}
 
         {/* Legibility wash in the template's own colours over a photo
             background; a soft darkening gradient (no photo to wash) when
