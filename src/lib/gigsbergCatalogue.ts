@@ -1,8 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { searchGigsbergAffiliateEvents, type GigsbergAffiliateEvent } from '@/lib/gigsbergAffiliate'
+import { CITIES } from '@/lib/cities'
 
 const PAGE_SIZE = 100
-const MAX_PAGES = 500
+const MAX_CITY_PAGES = 30
 
 export interface GigsbergCatalogueSyncResult {
   fetched: number
@@ -42,22 +43,16 @@ function toCatalogueRow(event: GigsbergAffiliateEvent) {
   }
 }
 
-async function fetchAllUpcomingEvents(): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
-  const today = new Date()
-  const all: GigsbergAffiliateEvent[] = []
+async function fetchCityEvents(city: string, from: string, to: string): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
+  const events: GigsbergAffiliateEvent[] = []
   let page = 1
 
   for (;;) {
-    const response = await searchGigsbergAffiliateEvents({
-      date_from: isoDate(today),
-      date_to: isoDate(addDays(today, 548)),
-      page,
-      per_page: PAGE_SIZE,
-    })
+    const response = await searchGigsbergAffiliateEvents({ city, date_from: from, date_to: to, page, per_page: PAGE_SIZE })
     const items = response.items ?? []
-    all.push(...items)
-    if (items.length === 0 || items.length < PAGE_SIZE || !response.nextPage || page >= MAX_PAGES) {
-      return { events: all, pages: page }
+    events.push(...items)
+    if (items.length === 0 || items.length < PAGE_SIZE || !response.nextPage || page >= MAX_CITY_PAGES) {
+      return { events, pages: page }
     }
 
     let nextPage = page + 1
@@ -69,11 +64,31 @@ async function fetchAllUpcomingEvents(): Promise<{ events: GigsbergAffiliateEven
       const cursor = Number(response.nextPage)
       if (Number.isFinite(cursor)) nextPage = cursor
     }
-
-    // A malformed or repeated cursor must never create an endless import.
-    if (!Number.isFinite(nextPage) || nextPage <= page) return { events: all, pages: page }
+    if (!Number.isFinite(nextPage) || nextPage <= page) return { events, pages: page }
     page = nextPage
   }
+}
+
+async function fetchAllUpcomingEvents(): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
+  const today = new Date()
+  const from = isoDate(today)
+  const to = isoDate(addDays(today, 548))
+  const unique = new Map<number, GigsbergAffiliateEvent>()
+  let pages = 0
+
+  // Gigsberg's event search has no country filter. Searching the site's UK
+  // city list keeps this catalogue UK-focused and avoids importing a huge
+  // worldwide result set.
+  for (let index = 0; index < CITIES.length; index += 4) {
+    const batch = CITIES.slice(index, index + 4)
+    const results = await Promise.all(batch.map(city => fetchCityEvents(city.name, from, to)))
+    for (const result of results) {
+      pages += result.pages
+      for (const event of result.events) unique.set(event.id, event)
+    }
+  }
+
+  return { events: [...unique.values()], pages }
 }
 
 export async function syncGigsbergCatalogue(): Promise<GigsbergCatalogueSyncResult> {
