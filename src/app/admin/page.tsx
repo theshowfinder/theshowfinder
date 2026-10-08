@@ -40,6 +40,12 @@ export default async function AdminPage() {
             Ticket Links
           </Link>
           <Link
+            href="/admin/gigsberg"
+            className="text-sm text-slate-500 hover:text-slate-700"
+          >
+            Gigsberg
+          </Link>
+          <Link
             href="/admin/local-businesses"
             className="text-sm text-slate-500 hover:text-slate-700"
           >
