@@ -5,6 +5,7 @@
  */
 export const ARTIST_SEO_ALIASES: Record<string, string> = {
   'ian-shaw-Z917rgR7': 'ian-shaw-Z917CSo0',
+  'dele-sosimi-Z9173d0V': 'dele-sosimi-Z9173h0f',
 }
 
 export function getArtistSeoAlias(slug: string): string | null {

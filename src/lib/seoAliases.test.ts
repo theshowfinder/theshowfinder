@@ -9,4 +9,8 @@ describe('SEO aliases', () => {
   test('leaves canonical artist URLs alone', () => {
     expect(getArtistSeoAlias('ian-shaw-Z917CSo0')).toBeNull()
   })
+
+  test('redirects the confirmed duplicate Dele Sosimi URL', () => {
+    expect(getArtistSeoAlias('dele-sosimi-Z9173d0V')).toBe('dele-sosimi-Z9173h0f')
+  })
 })
