@@ -13,4 +13,8 @@ describe('SEO aliases', () => {
   test('redirects the confirmed duplicate Dele Sosimi URL', () => {
     expect(getArtistSeoAlias('dele-sosimi-Z9173d0V')).toBe('dele-sosimi-Z9173h0f')
   })
+
+  test('redirects the confirmed duplicate Jazzy URL', () => {
+    expect(getArtistSeoAlias('jazzy-Z917C4xf')).toBe('jazzy-Z917hiQ7')
+  })
 })
