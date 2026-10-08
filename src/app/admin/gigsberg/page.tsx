@@ -86,6 +86,7 @@ export default async function GigsbergAdminPage({
             <p className="text-sm text-slate-500 mt-1">Pull all current and future UK Gigsberg events into the private catalogue for matching.</p>
           </div>
           <Link href="/admin/gigsberg/sync" className="font-bold text-white px-5 py-2.5 rounded-lg text-sm" style={{ backgroundColor: '#1E3A8A' }}>Run catalogue import</Link>
+          <Link href="/admin/gigsberg/matches" className="text-blue-600 font-semibold text-sm hover:underline">Review matches →</Link>
         </section>
 
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">

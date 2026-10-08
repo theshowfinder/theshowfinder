@@ -44,6 +44,7 @@ interface EventDetail {
   viagogo_url: string | null
   stubhub_url: string | null
   gigsberg_url: string | null
+  gigsberg_affiliate_url: string | null
   status: EventStatus
   tags: string[] | null
   venue: {
@@ -62,7 +63,7 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
       id, title, slug, description, category,
       start_date, end_date, doors_time,
       image_url, price_from, price_to, currency,
-      tickets_url, own_ticket_url, viagogo_url, stubhub_url, gigsberg_url, status, tags,
+      tickets_url, own_ticket_url, viagogo_url, stubhub_url, gigsberg_url, gigsberg_affiliate_url, status, tags,
       venue:venues(id, name, slug, address, city, postcode, website),
       artists:event_artists(
         is_headliner, order,
@@ -78,12 +79,14 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
 
 // ── Ticket providers ────────────────────────────────────────────────────────
 
-function buildProviders(event: Pick<EventDetail, 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url'>) {
+function buildProviders(event: Pick<EventDetail, 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url'>) {
   const primary = event.tickets_url
     ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: getTicketmasterAffiliateLink(event.tickets_url) }]
+    : event.gigsberg_affiliate_url
+      ? [{ name: 'Gigsberg', tagline: 'Tickets available via Gigsberg', bg: '#1a1f6e', href: event.gigsberg_affiliate_url }]
     : []
   const resale = [
-    ...(event.gigsberg_url && !isBareProviderHomepage(event.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(event.gigsberg_url) }] : []),
+    ...(!event.gigsberg_affiliate_url && event.gigsberg_url && !isBareProviderHomepage(event.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(event.gigsberg_url) }] : []),
     ...(event.viagogo_url && !isBareProviderHomepage(event.viagogo_url) ? [{ name: 'Viagogo', bg: '#00a650', href: getViagogoAffiliateLink(event.viagogo_url) }] : []),
     ...(event.stubhub_url && !isBareProviderHomepage(event.stubhub_url) ? [{ name: 'StubHub', bg: '#400078', href: getStubHubAffiliateLink(event.stubhub_url) }] : []),
   ]
@@ -202,7 +205,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     venue:         event.venue,
     priceFrom:     event.price_from,
     priceCurrency: event.currency,
-    offerUrl:      event.tickets_url ? getTicketmasterAffiliateLink(event.tickets_url) : canonicalUrl,
+    offerUrl:      primary[0]?.href ?? canonicalUrl,
     performers:    headliners.map(h => h.artist?.name).filter((n): n is string => !!n),
   })
   const breadcrumbSchema = buildBreadcrumbSchema([
@@ -265,10 +268,10 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
           {/* Desktop primary CTA */}
           {!isSoldOut ? (
-            event.tickets_url ? (
+            primary[0] ? (
               <TrackedTicketLink
-                href={getTicketmasterAffiliateLink(event.tickets_url)}
-                provider="Ticketmaster"
+                href={primary[0].href}
+                provider={primary[0].name}
                 section="hero_cta"
                 context={event.slug}
                 className="hidden md:inline-flex items-center gap-2 text-white font-extrabold text-lg px-8 py-4 rounded-xl hover:opacity-90 transition-opacity shadow-lg"
@@ -321,10 +324,10 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <p className="text-base font-extrabold text-slate-900 truncate">{priceLabel}</p>
             </div>
           )}
-          {event.tickets_url ? (
+          {primary[0] ? (
             <TrackedTicketLink
-              href={getTicketmasterAffiliateLink(event.tickets_url)}
-              provider="Ticketmaster"
+              href={primary[0].href}
+              provider={primary[0].name}
               section="hero_cta"
               context={event.slug}
               className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm"
