@@ -105,9 +105,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             position: 'absolute', top: 0, left: 0,
             width: '100%', height: '100%',
             display: 'flex',
-            backgroundImage: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.18) 100%)',
+            backgroundImage: `radial-gradient(ellipse at 50% 82%, ${theme.accent}55 0%, transparent 28%), radial-gradient(ellipse at 12% 18%, #ffffff33 0%, transparent 20%), radial-gradient(ellipse at 88% 22%, ${theme.accent}44 0%, transparent 24%), linear-gradient(180deg, #05081655 0%, #050816aa 58%, #02030bcc 100%)`,
           }}
         />
+
+        {/* Self-contained concert atmosphere. It deliberately uses only
+            ImageResponse primitives so the graphic still renders when a
+            remote or public image host is unavailable. */}
+        <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '23%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div style={{ width: '7%', height: '42%', backgroundColor: '#050505cc', borderRadius: '50% 50% 0 0' }} />
+          <div style={{ width: '9%', height: '62%', backgroundColor: '#050505cc', borderRadius: '50% 50% 0 0', marginLeft: 18 }} />
+          <div style={{ width: '8%', height: '52%', backgroundColor: '#050505cc', borderRadius: '50% 50% 0 0', marginLeft: 18 }} />
+          <div style={{ width: '10%', height: '72%', backgroundColor: '#050505cc', borderRadius: '50% 50% 0 0', marginLeft: 18 }} />
+          <div style={{ width: '7%', height: '48%', backgroundColor: '#050505cc', borderRadius: '50% 50% 0 0', marginLeft: 18 }} />
+        </div>
+        <div style={{ position: 'absolute', top: '16%', left: '9%', width: '18%', height: '64%', backgroundColor: '#ffffff1c', transform: 'rotate(18deg)', clipPath: 'polygon(42% 0, 58% 0, 100% 100%, 0 100%)', display: 'flex' }} />
+        <div style={{ position: 'absolute', top: '13%', right: '8%', width: '20%', height: '67%', backgroundColor: `${theme.accent}22`, transform: 'rotate(-19deg)', clipPath: 'polygon(42% 0, 58% 0, 100% 100%, 0 100%)', display: 'flex' }} />
 
         {/* Bright visual anchors keep the card recognisable in a fast feed,
             even when a source photo is unavailable. */}
