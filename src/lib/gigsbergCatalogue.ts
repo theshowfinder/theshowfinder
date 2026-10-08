@@ -14,6 +14,10 @@ const UK_COUNTRIES = new Set([
   'northern ireland',
 ])
 
+function todayIso() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 export interface GigsbergCatalogueSyncResult {
   fetched: number
   inserted: number
@@ -46,12 +50,12 @@ function isUKEvent(event: GigsbergAffiliateEvent) {
   return UK_COUNTRIES.has((event.country ?? '').trim().toLowerCase())
 }
 
-async function fetchCityEvents(city: string): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
+async function fetchCityEvents(city: string, from: string): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
   const events: GigsbergAffiliateEvent[] = []
   let page = 1
 
   for (;;) {
-    const response = await searchGigsbergAffiliateEvents({ city, page, per_page: PAGE_SIZE })
+    const response = await searchGigsbergAffiliateEvents({ city, date_from: from, page, per_page: PAGE_SIZE })
     const items = response.items ?? []
     events.push(...items)
     if (items.length === 0 || items.length < PAGE_SIZE || !response.nextPage) {
@@ -73,15 +77,16 @@ async function fetchCityEvents(city: string): Promise<{ events: GigsbergAffiliat
 }
 
 async function fetchAllEvents(): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
+  const from = todayIso()
   const unique = new Map<number, GigsbergAffiliateEvent>()
   let pages = 0
 
   // Gigsberg's event search has no country filter. Searching the site's UK
-  // city list and filtering the returned country keeps this catalogue UK-only
-  // while retaining past, current and future events.
+  // city list and filtering the returned country keeps this catalogue UK-only.
+  // date_from excludes past events while leaving the end date open.
   for (let index = 0; index < CITIES.length; index += 4) {
     const batch = CITIES.slice(index, index + 4)
-    const results = await Promise.all(batch.map(city => fetchCityEvents(city.name)))
+    const results = await Promise.all(batch.map(city => fetchCityEvents(city.name, from)))
     for (const result of results) {
       pages += result.pages
       for (const event of result.events) {
