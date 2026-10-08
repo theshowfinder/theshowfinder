@@ -6,6 +6,7 @@ import ArtistOnSaleCard from '@/components/ArtistOnSaleCard'
 import CategoryPills from '@/components/CategoryPills'
 import SearchBarWrapper from '@/components/SearchBarWrapper'
 import Pagination from '@/components/Pagination'
+import { clampPage } from '@/lib/pagination'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import type { Metadata } from 'next'
@@ -122,7 +123,8 @@ async function CityArtists({ city }: { city: string }) {
 
 async function EventsList({ searchParams }: { searchParams: SearchParams }) {
   const supabase = await createClient()
-  const page     = Number(searchParams.page ?? 1)
+  const requestedPage = Number(searchParams.page ?? 1)
+  const page     = Number.isFinite(requestedPage) ? Math.max(1, Math.floor(requestedPage)) : 1
   const from     = (page - 1) * PAGE_SIZE
   const to       = from + PAGE_SIZE - 1
 
@@ -162,6 +164,11 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
     if (p !== 1) params.set('page', String(p))
     const qs = params.toString()
     return qs ? `/events?${qs}` : '/events'
+  }
+
+  const validPage = clampPage(page, totalPages)
+  if (validPage !== page && totalPages > 0) {
+    redirect(buildHref(validPage))
   }
 
   return (

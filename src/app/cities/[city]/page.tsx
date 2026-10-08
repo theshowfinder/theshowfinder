@@ -7,7 +7,7 @@ export const revalidate = 300
 // midnight. 5 minutes bounds the worst-case staleness to a small,
 // acceptable window without regenerating on every request.
 
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
@@ -81,11 +81,20 @@ function affiliateUrl(directUrl: string, envVar: string): string {
 
 export default async function CityPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ city: string }>
+  searchParams: Promise<{ page?: string }>
 }) {
   const { city } = await params
   const cityName = decodeURIComponent(city)
+
+  // This route no longer paginates: the city page has its own focused pools
+  // and the full event list lives at /events?city=. Old paginated city URLs
+  // should resolve to the canonical city page instead of looking like a
+  // successful but empty page to crawlers.
+  const { page } = await searchParams
+  if (page) redirect(cityCanonicalUrl(cityName))
 
   const cityConfig = CITIES.find(c => c.name === cityName)
   if (!cityConfig) notFound()
@@ -318,12 +327,6 @@ export default async function CityPage({
               className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
             >
               Events this week
-            </Link>
-            <Link
-              href={`/events?city=${encodeURIComponent(cityName)}`}
-              className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
-            >
-              All events in {cityName}
             </Link>
           </nav>
         </div>
