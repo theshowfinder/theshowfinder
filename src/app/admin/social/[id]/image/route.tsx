@@ -278,8 +278,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
           </div>
 
-          <div style={{ display: 'flex', marginTop: 40, color: '#ffffff', fontSize: 24, fontWeight: 600, opacity: 0.7 }}>
-            theshowfinder.com
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, marginTop: 40 }}>
+            <span style={{ display: 'flex', color: '#ffffff', fontSize: 24, fontWeight: 600, opacity: 0.78 }}>
+              theshowfinder.com
+            </span>
+            <span style={{ display: 'flex', backgroundColor: theme.accent, color: '#101010', fontSize: 21, fontWeight: 900, letterSpacing: 1.2, padding: '10px 16px', borderRadius: 999 }}>
+              FOLLOW THESHOWFINDER
+            </span>
           </div>
         </div>
       </div>
