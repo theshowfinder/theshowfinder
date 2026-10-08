@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { bulkApproveNewsCandidatesAction } from '@/app/admin/actions'
+import { bulkApproveNewsCandidatesAction, bulkPublishNewsCandidatesAction } from '@/app/admin/actions'
 import SelectAllPendingCheckbox from './SelectAllPendingCheckbox'
 import {
   candidateAttentionReasons,
@@ -84,6 +84,8 @@ interface SearchParams {
   priority?: string
   recent?: string
   attention?: string
+  bulk_published?: string
+  bulk_failed?: string
 }
 
 export default async function NewsCandidatesAdminPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -191,7 +193,7 @@ export default async function NewsCandidatesAdminPage({ searchParams }: { search
 
   // ── Filters (narrow which rows are shown; never change row order) ──────
   const filtered = rowsWithAttention.filter(({ item, reasons }) => matchesNewsQueueFilters(item, reasons, params, now))
-  const filteredPendingCount = filtered.filter(({ item }) => item.review_status === 'pending').length
+  const filteredActionableCount = filtered.filter(({ item }) => item.review_status === 'pending' || item.review_status === 'approved').length
 
   // Builds a filter-chip href that toggles one query param on/off while
   // preserving every other active filter — so chips combine (e.g. "Pending
@@ -251,6 +253,12 @@ export default async function NewsCandidatesAdminPage({ searchParams }: { search
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+        {(params.bulk_published || params.bulk_failed) && (
+          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-800">
+            {params.bulk_published && <p className="font-semibold">Bulk publish complete: {params.bulk_published} {params.bulk_published === '1' ? 'story' : 'stories'} published.</p>}
+            {params.bulk_failed && <p className="mt-1 text-amber-800">{params.bulk_failed} selected {params.bulk_failed === '1' ? 'story' : 'stories'} could not be published and remain available for review.</p>}
+          </div>
+        )}
         <p className="text-sm text-slate-500 mb-4">
           Manually queued presale, tour-announcement and ticket news, plus AI-assisted URL imports. RSS-sourced stories publish
           automatically straight to the public site (not reviewed here) — see{' '}
@@ -294,8 +302,16 @@ export default async function NewsCandidatesAdminPage({ searchParams }: { search
                 >
                   Approve selected
                 </button>
+                <button
+                  type="submit"
+                  formAction={bulkPublishNewsCandidatesAction}
+                  className="font-bold text-white px-4 py-2 rounded-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: '#16A34A' }}
+                >
+                  Publish selected
+                </button>
                 <span className="text-xs text-slate-500">
-                  Select pending stories below. This approves them only — it does not publish them.
+                  Approve pending stories first, then select approved stories to publish them to their saved destinations.
                 </span>
               </div>
               <div className="overflow-x-auto">
@@ -303,7 +319,7 @@ export default async function NewsCandidatesAdminPage({ searchParams }: { search
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50 text-left">
                   <th className="px-4 py-3 font-semibold text-slate-600" aria-label="Select">
-                    <SelectAllPendingCheckbox count={filteredPendingCount} />
+                    <SelectAllPendingCheckbox count={filteredActionableCount} />
                   </th>
                   <th className="px-4 py-3 font-semibold text-slate-600">Headline</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">Source</th>
@@ -325,7 +341,7 @@ export default async function NewsCandidatesAdminPage({ searchParams }: { search
                         type="checkbox"
                         name="candidate_ids"
                         value={item.id}
-                        disabled={item.review_status !== 'pending'}
+                        disabled={item.review_status !== 'pending' && item.review_status !== 'approved'}
                         aria-label={`Select ${item.headline}`}
                         className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-40"
                       />

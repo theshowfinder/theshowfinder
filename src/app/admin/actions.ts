@@ -1012,6 +1012,68 @@ export async function publishNewsCandidateAction(id: string) {
   redirect('/admin/news/' + id + '?published=1')
 }
 
+/**
+ * Publishes selected approved candidates using the same checks as the
+ * individual Publish action. A failure on one item is reported without
+ * stopping the rest of the selected batch.
+ */
+export async function bulkPublishNewsCandidatesAction(formData: FormData) {
+  await checkAuth()
+
+  const ids = [...new Set(
+    formData.getAll('candidate_ids')
+      .filter((value): value is string => typeof value === 'string')
+      .map(value => value.trim())
+      .filter(Boolean),
+  )]
+  if (ids.length === 0) return
+
+  const db = createAdminClient()
+  let published = 0
+  let failed = 0
+
+  for (const id of ids) {
+    try {
+      const { candidate, cityTargets } = await fetchCandidateWithCities(db, id)
+      if (!canPublishCandidate(candidate.review_status)) throw new Error('Only approved stories can be bulk published.')
+      if (isBlockedTestContent(candidate.headline)) throw new Error('Internal/test content is blocked from publishing.')
+
+      const targets = resolveCityNewsTargets(candidate, cityTargets)
+      if (!targets.length) throw new Error('No publishing destination is selected.')
+
+      const now = new Date().toISOString()
+      const { error: upsertError } = await db
+        .from('city_news')
+        .upsert(buildPublishUpsertRows(candidate, targets, now), { onConflict: 'city_slug,url' })
+      if (upsertError) throw new Error(upsertError.message)
+
+      const { error: updateError } = await db
+        .from('news_candidates')
+        .update(buildPublishCandidatePatch(now))
+        .eq('id', id)
+      if (updateError) throw new Error(updateError.message)
+
+      try {
+        await findOrCreateSocialPackForCandidate(db, candidate, filterRealCityTargets(targets))
+      } catch (err) {
+        console.error('[social-pack] auto-create on bulk publish failed (non-fatal):', err)
+      }
+
+      revalidatePath('/admin/news/' + id)
+      for (const path of revalidatePathsForCandidate(candidate, targets)) revalidatePath(path)
+      published += 1
+    } catch (err) {
+      console.error('[news] bulk publish failed:', id, err)
+      failed += 1
+    }
+  }
+
+  revalidatePath('/admin/news')
+  const query = new URLSearchParams({ bulk_published: String(published) })
+  if (failed > 0) query.set('bulk_failed', String(failed))
+  redirect('/admin/news?' + query.toString())
+}
+
 // Removes every city_news row a published candidate created (one per
 // target city), without touching the candidate itself or any RSS/other-
 // editorial row (the delete filter includes is_editorial: true — see

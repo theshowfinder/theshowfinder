@@ -4,8 +4,8 @@ export default function SelectAllPendingCheckbox({ count }: { count: number }) {
   return (
     <input
       type="checkbox"
-      aria-label={`Select all ${count} pending stories`}
-      title={`Select all ${count} pending stories`}
+      aria-label={`Select all ${count} actionable stories`}
+      title={`Select all ${count} actionable stories`}
       disabled={count === 0}
       onChange={(event) => {
         const form = event.currentTarget.form
