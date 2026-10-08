@@ -123,10 +123,11 @@ export default async function SocialPacksAdminPage({ searchParams }: { searchPar
               </button>
               <span className="text-xs text-slate-500">Only valid one-step transitions are accepted.</span>
             </div>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[820px] text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50 text-left">
-                  <th className="px-4 py-3" />
+                  <th className="sticky right-0 z-10 bg-slate-50 px-4 py-3" />
                   <th className="px-4 py-3 font-semibold text-slate-600">Headline</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">City</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">Source</th>
@@ -137,7 +138,7 @@ export default async function SocialPacksAdminPage({ searchParams }: { searchPar
               </thead>
               <tbody>
                 {rows.map(pack => (
-                  <tr key={pack.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                  <tr key={pack.id} className="group border-b border-slate-100 last:border-0 hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <input type="checkbox" name="pack_ids" value={pack.id} aria-label={`Select ${pack.headline}`} className="h-4 w-4 rounded border-slate-300" />
                     </td>
@@ -152,7 +153,7 @@ export default async function SocialPacksAdminPage({ searchParams }: { searchPar
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-500">{fmtDate(pack.created_at)}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="sticky right-0 z-10 bg-white px-4 py-3 text-right group-hover:bg-slate-50">
                       <Link href={`/admin/social/${pack.id}`} className="text-blue-600 font-semibold hover:underline">
                         Open
                       </Link>
@@ -161,6 +162,7 @@ export default async function SocialPacksAdminPage({ searchParams }: { searchPar
                 ))}
               </tbody>
             </table>
+            </div>
           </form>
         )}
       </main>
