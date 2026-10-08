@@ -106,6 +106,15 @@ export async function syncGigsbergCatalogue(): Promise<GigsbergCatalogueSyncResu
   let updated = 0
   let errors = 0
 
+  // This table is a cache, not an editorial record. Rebuild it from the
+  // current UK/future result set so rows from the old worldwide import cannot
+  // remain visible in the matching queue.
+  const { error: clearError } = await db
+    .from('gigsberg_catalogue_events')
+    .delete()
+    .gte('id', 0)
+  if (clearError) throw new Error(clearError.message)
+
   for (let index = 0; index < events.length; index += 100) {
     const batch = events.slice(index, index + 100).map(toCatalogueRow)
     const { data, error } = await db

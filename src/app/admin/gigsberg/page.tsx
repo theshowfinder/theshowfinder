@@ -77,7 +77,7 @@ export default async function GigsbergAdminPage({
           </div>
         </section>
 
-        {synced && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">✓ Catalogue import complete: {synced} events fetched, {updated ?? synced} records saved.</div>}
+        {synced && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">✓ Catalogue import complete: {synced} current/future UK events fetched, {updated ?? synced} records saved. Previous catalogue rows were replaced.</div>}
         {syncError && <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-3 text-sm">Catalogue import failed: {syncError}</div>}
 
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
