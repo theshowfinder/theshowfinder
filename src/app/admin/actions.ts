@@ -1273,6 +1273,45 @@ export async function advanceSocialPackStatusAction(id: string, to: SocialPackSt
   redirect('/admin/social/' + id + '?saved=1')
 }
 
+// Batch version of the manual-review workflow. This only changes Social Pack
+// statuses; it never calls Facebook, Instagram or TikTok. It is deliberately
+// limited to the same one-step transitions as the single-pack action so a
+// batch approval cannot accidentally skip review stages.
+export async function bulkAdvanceSocialPackStatusAction(formData: FormData) {
+  await checkAuth()
+  const db = createAdminClient()
+  const ids = [...new Set(formData.getAll('pack_ids').map(String).filter(Boolean))]
+  const to = String(formData.get('to') ?? '') as SocialPackStatus
+
+  if (!ids.length || !['ready_for_review', 'approved'].includes(to)) {
+    redirect('/admin/social?error=' + encodeURIComponent('Select packs and a valid review step.'))
+  }
+
+  const { data: packs, error: fetchError } = await db
+    .from('social_packs')
+    .select('id, status')
+    .in('id', ids) as unknown as { data: Array<{ id: string; status: SocialPackStatus }> | null; error: { message: string } | null }
+
+  if (fetchError || !packs || packs.length !== ids.length) {
+    redirect('/admin/social?error=' + encodeURIComponent(fetchError?.message ?? 'One or more Social Packs could not be found.'))
+  }
+
+  if (packs.some(pack => !canAdvanceSocialPackStatus(pack.status, to))) {
+    redirect('/admin/social?error=' + encodeURIComponent('Each selected pack must be at the immediately previous review step.'))
+  }
+
+  const now = new Date().toISOString()
+  const patch: Record<string, unknown> = { status: to, updated_at: now }
+  if (to === 'approved') patch.approved_at = now
+
+  const { error: updateError } = await db.from('social_packs').update(patch).in('id', ids)
+  if (updateError) redirect('/admin/social?error=' + encodeURIComponent(updateError.message))
+
+  revalidatePath('/admin/social')
+  ids.forEach(id => revalidatePath('/admin/social/' + id))
+  redirect('/admin/social?saved=' + to)
+}
+
 // Local shape of the event row re-fetched when regenerating a pack's
 // image below — only the fields the image recipe actually needs,
 // distinct from SocialPackEventRow (which also carries title/slug for

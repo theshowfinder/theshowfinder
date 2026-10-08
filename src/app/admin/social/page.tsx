@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { bulkAdvanceSocialPackStatusAction } from '../actions'
 import type { SocialPack, SocialPackStatus } from '@/lib/types/database'
 
 // Phase 7, requirement 9 — the manual-review queue for Social Packs.
@@ -49,11 +50,13 @@ function fmtDate(value: string): string {
 
 interface SearchParams {
   status?: string
+  error?: string
+  saved?: string
 }
 
 export default async function SocialPacksAdminPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   await requireAdmin()
-  const { status } = await searchParams
+  const { status, error, saved } = await searchParams
   const db = createAdminClient()
 
   const { data: packs } = await db
@@ -74,10 +77,12 @@ export default async function SocialPacksAdminPage({ searchParams }: { searchPar
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
+        {saved && <p className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">Selected packs updated.</p>}
         <p className="text-sm text-slate-500">
-          Manual-review drafts prepared from published Manchester news stories and from events you flag yourself.
-          Nothing here ever posts to Facebook, Instagram or TikTok automatically — open a pack, edit the text if you
-          want, then copy it across by hand.
+          Manual-review drafts prepared from published city news stories and events you flag yourself. Nothing here
+          posts to Facebook, Instagram or TikTok automatically. Select a batch to move it through review, then use
+          Meta Business Suite or TikTok Scheduler for the final publishing step.
         </p>
 
         <div className="flex flex-wrap gap-2">
@@ -104,10 +109,21 @@ export default async function SocialPacksAdminPage({ searchParams }: { searchPar
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <form action={bulkAdvanceSocialPackStatusAction} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3">
+              <select name="to" defaultValue="ready_for_review" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                <option value="ready_for_review">Mark selected ready for review</option>
+                <option value="approved">Approve selected</option>
+              </select>
+              <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700">
+                Apply to selected
+              </button>
+              <span className="text-xs text-slate-500">Only valid one-step transitions are accepted.</span>
+            </div>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50 text-left">
+                  <th className="px-4 py-3" />
                   <th className="px-4 py-3 font-semibold text-slate-600">Headline</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">City</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">Source</th>
@@ -119,6 +135,9 @@ export default async function SocialPacksAdminPage({ searchParams }: { searchPar
               <tbody>
                 {rows.map(pack => (
                   <tr key={pack.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <input type="checkbox" name="pack_ids" value={pack.id} aria-label={`Select ${pack.headline}`} className="h-4 w-4 rounded border-slate-300" />
+                    </td>
                     <td className="px-4 py-3">
                       <p className="font-bold text-slate-900 max-w-md truncate">{pack.headline}</p>
                     </td>
@@ -139,7 +158,7 @@ export default async function SocialPacksAdminPage({ searchParams }: { searchPar
                 ))}
               </tbody>
             </table>
-          </div>
+          </form>
         )}
       </main>
     </div>
