@@ -324,29 +324,24 @@ export default async function CityPage({
         {/* ── NEWSLETTER (city-scoped) ── */}
         <CityNewsletterForm cityName={cityName} />
 
-        {/* ── TONIGHT ── */}
-        <section>
-          <div className="mb-7">
-            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
-              Happening now
-            </p>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-              Tonight in {cityName}
-            </h2>
-          </div>
-          {tonightEvents.length > 0 ? (
+        {/* ── TONIGHT (hidden completely when there are no valid events) ── */}
+        {tonightEvents.length > 0 && (
+          <section>
+            <div className="mb-7">
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+                Happening now
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                Tonight in {cityName}
+              </h2>
+            </div>
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm divide-y divide-slate-100">
               {tonightEvents.map(event => (
                 <TonightEventCard key={event.id} event={event} artists={artists} />
               ))}
             </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center">
-              <p className="text-3xl mb-2">🌙</p>
-              <p className="text-slate-500">Nothing on tonight in {cityName} — check what&rsquo;s coming up this week below.</p>
-            </div>
-          )}
-        </section>
+          </section>
+        )}
 
         {/* ── EVENTS THIS WEEK (ticketed shows + local events, merged) ── */}
         {eventsThisWeek.length > 0 && (
