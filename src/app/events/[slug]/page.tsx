@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { cache } from 'react'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { Metadata } from 'next'
@@ -16,6 +16,7 @@ import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { jsonLdScript, buildEventSchema, buildBreadcrumbSchema } from '@/lib/jsonld'
 import { ticketPurchaseDisabledStatus } from '@/lib/eventPools'
 import { isBareProviderHomepage } from '@/lib/intelligence'
+import { getEventSeoAlias } from '@/lib/seoAliases'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -165,6 +166,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function EventPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
+  const seoAlias = getEventSeoAlias(slug)
+  if (seoAlias) redirect(`/events/${seoAlias}`)
+
   const event    = await getEvent(slug)
   if (!event) notFound()
 

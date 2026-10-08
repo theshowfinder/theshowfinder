@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { getArtistSeoAlias } from './seoAliases'
+import { getArtistSeoAlias, getEventSeoAlias } from './seoAliases'
 
 describe('SEO aliases', () => {
   test('redirects the confirmed duplicate Ian Shaw URL', () => {
@@ -20,5 +20,25 @@ describe('SEO aliases', () => {
 
   test('redirects the confirmed duplicate Anvil URL', () => {
     expect(getArtistSeoAlias('anvil-Z917j-5f')).toBe('anvil-Z917fHc7')
+  })
+
+  test('redirects the confirmed duplicate Oliver event URL', () => {
+    expect(getEventSeoAlias('oliver-65wuVVPx')).toBe('oliver-65cVf-xv')
+  })
+
+  test('redirects the confirmed duplicate Temperance Movement event URL', () => {
+    expect(getEventSeoAlias('the-temperance-movement-aZZ0dAEz')).toBe('the-temperance-movement-GKdSWPy_')
+  })
+
+  test('redirects the confirmed duplicate Christopher Hall event URL', () => {
+    expect(getEventSeoAlias('christopher-hall-pizazz-bzCWBJBs')).toBe('christopher-hall-pizazz-dZZIuidJ')
+  })
+
+  test('redirects the confirmed duplicate Luanna event URL', () => {
+    expect(getEventSeoAlias('luanna-the-big-party-matinee-_1cTkv7s')).toBe('luanna-the-big-party-matinee-_G1qjwz1')
+  })
+
+  test('redirects the confirmed duplicate Bear McCreary event URL', () => {
+    expect(getEventSeoAlias('bear-mccreary-GkdvKALl')).toBe('bear-mccreary-Gkesyv7j')
   })
 })

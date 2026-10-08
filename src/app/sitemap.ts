@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next'
 import { createClient } from '@/lib/supabase/server'
-import { getArtistSeoAlias } from '@/lib/seoAliases'
+import { getArtistSeoAlias, getEventSeoAlias } from '@/lib/seoAliases'
 
 export const maxDuration = 60
 
@@ -133,7 +133,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified:    new Date(e.updated_at),
     changeFrequency: 'weekly' as const,
     priority:        0.6,
-  }))
+  })).filter(e => !getEventSeoAlias(e.url.split('/').pop() ?? ''))
 
   const venuePages: MetadataRoute.Sitemap = venueRows.map(v => ({
     url:             `${BASE}/venues/${v.slug}`,
