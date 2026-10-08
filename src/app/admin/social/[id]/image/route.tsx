@@ -34,7 +34,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import {
   SOCIAL_IMAGE_THEMES,
   resolveStoredImageKind,
-  resolveApprovedImageUrl,
 } from '@/lib/socialPack'
 
 export const dynamic = 'force-dynamic'
@@ -82,7 +81,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const city = typeof storedParams.city === 'string' && storedParams.city.trim() ? storedParams.city : null
   const dateLabel = typeof storedParams.dateLabel === 'string' && storedParams.dateLabel.trim() ? storedParams.dateLabel : null
   const kind = resolveStoredImageKind(storedParams.kind)
-  const imageUrl = resolveApprovedImageUrl(storedParams.imageUrl)
   const theme = SOCIAL_IMAGE_THEMES[kind]
   const cityLabel = city ? city.toUpperCase() : 'UK LIVE EVENTS'
   const ctaLabel = kind === 'presale' ? 'Find presale details' : kind === 'tonight' ? 'Find something tonight' : 'Find your next show'
@@ -96,35 +94,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           display: 'flex',
           position: 'relative',
           backgroundColor: theme.gradientFrom,
-            backgroundImage: imageUrl ? undefined : `radial-gradient(circle at 88% 12%, ${theme.accent}66 0%, transparent 30%), radial-gradient(circle at 8% 86%, #ffffff22 0%, transparent 26%), linear-gradient(135deg, ${theme.gradientFrom} 0%, ${theme.gradientTo} 100%)`,
+            backgroundImage: `radial-gradient(circle at 88% 12%, ${theme.accent}66 0%, transparent 30%), radial-gradient(circle at 8% 86%, #ffffff22 0%, transparent 26%), linear-gradient(135deg, ${theme.gradientFrom} 0%, ${theme.gradientTo} 100%)`,
           fontFamily: 'sans-serif',
         }}
       >
-        {/* Only fetch an approved source photo when one exists. The branded
-            gradient below is the reliable fallback: fetching a local public
-            PNG from inside ImageResponse can fail in the deployed renderer. */}
-        {imageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt=""
-            width={width}
-            height={height}
-            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'flex' }}
-          />
-        )}
-
-        {/* Legibility wash in the template's own colours over a photo
-            background; a soft darkening gradient (no photo to wash) when
-            the template is already the vibrant gradient on its own. */}
+        {/* The branded gradient is rendered entirely inside ImageResponse so
+            previews and downloads do not depend on third-party image hosts. */}
         <div
           style={{
             position: 'absolute', top: 0, left: 0,
             width: '100%', height: '100%',
             display: 'flex',
-            backgroundImage: imageUrl
-              ? `linear-gradient(135deg, ${theme.gradientFrom}66 0%, transparent 42%), linear-gradient(180deg, #00000022 0%, #000000b8 100%)`
-              : 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.18) 100%)',
+            backgroundImage: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.18) 100%)',
           }}
         />
 
