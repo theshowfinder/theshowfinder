@@ -233,6 +233,12 @@ export default async function NewsCandidatesAdminPage({ searchParams }: { search
           🔗 Add from URL
         </Link>
         <Link
+          href="/admin/news/batch"
+          className="inline-block font-semibold text-slate-600 px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors text-sm"
+        >
+          📚 Batch URLs
+        </Link>
+        <Link
           href="/admin/news/new"
           className="inline-block font-bold text-white px-5 py-2.5 rounded-xl hover:opacity-90 transition-opacity text-sm"
           style={{ backgroundColor: '#E8003D' }}

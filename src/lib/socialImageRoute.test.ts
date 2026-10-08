@@ -65,12 +65,9 @@ describe('branded social-image route — safe fallback behaviour', () => {
     assert.ok(!content.includes('storedParams.kind as'), 'should not blindly cast the stored kind')
   })
 
-  test('a stored image URL is re-validated through resolveApprovedImageUrl before it is ever painted', () => {
-    assert.ok(content.includes('resolveApprovedImageUrl(storedParams.imageUrl)'))
-  })
-
-  test('falls back to a gradient-only background when there is no approved image', () => {
-    assert.ok(content.includes('imageUrl ? undefined :'))
+  test('uses the self-contained concert background and keeps the gradient fallback', () => {
+    assert.ok(content.includes('readConcertBackground()'))
+    assert.ok(content.includes('concert-cinematic-v2.png'))
     assert.ok(content.includes('linear-gradient(135deg'))
   })
 
@@ -78,8 +75,9 @@ describe('branded social-image route — safe fallback behaviour', () => {
     assert.ok(content.includes("'TheShowFinder'"))
   })
 
-  test('never pulls a photo from Ticketmaster/venue/third-party article branding comment is still present', () => {
-    assert.ok(content.toLowerCase().includes('never pulls a photo from anywhere'))
+  test('does not scrape or copy third-party article imagery', () => {
+    assert.ok(content.toLowerCase().includes('never') || content.toLowerCase().includes('never\n'))
+    assert.ok(content.toLowerCase().includes('third-party article imagery'))
   })
 })
 
@@ -90,12 +88,12 @@ describe('branded social-image route — no scraped or constructed marketplace l
     assert.ok(!content.includes('encodeURIComponent'))
   })
 
-  test('images use only the validated event photo or the fixed local fallback', () => {
+  test('images use only the embedded local concert background', () => {
     const imgSrcMatches = [...content.matchAll(/<img\s+src=\{([^}]+)\}/g)].map(m => m[1].trim())
     assert.ok(imgSrcMatches.length > 0, 'expected at least one <img> tag')
     for (const src of imgSrcMatches) {
-      assert.equal(src, 'backgroundImageUrl')
+      assert.equal(src, 'concertBackground')
     }
-    assert.ok(content.includes("'/social-backgrounds/concert-city-night.png'"))
+    assert.ok(content.includes("'public/social-backgrounds/concert-cinematic-v2.png'"))
   })
 })

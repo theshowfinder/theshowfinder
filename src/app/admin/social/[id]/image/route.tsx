@@ -1,22 +1,15 @@
 // Branded social-image route (Phase 7, requirement 10) — renders an
-// on-demand graphic with next/og's ImageResponse. There is no file
-// storage anywhere in this project (no Supabase Storage bucket, no
-// Vercel Blob), so nothing is ever uploaded or persisted here: this is a
-// pure render of social_packs.image_params (a small JSON "recipe") every
-// time the route is hit.
+// on-demand graphic with next/og's ImageResponse. The route reads one local,
+// approved cinematic background into memory and embeds it in the response;
+// no user-uploaded media or remote photo host is involved.
 //
 // Five vibrant, distinct templates (src/lib/socialPack.ts's
 // SOCIAL_IMAGE_KINDS/SOCIAL_IMAGE_THEMES) replace the single flat dark
 // design this route used to render for every pack — tour announcements,
 // onsales, presales, city-wide roundups and "tonight" posts each get
-// their own gradient + accent + badge. When the pack's own event or
-// artist has a photo, it's used as a full-bleed background behind a
-// brand-coloured wash; otherwise the template falls back to its vibrant
-// gradient alone. Either way this NEVER pulls a photo from anywhere
-// other than TheShowFinder's own Ticketmaster/Live Nation/Universe
-// ingestion pipeline — isApprovedImageSource is re-checked here, not
-// just trusted from storage, so a row written before that gate existed
-// (or edited some other way) can never paint an unapproved image.
+// their own gradient + accent + badge. The local cinematic background is
+// the reliable visual foundation for every pack, and the design never
+// scrapes or copies third-party article imagery.
 //
 // ?format=square  → 1080x1080  (Facebook / Instagram feed)
 // ?format=vertical → 1080x1920 (Instagram Story / TikTok)

@@ -174,9 +174,8 @@ export default async function SocialPackDetailPage({ params, searchParams }: Pag
           <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Branded image</h2>
           <p className="text-xs text-slate-400">
             Always a TheShowFinder-branded graphic, in one of five vibrant templates — never a photo scraped or pasted
-            from a third-party article. When the event or artist has its own Ticketmaster photo it&rsquo;s used as the
-            background; otherwise the template falls back to its own gradient design. Preview below, right-click (or
-            long-press) to save, or use the download link.
+            from a third-party article. Each graphic uses our cinematic concert background with a safe text area for
+            the event details. Preview below, right-click (or long-press) to save, or use the download link.
           </p>
           <div className="flex flex-wrap gap-6">
             <div className="space-y-2">
@@ -214,7 +213,7 @@ export default async function SocialPackDetailPage({ params, searchParams }: Pag
               Regenerate image
             </button>
             <p className="text-xs text-slate-400 basis-full">
-              Re-reads the date, status and any approved photo from the source record. Pick a different template
+              Re-reads the date and status from the source record. Pick a different template
               above first if the automatic one isn&rsquo;t right for this post (e.g. a &ldquo;Tonight&rdquo; post).
             </p>
           </form>

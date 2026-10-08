@@ -656,63 +656,34 @@ export async function createNewsCandidateAction(formData: FormData) {
 // the exact same NewsCandidateForm as a manually-entered one. The only
 // permanent difference is intake_method='url_import' plus the read-only
 // extracted_content/ai_suggestions reference data shown on the detail page.
-export async function createNewsCandidateFromUrlAction(formData: FormData) {
-  await checkAuth()
-  const db = createAdminClient()
-
-  const rawUrl = ((formData.get('url') as string) || '').trim()
-
-  if (!rawUrl) {
-    redirect('/admin/news/from-url?error=' + encodeURIComponent('Paste an article URL first.'))
-  }
-  if (!isValidHttpUrl(rawUrl)) {
-    redirect('/admin/news/from-url?error=' + encodeURIComponent('Enter a valid http(s) URL.') + '&url=' + encodeURIComponent(rawUrl))
-  }
+async function intakeNewsCandidateFromUrl(
+  db: ReturnType<typeof createAdminClient>,
+  rawUrl: string,
+) {
+  if (!rawUrl) throw new Error('Paste an article URL first.')
+  if (!isValidHttpUrl(rawUrl)) throw new Error('Enter a valid http(s) URL.')
 
   const url = normalizeUrl(rawUrl)
+  await checkForDuplicateUrl(db, url, null)
 
+  let fetched: { html: string; finalUrl: string }
   try {
-    await checkForDuplicateUrl(db, url, null)
+    fetched = await fetchArticleHtml(rawUrl)
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Something went wrong.'
-    redirect('/admin/news/from-url?error=' + encodeURIComponent(message) + '&url=' + encodeURIComponent(rawUrl))
+    if (err instanceof UnsafeUrlError || err instanceof FetchArticleError) throw err
+    throw new Error('Could not fetch that page.')
   }
 
-  let html: string
-  let finalUrl: string
-  try {
-    const fetched = await fetchArticleHtml(rawUrl)
-    html = fetched.html
-    finalUrl = fetched.finalUrl
-  } catch (err) {
-    const message =
-      err instanceof UnsafeUrlError || err instanceof FetchArticleError
-        ? err.message
-        : 'Could not fetch that page.'
-    redirect('/admin/news/from-url?error=' + encodeURIComponent(message) + '&url=' + encodeURIComponent(rawUrl))
-  }
-
-  const extracted = extractArticleMetadata(html!, finalUrl!)
-
-  // A second duplicate check against the final (post-redirect) URL — the
-  // admin-typed URL and the page's real URL can differ (a shortlink, a
-  // tracking redirect); both are worth catching before we insert anything.
-  const normalizedFinalUrl = normalizeUrl(finalUrl!)
-  if (normalizedFinalUrl !== url) {
-    try {
-      await checkForDuplicateUrl(db, normalizedFinalUrl, null)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Something went wrong.'
-      redirect('/admin/news/from-url?error=' + encodeURIComponent(message) + '&url=' + encodeURIComponent(rawUrl))
-    }
-  }
+  const extracted = extractArticleMetadata(fetched.html, fetched.finalUrl)
+  const normalizedFinalUrl = normalizeUrl(fetched.finalUrl)
+  if (normalizedFinalUrl !== url) await checkForDuplicateUrl(db, normalizedFinalUrl, null)
 
   const { suggestion, warnings, model } = await requestAiSuggestions(extracted)
-
   const cityTargets: CandidateCityTarget[] = suggestion.scope_type === 'city'
-    ? suggestion.cities.map(name => ({ city_slug: citySlug(name), city_name: name }))
+    ? suggestion.cities
+        .filter(name => isSupportedCityName(name))
+        .map(name => ({ city_slug: citySlug(name), city_name: name }))
     : []
-
   const headline = suggestion.headline || extracted.headline || extracted.title || 'Untitled — needs a headline'
 
   const { data, error } = await db
@@ -721,10 +692,6 @@ export async function createNewsCandidateFromUrlAction(formData: FormData) {
       scope_type: suggestion.scope_type,
       city_slug: cityTargets[0]?.city_slug ?? null,
       city_name: cityTargets[0]?.city_name ?? null,
-      // Destinations (migration_029) always start unset for a URL-imported
-      // candidate — Homepage/Main News page are an explicit editorial
-      // decision, never inferred from the AI's scope/city suggestion. The
-      // admin opts in via the two new checkboxes when reviewing/editing.
       publish_to_homepage: false,
       publish_to_news_page: false,
       headline,
@@ -735,7 +702,7 @@ export async function createNewsCandidateFromUrlAction(formData: FormData) {
       story_type: suggestion.category,
       summary: suggestion.summary ?? extracted.description ?? null,
       priority: suggestion.priority,
-      review_status: 'pending', // always — requirement 7/8: never auto-published, whatever the AI's confidence
+      review_status: 'pending',
       created_by: ADMIN_IDENTITY,
       intake_method: 'url_import',
       extracted_content: extracted,
@@ -747,12 +714,58 @@ export async function createNewsCandidateFromUrlAction(formData: FormData) {
     .select('id')
     .single()
 
-  if (error) redirect('/admin/news/from-url?error=' + encodeURIComponent(newsCandidateDbError(error).message) + '&url=' + encodeURIComponent(rawUrl))
-
+  if (error) throw newsCandidateDbError(error)
   await syncNewsCandidateCities(db, data.id, cityTargets)
+  return { id: data.id as string, headline, cities: cityTargets.map(target => target.city_name) }
+}
+
+export async function createNewsCandidateFromUrlAction(formData: FormData) {
+  await checkAuth()
+  const db = createAdminClient()
+  const rawUrl = ((formData.get('url') as string) || '').trim()
+
+  try {
+    const result = await intakeNewsCandidateFromUrl(db, rawUrl)
+    revalidatePath('/admin/news')
+    redirect('/admin/news/' + result.id + '?created=1')
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Something went wrong.'
+    redirect('/admin/news/from-url?error=' + encodeURIComponent(message) + (rawUrl ? '&url=' + encodeURIComponent(rawUrl) : ''))
+  }
+}
+
+const MAX_BATCH_NEWS_URLS = 20
+
+export async function createNewsCandidatesFromUrlsAction(formData: FormData) {
+  await checkAuth()
+  const db = createAdminClient()
+  const urls = [...new Set(
+    String(formData.get('urls') ?? '')
+      .split(/\r?\n/)
+      .map(value => value.trim())
+      .filter(Boolean),
+  )]
+
+  if (urls.length === 0) redirect('/admin/news/batch?error=' + encodeURIComponent('Paste at least one article URL.'))
+  if (urls.length > MAX_BATCH_NEWS_URLS) {
+    redirect('/admin/news/batch?error=' + encodeURIComponent(`Please submit no more than ${MAX_BATCH_NEWS_URLS} URLs at a time.`))
+  }
+
+  const created: { id: string; headline: string; cities: string[] }[] = []
+  const errors: { url: string; message: string }[] = []
+  for (const url of urls) {
+    try {
+      created.push(await intakeNewsCandidateFromUrl(db, url))
+    } catch (err) {
+      errors.push({ url, message: err instanceof Error ? err.message : 'Could not import this URL.' })
+    }
+  }
 
   revalidatePath('/admin/news')
-  redirect('/admin/news/' + data.id + '?created=1')
+  const query = new URLSearchParams({ created: String(created.length), failed: String(errors.length) })
+  if (created.length) query.set('ids', created.map(item => item.id).join(','))
+  if (errors.length) query.set('errors', JSON.stringify(errors))
+  redirect('/admin/news/batch?' + query.toString())
 }
 
 export async function updateNewsCandidateAction(id: string, formData: FormData) {
