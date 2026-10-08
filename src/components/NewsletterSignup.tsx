@@ -91,7 +91,12 @@ export default function NewsletterSignup() {
           </>
         )}
 
-        <p className="mt-5 text-white/50 text-sm">Just your email — no password or account needed. No spam, unsubscribe any time.</p>
+        <p className="mt-5 flex flex-wrap items-center justify-center gap-2 text-sm">
+          <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-extrabold" style={{ backgroundColor: '#FFD84D', color: '#1A1A2E' }}>
+            <span aria-hidden="true">✓</span> Free to join
+          </span>
+          <span className="text-white/65">Just your email · no spam · unsubscribe any time</span>
+        </p>
       </div>
     </section>
   )

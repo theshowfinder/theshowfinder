@@ -73,7 +73,12 @@ export default function CityNewsletterForm({ cityName }: { cityName: string }) {
                 {loading ? 'Subscribing…' : `Get ${cityName} Alerts`}
               </button>
             </form>
-            <p className="mt-2 text-white/45 text-xs">Free to join · unsubscribe any time</p>
+            <p className="mt-3 text-center sm:text-left">
+              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold" style={{ backgroundColor: '#FFD84D', color: '#1A1A2E' }}>
+                <span aria-hidden="true">✓</span> Free to join
+              </span>
+              <span className="ml-2 text-white/55 text-xs">No spam · unsubscribe any time</span>
+            </p>
             {error && <p className="mt-2 text-white/90 text-xs font-semibold">{error}</p>}
           </>
         )}
