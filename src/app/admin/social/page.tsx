@@ -118,6 +118,9 @@ export default async function SocialPacksAdminPage({ searchParams }: { searchPar
               <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700">
                 Apply to selected
               </button>
+              <button type="submit" formAction="/admin/social/batch" formMethod="get" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100">
+                Prepare Meta batch
+              </button>
               <span className="text-xs text-slate-500">Only valid one-step transitions are accepted.</span>
             </div>
             <table className="w-full text-sm">
