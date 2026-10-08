@@ -75,18 +75,18 @@ export default function NewsCandidateForm({ mode, action, candidate, artists, ci
     <form action={action} className="space-y-5">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
         <div>
-          <label className={LABEL}>Headline *</label>
-          <input name="headline" required defaultValue={candidate?.headline ?? ''} placeholder="e.g. Oasis add second Wembley date" className={INPUT} />
+          <label htmlFor="news-headline" className={LABEL}>Headline *</label>
+          <input id="news-headline" name="headline" required defaultValue={candidate?.headline ?? ''} placeholder="e.g. Oasis add second Wembley date" className={INPUT} autoComplete="off" />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={LABEL}>Source name</label>
-            <input name="source" defaultValue={candidate?.source ?? ''} placeholder="e.g. NME, GetToTheFront" className={INPUT} />
+            <label htmlFor="news-source" className={LABEL}>Source name</label>
+            <input id="news-source" name="source" defaultValue={candidate?.source ?? ''} placeholder="e.g. NME, GetToTheFront" className={INPUT} autoComplete="off" />
           </div>
           <div>
-            <label className={LABEL}>Original article date</label>
-            <input name="published_at" type="datetime-local" defaultValue={toDatetimeLocal(candidate?.published_at ?? null)} className={INPUT} />
+            <label htmlFor="news-published-at" className={LABEL}>Original article date</label>
+            <input id="news-published-at" name="published_at" type="datetime-local" defaultValue={toDatetimeLocal(candidate?.published_at ?? null)} className={INPUT} />
             <p className="text-xs text-slate-400 mt-1">
               For reference only — when this story goes live, its public display date is set to the actual publish time, not this date.
             </p>
@@ -94,18 +94,19 @@ export default function NewsCandidateForm({ mode, action, candidate, artists, ci
         </div>
 
         <div>
-          <label className={LABEL}>Article URL *</label>
-          <input name="url" type="url" required defaultValue={candidate?.url ?? defaultUrl ?? ''} placeholder="https://… (the specific story)" className={INPUT} />
+          <label htmlFor="news-url" className={LABEL}>Article URL *</label>
+          <input id="news-url" name="url" type="url" required defaultValue={candidate?.url ?? defaultUrl ?? ''} placeholder="https://… (the specific story)" className={INPUT} autoComplete="url" />
         </div>
 
         <div>
-          <label className={LABEL}>Source URL</label>
-          <input name="source_url" type="url" defaultValue={candidate?.source_url ?? ''} placeholder="https://… (the outlet itself, optional)" className={INPUT} />
+          <label htmlFor="news-source-url" className={LABEL}>Source URL</label>
+          <input id="news-source-url" name="source_url" type="url" defaultValue={candidate?.source_url ?? ''} placeholder="https://… (the outlet itself, optional)" className={INPUT} autoComplete="url" />
         </div>
 
         <div>
-          <label className={LABEL}>Scope *</label>
+          <label htmlFor="news-scope" className={LABEL}>Scope *</label>
           <select
+            id="news-scope"
             name="scope_type"
             required
             className={INPUT}
@@ -170,16 +171,16 @@ export default function NewsCandidateForm({ mode, action, candidate, artists, ci
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={LABEL}>Story type</label>
-            <select name="story_type" defaultValue={candidate?.story_type ?? 'general_entertainment'} className={INPUT}>
+            <label htmlFor="news-story-type" className={LABEL}>Story type</label>
+            <select id="news-story-type" name="story_type" defaultValue={candidate?.story_type ?? 'general_entertainment'} className={INPUT}>
               {STORY_TYPES.map(t => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className={LABEL}>Priority</label>
-            <select name="priority" defaultValue={candidate?.priority ?? 'normal'} className={INPUT}>
+            <label htmlFor="news-priority" className={LABEL}>Priority</label>
+            <select id="news-priority" name="priority" defaultValue={candidate?.priority ?? 'normal'} className={INPUT}>
               {PRIORITIES.map(p => (
                 <option key={p.value} value={p.value}>{p.label}</option>
               ))}
@@ -189,12 +190,12 @@ export default function NewsCandidateForm({ mode, action, candidate, artists, ci
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={LABEL}>Artist name</label>
-            <input name="artist_name" defaultValue={candidate?.artist_name ?? ''} placeholder="Free text — used even if there's no matching artist page" className={INPUT} />
+            <label htmlFor="news-artist-name" className={LABEL}>Artist name</label>
+            <input id="news-artist-name" name="artist_name" defaultValue={candidate?.artist_name ?? ''} placeholder="Free text — used even if there's no matching artist page" className={INPUT} autoComplete="off" />
           </div>
           <div>
-            <label className={LABEL}>Matching artist (optional)</label>
-            <select name="artist_id" defaultValue={candidate?.artist_id ?? ''} className={INPUT}>
+            <label htmlFor="news-artist-id" className={LABEL}>Matching artist (optional)</label>
+            <select id="news-artist-id" name="artist_id" defaultValue={candidate?.artist_id ?? ''} className={INPUT}>
               <option value="">— No match —</option>
               {artists.map(a => (
                 <option key={a.id} value={a.id}>{a.name}</option>
@@ -204,18 +205,18 @@ export default function NewsCandidateForm({ mode, action, candidate, artists, ci
         </div>
 
         <div>
-          <label className={LABEL}>Summary</label>
-          <textarea name="summary" rows={3} defaultValue={candidate?.summary ?? ''} placeholder="Manually editable — not shown publicly" className={`${INPUT} resize-none`} />
+          <label htmlFor="news-summary" className={LABEL}>Summary</label>
+          <textarea id="news-summary" name="summary" rows={3} defaultValue={candidate?.summary ?? ''} placeholder="Manually editable — not shown publicly" className={`${INPUT} resize-none`} />
         </div>
 
         <div>
-          <label className={LABEL}>Editorial note</label>
-          <textarea name="editorial_note" rows={2} defaultValue={candidate?.editorial_note ?? ''} placeholder="Internal only — why this matters, anything to double-check" className={`${INPUT} resize-none`} />
+          <label htmlFor="news-editorial-note" className={LABEL}>Editorial note</label>
+          <textarea id="news-editorial-note" name="editorial_note" rows={2} defaultValue={candidate?.editorial_note ?? ''} placeholder="Internal only — why this matters, anything to double-check" className={`${INPUT} resize-none`} />
         </div>
 
         <div>
-          <label className={LABEL}>Review status</label>
-          <select name="review_status" defaultValue={candidate?.review_status === 'published' ? 'approved' : (candidate?.review_status ?? 'pending')} className={INPUT}>
+          <label htmlFor="news-review-status" className={LABEL}>Review status</label>
+          <select id="news-review-status" name="review_status" defaultValue={candidate?.review_status === 'published' ? 'approved' : (candidate?.review_status ?? 'pending')} className={INPUT}>
             {REVIEW_STATUSES.map(s => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
