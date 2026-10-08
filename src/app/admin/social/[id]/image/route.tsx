@@ -30,6 +30,8 @@
 import { ImageResponse } from 'next/og'
 import { cookies } from 'next/headers'
 import type { NextRequest } from 'next/server'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   SOCIAL_IMAGE_THEMES,
@@ -37,6 +39,7 @@ import {
 } from '@/lib/socialPack'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -46,6 +49,15 @@ async function isAdminAuthed(): Promise<boolean> {
   const store = await cookies()
   const token = store.get('admin_token')?.value
   return Boolean(token) && token === process.env.ADMIN_PASSWORD
+}
+
+async function readConcertBackground(): Promise<string | null> {
+  try {
+    const file = await readFile(path.join(process.cwd(), 'public/social-backgrounds/concert-cinematic-v2.png'))
+    return `data:image/png;base64,${file.toString('base64')}`
+  } catch {
+    return null
+  }
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
@@ -84,6 +96,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const theme = SOCIAL_IMAGE_THEMES[kind]
   const cityLabel = city ? city.toUpperCase() : 'UK LIVE EVENTS'
   const ctaLabel = kind === 'presale' ? 'Find presale details' : kind === 'tonight' ? 'Find something tonight' : 'Find your next show'
+  const concertBackground = await readConcertBackground()
 
   return new ImageResponse(
     (
@@ -98,8 +111,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           fontFamily: 'sans-serif',
         }}
       >
-        {/* The branded gradient is rendered entirely inside ImageResponse so
-            previews and downloads do not depend on third-party image hosts. */}
+        {concertBackground && (
+          // The background is embedded as data, so the renderer never has to
+          // fetch a public or third-party URL while creating the PNG.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={concertBackground}
+            alt=""
+            width={width}
+            height={height}
+            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'flex' }}
+          />
+        )}
+
+        {/* A branded gradient remains underneath as a safe fallback if the
+            local background asset is unavailable. */}
         <div
           style={{
             position: 'absolute', top: 0, left: 0,

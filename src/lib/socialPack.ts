@@ -147,7 +147,7 @@ export const SOCIAL_IMAGE_THEMES: Record<SocialImageKind, SocialImageTheme> = {
   tour_announcement: { badgeLabel: 'TOUR ANNOUNCEMENT', gradientFrom: '#7c3aed', gradientTo: '#ec4899', accent: '#fde047' },
   onsale:             { badgeLabel: 'ON SALE NOW',       gradientFrom: '#ef4444', gradientTo: '#f97316', accent: '#fef08a' },
   presale:            { badgeLabel: 'PRESALE ACCESS',    gradientFrom: '#06b6d4', gradientTo: '#4f46e5', accent: '#99f6e4' },
-  city_event:         { badgeLabel: 'LIVE IN THE UK',    gradientFrom: '#f43f5e', gradientTo: '#312e81', accent: '#fecdd3' },
+  city_event:         { badgeLabel: 'LIVE IN THE UK',    gradientFrom: '#071a3d', gradientTo: '#0b1024', accent: '#fbbf24' },
   tonight:            { badgeLabel: 'TONIGHT',           gradientFrom: '#7c2d12', gradientTo: '#e11d48', accent: '#fef08a' },
 }
 
