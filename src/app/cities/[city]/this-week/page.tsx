@@ -8,7 +8,9 @@
 // same fetchEventsThisWeek() the main city page uses, so this is safe to
 // ship for all 36 cities at once — no per-city manual content needed here
 // (unlike src/lib/cityGuides.ts, which does need real per-city research).
-export const revalidate = 3600
+// This page starts at tomorrow's London date, so it must roll over promptly
+// after midnight rather than serving yesterday's window for a full hour.
+export const revalidate = 300
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -19,6 +21,7 @@ import { CITIES } from '@/lib/cities'
 import { fetchEventsThisWeek } from '@/lib/eventPools'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
+import { buildCityCollectionSchema, cityThisWeekCanonicalUrl, cityThisWeekDescription, cityThisWeekTitle } from '@/lib/citySeo'
 
 export async function generateStaticParams() {
   return CITIES.map(c => ({ city: encodeURIComponent(c.name) }))
@@ -29,9 +32,9 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { city } = await params
   const cityName  = decodeURIComponent(city)
-  const canonical = `https://www.theshowfinder.com/cities/${encodeURIComponent(cityName)}/this-week`
-  const title     = `Events This Week in ${cityName}`
-  const desc      = `What's on in ${cityName} this week — concerts, theatre, comedy, sport and family events. Compare ticket prices across every major provider.`
+  const canonical = cityThisWeekCanonicalUrl(cityName)
+  const title     = cityThisWeekTitle(cityName)
+  const desc      = cityThisWeekDescription(cityName)
   const ogImage   = 'https://www.theshowfinder.com/og-image.png'
   return {
     title,
@@ -79,6 +82,12 @@ export default async function CityThisWeekPage({
       url:  `https://www.theshowfinder.com/events/${ev.slug}`,
     }))
   )
+  const collectionSchema = buildCityCollectionSchema({
+    cityName,
+    url: canonical,
+    name: cityThisWeekTitle(cityName),
+    description: cityThisWeekDescription(cityName),
+  })
 
   const guideIntro = CITY_GUIDE_INTROS[cityName]
 
@@ -87,6 +96,10 @@ export default async function CityThisWeekPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLdScript(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(collectionSchema) }}
       />
       {itemListSchema.itemListElement.length > 0 && (
         <script

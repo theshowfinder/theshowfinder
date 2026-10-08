@@ -21,6 +21,7 @@ import { venueCardBlurb } from '@/lib/venueBlurb'
 import { citySlug } from '@/lib/cityNews'
 import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
+import { buildCityCollectionSchema, cityCanonicalUrl, cityPageDescription, cityPageTitle } from '@/lib/citySeo'
 import CityNewsletterForm from '@/components/CityNewsletterForm'
 import { fetchEventsThisWeek, fetchTopEvents, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { resolveCityEventCount, normalizeCityFilterValue } from '@/lib/cityEventCount'
@@ -39,9 +40,9 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { city } = await params
   const cityName  = decodeURIComponent(city)
-  const canonical = `https://www.theshowfinder.com/cities/${encodeURIComponent(cityName)}`
-  const title     = `Concerts & Live Events in ${cityName}`
-  const desc      = `Find upcoming concerts, theatre, comedy and live events in ${cityName}. Compare ticket prices from all major providers.`
+  const canonical = cityCanonicalUrl(cityName)
+  const title     = cityPageTitle(cityName)
+  const desc      = cityPageDescription(cityName)
   const ogImage   = 'https://www.theshowfinder.com/og-image.png'
   return {
     title,
@@ -254,12 +255,22 @@ export default async function CityPage({
       url:  `https://www.theshowfinder.com/events/${ev.slug}`,
     }))
   )
+  const collectionSchema = buildCityCollectionSchema({
+    cityName,
+    url: canonical,
+    name: cityPageTitle(cityName),
+    description: cityPageDescription(cityName),
+  })
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLdScript(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(collectionSchema) }}
       />
       {itemListSchema.itemListElement.length > 0 && (
         <script
@@ -291,7 +302,7 @@ export default async function CityPage({
         <div className="relative max-w-7xl mx-auto">
           <p className="text-5xl mb-4 select-none">{cityConfig.emoji}</p>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-2">
-            Events in {cityName}
+            Concerts &amp; Live Events in {cityName}
           </h1>
           <p className="text-white/50 text-sm mb-8">
             {totalCount > 0
@@ -301,6 +312,20 @@ export default async function CityPage({
           <Suspense>
             <SearchBarWrapper />
           </Suspense>
+          <nav aria-label={`${cityName} event links`} className="flex flex-wrap gap-3 mt-6">
+            <Link
+              href={`/cities/${encodeURIComponent(cityName)}/this-week`}
+              className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
+            >
+              Events this week
+            </Link>
+            <Link
+              href={`/events?city=${encodeURIComponent(cityName)}`}
+              className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
+            >
+              All events in {cityName}
+            </Link>
+          </nav>
         </div>
       </div>
 
@@ -401,8 +426,10 @@ export default async function CityPage({
           </section>
         )}
 
-        {/* ── ON SALE THIS WEEK ── */}
-        <section>
+        {/* ── ON SALE THIS WEEK (omit the whole block when empty so the page
+             stays focused and does not present a thin empty section to users
+             or crawlers) ── */}
+        {onsaleGroups.length > 0 && <section>
           <div className="flex items-end justify-between mb-7">
             <div>
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
@@ -420,8 +447,7 @@ export default async function CityPage({
               View all →
             </Link>
           </div>
-          {onsaleGroups.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {onsaleGroups.map(group => (
                 <Link
                   key={group.slug}
@@ -460,20 +486,8 @@ export default async function CityPage({
                   </div>
                 </Link>
               ))}
-            </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center">
-              <p className="text-3xl mb-2">🎟️</p>
-              <p className="text-slate-500">
-                Nothing has gone on sale in {cityName} this week yet — check{' '}
-                <Link href={`/cities/${encodeURIComponent(cityName)}/this-week`} className="font-semibold hover:underline" style={{ color: '#026CDF' }}>
-                  what&rsquo;s already on
-                </Link>{' '}
-                or come back Monday for the new week.
-              </p>
-            </div>
-          )}
-        </section>
+          </div>
+        </section>}
 
         {/* ── TOP EVENTS (beyond this week, up to ~2 months out) ── */}
         {topEvents.length > 0 && (
