@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { searchGigsbergAffiliateEvents, type GigsbergAffiliateEvent } from '@/lib/gigsbergAffiliate'
 
 const PAGE_SIZE = 100
+const MAX_PAGES = 500
 
 export interface GigsbergCatalogueSyncResult {
   fetched: number
@@ -55,10 +56,23 @@ async function fetchAllUpcomingEvents(): Promise<{ events: GigsbergAffiliateEven
     })
     const items = response.items ?? []
     all.push(...items)
-    if (items.length === 0 || items.length < PAGE_SIZE || (response.lastPage && String(page) >= response.lastPage)) {
+    if (items.length === 0 || items.length < PAGE_SIZE || !response.nextPage || page >= MAX_PAGES) {
       return { events: all, pages: page }
     }
-    page += 1
+
+    let nextPage = page + 1
+    try {
+      const nextUrl = new URL(response.nextPage)
+      const cursor = nextUrl.searchParams.get('page')
+      if (cursor) nextPage = Number(cursor)
+    } catch {
+      const cursor = Number(response.nextPage)
+      if (Number.isFinite(cursor)) nextPage = cursor
+    }
+
+    // A malformed or repeated cursor must never create an endless import.
+    if (!Number.isFinite(nextPage) || nextPage <= page) return { events: all, pages: page }
+    page = nextPage
   }
 }
 
