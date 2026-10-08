@@ -25,16 +25,25 @@ export default function CityNewsletterForm({ cityName }: { cityName: string }) {
 
   return (
     <section
-      className="rounded-2xl px-6 py-8 sm:px-10 sm:py-10 flex flex-col sm:flex-row items-center gap-6 sm:gap-10"
-      style={{ backgroundColor: '#1A1A2E' }}
+      className="relative overflow-hidden rounded-2xl px-6 py-8 sm:px-10 sm:py-10 flex flex-col sm:flex-row items-center gap-7 sm:gap-10"
+      style={{ background: 'linear-gradient(135deg, #1A1A2E 0%, #25254A 60%, #3B1D4A 100%)' }}
     >
+      <div className="absolute -right-12 -top-16 h-40 w-40 rounded-full opacity-20" style={{ backgroundColor: '#FFB800' }} aria-hidden="true" />
       <div className="flex-1 text-center sm:text-left">
-        <h2 className="text-xl sm:text-2xl font-extrabold text-white mb-1.5">
+        <p className="text-xs font-extrabold uppercase tracking-[0.2em] mb-2" style={{ color: '#FFD84D' }}>
+          {cityName} ticket alerts
+        </p>
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-2 leading-tight">
           Never miss a {cityName} show
         </h2>
-        <p className="text-white/60 text-sm">
-          Get an alert the moment presale or on-sale opens for shows in {cityName}.
+        <p className="text-white/70 text-sm leading-relaxed max-w-md">
+          Get the best new concerts, presales and ticket-sale alerts in {cityName}, before you miss out.
         </p>
+        <div className="flex flex-wrap justify-center sm:justify-start gap-2 mt-4 text-xs font-semibold text-white/75">
+          <span className="rounded-full bg-white/10 px-3 py-1">Early alerts</span>
+          <span className="rounded-full bg-white/10 px-3 py-1">Local picks</span>
+          <span className="rounded-full bg-white/10 px-3 py-1">No spam</span>
+        </div>
       </div>
 
       <div className="w-full sm:w-auto shrink-0">
@@ -64,6 +73,7 @@ export default function CityNewsletterForm({ cityName }: { cityName: string }) {
                 {loading ? 'Subscribing…' : `Get ${cityName} Alerts`}
               </button>
             </form>
+            <p className="mt-2 text-white/45 text-xs">Free to join · unsubscribe any time</p>
             {error && <p className="mt-2 text-white/90 text-xs font-semibold">{error}</p>}
           </>
         )}

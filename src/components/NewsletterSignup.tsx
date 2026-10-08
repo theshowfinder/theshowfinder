@@ -47,9 +47,15 @@ export default function NewsletterSignup() {
           Never Miss a Show
         </h2>
 
-        <p className="text-white/80 text-lg mb-10 max-w-xl mx-auto leading-relaxed">
-          Get alerts the moment tickets go on sale for your favourite artists.
+        <p className="text-white/80 text-lg mb-5 max-w-xl mx-auto leading-relaxed">
+          Get the latest presales, onsales, tour announcements and local event picks in your inbox.
         </p>
+
+        <div className="flex flex-wrap justify-center gap-2 mb-9 text-xs font-bold text-white/90">
+          <span className="rounded-full bg-white/15 px-3 py-1.5">New announcements</span>
+          <span className="rounded-full bg-white/15 px-3 py-1.5">Presale alerts</span>
+          <span className="rounded-full bg-white/15 px-3 py-1.5">Local events</span>
+        </div>
 
         {success ? (
           <div className="inline-flex flex-col items-center gap-2 bg-white/20 text-white px-8 py-6 rounded-2xl text-center max-w-sm mx-auto">
