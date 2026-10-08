@@ -1,0 +1,12 @@
+/**
+ * Explicit SEO aliases for duplicate records identified in Search Console.
+ * Keep this list deliberately small: similarly named artists/events are not
+ * automatically interchangeable.
+ */
+export const ARTIST_SEO_ALIASES: Record<string, string> = {
+  'ian-shaw-Z917rgR7': 'ian-shaw-Z917CSo0',
+}
+
+export function getArtistSeoAlias(slug: string): string | null {
+  return ARTIST_SEO_ALIASES[slug] ?? null
+}

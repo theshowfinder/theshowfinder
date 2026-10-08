@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { getArtistSeoAlias } from '@/lib/seoAliases'
 
 export const maxDuration = 60
 
@@ -146,7 +147,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified:    new Date(),
     changeFrequency: 'weekly' as const,
     priority:        0.6,
-  }))
+  })).filter(a => !getArtistSeoAlias(a.url.split('/').pop() ?? ''))
 
   return [...staticPages, ...cityPages, ...cityThisWeekPages, ...eventPages, ...venuePages, ...artistPages]
 }

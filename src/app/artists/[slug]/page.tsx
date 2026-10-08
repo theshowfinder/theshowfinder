@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
@@ -11,6 +11,7 @@ import { CopyLinkButton } from '@/components/CopyLinkButton'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { jsonLdScript, buildBreadcrumbSchema } from '@/lib/jsonld'
 import { isBareProviderHomepage } from '@/lib/intelligence'
+import { getArtistSeoAlias } from '@/lib/seoAliases'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,6 +62,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ArtistPage({ params }: PageProps) {
   const { slug } = await params
+  const seoAlias = getArtistSeoAlias(slug)
+  if (seoAlias) redirect(`/artists/${seoAlias}`)
+
   const supabase = await createClient()
 
   const { data: artist } = await supabase
