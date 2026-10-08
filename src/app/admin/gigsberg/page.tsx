@@ -7,6 +7,7 @@ import {
   searchGigsbergAffiliateEvents,
   type GigsbergAffiliateEvent,
 } from '@/lib/gigsbergAffiliate'
+import { runGigsbergCatalogueSyncAction } from './actions'
 
 function formatDate(date: string, time?: string) {
   const value = new Date(`${date}${time ? `T${time}` : 'T00:00:00'}`)
@@ -24,10 +25,10 @@ function errorMessage(error: unknown) {
 export default async function GigsbergAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; city?: string }>
+  searchParams: Promise<{ q?: string; city?: string; synced?: string; updated?: string; syncError?: string }>
 }) {
   await requireAdmin()
-  const { q = '', city = '' } = await searchParams
+  const { q = '', city = '', synced, updated, syncError } = await searchParams
   const query = q.trim()
   const cityQuery = city.trim()
 
@@ -75,6 +76,19 @@ export default async function GigsbergAdminPage({
             </p>
             <p className="text-xs text-slate-500 mt-1">API key stays server-side</p>
           </div>
+        </section>
+
+        {synced && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">✓ Catalogue import complete: {synced} events fetched, {updated ?? synced} records saved.</div>}
+        {syncError && <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-3 text-sm">Catalogue import failed: {syncError}</div>}
+
+        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-extrabold text-slate-900">Catalogue import</h2>
+            <p className="text-sm text-slate-500 mt-1">Pull upcoming Gigsberg events into the private catalogue for matching.</p>
+          </div>
+          <form action={runGigsbergCatalogueSyncAction}>
+            <button type="submit" className="font-bold text-white px-5 py-2.5 rounded-lg text-sm" style={{ backgroundColor: '#1E3A8A' }}>Run catalogue import</button>
+          </form>
         </section>
 
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
