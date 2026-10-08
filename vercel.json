@@ -17,6 +17,10 @@
       "schedule": "45 2 * * *"
     },
     {
+      "path": "/api/cron/match-gigsberg",
+      "schedule": "0 3 * * *"
+    },
+    {
       "path": "/api/cron/sync-city-news",
       "schedule": "0 3 * * *"
     },
