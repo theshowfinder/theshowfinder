@@ -3,6 +3,8 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { bulkApproveNewsCandidatesAction } from '@/app/admin/actions'
+import SelectAllPendingCheckbox from './SelectAllPendingCheckbox'
 import {
   candidateAttentionReasons,
   resolveCityNewsTargets,
@@ -189,6 +191,7 @@ export default async function NewsCandidatesAdminPage({ searchParams }: { search
 
   // ── Filters (narrow which rows are shown; never change row order) ──────
   const filtered = rowsWithAttention.filter(({ item, reasons }) => matchesNewsQueueFilters(item, reasons, params, now))
+  const filteredPendingCount = filtered.filter(({ item }) => item.review_status === 'pending').length
 
   // Builds a filter-chip href that toggles one query param on/off while
   // preserving every other active filter — so chips combine (e.g. "Pending
@@ -281,10 +284,27 @@ export default async function NewsCandidatesAdminPage({ searchParams }: { search
             )}
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto">
-            <table className="w-full text-sm">
+          <form action={bulkApproveNewsCandidatesAction}>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 bg-white flex items-center gap-3 flex-wrap">
+                <button
+                  type="submit"
+                  className="font-bold text-white px-4 py-2 rounded-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: '#2563EB' }}
+                >
+                  Approve selected
+                </button>
+                <span className="text-xs text-slate-500">
+                  Select pending stories below. This approves them only — it does not publish them.
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50 text-left">
+                  <th className="px-4 py-3 font-semibold text-slate-600" aria-label="Select">
+                    <SelectAllPendingCheckbox count={filteredPendingCount} />
+                  </th>
                   <th className="px-4 py-3 font-semibold text-slate-600">Headline</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">Source</th>
                   <th className="px-4 py-3 font-semibold text-slate-600">Provenance</th>
@@ -300,6 +320,16 @@ export default async function NewsCandidatesAdminPage({ searchParams }: { search
               <tbody>
                 {filtered.map(({ item, reasons }) => (
                   <tr key={item.id} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50 ${reasons.length > 0 ? 'bg-amber-50/40' : ''}`}>
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        name="candidate_ids"
+                        value={item.id}
+                        disabled={item.review_status !== 'pending'}
+                        aria-label={`Select ${item.headline}`}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-40"
+                      />
+                    </td>
                     <td className="px-4 py-3 max-w-xs">
                       <p className="font-bold text-slate-900 line-clamp-2">
                         {reasons.length > 0 && <span title={reasons.map(r => ATTENTION_LABEL[r]).join(' · ')}>⚠ </span>}
@@ -350,7 +380,9 @@ export default async function NewsCandidatesAdminPage({ searchParams }: { search
                 ))}
               </tbody>
             </table>
+              </div>
           </div>
+          </form>
         )}
       </main>
     </div>

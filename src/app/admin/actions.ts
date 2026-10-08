@@ -819,6 +819,42 @@ export async function approveNewsCandidateAction(id: string) {
   revalidatePath('/admin/news/' + id)
 }
 
+/**
+ * Approve a checked set of pending inbox items in one editorial action.
+ * This intentionally stops at Approved: publishing still requires the
+ * individual destination review on the candidate page.
+ */
+export async function bulkApproveNewsCandidatesAction(formData: FormData) {
+  await checkAuth()
+
+  const ids = [...new Set(
+    formData.getAll('candidate_ids')
+      .filter((value): value is string => typeof value === 'string')
+      .map(value => value.trim())
+      .filter(Boolean),
+  )]
+
+  if (ids.length === 0) return
+
+  const db = createAdminClient()
+  const now = new Date().toISOString()
+  const { error } = await db
+    .from('news_candidates')
+    .update({
+      review_status: 'approved',
+      reviewed_at: now,
+      reviewed_by: ADMIN_IDENTITY,
+      updated_at: now,
+    })
+    .in('id', ids)
+    .eq('review_status', 'pending')
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin/news')
+  for (const id of ids) revalidatePath('/admin/news/' + id)
+}
+
 export async function rejectNewsCandidateAction(id: string) {
   await checkAuth()
   await setNewsCandidateReviewStatus(id, 'rejected', { reviewed_at: new Date().toISOString(), reviewed_by: ADMIN_IDENTITY })
