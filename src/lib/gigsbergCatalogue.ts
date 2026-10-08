@@ -4,6 +4,16 @@ import { CITIES } from '@/lib/cities'
 
 const PAGE_SIZE = 100
 const MAX_CITY_PAGES = 30
+const UK_COUNTRIES = new Set([
+  'uk',
+  'gb',
+  'great britain',
+  'united kingdom',
+  'england',
+  'scotland',
+  'wales',
+  'northern ireland',
+])
 
 export interface GigsbergCatalogueSyncResult {
   fetched: number
@@ -41,6 +51,10 @@ function toCatalogueRow(event: GigsbergAffiliateEvent) {
     raw: event,
     last_seen_at: new Date().toISOString(),
   }
+}
+
+function isUKEvent(event: GigsbergAffiliateEvent) {
+  return UK_COUNTRIES.has((event.country ?? '').trim().toLowerCase())
 }
 
 async function fetchCityEvents(city: string, from: string, to: string): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
@@ -84,7 +98,9 @@ async function fetchAllUpcomingEvents(): Promise<{ events: GigsbergAffiliateEven
     const results = await Promise.all(batch.map(city => fetchCityEvents(city.name, from, to)))
     for (const result of results) {
       pages += result.pages
-      for (const event of result.events) unique.set(event.id, event)
+      for (const event of result.events) {
+        if (isUKEvent(event)) unique.set(event.id, event)
+      }
     }
   }
 
