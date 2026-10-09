@@ -41,6 +41,23 @@ import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
 
+type FeaturedQueryResult = { data: EventWithVenue[] | null; error: { message: string } | null }
+
+async function queryFeaturedEvents(supabase: Awaited<ReturnType<typeof createClient>>, now: string): Promise<FeaturedQueryResult> {
+  try {
+    return await supabase
+      .from('events_with_venue')
+      .select('*')
+      .gte('start_date', now)
+      .in('status', LIVE_EVENT_STATUSES)
+      .order('venue_capacity', { ascending: false, nullsFirst: false })
+      .order('onsale_date',    { ascending: false, nullsFirst: true  })
+      .limit(100) as unknown as FeaturedQueryResult
+  } catch (err) {
+    return { data: null, error: { message: err instanceof Error ? err.message : 'unknown error' } }
+  }
+}
+
 async function FeaturedEvents() {
   const supabase = await createClient()
   const now = new Date().toISOString()
@@ -61,19 +78,11 @@ async function FeaturedEvents() {
   // Fetch more than needed to absorb title deduplication; primary sort is
   // venue_capacity desc so the biggest venues surface first, onsale_date desc
   // as a tiebreaker for venues with unknown capacity (nulls last).
-  let result: { data: EventWithVenue[] | null; error: { message: string } | null }
-  try {
-    result = await supabase
-      .from('events_with_venue')
-      .select('*')
-      .gte('start_date', now)
-      .in('status', LIVE_EVENT_STATUSES)
-      .order('venue_capacity', { ascending: false, nullsFirst: false })
-      .order('onsale_date',    { ascending: false, nullsFirst: true  })
-      .limit(100) as unknown as { data: EventWithVenue[] | null; error: { message: string } | null }
-  } catch (err) {
-    console.error('[homepage] Featured Shows query threw:', err)
-    result = { data: null, error: { message: err instanceof Error ? err.message : 'unknown error' } }
+  let result = await queryFeaturedEvents(supabase, now)
+  if (result.error) {
+    console.warn('[homepage] Featured Shows query failed; retrying once:', result.error.message)
+    await new Promise(resolve => setTimeout(resolve, 250))
+    result = await queryFeaturedEvents(supabase, now)
   }
 
   if (result.error) {
