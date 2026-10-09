@@ -18,6 +18,7 @@ type ShowfinderEvent = {
   start_date: string
   gigsberg_affiliate_url: string | null
   venue: { name: string; city: string } | null
+  artists: { artist: { name: string } | null }[]
 }
 
 export interface GigsbergMatchResult {
@@ -55,12 +56,18 @@ function score(catalogue: CatalogueRow, event: ShowfinderEvent) {
   const sameDate = dateOnly(catalogue.event_date) === dateOnly(event.start_date)
   const sameCity = normalize(catalogue.city) === normalize(event.venue?.city)
   const venueOverlap = tokenOverlap(catalogue.venue ?? '', event.venue?.name ?? '')
-  const performerName = normalize(catalogue.performer1 ?? '')
-  const eventTitle = normalize(event.title)
-  const performerExact = Boolean(performerName && (eventTitle === performerName || eventTitle.includes(performerName) || performerName.includes(eventTitle)))
+  const cataloguePerformers = [catalogue.performer1, catalogue.performer2].filter((name): name is string => Boolean(name?.trim()))
+  const eventNames = [event.title, ...(event.artists ?? []).map(row => row.artist?.name ?? '')]
+  const performerExact = cataloguePerformers.some(catalogueName => {
+    const performerName = normalize(catalogueName)
+    return eventNames.some(eventName => {
+      const candidate = normalize(eventName)
+      return Boolean(performerName && candidate && (candidate === performerName || candidate.includes(performerName) || performerName.includes(candidate)))
+    })
+  })
   const performerOverlap = Math.max(
-    tokenOverlap(catalogue.performer1 ?? '', event.title),
-    tokenOverlap(catalogue.performer2 ?? '', event.title),
+    ...cataloguePerformers.flatMap(catalogueName => eventNames.map(eventName => tokenOverlap(catalogueName, eventName))),
+    0,
   )
 
   let value = 0
@@ -75,7 +82,7 @@ export async function matchGigsbergCatalogue(): Promise<GigsbergMatchResult> {
   const db = createAdminClient()
   const [{ data: catalogue, error: catalogueError }, { data: events, error: eventsError }] = await Promise.all([
     db.from('gigsberg_catalogue_events').select('id, name, event_date, venue, city, performer1, performer2, url, matched_event_id').in('match_status', ['pending', 'review', 'no_match']).limit(50000),
-    db.from('events').select('id, title, start_date, gigsberg_affiliate_url, venue:venues(name, city)').gte('start_date', new Date().toISOString()).limit(50000),
+    db.from('events').select('id, title, start_date, gigsberg_affiliate_url, venue:venues(name, city), artists:event_artists(artist:artists(name))').gte('start_date', new Date().toISOString()).limit(50000),
   ]) as unknown as [
     { data: CatalogueRow[] | null; error: { message: string } | null },
     { data: ShowfinderEvent[] | null; error: { message: string } | null },
@@ -104,7 +111,7 @@ export async function matchGigsbergCatalogue(): Promise<GigsbergMatchResult> {
       matched_event_id: confident ? best.event.id : null,
       match_status: status,
       match_confidence: best ? Number(best.detail.value.toFixed(3)) : null,
-      match_reason: best ? `${best.event.title} (${Math.round(best.detail.value * 100)}% match)` : 'No close Showfinder event found',
+      match_reason: best ? `${best.event.title} (${Math.round(best.detail.value * 100)}% match${best.detail.performerExact ? ', artist confirmed' : ''})` : 'No close Showfinder event found',
       match_checked_at: new Date().toISOString(),
     }).eq('id', item.id)
 
