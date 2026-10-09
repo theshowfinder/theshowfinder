@@ -87,7 +87,7 @@ function buildProviders(event: Pick<EventDetail, 'tickets_url' | 'viagogo_url' |
   const primary = event.tickets_url
     ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: getTicketmasterAffiliateLink(event.tickets_url) }]
     : event.gigsberg_affiliate_url
-      ? [{ name: 'Gigsberg', tagline: event.gigsberg_inventory_status === 'available' ? 'Tickets available via Gigsberg' : 'Find tickets via Gigsberg', bg: '#1a1f6e', href: event.gigsberg_affiliate_url }]
+      ? [{ name: 'Gigsberg', tagline: event.gigsberg_inventory_status === 'available' ? 'Secondary-market tickets via Gigsberg' : 'Check availability on Gigsberg', bg: '#1a1f6e', href: event.gigsberg_affiliate_url }]
     : []
   const resale = [
     ...(event.tickets_url && event.gigsberg_affiliate_url ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: event.gigsberg_affiliate_url }] : []),
@@ -284,7 +284,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 className="hidden md:inline-flex items-center gap-2 text-white font-extrabold text-lg px-8 py-4 rounded-xl hover:opacity-90 transition-opacity shadow-lg"
                 style={{ backgroundColor: '#E8003D' }}
               >
-                Get Tickets ↗
+                {primary[0].name === 'Gigsberg' ? 'View tickets on Gigsberg ↗' : 'Get Tickets ↗'}
               </TrackedTicketLink>
             ) : (
               <a
@@ -340,7 +340,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm"
               style={{ backgroundColor: '#E8003D' }}
             >
-              Get Tickets ↗
+              {primary[0].name === 'Gigsberg' ? 'View tickets on Gigsberg ↗' : 'Get Tickets ↗'}
             </TrackedTicketLink>
           ) : (
             <a
@@ -489,7 +489,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               </div>
             ) : (
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-4">Primary Tickets</h3>
+                <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-4">{event.tickets_url ? 'Official Tickets' : 'Ticket Marketplace'}</h3>
                 <div className="flex flex-col gap-3">
                   {primary.map(({ name, tagline, bg, href }) => (
                     <div key={name}>
