@@ -60,12 +60,18 @@ export default async function GigsbergAdminPage({
     showfinderCounts.set(normalise(cityItem.name), result?.error ? 0 : (result?.count ?? 0))
   })
 
-  const { data: catalogueRows } = await db.from('gigsberg_catalogue_events').select('event_date, city').limit(50000) as unknown as { data: Array<{ event_date: string; city: string | null }> | null }
   const catalogueCounts = new Map<string, number>()
-  for (const row of catalogueRows ?? []) {
-    const cityName = normalise(row.city)
-    if (cityName) catalogueCounts.set(cityName, (catalogueCounts.get(cityName) ?? 0) + 1)
-  }
+  const today = new Date().toISOString().slice(0, 10)
+  const catalogueResults = await Promise.all(CITIES.map(cityItem =>
+    db.from('gigsberg_catalogue_events')
+      .select('*', { count: 'exact', head: true })
+      .ilike('city', cityItem.name)
+      .gte('event_date', today) as unknown as Promise<{ count: number | null; error: unknown }>
+  ))
+  CITIES.forEach((cityItem, index) => {
+    const result = catalogueResults[index]
+    catalogueCounts.set(normalise(cityItem.name), result?.error ? 0 : (result?.count ?? 0))
+  })
 
   const [eventResult, orderResult] = await Promise.allSettled([
     query || cityQuery
