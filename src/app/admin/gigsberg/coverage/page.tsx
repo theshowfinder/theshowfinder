@@ -15,14 +15,14 @@ export default async function GigsbergCoveragePage({ searchParams }: { searchPar
   const today = now.slice(0, 10)
 
   const [{ data: ticketmasterEvents }, { data: gigsbergEvents }] = await Promise.all([
-    db.from('events_with_venue')
-      .select('id, title, start_date, venue_name, venue_city, ticketmaster_id, gigsberg_affiliate_url')
-      .ilike('venue_city', city)
+    db.from('events')
+      .select('id, title, start_date, ticketmaster_id, gigsberg_affiliate_url, venue:venues!inner(name, city)')
+      .ilike('venues.city', city)
       .not('ticketmaster_id', 'is', null)
       .in('status', LIVE_EVENT_STATUSES)
       .gte('start_date', now)
       .order('start_date', { ascending: true })
-      .limit(5000) as unknown as Promise<{ data: Array<{ id: string; title: string; start_date: string; venue_name: string; venue_city: string; ticketmaster_id: string | null; gigsberg_affiliate_url: string | null }> | null }>,
+      .limit(5000) as unknown as Promise<{ data: Array<{ id: string; title: string; start_date: string; ticketmaster_id: string | null; gigsberg_affiliate_url: string | null; venue: { name: string; city: string } | null }> | null }>,
     db.from('gigsberg_catalogue_events')
       .select('id, name, event_date, event_time, venue, city, url, match_status, matched_event_id, inventory_status')
       .ilike('city', city)
@@ -31,7 +31,11 @@ export default async function GigsbergCoveragePage({ searchParams }: { searchPar
       .limit(5000) as unknown as Promise<{ data: Array<{ id: number; name: string; event_date: string; event_time: string | null; venue: string | null; city: string | null; url: string; match_status: string; matched_event_id: string | null; inventory_status: string }> | null }>,
   ])
 
-  const tmRows = ticketmasterEvents ?? []
+  const tmRows = (ticketmasterEvents ?? []).map(row => ({
+    ...row,
+    venue_name: row.venue?.name ?? '—',
+    venue_city: row.venue?.city ?? city,
+  }))
   const gbRows = gigsbergEvents ?? []
   const matched = gbRows.filter(row => row.matched_event_id).length
   const linked = tmRows.filter(row => row.gigsberg_affiliate_url).length
