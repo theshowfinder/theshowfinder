@@ -23,7 +23,7 @@ export async function runGigsbergCatalogueSyncAction() {
   try {
     const result = await syncGigsbergCatalogue()
     revalidatePath('/admin/gigsberg')
-    redirect(`/admin/gigsberg?synced=${result.fetched}&updated=${result.updated}`)
+    redirect(`/admin/gigsberg?synced=${result.fetched}&updated=${result.updated}&importCity=${encodeURIComponent(result.city)}&nextCity=${encodeURIComponent(result.nextCity ?? '')}`)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The catalogue import failed.'
     redirect(`/admin/gigsberg?syncError=${encodeURIComponent(message)}`)

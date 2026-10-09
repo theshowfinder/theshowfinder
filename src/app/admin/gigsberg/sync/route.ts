@@ -13,6 +13,8 @@ export async function GET() {
     const url = new URL('/admin/gigsberg', process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.theshowfinder.com')
     url.searchParams.set('synced', String(result.fetched))
     url.searchParams.set('updated', String(result.updated))
+    url.searchParams.set('importCity', result.city)
+    url.searchParams.set('nextCity', result.nextCity ?? '')
     return NextResponse.redirect(url)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The catalogue import failed.'

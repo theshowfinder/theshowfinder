@@ -25,6 +25,9 @@ function horizonIso() {
 }
 
 export interface GigsbergCatalogueSyncResult {
+  city: string
+  cityIndex: number
+  nextCity: string | null
   fetched: number
   inserted: number
   updated: number
@@ -82,7 +85,7 @@ async function fetchCityEvents(city: string, from: string, to: string): Promise<
   }
 }
 
-async function fetchAllEvents(): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
+async function fetchAllEvents(cityOverride?: string): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
   const from = todayIso()
   const to = horizonIso()
   const unique = new Map<number, GigsbergAffiliateEvent>()
@@ -92,8 +95,9 @@ async function fetchAllEvents(): Promise<{ events: GigsbergAffiliateEvent[]; pag
   // city list and filtering the returned country keeps this catalogue UK-only.
   // date_from excludes past events and date_to keeps the catalogue aligned
   // with the site's rolling 24-month coverage policy.
-  for (let index = 0; index < CITIES.length; index += 4) {
-    const batch = CITIES.slice(index, index + 4)
+  const cities = cityOverride ? CITIES.filter(city => city.name === cityOverride) : CITIES
+  for (let index = 0; index < cities.length; index += 4) {
+    const batch = cities.slice(index, index + 4)
     const results = await Promise.all(batch.map(city => fetchCityEvents(city.name, from, to)))
     for (const result of results) {
       pages += result.pages
@@ -106,22 +110,25 @@ async function fetchAllEvents(): Promise<{ events: GigsbergAffiliateEvent[]; pag
   return { events: [...unique.values()], pages }
 }
 
-export async function syncGigsbergCatalogue(): Promise<GigsbergCatalogueSyncResult> {
+export async function syncGigsbergCatalogue(cityOverride?: string): Promise<GigsbergCatalogueSyncResult> {
   const started = Date.now()
-  const { events, pages } = await fetchAllEvents()
   const db = createAdminClient()
+  const { data: syncState } = await db
+    .from('gigsberg_sync_state')
+    .select('current_city_index')
+    .eq('id', 1)
+    .maybeSingle() as unknown as { data: { current_city_index: number | null } | null }
+  const cityIndex = Math.max(0, Math.min(syncState?.current_city_index ?? 0, CITIES.length - 1))
+  const city = cityOverride && CITIES.some(item => item.name === cityOverride)
+    ? cityOverride
+    : CITIES[cityIndex].name
+  const effectiveCityIndex = CITIES.findIndex(item => item.name === city)
+  await db.from('gigsberg_sync_state').update({ status: 'running', last_started_at: new Date().toISOString() }).eq('id', 1)
+
+  const { events, pages } = await fetchAllEvents(city)
   let inserted = 0
   let updated = 0
   let errors = 0
-
-  // This table is a cache, not an editorial record. Rebuild it from the
-  // current UK/future result set so rows from the old worldwide import cannot
-  // remain visible in the matching queue.
-  const { error: clearError } = await db
-    .from('gigsberg_catalogue_events')
-    .delete()
-    .gte('id', 0)
-  if (clearError) throw new Error(clearError.message)
 
   for (let index = 0; index < events.length; index += 100) {
     const batch = events.slice(index, index + 100).map(toCatalogueRow)
@@ -142,7 +149,18 @@ export async function syncGigsbergCatalogue(): Promise<GigsbergCatalogueSyncResu
     updated += data?.length ?? batch.length
   }
 
+  const nextCityIndex = (effectiveCityIndex + 1) % CITIES.length
+  await db.from('gigsberg_sync_state').update({
+    status: 'idle',
+    current_city_index: nextCityIndex,
+    last_completed_at: new Date().toISOString(),
+    total_listings_synced: updated,
+  }).eq('id', 1)
+
   return {
+    city,
+    cityIndex: effectiveCityIndex,
+    nextCity: CITIES[nextCityIndex]?.name ?? null,
     fetched: events.length,
     inserted,
     updated,

@@ -28,10 +28,10 @@ function errorMessage(error: unknown) {
 export default async function GigsbergAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; city?: string; synced?: string; updated?: string; syncError?: string }>
+  searchParams: Promise<{ q?: string; city?: string; synced?: string; updated?: string; importCity?: string; nextCity?: string; syncError?: string }>
 }) {
   await requireAdmin()
-  const { q = '', city = '', synced, updated, syncError } = await searchParams
+  const { q = '', city = '', synced, updated, importCity, nextCity, syncError } = await searchParams
   const query = q.trim()
   const cityQuery = city.trim()
   const db = createAdminClient()
@@ -107,13 +107,13 @@ export default async function GigsbergAdminPage({
           </div>
         </section>
 
-        {synced && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">✓ Catalogue import complete: {synced} current/future UK events fetched, {updated ?? synced} records saved. Previous catalogue rows were replaced.</div>}
+        {synced && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">✓ {importCity || 'City'} import complete: {synced} current/future UK events fetched, {updated ?? synced} records saved. Existing catalogue records were preserved. Next city: {nextCity || 'the first city in the queue'}.</div>}
         {syncError && <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-3 text-sm">Catalogue import failed: {syncError}</div>}
 
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="text-lg font-extrabold text-slate-900">Catalogue import</h2>
-            <p className="text-sm text-slate-500 mt-1">Pull all current and future UK Gigsberg events into the private catalogue for matching.</p>
+            <p className="text-sm text-slate-500 mt-1">Import the next UK city across the rolling 24-month window. Existing catalogue decisions are preserved.</p>
           </div>
           <Link href="/admin/gigsberg/sync" className="font-bold text-white px-5 py-2.5 rounded-lg text-sm" style={{ backgroundColor: '#1E3A8A' }}>Run catalogue import</Link>
           <RunMatchingButton />
