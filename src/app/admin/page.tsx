@@ -46,6 +46,12 @@ export default async function AdminPage() {
             Gigsberg
           </Link>
           <Link
+            href="/admin/ticketmaster"
+            className="text-sm text-slate-500 hover:text-slate-700"
+          >
+            Ticketmaster
+          </Link>
+          <Link
             href="/admin/local-businesses"
             className="text-sm text-slate-500 hover:text-slate-700"
           >

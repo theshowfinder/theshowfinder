@@ -287,6 +287,7 @@ async function fetchTMPage(
   startDateTime: string,
   endDateTime: string,
   city?: string,
+  keyword?: string,
 ): Promise<FetchResult> {
   const url = new URL(`${TM_BASE}/events.json`)
   url.searchParams.set('apikey',             process.env.TICKETMASTER_API_KEY!)
@@ -299,6 +300,7 @@ async function fetchTMPage(
   url.searchParams.set('startDateTime',      startDateTime)
   url.searchParams.set('endDateTime',        endDateTime)
   if (city) url.searchParams.set('city', city)
+  if (keyword) url.searchParams.set('keyword', keyword)
 
   return fetchWithRetry(url, `"${classificationName}" page ${page}`)
 }
@@ -581,6 +583,54 @@ async function processEvent(
   if (!venueId) return 'error'
 
   return upsertEvent(db, tmEvent, venueId, upsertCategory, artistCache)
+}
+
+export interface TargetedTicketmasterResult {
+  keyword: string
+  city: string
+  from: string
+  to: string
+  fetched: number
+  inserted: number
+  skipped: number
+  errors: number
+}
+
+/** Import a narrow Ticketmaster search immediately, without waiting for the city queue. */
+export async function syncTicketmasterTargeted(input: {
+  keyword: string
+  city: string
+  from: string
+  to: string
+}): Promise<TargetedTicketmasterResult> {
+  const db = createAdminClient()
+  const venueCache = new Map<string, string>()
+  const artistCache = new Map<string, string>()
+  const start = `${input.from}T00:00:00Z`
+  const end = `${input.to}T23:59:59Z`
+  let fetched = 0
+  let inserted = 0
+  let skipped = 0
+  let errors = 0
+
+  for (const { classificationName, dbCategory } of SEGMENT_QUERIES) {
+    let totalPages = 1
+    for (let page = 0; page < totalPages; page++) {
+      const result = await fetchTMPage(classificationName, page, start, end, input.city, input.keyword)
+      totalPages = Math.min(result.totalPages || 1, 6)
+      fetched += result.events.length
+      for (const event of result.events) {
+        const outcome = await processEvent(db, event, dbCategory, venueCache, artistCache)
+        if (outcome === 'inserted' || outcome === 'updated') inserted++
+        else if (outcome === 'skipped' || outcome === 'no-venue') skipped++
+        else errors++
+      }
+      if (!result.events.length) break
+      if (page + 1 < totalPages) await sleep(RATE_LIMIT_MS)
+    }
+  }
+
+  return { keyword: input.keyword, city: input.city, from: input.from, to: input.to, fetched, inserted, skipped, errors }
 }
 
 const EVENT_CONCURRENCY = 20  // events processed in parallel per TM API page
