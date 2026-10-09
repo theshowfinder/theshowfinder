@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import RunMatchingButton from './RunMatchingButton'
+import RunCatalogueImportButton from './RunCatalogueImportButton'
 import {
   getGigsbergAffiliateOrders,
   searchGigsbergAffiliateEvents,
@@ -115,7 +116,7 @@ export default async function GigsbergAdminPage({
             <h2 className="text-lg font-extrabold text-slate-900">Catalogue import</h2>
             <p className="text-sm text-slate-500 mt-1">Import the next UK city across the rolling 24-month window. Existing catalogue decisions are preserved.</p>
           </div>
-          <Link href="/admin/gigsberg/sync" className="font-bold text-white px-5 py-2.5 rounded-lg text-sm" style={{ backgroundColor: '#1E3A8A' }}>Run catalogue import</Link>
+          <RunCatalogueImportButton />
           <RunMatchingButton />
           <Link href="/admin/gigsberg/matches" className="text-blue-600 font-semibold text-sm hover:underline">Review catalogue →</Link>
         </section>
