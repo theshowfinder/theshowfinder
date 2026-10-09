@@ -142,7 +142,7 @@ export default async function GigsbergAdminPage({
                 const showfinderCount = showfinderCounts.get(normalise(cityItem.name)) ?? 0
                 const catalogueCount = catalogueCounts.get(normalise(cityItem.name)) ?? 0
                 const status = showfinderCount === 0 && catalogueCount > 0 ? 'Needs import/matching' : catalogueCount === 0 ? 'No Gigsberg data' : 'Covered'
-                return <tr key={cityItem.name} className="border-b border-slate-100 last:border-0"><td className="py-2 font-semibold text-slate-800">{cityItem.emoji} {cityItem.name}</td><td className="py-2 text-slate-600">{showfinderCount}</td><td className="py-2 text-slate-600">{catalogueCount}</td><td className={`py-2 font-semibold ${status === 'Covered' ? 'text-green-700' : 'text-amber-700'}`}>{status}</td></tr>
+                return <tr key={cityItem.name} className="border-b border-slate-100 last:border-0"><td className="py-2 font-semibold text-slate-800"><Link href={`/admin/gigsberg/coverage?city=${encodeURIComponent(cityItem.name)}`} className="hover:text-blue-700">{cityItem.emoji} {cityItem.name}</Link></td><td className="py-2 text-slate-600">{showfinderCount}</td><td className="py-2 text-slate-600">{catalogueCount}</td><td className={`py-2 font-semibold ${status === 'Covered' ? 'text-green-700' : 'text-amber-700'}`}><Link href={`/admin/gigsberg/coverage?city=${encodeURIComponent(cityItem.name)}`} className="hover:underline">{status}</Link></td></tr>
               })}</tbody>
             </table>
           </div>
