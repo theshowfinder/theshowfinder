@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildFallbackDescription, cleanSourceDescription } from '@/lib/eventDescription'
 import type { EventCategory } from '@/lib/types/database'
+import { CITIES } from '@/lib/cities'
 
 type DbClient = ReturnType<typeof createAdminClient>
 
@@ -286,6 +287,7 @@ async function fetchTMPage(
   page: number,
   startDateTime: string,
   endDateTime: string,
+  city?: string,
 ): Promise<FetchResult> {
   const url = new URL(`${TM_BASE}/events.json`)
   url.searchParams.set('apikey',             process.env.TICKETMASTER_API_KEY!)
@@ -297,6 +299,7 @@ async function fetchTMPage(
   url.searchParams.set('sort',               'date,asc')
   url.searchParams.set('startDateTime',      startDateTime)
   url.searchParams.set('endDateTime',        endDateTime)
+  if (city) url.searchParams.set('city', city)
 
   return fetchWithRetry(url, `"${classificationName}" page ${page}`)
 }
@@ -615,6 +618,8 @@ async function fetchOnSaleSoonPage(
 // ── Public sync result type ──────────────────────────────────────────────────
 
 export interface SyncResult {
+  city:           string | null
+  nextCity:       string | null
   total:          number
   inserted:       number
   skipped:        number
@@ -689,6 +694,9 @@ export async function syncTicketmasterEvents(
   const db = createAdminClient()
   const pass = opts?.pass ?? 'both'
 
+  let importedCity: string | null = null
+  let nextCity: string | null = null
+
   await updateSyncState(db, { status: 'running', last_started_at: new Date().toISOString() })
   const venueCache = new Map<string, string>()
   const artistCache = new Map<string, string>()
@@ -697,32 +705,32 @@ export async function syncTicketmasterEvents(
   const byCategory: Record<string, number> = {}
 
   if (pass !== 'onsale') {
-  // The Discovery API caps a broad search at six pages. Scan one bounded
-  // 21-day window per daily run instead of requesting the whole 24-month
-  // catalogue at once. The rolling band index means the complete horizon is
-  // refreshed over roughly 37 runs without exhausting the daily API quota;
-  // the one-day overlap between adjacent windows prevents coverage gaps.
+  // Process one city per run. The city filter keeps the 24-month query small
+  // enough to page reliably, while the cursor in sync_state lets the next run
+  // continue alphabetically without replacing or losing another city's data.
+  const { data: state } = await (db.from('sync_state').select('current_city_index').eq('id', 1).maybeSingle() as unknown as Promise<{ data: { current_city_index: number | null } | null }>)
+  const cityIndex = Math.max(0, Math.min(state?.current_city_index ?? 0, CITIES.length - 1))
+  importedCity = CITIES[cityIndex].name
+  nextCity = CITIES[(cityIndex + 1) % CITIES.length]?.name ?? null
+  await updateSyncState(db, { status: 'running', last_started_at: new Date().toISOString() })
+
   const now = new Date()
   const horizon = new Date(now)
   horizon.setMonth(horizon.getMonth() + EVENT_HORIZON_MONTHS)
-  const horizonDays = Math.ceil((horizon.getTime() - now.getTime()) / 86400000)
-  const bandCount = Math.ceil(horizonDays / EVENT_BAND_STEP_DAYS)
-  const currentDay = Math.floor(now.getTime() / 86400000)
-  const bandIndex = Math.max(0, Math.min(opts?.bandIndex ?? (currentDay % bandCount), bandCount - 1))
-  const bandStart = opts?.startDateTime ? new Date(opts.startDateTime) : new Date(now.getTime() + bandIndex * EVENT_BAND_STEP_DAYS * 86400000)
-  const bandEnd = new Date(Math.min(bandStart.getTime() + EVENT_BAND_DAYS * 86400000, horizon.getTime()))
+  const bandStart = opts?.startDateTime ? new Date(opts.startDateTime) : now
+  const bandEnd = horizon
   const fmt = (date: Date) => date.toISOString().replace(/\.\d{3}Z$/, 'Z')
-  const bandLabel = `${bandStart.toISOString().slice(0, 10)}–${bandEnd.toISOString().slice(0, 10)}`
+  const bandLabel = `${importedCity}:${bandStart.toISOString().slice(0, 10)}–${bandEnd.toISOString().slice(0, 10)}`
 
   for (const { classificationName, dbCategory } of SEGMENT_QUERIES) {
-    console.log(`\n[TM] ── Fetching "${classificationName}" ${bandLabel} (band ${bandIndex + 1}/${bandCount}) ──`)
+    console.log(`\n[TM] ── Fetching "${classificationName}" for ${bandLabel} ──`)
     const segmentStarted = new Date().toISOString()
     const segmentResults: FetchResult[] = []
     let segmentEventsFound = 0
 
     let totalPages = 1
     for (let page = 0; page < totalPages; page++) {
-      const result = await fetchTMPage(classificationName, page, fmt(bandStart), fmt(bandEnd))
+      const result = await fetchTMPage(classificationName, page, fmt(bandStart), fmt(bandEnd), importedCity)
       segmentResults.push(result)
       totalPages = Math.min(result.totalPages || 1, 6)  // TM API hard-caps at page 5 (0-indexed)
       console.log(`[TM]    page ${page}/${totalPages - 1}: ${result.events.length} events (${result.status})`)
@@ -763,6 +771,8 @@ export async function syncTicketmasterEvents(
 
     await sleep(RATE_LIMIT_MS)
   }
+
+  await updateSyncState(db, { current_city_index: importedCity ? (CITIES.findIndex(item => item.name === importedCity) + 1) % CITIES.length : 0 })
   }
 
   // ── On-sale-soon pass ──────────────────────────────────────────────────────
@@ -877,5 +887,5 @@ export async function syncTicketmasterEvents(
     total_events_synced: total,
   })
 
-  return { total, inserted, skipped, errors, byCategory, durationMs, flagsUpdated, rateLimited }
+  return { city: importedCity, nextCity, total, inserted, skipped, errors, byCategory, durationMs, flagsUpdated, rateLimited }
 }
