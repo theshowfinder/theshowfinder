@@ -82,8 +82,7 @@ interface TMResponse {
 const TM_BASE       = 'https://app.ticketmaster.com/discovery/v2'
 const RATE_LIMIT_MS = 300   // ms between API calls
 const EVENT_HORIZON_MONTHS = 24
-const EVENT_BAND_DAYS = 21
-const EVENT_BAND_STEP_DAYS = 20 // one-day overlap prevents gaps between runs
+const EVENT_BAND_DAYS = 90
 
 interface SegmentQuery {
   classificationName: string
@@ -620,6 +619,8 @@ async function fetchOnSaleSoonPage(
 export interface SyncResult {
   city:           string | null
   nextCity:       string | null
+  dateRange:      string | null
+  nextDateRange:  string | null
   total:          number
   inserted:       number
   skipped:        number
@@ -696,6 +697,8 @@ export async function syncTicketmasterEvents(
 
   let importedCity: string | null = null
   let nextCity: string | null = null
+  let dateRange: string | null = null
+  let nextDateRange: string | null = null
 
   await updateSyncState(db, { status: 'running', last_started_at: new Date().toISOString() })
   const venueCache = new Map<string, string>()
@@ -705,22 +708,32 @@ export async function syncTicketmasterEvents(
   const byCategory: Record<string, number> = {}
 
   if (pass !== 'onsale') {
-  // Process one city per run. The city filter keeps the 24-month query small
-  // enough to page reliably, while the cursor in sync_state lets the next run
-  // continue alphabetically without replacing or losing another city's data.
-  const { data: state } = await (db.from('sync_state').select('current_city_index').eq('id', 1).maybeSingle() as unknown as Promise<{ data: { current_city_index: number | null } | null }>)
+  // Process one bounded date window for one city per run. Ticketmaster caps a
+  // query at six pages, so a broad 24-month request can silently omit events.
+  // The city and band cursors let repeated runs cover every 90-day window
+  // across the full 24-month horizon before moving to the next city.
+  const { data: state } = await (db.from('sync_state').select('current_city_index, current_band_index').eq('id', 1).maybeSingle() as unknown as Promise<{ data: { current_city_index: number | null; current_band_index: number | null } | null }>)
   const cityIndex = Math.max(0, Math.min(state?.current_city_index ?? 0, CITIES.length - 1))
+  const bandIndex = Math.max(0, state?.current_band_index ?? 0)
   importedCity = CITIES[cityIndex].name
-  nextCity = CITIES[(cityIndex + 1) % CITIES.length]?.name ?? null
-  await updateSyncState(db, { status: 'running', last_started_at: new Date().toISOString() })
 
   const now = new Date()
   const horizon = new Date(now)
   horizon.setMonth(horizon.getMonth() + EVENT_HORIZON_MONTHS)
-  const bandStart = opts?.startDateTime ? new Date(opts.startDateTime) : now
-  const bandEnd = horizon
+  const horizonDays = Math.ceil((horizon.getTime() - now.getTime()) / 86400000)
+  const bandCount = Math.ceil(horizonDays / EVENT_BAND_DAYS)
+  const safeBandIndex = Math.min(bandIndex, bandCount - 1)
+  const bandStart = opts?.startDateTime ? new Date(opts.startDateTime) : new Date(now.getTime() + safeBandIndex * EVENT_BAND_DAYS * 86400000)
+  const bandEnd = new Date(Math.min(bandStart.getTime() + EVENT_BAND_DAYS * 86400000, horizon.getTime()))
   const fmt = (date: Date) => date.toISOString().replace(/\.\d{3}Z$/, 'Z')
   const bandLabel = `${importedCity}:${bandStart.toISOString().slice(0, 10)}–${bandEnd.toISOString().slice(0, 10)}`
+  const isLastBand = safeBandIndex >= bandCount - 1
+  const nextCityIndex = isLastBand ? (cityIndex + 1) % CITIES.length : cityIndex
+  const nextBandIndex = isLastBand ? 0 : safeBandIndex + 1
+  nextCity = CITIES[nextCityIndex]?.name ?? null
+  dateRange = `${bandStart.toISOString().slice(0, 10)}–${bandEnd.toISOString().slice(0, 10)}`
+  nextDateRange = isLastBand ? `${nextCity} starting again` : `next 90-day window (${nextBandIndex + 1}/${bandCount})`
+  await updateSyncState(db, { status: 'running', last_started_at: new Date().toISOString() })
 
   for (const { classificationName, dbCategory } of SEGMENT_QUERIES) {
     console.log(`\n[TM] ── Fetching "${classificationName}" for ${bandLabel} ──`)
@@ -772,7 +785,7 @@ export async function syncTicketmasterEvents(
     await sleep(RATE_LIMIT_MS)
   }
 
-  await updateSyncState(db, { current_city_index: importedCity ? (CITIES.findIndex(item => item.name === importedCity) + 1) % CITIES.length : 0 })
+  await updateSyncState(db, { status: 'idle', current_city_index: nextCityIndex, current_band_index: nextBandIndex, last_completed_at: new Date().toISOString() })
   }
 
   // ── On-sale-soon pass ──────────────────────────────────────────────────────
@@ -887,5 +900,5 @@ export async function syncTicketmasterEvents(
     total_events_synced: total,
   })
 
-  return { city: importedCity, nextCity, total, inserted, skipped, errors, byCategory, durationMs, flagsUpdated, rateLimited }
+  return { city: importedCity, nextCity, dateRange, nextDateRange, total, inserted, skipped, errors, byCategory, durationMs, flagsUpdated, rateLimited }
 }
