@@ -633,6 +633,41 @@ export async function syncTicketmasterTargeted(input: {
   return { keyword: input.keyword, city: input.city, from: input.from, to: input.to, fetched, inserted, skipped, errors }
 }
 
+export async function syncTicketmasterCityWindow(input: {
+  city: string
+  from: string
+  to: string
+}): Promise<Omit<TargetedTicketmasterResult, 'keyword'> & { keyword: null }> {
+  const db = createAdminClient()
+  const venueCache = new Map<string, string>()
+  const artistCache = new Map<string, string>()
+  const start = `${input.from}T00:00:00Z`
+  const end = `${input.to}T23:59:59Z`
+  let fetched = 0
+  let inserted = 0
+  let skipped = 0
+  let errors = 0
+
+  for (const { classificationName, dbCategory } of SEGMENT_QUERIES) {
+    let totalPages = 1
+    for (let page = 0; page < totalPages; page++) {
+      const result = await fetchTMPage(classificationName, page, start, end, input.city)
+      totalPages = Math.min(result.totalPages || 1, 6)
+      fetched += result.events.length
+      for (const event of result.events) {
+        const outcome = await processEvent(db, event, dbCategory, venueCache, artistCache)
+        if (outcome === 'inserted' || outcome === 'updated') inserted++
+        else if (outcome === 'skipped' || outcome === 'no-venue') skipped++
+        else errors++
+      }
+      if (!result.events.length) break
+      if (page + 1 < totalPages) await sleep(RATE_LIMIT_MS)
+    }
+  }
+
+  return { keyword: null, city: input.city, from: input.from, to: input.to, fetched, inserted, skipped, errors }
+}
+
 const EVENT_CONCURRENCY = 20  // events processed in parallel per TM API page
 
 // ── On-sale-soon fetch ───────────────────────────────────────────────────────
