@@ -13,8 +13,16 @@ export default async function GigsbergCoveragePage({ searchParams }: { searchPar
   const db = createAdminClient()
   const now = new Date().toISOString()
   const today = now.slice(0, 10)
+  type CountResult = { count: number | null }
 
-  const [{ data: ticketmasterEvents, count: ticketmasterCount }, { data: gigsbergEvents, count: gigsbergCount }] = await Promise.all([
+  const [
+    { data: ticketmasterEvents, count: ticketmasterCount },
+    { data: gigsbergEvents, count: gigsbergCount },
+    { count: bothLinksCount },
+    { count: ticketmasterOnlyCount },
+    { count: gigsbergOnlyCount },
+    { count: gigsbergMatchedCount },
+  ] = await Promise.all([
     db.from('events')
       .select('id, title, start_date, ticketmaster_id, gigsberg_affiliate_url, venue:venues!inner(name, city)', { count: 'exact' })
       .ilike('venues.city', city)
@@ -29,6 +37,32 @@ export default async function GigsbergCoveragePage({ searchParams }: { searchPar
       .gte('event_date', today)
       .order('event_date', { ascending: true })
       .limit(5000) as unknown as Promise<{ data: Array<{ id: number; name: string; event_date: string; event_time: string | null; venue: string | null; city: string | null; url: string; match_status: string; matched_event_id: string | null; inventory_status: string }> | null; count: number | null }>,
+    db.from('events')
+      .select('id, venue:venues!inner(city)', { count: 'exact', head: true })
+      .ilike('venues.city', city)
+      .not('ticketmaster_id', 'is', null)
+      .not('gigsberg_affiliate_url', 'is', null)
+      .in('status', LIVE_EVENT_STATUSES)
+      .gte('start_date', now) as unknown as Promise<CountResult>,
+    db.from('events')
+      .select('id, venue:venues!inner(city)', { count: 'exact', head: true })
+      .ilike('venues.city', city)
+      .not('ticketmaster_id', 'is', null)
+      .is('gigsberg_affiliate_url', null)
+      .in('status', LIVE_EVENT_STATUSES)
+      .gte('start_date', now) as unknown as Promise<CountResult>,
+    db.from('events')
+      .select('id, venue:venues!inner(city)', { count: 'exact', head: true })
+      .ilike('venues.city', city)
+      .is('ticketmaster_id', null)
+      .not('gigsberg_affiliate_url', 'is', null)
+      .in('status', LIVE_EVENT_STATUSES)
+      .gte('start_date', now) as unknown as Promise<CountResult>,
+    db.from('gigsberg_catalogue_events')
+      .select('id', { count: 'exact', head: true })
+      .ilike('city', city)
+      .gte('event_date', today)
+      .not('matched_event_id', 'is', null) as unknown as Promise<CountResult>,
   ])
 
   const tmRows = (ticketmasterEvents ?? []).map(row => ({
@@ -37,14 +71,13 @@ export default async function GigsbergCoveragePage({ searchParams }: { searchPar
     venue_city: row.venue?.city ?? city,
   }))
   const gbRows = gigsbergEvents ?? []
-  const matched = gbRows.filter(row => row.matched_event_id).length
-  const linked = tmRows.filter(row => row.gigsberg_affiliate_url).length
+  const gigsbergAwaitingCount = Math.max((gigsbergCount ?? 0) - (gigsbergMatchedCount ?? 0), 0)
 
   return <main className="min-h-screen bg-slate-50 px-4 sm:px-6 py-8">
     <div className="max-w-[1500px] mx-auto space-y-6">
       <header className="flex items-center gap-4"><Link href="/admin/gigsberg" className="text-slate-400 hover:text-slate-600 text-sm">← Gigsberg</Link><h1 className="text-2xl font-extrabold text-slate-900">{city} source coverage</h1></header>
       <form method="get" className="bg-white rounded-2xl border border-slate-200 p-5 flex gap-3 items-end"><label className="text-sm font-semibold text-slate-600">City<select name="city" defaultValue={city} className="block mt-1 border border-slate-300 rounded-lg px-3 py-2"><option value="">Choose a city</option>{CITIES.map(item => <option key={item.name}>{item.name}</option>)}</select></label><button className="bg-blue-900 text-white font-bold rounded-lg px-5 py-2">View coverage</button></form>
-      <section className="grid gap-4 sm:grid-cols-4"><Metric label="Ticketmaster imported" value={ticketmasterCount ?? 0} /><Metric label="Gigsberg imported" value={gigsbergCount ?? 0} /><Metric label="Gigsberg matched" value={matched} /><Metric label="Gigsberg links live" value={linked} /></section>
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><Metric label="Ticketmaster total" value={ticketmasterCount ?? 0} /><Metric label="Gigsberg catalogue total" value={gigsbergCount ?? 0} /><Metric label="Both links live" value={bothLinksCount ?? 0} /><Metric label="Ticketmaster only" value={ticketmasterOnlyCount ?? 0} /><Metric label="Gigsberg-only pages" value={gigsbergOnlyCount ?? 0} /><Metric label="Gigsberg awaiting match/approval" value={gigsbergAwaitingCount} /></section>
       <section className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="text-lg font-extrabold mb-4">Gigsberg events imported from {city}</h2><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm"><thead><tr className="border-b text-left"><th className="py-2">Event</th><th>Date / venue</th><th>Status</th><th>Match</th><th>Source</th></tr></thead><tbody>{gbRows.map(row => <tr key={row.id} className="border-b last:border-0"><td className="py-3 font-semibold">{row.name}</td><td className="text-slate-600">{row.event_date}<br />{row.venue ?? '—'}</td><td>{row.inventory_status}</td><td>{row.matched_event_id ? 'Matched' : 'Unmatched'}</td><td><a href={row.url} target="_blank" rel="noreferrer" className="text-blue-600 font-semibold">Open Gigsberg →</a></td></tr>)}</tbody></table>{gbRows.length === 0 && <p className="py-8 text-center text-slate-500">No future Gigsberg records currently stored for {city}.</p>}</div></section>
       <section className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="text-lg font-extrabold mb-4">Ticketmaster events imported from {city}</h2><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm"><thead><tr className="border-b text-left"><th className="py-2">Event</th><th>Date / venue</th><th>Source</th><th>Gigsberg match</th></tr></thead><tbody>{tmRows.map(row => <tr key={row.id} className="border-b last:border-0"><td className="py-3 font-semibold">{row.title}</td><td className="text-slate-600">{new Date(row.start_date).toLocaleDateString('en-GB')}<br />{row.venue_name}</td><td className="text-slate-500">Ticketmaster</td><td>{row.gigsberg_affiliate_url ? 'Matched / linked' : 'Not matched'}</td></tr>)}</tbody></table></div></section>
     </div>
