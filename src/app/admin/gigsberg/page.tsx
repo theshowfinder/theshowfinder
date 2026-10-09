@@ -41,23 +41,26 @@ export default async function GigsbergAdminPage({
   let orderTotal: number | null = null
   let orderError: string | null = null
 
-  const [{ data: showfinderRows }, { data: catalogueRows }] = await Promise.all([
-    // Use the same public event view and live-status rules as the city pages.
-    // The previous venue join could undercount cities because it bypassed the
-    // view's normalised venue_city value and public status filtering.
-    db.from('events_with_venue').select('start_date, venue_city, status').gte('start_date', new Date().toISOString()).in('status', LIVE_EVENT_STATUSES).limit(50000),
-    db.from('gigsberg_catalogue_events').select('event_date, city').limit(50000),
-  ]) as unknown as [
-    { data: Array<{ start_date: string; venue_city: string | null; status: string }> | null },
-    { data: Array<{ event_date: string; city: string | null }> | null },
-  ]
   const normalise = (value: string | null | undefined) => (value ?? '').trim().toLowerCase()
+  const nowISO = new Date().toISOString()
+  // Count each city separately. A single large events query is subject to
+  // Supabase/PostgREST's row cap, which can make later cities falsely appear
+  // empty once the response has filled with rows from larger cities.
+  const showfinderResults = await Promise.all(CITIES.map(cityItem =>
+    db.from('events_with_venue')
+      .select('*', { count: 'exact', head: true })
+      .ilike('venue_city', cityItem.name)
+      .in('status', LIVE_EVENT_STATUSES)
+      .gte('start_date', nowISO) as unknown as Promise<{ count: number | null; error: unknown }>
+  ))
   const showfinderCounts = new Map<string, number>()
+  CITIES.forEach((cityItem, index) => {
+    const result = showfinderResults[index]
+    showfinderCounts.set(normalise(cityItem.name), result?.error ? 0 : (result?.count ?? 0))
+  })
+
+  const { data: catalogueRows } = await db.from('gigsberg_catalogue_events').select('event_date, city').limit(50000) as unknown as { data: Array<{ event_date: string; city: string | null }> | null }
   const catalogueCounts = new Map<string, number>()
-  for (const row of showfinderRows ?? []) {
-    const cityName = normalise(row.venue_city)
-    if (cityName) showfinderCounts.set(cityName, (showfinderCounts.get(cityName) ?? 0) + 1)
-  }
   for (const row of catalogueRows ?? []) {
     const cityName = normalise(row.city)
     if (cityName) catalogueCounts.set(cityName, (catalogueCounts.get(cityName) ?? 0) + 1)
