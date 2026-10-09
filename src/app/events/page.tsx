@@ -58,6 +58,15 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
 
 const PAGE_SIZE = 12
 
+function searchSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 async function CityArtists({ city }: { city: string }) {
   const supabase = await createClient()
   const now = new Date().toISOString()
@@ -140,7 +149,15 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
 
   if (searchParams.category) query = query.eq('category', searchParams.category)
   if (searchParams.city)     query = query.eq('venue_city', searchParams.city)
-  if (searchParams.q)        query = query.ilike('title', `%${searchParams.q}%`)
+  if (searchParams.q) {
+    // Ticketmaster titles often include punctuation (for example "Mr. Polska")
+    // while visitors search without it ("Mr Polska"). The slug is generated
+    // from the same title with punctuation removed, so searching both fields
+    // keeps imported events discoverable without changing their display title.
+    const term = searchParams.q.replace(/[,%()]/g, '').trim()
+    const slugTerm = searchSlug(searchParams.q)
+    query = query.or(`title.ilike.%${term}%,slug.ilike.%${slugTerm}%`)
+  }
 
   const { data: events, count } = await query
 
