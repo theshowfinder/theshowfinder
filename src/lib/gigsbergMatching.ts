@@ -56,7 +56,15 @@ function score(catalogue: CatalogueRow, event: ShowfinderEvent) {
   const sameDate = dateOnly(catalogue.event_date) === dateOnly(event.start_date)
   const sameCity = normalize(catalogue.city) === normalize(event.venue?.city)
   const venueOverlap = tokenOverlap(catalogue.venue ?? '', event.venue?.name ?? '')
-  const cataloguePerformers = [catalogue.performer1, catalogue.performer2].filter((name): name is string => Boolean(name?.trim()))
+  // Some catalogue records have the artist only in the event name and leave
+  // performer1/performer2 empty. Keep the structured performer fields first,
+  // but use the event name as a fallback so obvious artist/date/city matches
+  // are not sent through manual review.
+  const cataloguePerformers = [...new Set(
+    [catalogue.performer1, catalogue.performer2, catalogue.name]
+      .filter((name): name is string => Boolean(name?.trim()))
+      .map(name => name.trim()),
+  )]
   const titlePerformerExact = cataloguePerformers.some(catalogueName => {
     const performerName = normalize(catalogueName)
     const candidate = normalize(event.title)
