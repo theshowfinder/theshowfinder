@@ -11,6 +11,10 @@ import type { EventWithVenue, Artist } from '@/lib/types/database'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import type { Metadata } from 'next'
 
+// Search results must reflect newly imported Ticketmaster/Gigsberg events
+// immediately; serving a cached page can hide an event that is already in DB.
+export const dynamic = 'force-dynamic'
+
 interface SearchParams {
   category?: string
   city?: string
