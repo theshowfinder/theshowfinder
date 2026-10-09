@@ -6,9 +6,11 @@ import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 
 export const dynamic = 'force-dynamic'
 
-export default async function GigsbergCoveragePage({ searchParams }: { searchParams: Promise<{ city?: string }> }) {
+export default async function GigsbergCoveragePage({ searchParams }: { searchParams: Promise<{ city?: string; source?: string }> }) {
   await requireAdmin()
-  const requestedCity = (await searchParams).city?.trim() ?? ''
+  const requestedParams = await searchParams
+  const requestedCity = requestedParams.city?.trim() ?? ''
+  const sourceFilter = requestedParams.source
   const city = CITIES.find(item => item.name.toLowerCase() === requestedCity.toLowerCase())?.name ?? CITIES[0].name
   const db = createAdminClient()
   const now = new Date().toISOString()
@@ -71,17 +73,20 @@ export default async function GigsbergCoveragePage({ searchParams }: { searchPar
     venue_city: row.venue?.city ?? city,
   }))
   const gbRows = gigsbergEvents ?? []
+  const visibleTmRows = sourceFilter === 'ticketmaster-only'
+    ? tmRows.filter(row => !row.gigsberg_affiliate_url)
+    : tmRows
   const gigsbergAwaitingCount = Math.max((gigsbergCount ?? 0) - (gigsbergMatchedCount ?? 0), 0)
 
   return <main className="min-h-screen bg-slate-50 px-4 sm:px-6 py-8">
     <div className="max-w-[1500px] mx-auto space-y-6">
       <header className="flex items-center gap-4"><Link href="/admin/gigsberg" className="text-slate-400 hover:text-slate-600 text-sm">← Gigsberg</Link><h1 className="text-2xl font-extrabold text-slate-900">{city} source coverage</h1></header>
       <form method="get" className="bg-white rounded-2xl border border-slate-200 p-5 flex gap-3 items-end"><label className="text-sm font-semibold text-slate-600">City<select name="city" defaultValue={city} className="block mt-1 border border-slate-300 rounded-lg px-3 py-2"><option value="">Choose a city</option>{CITIES.map(item => <option key={item.name}>{item.name}</option>)}</select></label><button className="bg-blue-900 text-white font-bold rounded-lg px-5 py-2">View coverage</button></form>
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><Metric label="Ticketmaster total" value={ticketmasterCount ?? 0} /><Metric label="Gigsberg catalogue total" value={gigsbergCount ?? 0} /><Metric label="Both links live" value={bothLinksCount ?? 0} /><Metric label="Ticketmaster only" value={ticketmasterOnlyCount ?? 0} /><Metric label="Gigsberg-only pages" value={gigsbergOnlyCount ?? 0} /><Metric label="Gigsberg awaiting match/approval" value={gigsbergAwaitingCount} /></section>
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><Metric href="#ticketmaster" label="Ticketmaster total" value={ticketmasterCount ?? 0} /><Metric href={`/admin/gigsberg/matches?city=${encodeURIComponent(city)}`} label="Gigsberg catalogue total" value={gigsbergCount ?? 0} /><Metric href={`/admin/gigsberg/matches?city=${encodeURIComponent(city)}&view=matched&filter=both`} label="Both links live" value={bothLinksCount ?? 0} /><Metric href={`/admin/gigsberg/coverage?city=${encodeURIComponent(city)}&source=ticketmaster-only#ticketmaster`} label="Ticketmaster only" value={ticketmasterOnlyCount ?? 0} /><Metric href={`/admin/gigsberg/matches?city=${encodeURIComponent(city)}&view=matched&filter=gigsberg_only`} label="Gigsberg-only pages" value={gigsbergOnlyCount ?? 0} /><Metric href={`/admin/gigsberg/matches?city=${encodeURIComponent(city)}&filter=awaiting`} label="Gigsberg awaiting match/approval" value={gigsbergAwaitingCount} /></section>
       <section className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="text-lg font-extrabold mb-4">Gigsberg events imported from {city}</h2><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm"><thead><tr className="border-b text-left"><th className="py-2">Event</th><th>Date / venue</th><th>Status</th><th>Match</th><th>Source</th></tr></thead><tbody>{gbRows.map(row => <tr key={row.id} className="border-b last:border-0"><td className="py-3 font-semibold">{row.name}</td><td className="text-slate-600">{row.event_date}<br />{row.venue ?? '—'}</td><td>{row.inventory_status}</td><td>{row.matched_event_id ? 'Matched' : 'Unmatched'}</td><td><a href={row.url} target="_blank" rel="noreferrer" className="text-blue-600 font-semibold">Open Gigsberg →</a></td></tr>)}</tbody></table>{gbRows.length === 0 && <p className="py-8 text-center text-slate-500">No future Gigsberg records currently stored for {city}.</p>}</div></section>
-      <section className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="text-lg font-extrabold mb-4">Ticketmaster events imported from {city}</h2><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm"><thead><tr className="border-b text-left"><th className="py-2">Event</th><th>Date / venue</th><th>Source</th><th>Gigsberg match</th></tr></thead><tbody>{tmRows.map(row => <tr key={row.id} className="border-b last:border-0"><td className="py-3 font-semibold">{row.title}</td><td className="text-slate-600">{new Date(row.start_date).toLocaleDateString('en-GB')}<br />{row.venue_name}</td><td className="text-slate-500">Ticketmaster</td><td>{row.gigsberg_affiliate_url ? 'Matched / linked' : 'Not matched'}</td></tr>)}</tbody></table></div></section>
+      <section id="ticketmaster" className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="text-lg font-extrabold mb-4">Ticketmaster events imported from {city}</h2><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm"><thead><tr className="border-b text-left"><th className="py-2">Event</th><th>Date / venue</th><th>Source</th><th>Gigsberg match</th></tr></thead><tbody>{visibleTmRows.map(row => <tr key={row.id} className="border-b last:border-0"><td className="py-3 font-semibold">{row.title}</td><td className="text-slate-600">{new Date(row.start_date).toLocaleDateString('en-GB')}<br />{row.venue_name}</td><td className="text-slate-500">Ticketmaster</td><td>{row.gigsberg_affiliate_url ? 'Matched / linked' : 'Not matched'}</td></tr>)}</tbody></table></div></section>
     </div>
   </main>
 }
 
-function Metric({ label, value }: { label: string; value: number }) { return <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-xs uppercase tracking-wide font-bold text-slate-400">{label}</p><p className="text-3xl font-extrabold text-slate-900 mt-2">{value}</p></div> }
+function Metric({ href, label, value }: { href?: string; label: string; value: number }) { const content = <><p className="text-xs uppercase tracking-wide font-bold text-slate-400">{label}</p><p className="text-3xl font-extrabold text-slate-900 mt-2">{value}</p><p className="text-xs text-blue-600 font-semibold mt-2">View events →</p></>; return href ? <Link href={href} className="block bg-white rounded-2xl border border-slate-200 p-5 hover:border-blue-400 hover:shadow-sm">{content}</Link> : <div className="bg-white rounded-2xl border border-slate-200 p-5">{content}</div> }

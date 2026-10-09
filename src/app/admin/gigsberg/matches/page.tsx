@@ -22,33 +22,43 @@ type MatchRow = {
   image_status: string
 }
 
-type PossibleEvent = { id: string; title: string; slug: string }
+type PossibleEvent = { id: string; title: string; slug: string; ticketmaster_id: string | null }
 
-export default async function GigsbergMatchesPage({ searchParams }: { searchParams: Promise<{ checked?: string; matched?: string; review?: string; noMatch?: string; errors?: string; approved?: string; error?: string; inventory?: string; view?: string }> }) {
+export default async function GigsbergMatchesPage({ searchParams }: { searchParams: Promise<{ checked?: string; matched?: string; review?: string; noMatch?: string; errors?: string; approved?: string; error?: string; inventory?: string; view?: string; city?: string; filter?: string }> }) {
   await requireAdmin()
   const params = await searchParams
   const matchedView = params.view === 'matched'
+  const city = params.city?.trim() ?? ''
+  const filter = params.filter ?? ''
   const db = createAdminClient()
-  const { data, error } = await db
+  const statuses = matchedView
+    ? filter === 'gigsberg_only' ? ['approved_new'] : ['auto_matched', 'approved_existing', 'approved_new']
+    : filter === 'awaiting' ? ['pending', 'review'] : ['pending', 'review', 'no_match']
+  let query = db
     .from('gigsberg_catalogue_events')
     .select('id, name, event_date, venue, city, performer1, url, match_status, match_confidence, match_reason, matched_event_id, inventory_status, inventory_checked_at, image_status')
-    .in('match_status', matchedView ? ['auto_matched', 'approved_existing', 'approved_new'] : ['pending', 'review', 'no_match'])
+    .in('match_status', statuses)
+  if (city) query = query.ilike('city', city)
+  const { data, error } = await query
     .order('event_date', { ascending: true })
     .limit(500) as unknown as { data: MatchRow[] | null; error: { message: string } | null }
 
   const rows = data ?? []
   const eventIds = rows.map(row => row.matched_event_id).filter((id): id is string => Boolean(id))
   const { data: possibleEvents } = eventIds.length
-    ? await db.from('events').select('id, title, slug').in('id', eventIds)
+    ? await db.from('events').select('id, title, slug, ticketmaster_id').in('id', eventIds)
     : { data: [] as PossibleEvent[] }
   const eventMap = new Map((possibleEvents ?? []).map(event => [event.id, event as PossibleEvent]))
+  const visibleRows = filter === 'both'
+    ? rows.filter(row => Boolean(row.matched_event_id && eventMap.get(row.matched_event_id)?.ticketmaster_id))
+    : rows
 
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4">
         <Link href="/admin/gigsberg" className="text-slate-400 hover:text-slate-600 text-sm">← Gigsberg</Link>
-        <h1 className="text-xl font-extrabold text-slate-900">Gigsberg {matchedView ? 'Matched Events' : 'Matches'}</h1>
-        <span className="text-slate-400 text-sm">{rows.length} catalogue records shown</span>
+        <h1 className="text-xl font-extrabold text-slate-900">Gigsberg {matchedView ? 'Matched Events' : 'Matches'}{city ? ` — ${city}` : ''}</h1>
+        <span className="text-slate-400 text-sm">{visibleRows.length} catalogue records shown</span>
         <div className="ml-auto flex gap-2 text-sm font-semibold">
           <Link href="/admin/gigsberg/matches" className={`px-3 py-1.5 rounded-lg ${!matchedView ? 'bg-slate-900 text-white' : 'text-blue-600 hover:bg-blue-50'}`}>Needs review</Link>
           <Link href="/admin/gigsberg/matches?view=matched" className={`px-3 py-1.5 rounded-lg ${matchedView ? 'bg-slate-900 text-white' : 'text-blue-600 hover:bg-blue-50'}`}>Matched</Link>
@@ -61,7 +71,7 @@ export default async function GigsbergMatchesPage({ searchParams }: { searchPara
         {params.inventory && <div className={`rounded-xl px-5 py-4 mb-6 text-sm font-semibold ${params.inventory === 'available' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-amber-50 border border-amber-200 text-amber-800'}`}>{params.inventory === 'available' ? '✓ Inventory found — this event can be highlighted.' : params.inventory === 'no_inventory' ? 'No current inventory found; keep this event unhighlighted.' : 'Inventory could not be confirmed.'}</div>}
         {error ? (
           <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-6">Unable to load matches: {error.message}</div>
-        ) : rows.length === 0 ? (
+        ) : visibleRows.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500">No Gigsberg catalogue records found.</div>
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
@@ -73,7 +83,7 @@ export default async function GigsbergMatchesPage({ searchParams }: { searchPara
                 <th className="px-4 py-3 font-semibold text-slate-600">Possible match</th>
                 <th className="px-4 py-3" />
               </tr></thead>
-              <tbody>{rows.map(row => <tr key={row.id} className="border-b border-slate-100 last:border-0 align-top">
+              <tbody>{visibleRows.map(row => <tr key={row.id} className="border-b border-slate-100 last:border-0 align-top">
                 <td className="px-4 py-4"><p className="font-bold text-slate-900">{row.name}</p><p className="text-xs text-slate-400 mt-1">{row.performer1 || 'Performer unknown'} · ID {row.id}</p></td>
                 <td className="px-4 py-4 text-slate-600 whitespace-nowrap">{new Date(row.event_date).toLocaleDateString('en-GB')}<p className="text-xs text-slate-400 mt-1">{row.venue || 'Venue unknown'}{row.city ? `, ${row.city}` : ''}</p></td>
                 <td className="px-4 py-4"><span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${row.match_status === 'review' ? 'bg-amber-100 text-amber-800' : row.match_status === 'pending' ? 'bg-blue-100 text-blue-800' : row.match_status === 'auto_matched' ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-600'}`}>{row.match_status === 'review' ? 'Review' : row.match_status === 'pending' ? 'Awaiting match' : row.match_status === 'auto_matched' ? 'Auto matched' : row.match_status === 'approved_existing' ? 'Approved existing' : row.match_status === 'approved_new' ? 'Showfinder page created' : 'New event candidate'}</span>{row.inventory_status !== 'unknown' && <span className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-bold ${row.inventory_status === 'available' ? 'bg-green-100 text-green-800' : row.inventory_status === 'no_inventory' ? 'bg-slate-100 text-slate-600' : 'bg-amber-100 text-amber-800'}`}>{row.inventory_status === 'available' ? 'Tickets available' : row.inventory_status === 'no_inventory' ? 'No inventory' : 'Check failed'}</span>}{row.image_status !== 'pending' && <span className="mt-2 inline-flex rounded-full px-3 py-1 text-xs font-bold bg-violet-100 text-violet-800">{row.image_status === 'artist_image' ? 'Artist image' : 'Branded fallback'}</span>}</td>
