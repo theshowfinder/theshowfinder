@@ -71,6 +71,16 @@ function searchSlug(value: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
+function normalizedSearch(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+}
+
 async function CityArtists({ city }: { city: string }) {
   const supabase = await createClient()
   const now = new Date().toISOString()
@@ -143,17 +153,26 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
 
   let artistEventIds: string[] = []
   if (searchParams.q) {
+    const normalizedQuery = normalizedSearch(searchParams.q)
+    const searchToken = normalizedQuery.split(' ')[0] ?? normalizedQuery
     const { data: artists } = await supabase
       .from('artists')
-      .select('id')
-      .ilike('name', `%${searchParams.q.replace(/[,%()]/g, '').trim()}%`)
-      .limit(50) as unknown as { data: { id: string }[] | null }
+      .select('id, name')
+      .ilike('name', `%${searchToken.replace(/[,%()]/g, '')}%`)
+      .limit(1000) as unknown as { data: { id: string; name: string }[] | null }
 
-    if (artists?.length) {
+    const matchingArtistIds = (artists ?? [])
+      .filter(artist => {
+        const candidate = normalizedSearch(artist.name)
+        return candidate.includes(normalizedQuery) || normalizedQuery.split(' ').every(token => candidate.includes(token))
+      })
+      .map(artist => artist.id)
+
+    if (matchingArtistIds.length) {
       const { data: links } = await supabase
         .from('event_artists')
         .select('event_id')
-        .in('artist_id', artists.map(artist => artist.id))
+        .in('artist_id', matchingArtistIds)
         .limit(5000) as unknown as { data: { event_id: string }[] | null }
       artistEventIds = Array.from(new Set((links ?? []).map(link => link.event_id)))
     }
