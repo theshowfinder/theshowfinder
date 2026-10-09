@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { CITIES } from '@/lib/cities'
 import RunMatchingButton from './RunMatchingButton'
 import {
   getGigsbergAffiliateOrders,
@@ -31,11 +33,31 @@ export default async function GigsbergAdminPage({
   const { q = '', city = '', synced, updated, syncError } = await searchParams
   const query = q.trim()
   const cityQuery = city.trim()
+  const db = createAdminClient()
 
   let events: GigsbergAffiliateEvent[] = []
   let eventError: string | null = null
   let orderTotal: number | null = null
   let orderError: string | null = null
+
+  const [{ data: showfinderRows }, { data: catalogueRows }] = await Promise.all([
+    db.from('events').select('start_date, venue:venues(city)').gte('start_date', new Date().toISOString()).limit(50000),
+    db.from('gigsberg_catalogue_events').select('event_date, city').limit(50000),
+  ]) as unknown as [
+    { data: Array<{ start_date: string; venue: { city: string } | null }> | null },
+    { data: Array<{ event_date: string; city: string | null }> | null },
+  ]
+  const normalise = (value: string | null | undefined) => (value ?? '').trim().toLowerCase()
+  const showfinderCounts = new Map<string, number>()
+  const catalogueCounts = new Map<string, number>()
+  for (const row of showfinderRows ?? []) {
+    const cityName = normalise(row.venue?.city)
+    if (cityName) showfinderCounts.set(cityName, (showfinderCounts.get(cityName) ?? 0) + 1)
+  }
+  for (const row of catalogueRows ?? []) {
+    const cityName = normalise(row.city)
+    if (cityName) catalogueCounts.set(cityName, (catalogueCounts.get(cityName) ?? 0) + 1)
+  }
 
   const [eventResult, orderResult] = await Promise.allSettled([
     query || cityQuery
@@ -89,6 +111,27 @@ export default async function GigsbergAdminPage({
           <Link href="/admin/gigsberg/sync" className="font-bold text-white px-5 py-2.5 rounded-lg text-sm" style={{ backgroundColor: '#1E3A8A' }}>Run catalogue import</Link>
           <RunMatchingButton />
           <Link href="/admin/gigsberg/matches" className="text-blue-600 font-semibold text-sm hover:underline">Review catalogue →</Link>
+        </section>
+
+        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <div className="flex items-baseline justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-900">UK city coverage</h2>
+              <p className="text-sm text-slate-500 mt-1">Future Showfinder events compared with the current Gigsberg catalogue.</p>
+            </div>
+            <span className="text-xs text-slate-400">Low counts need checking</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[600px] text-sm">
+              <thead><tr className="border-b border-slate-100 text-left"><th className="py-2 font-semibold text-slate-500">City</th><th className="py-2 font-semibold text-slate-500">Showfinder events</th><th className="py-2 font-semibold text-slate-500">Gigsberg catalogue</th><th className="py-2 font-semibold text-slate-500">Status</th></tr></thead>
+              <tbody>{CITIES.map(cityItem => {
+                const showfinderCount = showfinderCounts.get(normalise(cityItem.name)) ?? 0
+                const catalogueCount = catalogueCounts.get(normalise(cityItem.name)) ?? 0
+                const status = showfinderCount === 0 && catalogueCount > 0 ? 'Needs import/matching' : catalogueCount === 0 ? 'No Gigsberg data' : 'Covered'
+                return <tr key={cityItem.name} className="border-b border-slate-100 last:border-0"><td className="py-2 font-semibold text-slate-800">{cityItem.emoji} {cityItem.name}</td><td className="py-2 text-slate-600">{showfinderCount}</td><td className="py-2 text-slate-600">{catalogueCount}</td><td className={`py-2 font-semibold ${status === 'Covered' ? 'text-green-700' : 'text-amber-700'}`}>{status}</td></tr>
+              })}</tbody>
+            </table>
+          </div>
         </section>
 
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
