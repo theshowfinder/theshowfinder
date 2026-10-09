@@ -587,7 +587,7 @@ async function processEvent(
 
 export interface TargetedTicketmasterResult {
   keyword: string
-  city: string
+  city: string | null
   from: string
   to: string
   fetched: number
@@ -599,7 +599,7 @@ export interface TargetedTicketmasterResult {
 /** Import a narrow Ticketmaster search immediately, without waiting for the city queue. */
 export async function syncTicketmasterTargeted(input: {
   keyword: string
-  city: string
+  city?: string
   from: string
   to: string
 }): Promise<TargetedTicketmasterResult> {
@@ -630,7 +630,7 @@ export async function syncTicketmasterTargeted(input: {
     }
   }
 
-  return { keyword: input.keyword, city: input.city, from: input.from, to: input.to, fetched, inserted, skipped, errors }
+  return { keyword: input.keyword, city: input.city || null, from: input.from, to: input.to, fetched, inserted, skipped, errors }
 }
 
 export async function syncTicketmasterCityWindow(input: {

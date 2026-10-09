@@ -40,10 +40,10 @@ export default async function TicketmasterAdminPage({
       {params.error && <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-4 text-sm">{params.error}</div>}
       <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h2 className="text-xl font-extrabold text-slate-900">Targeted Ticketmaster import</h2>
-        <p className="text-sm text-slate-500 mt-1 mb-5">Use this when a live Ticketmaster event is missing. It imports the matching event immediately without waiting for the city queue.</p>
+        <p className="text-sm text-slate-500 mt-1 mb-5">Use this when a live Ticketmaster event is missing. Choose a city or search across the whole UK without waiting for the city queue.</p>
         <ImportForm action={targetedTicketmasterImportAction} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 items-end">
           <label className="text-sm font-semibold text-slate-600 lg:col-span-2">Artist or event<input name="keyword" required defaultValue={params.keyword ?? ''} placeholder="e.g. Mr Polska" className="block w-full mt-1 border border-slate-300 rounded-lg px-3 py-2" /></label>
-          <label className="text-sm font-semibold text-slate-600">City<select name="city" required defaultValue={params.city ?? ''} className="block w-full mt-1 border border-slate-300 rounded-lg px-3 py-2"><option value="">Choose</option>{CITIES.map(city => <option key={city.name}>{city.name}</option>)}</select></label>
+          <label className="text-sm font-semibold text-slate-600">City<select name="city" defaultValue={params.city ?? ''} className="block w-full mt-1 border border-slate-300 rounded-lg px-3 py-2"><option value="">All UK</option>{CITIES.map(city => <option key={city.name}>{city.name}</option>)}</select></label>
           <label className="text-sm font-semibold text-slate-600">From<input type="date" name="from" required defaultValue={params.from ?? defaultFrom} className="block w-full mt-1 border border-slate-300 rounded-lg px-3 py-2" /></label>
           <label className="text-sm font-semibold text-slate-600">To<input type="date" name="to" required defaultValue={params.to ?? defaultTo} className="block w-full mt-1 border border-slate-300 rounded-lg px-3 py-2" /></label>
           <SubmitButton className="bg-blue-900 text-white font-bold rounded-lg px-5 py-2.5 lg:col-start-5">Search and import</SubmitButton>

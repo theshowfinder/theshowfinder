@@ -12,8 +12,8 @@ export async function targetedTicketmasterImportAction(formData: FormData) {
   const from = String(formData.get('from') ?? '').trim()
   const to = String(formData.get('to') ?? '').trim()
 
-  if (!keyword || !city || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
-    redirect('/admin/ticketmaster?error=Enter an artist or event, city, and a valid date range.')
+  if (!keyword || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
+    redirect('/admin/ticketmaster?error=Enter an artist or event and a valid date range.')
   }
 
   let result
@@ -25,7 +25,8 @@ export async function targetedTicketmasterImportAction(formData: FormData) {
   }
   revalidatePath('/admin/ticketmaster')
   revalidatePath('/admin/gigsberg')
-  redirect(`/admin/ticketmaster?keyword=${encodeURIComponent(keyword)}&city=${encodeURIComponent(city)}&from=${from}&to=${to}&fetched=${result.fetched}&saved=${result.inserted}&skipped=${result.skipped}&errors=${result.errors}`)
+  const cityParam = city ? `&city=${encodeURIComponent(city)}` : ''
+  redirect(`/admin/ticketmaster?keyword=${encodeURIComponent(keyword)}${cityParam}&from=${from}&to=${to}&fetched=${result.fetched}&saved=${result.inserted}&skipped=${result.skipped}&errors=${result.errors}`)
 }
 
 export async function manualTicketmasterCitySyncAction(formData: FormData) {
