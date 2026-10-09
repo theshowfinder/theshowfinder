@@ -16,15 +16,16 @@ export async function targetedTicketmasterImportAction(formData: FormData) {
     redirect('/admin/ticketmaster?error=Enter an artist or event, city, and a valid date range.')
   }
 
+  let result
   try {
-    const result = await syncTicketmasterTargeted({ keyword, city, from, to })
-    revalidatePath('/admin/ticketmaster')
-    revalidatePath('/admin/gigsberg')
-    redirect(`/admin/ticketmaster?keyword=${encodeURIComponent(keyword)}&city=${encodeURIComponent(city)}&from=${from}&to=${to}&fetched=${result.fetched}&saved=${result.inserted}&skipped=${result.skipped}&errors=${result.errors}`)
+    result = await syncTicketmasterTargeted({ keyword, city, from, to })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The targeted Ticketmaster import failed.'
     redirect(`/admin/ticketmaster?error=${encodeURIComponent(message)}`)
   }
+  revalidatePath('/admin/ticketmaster')
+  revalidatePath('/admin/gigsberg')
+  redirect(`/admin/ticketmaster?keyword=${encodeURIComponent(keyword)}&city=${encodeURIComponent(city)}&from=${from}&to=${to}&fetched=${result.fetched}&saved=${result.inserted}&skipped=${result.skipped}&errors=${result.errors}`)
 }
 
 export async function manualTicketmasterCitySyncAction(formData: FormData) {
@@ -40,13 +41,14 @@ export async function manualTicketmasterCitySyncAction(formData: FormData) {
     redirect('/admin/ticketmaster?error=Choose a city and a valid date window of no more than 92 days.')
   }
 
+  let result
   try {
-    const result = await syncTicketmasterCityWindow({ city, from, to })
-    revalidatePath('/admin/ticketmaster')
-    revalidatePath('/admin/gigsberg')
-    redirect(`/admin/ticketmaster?city=${encodeURIComponent(city)}&cityFrom=${from}&cityTo=${to}&cityFetched=${result.fetched}&citySaved=${result.inserted}&citySkipped=${result.skipped}&cityErrors=${result.errors}`)
+    result = await syncTicketmasterCityWindow({ city, from, to })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The manual Ticketmaster city sync failed.'
     redirect(`/admin/ticketmaster?error=${encodeURIComponent(message)}`)
   }
+  revalidatePath('/admin/ticketmaster')
+  revalidatePath('/admin/gigsberg')
+  redirect(`/admin/ticketmaster?city=${encodeURIComponent(city)}&cityFrom=${from}&cityTo=${to}&cityFetched=${result.fetched}&citySaved=${result.inserted}&citySkipped=${result.skipped}&cityErrors=${result.errors}`)
 }
