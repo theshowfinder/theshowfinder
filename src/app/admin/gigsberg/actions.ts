@@ -52,7 +52,7 @@ export async function approveExistingGigsbergMatchAction(formData: FormData) {
   if (!Number.isFinite(catalogueId) || !eventId) throw new Error('Missing Gigsberg or Showfinder event')
 
   const { db, row } = await getCatalogueRow(catalogueId)
-  const highlight = requestedHighlight && row.inventory_status === 'available'
+  let highlight = requestedHighlight && row.inventory_status === 'available'
   const { error: eventError } = await db.from('events').update({
     gigsberg_affiliate_url: row.url,
     gigsberg_highlighted: highlight,
@@ -113,8 +113,24 @@ export async function createGigsbergEventAction(formData: FormData) {
   const requestedHighlight = formData.get('highlight') === '1'
   if (!Number.isFinite(catalogueId)) throw new Error('Missing Gigsberg catalogue record')
   const { db, row } = await getCatalogueRow(catalogueId)
-  const highlight = requestedHighlight && row.inventory_status === 'available'
+  let highlight = requestedHighlight && row.inventory_status === 'available'
   if (!row.city || !row.venue) throw new Error('A city and venue are required before creating a public event page')
+
+  // Re-check immediately before publishing a Gigsberg-only page. Catalogue
+  // URLs can become stale when an event sells out or is delisted between the
+  // import and manual review; never create a page with a dead ticket route.
+  let liveStatus = 'check_failed'
+  try {
+    const liveInventory = await searchGigsbergAffiliateListings({ event_id: row.id, currency_code: 'GBP' })
+    const checkedAt = new Date().toISOString()
+    liveStatus = liveInventory.total > 0 ? 'available' : 'no_inventory'
+    await db.from('gigsberg_catalogue_events').update({ inventory_status: liveStatus, inventory_checked_at: checkedAt }).eq('id', catalogueId)
+  } catch (error) {
+    console.error('[gigsberg] live inventory check before page creation failed', error)
+    redirect('/admin/gigsberg/matches?inventory=check_failed')
+  }
+  if (liveStatus !== 'available') redirect('/admin/gigsberg/matches?inventory=no_inventory')
+  highlight = requestedHighlight
 
   const venueSlug = slugify(`${row.venue}-${row.city}`)
   const { data: existingVenue } = await db.from('venues').select('id').eq('slug', venueSlug).maybeSingle()
@@ -141,7 +157,7 @@ export async function createGigsbergEventAction(formData: FormData) {
     gigsberg_affiliate_url: row.url,
     gigsberg_highlighted: highlight,
     gigsberg_highlight_until: highlight ? new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString() : null,
-    gigsberg_inventory_status: row.inventory_status === 'available' ? 'available' : null,
+    gigsberg_inventory_status: 'available',
     source: 'gigsberg',
     source_url: row.url,
     status: 'upcoming',

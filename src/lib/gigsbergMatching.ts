@@ -55,6 +55,9 @@ function score(catalogue: CatalogueRow, event: ShowfinderEvent) {
   const sameDate = dateOnly(catalogue.event_date) === dateOnly(event.start_date)
   const sameCity = normalize(catalogue.city) === normalize(event.venue?.city)
   const venueOverlap = tokenOverlap(catalogue.venue ?? '', event.venue?.name ?? '')
+  const performerName = normalize(catalogue.performer1 ?? '')
+  const eventTitle = normalize(event.title)
+  const performerExact = Boolean(performerName && (eventTitle === performerName || eventTitle.includes(performerName) || performerName.includes(eventTitle)))
   const performerOverlap = Math.max(
     tokenOverlap(catalogue.performer1 ?? '', event.title),
     tokenOverlap(catalogue.performer2 ?? '', event.title),
@@ -64,14 +67,14 @@ function score(catalogue: CatalogueRow, event: ShowfinderEvent) {
   if (sameDate) value += 0.35
   if (sameCity) value += 0.2
   value += venueOverlap * 0.2
-  value += performerOverlap * 0.25
-  return { value, sameDate, sameCity, venueOverlap, performerOverlap }
+  value += performerExact ? 0.45 : performerOverlap * 0.25
+  return { value, sameDate, sameCity, venueOverlap, performerOverlap, performerExact }
 }
 
 export async function matchGigsbergCatalogue(): Promise<GigsbergMatchResult> {
   const db = createAdminClient()
   const [{ data: catalogue, error: catalogueError }, { data: events, error: eventsError }] = await Promise.all([
-    db.from('gigsberg_catalogue_events').select('id, name, event_date, venue, city, performer1, performer2, url, matched_event_id').in('match_status', ['pending', 'review']).limit(50000),
+    db.from('gigsberg_catalogue_events').select('id, name, event_date, venue, city, performer1, performer2, url, matched_event_id').in('match_status', ['pending', 'review', 'no_match']).limit(50000),
     db.from('events').select('id, title, start_date, gigsberg_affiliate_url, venue:venues(name, city)').gte('start_date', new Date().toISOString()).limit(50000),
   ]) as unknown as [
     { data: CatalogueRow[] | null; error: { message: string } | null },
@@ -86,11 +89,14 @@ export async function matchGigsbergCatalogue(): Promise<GigsbergMatchResult> {
     result.checked++
     const ranked = (events ?? [])
       .map(event => ({ event, detail: score(item, event) }))
-      .filter(candidate => candidate.detail.sameDate || candidate.detail.performerOverlap >= 0.6)
+      .filter(candidate => candidate.detail.sameDate || candidate.detail.performerExact || candidate.detail.performerOverlap >= 0.6)
       .sort((a, b) => b.detail.value - a.detail.value)
     const best = ranked[0]
     const second = ranked[1]
-    const confident = Boolean(best && best.detail.value >= 0.82 && (!second || best.detail.value - second.detail.value >= 0.12))
+    const confident = Boolean(best && (
+      (best.detail.performerExact && best.detail.sameDate && best.detail.value >= 0.75 && (!second || best.detail.value - second.detail.value >= 0.08))
+      || (best.detail.value >= 0.82 && (!second || best.detail.value - second.detail.value >= 0.12))
+    ))
     const review = Boolean(best && !confident && best.detail.value >= 0.45)
     const status = confident ? 'auto_matched' : review ? 'review' : 'no_match'
 
