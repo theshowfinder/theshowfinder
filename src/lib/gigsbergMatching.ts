@@ -70,18 +70,21 @@ function score(catalogue: CatalogueRow, event: ShowfinderEvent) {
     0,
   )
 
+  // Artist evidence is mandatory. Date, city and venue refine a match but
+  // must never make two unrelated events match merely because they happen in
+  // the same city on the same day.
   let value = 0
-  if (sameDate) value += 0.35
-  if (sameCity) value += 0.2
-  value += venueOverlap * 0.2
-  value += performerExact ? 0.45 : performerOverlap * 0.25
+  value += performerExact ? 0.55 : performerOverlap * 0.55
+  if (sameDate) value += 0.25
+  if (sameCity) value += 0.1
+  value += venueOverlap * 0.1
   return { value, sameDate, sameCity, venueOverlap, performerOverlap, performerExact }
 }
 
 export async function matchGigsbergCatalogue(): Promise<GigsbergMatchResult> {
   const db = createAdminClient()
   const [{ data: catalogue, error: catalogueError }, { data: events, error: eventsError }] = await Promise.all([
-    db.from('gigsberg_catalogue_events').select('id, name, event_date, venue, city, performer1, performer2, url, matched_event_id').in('match_status', ['pending', 'review', 'no_match']).limit(50000),
+    db.from('gigsberg_catalogue_events').select('id, name, event_date, venue, city, performer1, performer2, url, matched_event_id').in('match_status', ['pending', 'review', 'no_match', 'auto_matched']).limit(50000),
     db.from('events').select('id, title, start_date, gigsberg_affiliate_url, venue:venues(name, city), artists:event_artists(artist:artists(name))').gte('start_date', new Date().toISOString()).limit(50000),
   ]) as unknown as [
     { data: CatalogueRow[] | null; error: { message: string } | null },
@@ -96,13 +99,13 @@ export async function matchGigsbergCatalogue(): Promise<GigsbergMatchResult> {
     result.checked++
     const ranked = (events ?? [])
       .map(event => ({ event, detail: score(item, event) }))
-      .filter(candidate => candidate.detail.sameDate || candidate.detail.performerExact || candidate.detail.performerOverlap >= 0.6)
+      .filter(candidate => candidate.detail.performerExact || candidate.detail.performerOverlap >= 0.6)
       .sort((a, b) => b.detail.value - a.detail.value)
     const best = ranked[0]
     const second = ranked[1]
     const confident = Boolean(best && (
-      (best.detail.performerExact && best.detail.sameDate && best.detail.value >= 0.75 && (!second || best.detail.value - second.detail.value >= 0.08))
-      || (best.detail.value >= 0.82 && (!second || best.detail.value - second.detail.value >= 0.12))
+      (best.detail.performerExact && best.detail.sameDate && best.detail.value >= 0.78 && (!second || best.detail.value - second.detail.value >= 0.08))
+      || (best.detail.performerOverlap >= 0.6 && best.detail.sameDate && best.detail.value >= 0.78 && (!second || best.detail.value - second.detail.value >= 0.12))
     ))
     const review = Boolean(best && !confident && best.detail.value >= 0.45)
     const status = confident ? 'auto_matched' : review ? 'review' : 'no_match'
@@ -124,8 +127,16 @@ export async function matchGigsbergCatalogue(): Promise<GigsbergMatchResult> {
       const { error: linkError } = await db.from('events').update({ gigsberg_affiliate_url: item.url }).eq('id', best.event.id)
       if (linkError) result.errors++
       else result.autoMatched++
-    } else if (review) result.review++
-    else result.noMatch++
+    } else {
+      // If a previous automatic match is now rejected by the stricter
+      // artist-first check, remove only the link created from this catalogue
+      // record. Manually curated or differently sourced links are untouched.
+      if (item.matched_event_id) {
+        await db.from('events').update({ gigsberg_affiliate_url: null }).eq('id', item.matched_event_id).eq('gigsberg_affiliate_url', item.url)
+      }
+      if (review) result.review++
+      else result.noMatch++
+    }
   }
 
   return result
