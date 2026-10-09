@@ -137,6 +137,24 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
   const from     = (page - 1) * PAGE_SIZE
   const to       = from + PAGE_SIZE - 1
 
+  let artistEventIds: string[] = []
+  if (searchParams.q) {
+    const { data: artists } = await supabase
+      .from('artists')
+      .select('id')
+      .ilike('name', `%${searchParams.q.replace(/[,%()]/g, '').trim()}%`)
+      .limit(50) as unknown as { data: { id: string }[] | null }
+
+    if (artists?.length) {
+      const { data: links } = await supabase
+        .from('event_artists')
+        .select('event_id')
+        .in('artist_id', artists.map(artist => artist.id))
+        .limit(5000) as unknown as { data: { event_id: string }[] | null }
+      artistEventIds = Array.from(new Set((links ?? []).map(link => link.event_id)))
+    }
+  }
+
   let query = supabase
     .from('events_with_venue')
     .select('*', { count: 'exact' })
@@ -156,7 +174,10 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
     // keeps imported events discoverable without changing their display title.
     const term = searchParams.q.replace(/[,%()]/g, '').trim()
     const slugTerm = searchSlug(searchParams.q)
-    query = query.or(`title.ilike.%${term}%,slug.ilike.%${slugTerm}%`)
+    const filters = [`title.ilike.%${term}%`]
+    if (slugTerm) filters.push(`slug.ilike.%${slugTerm}%`)
+    if (artistEventIds.length) filters.push(`id.in.(${artistEventIds.join(',')})`)
+    query = query.or(filters.join(','))
   }
 
   const { data: events, count } = await query
