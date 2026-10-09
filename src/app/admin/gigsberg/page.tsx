@@ -131,13 +131,13 @@ export default async function GigsbergAdminPage({
           <div className="flex items-baseline justify-between gap-4 mb-4">
             <div>
               <h2 className="text-lg font-extrabold text-slate-900">UK city coverage</h2>
-              <p className="text-sm text-slate-500 mt-1">Future Showfinder events compared with the current Gigsberg catalogue.</p>
+              <p className="text-sm text-slate-500 mt-1">Future Ticketmaster events compared with the current Gigsberg catalogue.</p>
             </div>
             <span className="text-xs text-slate-400">Low counts need checking</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[600px] text-sm">
-              <thead><tr className="border-b border-slate-100 text-left"><th className="py-2 font-semibold text-slate-500">City</th><th className="py-2 font-semibold text-slate-500">Showfinder events</th><th className="py-2 font-semibold text-slate-500">Gigsberg catalogue</th><th className="py-2 font-semibold text-slate-500">Status</th></tr></thead>
+              <thead><tr className="border-b border-slate-100 text-left"><th className="py-2 font-semibold text-slate-500">City</th><th className="py-2 font-semibold text-slate-500">Ticketmaster events</th><th className="py-2 font-semibold text-slate-500">Gigsberg catalogue</th><th className="py-2 font-semibold text-slate-500">Status</th></tr></thead>
               <tbody>{CITIES.map(cityItem => {
                 const showfinderCount = showfinderCounts.get(normalise(cityItem.name)) ?? 0
                 const catalogueCount = catalogueCounts.get(normalise(cityItem.name)) ?? 0
