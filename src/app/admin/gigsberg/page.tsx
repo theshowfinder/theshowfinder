@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
+import RunMatchingButton from './RunMatchingButton'
 import {
   getGigsbergAffiliateOrders,
   searchGigsbergAffiliateEvents,
@@ -86,7 +87,7 @@ export default async function GigsbergAdminPage({
             <p className="text-sm text-slate-500 mt-1">Pull all current and future UK Gigsberg events into the private catalogue for matching.</p>
           </div>
           <Link href="/admin/gigsberg/sync" className="font-bold text-white px-5 py-2.5 rounded-lg text-sm" style={{ backgroundColor: '#1E3A8A' }}>Run catalogue import</Link>
-          <Link href="/admin/gigsberg/match" className="text-blue-600 font-semibold text-sm hover:underline">Run matching →</Link>
+          <RunMatchingButton />
           <Link href="/admin/gigsberg/matches" className="text-blue-600 font-semibold text-sm hover:underline">Review catalogue →</Link>
         </section>
 

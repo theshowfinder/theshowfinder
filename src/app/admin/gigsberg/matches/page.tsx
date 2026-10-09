@@ -21,8 +21,9 @@ type MatchRow = {
 
 type PossibleEvent = { id: string; title: string; slug: string }
 
-export default async function GigsbergMatchesPage() {
+export default async function GigsbergMatchesPage({ searchParams }: { searchParams: Promise<{ checked?: string; matched?: string; review?: string; noMatch?: string; errors?: string; approved?: string; error?: string }> }) {
   await requireAdmin()
+  const params = await searchParams
   const db = createAdminClient()
   const { data, error } = await db
     .from('gigsberg_catalogue_events')
@@ -46,6 +47,9 @@ export default async function GigsbergMatchesPage() {
         <span className="text-slate-400 text-sm">{rows.length} catalogue records shown</span>
       </header>
       <main className="max-w-[1500px] mx-auto px-4 sm:px-6 py-8">
+        {params.checked && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-4 mb-6 text-sm font-semibold">✓ Matching complete: {params.checked} checked, {params.matched ?? 0} matched automatically, {params.review ?? 0} needing review, {params.noMatch ?? 0} new event candidates{params.errors && params.errors !== '0' ? `, ${params.errors} errors` : ''}.</div>}
+        {params.approved && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-4 mb-6 text-sm font-semibold">✓ {params.approved === 'existing' ? 'Affiliate link approved on the existing Showfinder event.' : params.approved === 'new' ? 'New Showfinder event page created.' : 'Catalogue record rejected.'}</div>}
+        {params.error && <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-4 mb-6 text-sm">Matching could not complete: {params.error}</div>}
         {error ? (
           <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-6">Unable to load matches: {error.message}</div>
         ) : rows.length === 0 ? (
