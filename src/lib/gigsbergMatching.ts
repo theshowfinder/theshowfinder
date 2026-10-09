@@ -57,16 +57,24 @@ function score(catalogue: CatalogueRow, event: ShowfinderEvent) {
   const sameCity = normalize(catalogue.city) === normalize(event.venue?.city)
   const venueOverlap = tokenOverlap(catalogue.venue ?? '', event.venue?.name ?? '')
   const cataloguePerformers = [catalogue.performer1, catalogue.performer2].filter((name): name is string => Boolean(name?.trim()))
-  const eventNames = [event.title, ...(event.artists ?? []).map(row => row.artist?.name ?? '')]
-  const performerExact = cataloguePerformers.some(catalogueName => {
+  const titlePerformerExact = cataloguePerformers.some(catalogueName => {
     const performerName = normalize(catalogueName)
-    return eventNames.some(eventName => {
-      const candidate = normalize(eventName)
+    const candidate = normalize(event.title)
+    return Boolean(performerName && candidate && (candidate === performerName || candidate.includes(performerName) || performerName.includes(candidate)))
+  })
+  const linkedArtistExact = cataloguePerformers.some(catalogueName => {
+    const performerName = normalize(catalogueName)
+    return (event.artists ?? []).some(row => {
+      const candidate = normalize(row.artist?.name)
       return Boolean(performerName && candidate && (candidate === performerName || candidate.includes(performerName) || performerName.includes(candidate)))
     })
   })
+  const performerExact = titlePerformerExact || linkedArtistExact
+  // Deliberately compare against the event title only. Linked artist rows are
+  // useful evidence, but they must not manufacture a match when the title is
+  // a different headliner or stale relation.
   const performerOverlap = Math.max(
-    ...cataloguePerformers.flatMap(catalogueName => eventNames.map(eventName => tokenOverlap(catalogueName, eventName))),
+    ...cataloguePerformers.map(catalogueName => tokenOverlap(catalogueName, event.title)),
     0,
   )
 
@@ -74,11 +82,11 @@ function score(catalogue: CatalogueRow, event: ShowfinderEvent) {
   // must never make two unrelated events match merely because they happen in
   // the same city on the same day.
   let value = 0
-  value += performerExact ? 0.55 : performerOverlap * 0.55
+  value += titlePerformerExact ? 0.55 : linkedArtistExact ? 0.35 : performerOverlap * 0.55
   if (sameDate) value += 0.25
   if (sameCity) value += 0.1
   value += venueOverlap * 0.1
-  return { value, sameDate, sameCity, venueOverlap, performerOverlap, performerExact }
+  return { value, sameDate, sameCity, venueOverlap, performerOverlap, performerExact, titlePerformerExact, linkedArtistExact }
 }
 
 export async function matchGigsbergCatalogue(): Promise<GigsbergMatchResult> {
@@ -99,12 +107,18 @@ export async function matchGigsbergCatalogue(): Promise<GigsbergMatchResult> {
     result.checked++
     const ranked = (events ?? [])
       .map(event => ({ event, detail: score(item, event) }))
-      .filter(candidate => candidate.detail.performerExact || candidate.detail.performerOverlap >= 0.6)
+      // A linked artist row alone is not enough to identify the event. It can
+      // be stale or incorrectly attached to a different headliner (for
+      // example, Amon Amarth was being suggested as The Darkness). Require
+      // the performer to appear in the event title, or use token overlap for
+      // a genuinely similar title. This keeps unrelated same-day London
+      // events out of the review queue.
+      .filter(candidate => candidate.detail.titlePerformerExact || candidate.detail.performerOverlap >= 0.6)
       .sort((a, b) => b.detail.value - a.detail.value)
     const best = ranked[0]
     const second = ranked[1]
     const confident = Boolean(best && (
-      (best.detail.performerExact && best.detail.sameDate && best.detail.value >= 0.78 && (!second || best.detail.value - second.detail.value >= 0.08))
+      (best.detail.titlePerformerExact && best.detail.sameDate && best.detail.value >= 0.78 && (!second || best.detail.value - second.detail.value >= 0.08))
       || (best.detail.performerOverlap >= 0.6 && best.detail.sameDate && best.detail.value >= 0.78 && (!second || best.detail.value - second.detail.value >= 0.12))
     ))
     const review = Boolean(best && !confident && best.detail.value >= 0.45)
@@ -114,7 +128,7 @@ export async function matchGigsbergCatalogue(): Promise<GigsbergMatchResult> {
       matched_event_id: confident ? best.event.id : null,
       match_status: status,
       match_confidence: best ? Number(best.detail.value.toFixed(3)) : null,
-      match_reason: best ? `${best.event.title} (${Math.round(best.detail.value * 100)}% match${best.detail.performerExact ? ', artist confirmed' : ''})` : 'No close Showfinder event found',
+      match_reason: best ? `${best.event.title} (${Math.round(best.detail.value * 100)}% match${best.detail.titlePerformerExact ? ', title confirmed' : best.detail.linkedArtistExact ? ', linked artist only' : ''})` : 'No close Showfinder event found',
       match_checked_at: new Date().toISOString(),
     }).eq('id', item.id)
 
