@@ -98,6 +98,10 @@ function buildProviders(event: Pick<EventDetail, 'tickets_url' | 'viagogo_url' |
   return { primary, resale }
 }
 
+function isGigsbergUrl(url: string | null) {
+  return Boolean(url && /(^|:)\/\/([^/]+\.)?gigsberg\.com(?:\/|$)/i.test(url))
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 const categoryLabel: Record<string, string> = {
@@ -194,6 +198,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const isCancelledOrPostponed = event.status === 'cancelled' || event.status === 'postponed'
   const priceLabel = fmtPrice(event.price_from, event.price_to, event.currency)
   const { primary, resale } = buildProviders(event)
+  const ownTicketUrl = event.own_ticket_url && !isGigsbergUrl(event.own_ticket_url) ? event.own_ticket_url : null
   const highlightActive = event.gigsberg_highlighted && event.gigsberg_inventory_status === 'available' && (!event.gigsberg_highlight_until || new Date(event.gigsberg_highlight_until) > new Date())
   const headliners = event.artists
     .filter(a => a.is_headliner && a.artist)
@@ -445,7 +450,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           {/* Right: tickets ─────────────────────────────────────── */}
           <div id="tickets" className="space-y-5 lg:sticky lg:top-24 self-start">
             {/* Buy Direct — our own listing, shown above the standard provider sections */}
-            {event.own_ticket_url && !isCancelledOrPostponed && (
+            {ownTicketUrl && !isCancelledOrPostponed && (
               <div className="relative bg-white border-2 rounded-2xl p-5 pt-6 shadow-sm" style={{ borderColor: '#E8003D' }}>
                 <span
                   className="absolute -top-3 left-5 text-[10px] font-extrabold uppercase tracking-widest text-white px-3 py-1 rounded-full"
@@ -458,7 +463,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 </h3>
                 <p className="text-xs text-slate-400 mb-4">We hold tickets for this event</p>
                 <TrackedTicketLink
-                  href={event.own_ticket_url}
+                  href={ownTicketUrl}
                   provider="TheShowFinder Direct"
                   section="buy_direct"
                   context={event.slug}
