@@ -18,6 +18,12 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function horizonIso() {
+  const date = new Date()
+  date.setMonth(date.getMonth() + 24)
+  return date.toISOString().slice(0, 10)
+}
+
 export interface GigsbergCatalogueSyncResult {
   fetched: number
   inserted: number
@@ -50,12 +56,12 @@ function isUKEvent(event: GigsbergAffiliateEvent) {
   return UK_COUNTRIES.has((event.country ?? '').trim().toLowerCase())
 }
 
-async function fetchCityEvents(city: string, from: string): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
+async function fetchCityEvents(city: string, from: string, to: string): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
   const events: GigsbergAffiliateEvent[] = []
   let page = 1
 
   for (;;) {
-    const response = await searchGigsbergAffiliateEvents({ city, date_from: from, page, per_page: PAGE_SIZE })
+    const response = await searchGigsbergAffiliateEvents({ city, date_from: from, date_to: to, page, per_page: PAGE_SIZE })
     const items = response.items ?? []
     events.push(...items)
     if (items.length === 0 || items.length < PAGE_SIZE || !response.nextPage) {
@@ -78,15 +84,17 @@ async function fetchCityEvents(city: string, from: string): Promise<{ events: Gi
 
 async function fetchAllEvents(): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
   const from = todayIso()
+  const to = horizonIso()
   const unique = new Map<number, GigsbergAffiliateEvent>()
   let pages = 0
 
   // Gigsberg's event search has no country filter. Searching the site's UK
   // city list and filtering the returned country keeps this catalogue UK-only.
-  // date_from excludes past events while leaving the end date open.
+  // date_from excludes past events and date_to keeps the catalogue aligned
+  // with the site's rolling 24-month coverage policy.
   for (let index = 0; index < CITIES.length; index += 4) {
     const batch = CITIES.slice(index, index + 4)
-    const results = await Promise.all(batch.map(city => fetchCityEvents(city.name, from)))
+    const results = await Promise.all(batch.map(city => fetchCityEvents(city.name, from, to)))
     for (const result of results) {
       pages += result.pages
       for (const event of result.events) {

@@ -80,6 +80,9 @@ interface TMResponse {
 
 const TM_BASE       = 'https://app.ticketmaster.com/discovery/v2'
 const RATE_LIMIT_MS = 300   // ms between API calls
+const EVENT_HORIZON_MONTHS = 24
+const EVENT_BAND_DAYS = 21
+const EVENT_BAND_STEP_DAYS = 20 // one-day overlap prevents gaps between runs
 
 interface SegmentQuery {
   classificationName: string
@@ -281,12 +284,9 @@ async function fetchWithRetry(url: URL, label: string): Promise<FetchResult> {
 async function fetchTMPage(
   classificationName: string,
   page: number,
-  startDateTime?: string,
+  startDateTime: string,
+  endDateTime: string,
 ): Promise<FetchResult> {
-  const endDate = new Date()
-  endDate.setFullYear(endDate.getFullYear() + 1)
-  const endDateTime = endDate.toISOString().replace(/\.\d{3}Z$/, 'Z')
-
   const url = new URL(`${TM_BASE}/events.json`)
   url.searchParams.set('apikey',             process.env.TICKETMASTER_API_KEY!)
   url.searchParams.set('countryCode',        'GB')
@@ -295,8 +295,8 @@ async function fetchTMPage(
   url.searchParams.set('page',               String(page))
   url.searchParams.set('locale',             'en-us')
   url.searchParams.set('sort',               'date,asc')
+  url.searchParams.set('startDateTime',      startDateTime)
   url.searchParams.set('endDateTime',        endDateTime)
-  if (startDateTime) url.searchParams.set('startDateTime', startDateTime)
 
   return fetchWithRetry(url, `"${classificationName}" page ${page}`)
 }
@@ -683,7 +683,7 @@ function worstStatus(results: FetchResult[]): { status: 'ok' | 'rate_limited' | 
 // ── Main entry point ─────────────────────────────────────────────────────────
 
 export async function syncTicketmasterEvents(
-  opts?: { startDateTime?: string; pass?: 'main' | 'onsale' | 'both' },
+  opts?: { startDateTime?: string; pass?: 'main' | 'onsale' | 'both'; bandIndex?: number },
 ): Promise<SyncResult> {
   const t0 = Date.now()
   const db = createAdminClient()
@@ -697,15 +697,32 @@ export async function syncTicketmasterEvents(
   const byCategory: Record<string, number> = {}
 
   if (pass !== 'onsale') {
+  // The Discovery API caps a broad search at six pages. Scan one bounded
+  // 21-day window per daily run instead of requesting the whole 24-month
+  // catalogue at once. The rolling band index means the complete horizon is
+  // refreshed over roughly 37 runs without exhausting the daily API quota;
+  // the one-day overlap between adjacent windows prevents coverage gaps.
+  const now = new Date()
+  const horizon = new Date(now)
+  horizon.setMonth(horizon.getMonth() + EVENT_HORIZON_MONTHS)
+  const horizonDays = Math.ceil((horizon.getTime() - now.getTime()) / 86400000)
+  const bandCount = Math.ceil(horizonDays / EVENT_BAND_STEP_DAYS)
+  const currentDay = Math.floor(now.getTime() / 86400000)
+  const bandIndex = Math.max(0, Math.min(opts?.bandIndex ?? (currentDay % bandCount), bandCount - 1))
+  const bandStart = opts?.startDateTime ? new Date(opts.startDateTime) : new Date(now.getTime() + bandIndex * EVENT_BAND_STEP_DAYS * 86400000)
+  const bandEnd = new Date(Math.min(bandStart.getTime() + EVENT_BAND_DAYS * 86400000, horizon.getTime()))
+  const fmt = (date: Date) => date.toISOString().replace(/\.\d{3}Z$/, 'Z')
+  const bandLabel = `${bandStart.toISOString().slice(0, 10)}–${bandEnd.toISOString().slice(0, 10)}`
+
   for (const { classificationName, dbCategory } of SEGMENT_QUERIES) {
-    console.log(`\n[TM] ── Fetching "${classificationName}" ──`)
+    console.log(`\n[TM] ── Fetching "${classificationName}" ${bandLabel} (band ${bandIndex + 1}/${bandCount}) ──`)
     const segmentStarted = new Date().toISOString()
     const segmentResults: FetchResult[] = []
     let segmentEventsFound = 0
 
     let totalPages = 1
     for (let page = 0; page < totalPages; page++) {
-      const result = await fetchTMPage(classificationName, page, opts?.startDateTime)
+      const result = await fetchTMPage(classificationName, page, fmt(bandStart), fmt(bandEnd))
       segmentResults.push(result)
       totalPages = Math.min(result.totalPages || 1, 6)  // TM API hard-caps at page 5 (0-indexed)
       console.log(`[TM]    page ${page}/${totalPages - 1}: ${result.events.length} events (${result.status})`)
@@ -737,7 +754,7 @@ export async function syncTicketmasterEvents(
     const segmentOutcome = worstStatus(segmentResults)
     if (segmentOutcome.status === 'rate_limited') rateLimited++
     await logSegment(db, {
-      label:       classificationName,
+      label:       `${classificationName}:${bandLabel}`,
       startedAt:   segmentStarted,
       eventsFound: segmentEventsFound,
       status:      segmentOutcome.status,
