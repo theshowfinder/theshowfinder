@@ -113,6 +113,47 @@ async function FeaturedEvents() {
   )
 }
 
+async function GigsbergHighlights() {
+  const supabase = await createClient()
+  const now = new Date().toISOString()
+  const { data } = await supabase
+    .from('events')
+    .select('*, venue:venues(id, name, slug, city, postcode, capacity)')
+    .eq('gigsberg_highlighted', true)
+    .eq('gigsberg_inventory_status', 'available')
+    .gte('gigsberg_highlight_until', now)
+    .gte('start_date', now)
+    .in('status', LIVE_EVENT_STATUSES)
+    .order('start_date', { ascending: true })
+    .limit(6) as unknown as { data: (Record<string, unknown> & { id: string; venue: { id: string; name: string; slug: string | null; city: string; postcode: string; capacity: number | null } | null })[] | null }
+
+  const events: EventWithVenue[] = (data ?? []).filter(row => row.venue).map(row => ({
+    ...row,
+    venue_id: row.venue!.id,
+    venue_name: row.venue!.name,
+    venue_slug: row.venue!.slug,
+    venue_city: row.venue!.city,
+    venue_postcode: row.venue!.postcode,
+    venue_capacity: row.venue!.capacity,
+  } as unknown as EventWithVenue))
+
+  if (!events.length) return null
+  return (
+    <section className="bg-slate-900 py-14">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mb-7">
+          <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFD23F' }}>Tickets currently available</p>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Featured Gigsberg events</h2>
+          <p className="text-white/60 mt-2 text-sm">Live UK events with inventory checked recently.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {events.map(event => <EventCard key={event.id} event={event} />)}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function fmtCount(n: number): string {
   if (n >= 10000) return `${(Math.floor(n / 1000) * 1000).toLocaleString('en-GB')}+`
   if (n >= 1000)  return `${(Math.floor(n / 100)  * 100 ).toLocaleString('en-GB')}+`
@@ -551,6 +592,10 @@ export default function HomePage() {
       {/* ── JUST ANNOUNCED ──────────────────────── */}
       <Suspense fallback={null}>
         <JustAnnounced />
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <GigsbergHighlights />
       </Suspense>
 
       {/* ── FEATURED EVENTS ─────────────────────────────────────── */}

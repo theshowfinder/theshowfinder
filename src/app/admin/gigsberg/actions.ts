@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncGigsbergCatalogue } from '@/lib/gigsbergCatalogue'
+import { searchGigsbergAffiliateListings } from '@/lib/gigsbergAffiliate'
 
 function slugify(value: string) {
   return value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 90)
@@ -33,13 +34,13 @@ async function getCatalogueRow(id: number) {
   const db = createAdminClient()
   const { data, error } = await db
     .from('gigsberg_catalogue_events')
-    .select('id, name, event_date, event_time, venue, city, performer1, url, match_status, matched_event_id')
+    .select('id, name, event_date, event_time, venue, city, performer1, url, match_status, matched_event_id, inventory_status')
     .eq('id', id)
     .single()
   if (error || !data) throw new Error(error?.message ?? 'Gigsberg catalogue record not found')
   return { db, row: data as {
     id: number; name: string; event_date: string; event_time: string | null; venue: string | null
-    city: string | null; performer1: string | null; url: string; match_status: string; matched_event_id: string | null
+    city: string | null; performer1: string | null; url: string; match_status: string; matched_event_id: string | null; inventory_status: string
   } }
 }
 
@@ -47,15 +48,21 @@ export async function approveExistingGigsbergMatchAction(formData: FormData) {
   await checkAuth()
   const catalogueId = Number(formData.get('catalogue_id'))
   const eventId = String(formData.get('event_id') ?? '')
+  const requestedHighlight = formData.get('highlight') === '1'
   if (!Number.isFinite(catalogueId) || !eventId) throw new Error('Missing Gigsberg or Showfinder event')
 
   const { db, row } = await getCatalogueRow(catalogueId)
-  const { error: eventError } = await db.from('events').update({ gigsberg_affiliate_url: row.url }).eq('id', eventId)
+  const highlight = requestedHighlight && row.inventory_status === 'available'
+  const { error: eventError } = await db.from('events').update({
+    gigsberg_affiliate_url: row.url,
+    gigsberg_highlighted: highlight,
+    gigsberg_highlight_until: highlight ? new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString() : null,
+  }).eq('id', eventId)
   if (eventError) throw new Error(eventError.message)
   const { error } = await db.from('gigsberg_catalogue_events').update({
     matched_event_id: eventId,
     match_status: 'approved_existing',
-    match_reason: 'Approved by admin',
+    match_reason: highlight ? 'Approved and highlighted by admin' : 'Approved by admin',
     match_checked_at: new Date().toISOString(),
   }).eq('id', catalogueId)
   if (error) throw new Error(error.message)
@@ -63,6 +70,26 @@ export async function approveExistingGigsbergMatchAction(formData: FormData) {
   revalidatePath('/admin/gigsberg/matches')
   revalidatePath('/events', 'layout')
   redirect('/admin/gigsberg/matches?approved=existing')
+}
+
+export async function checkGigsbergInventoryAction(formData: FormData) {
+  await checkAuth()
+  const catalogueId = Number(formData.get('catalogue_id'))
+  if (!Number.isFinite(catalogueId)) throw new Error('Missing Gigsberg catalogue record')
+  const { db, row } = await getCatalogueRow(catalogueId)
+  let inventoryStatus = 'check_failed'
+  try {
+    const result = await searchGigsbergAffiliateListings({ event_id: row.id, currency_code: 'GBP' })
+    inventoryStatus = result.total > 0 ? 'available' : 'no_inventory'
+  } catch (error) {
+    console.error('[gigsberg] inventory check failed', error)
+  }
+  const checkedAt = new Date().toISOString()
+  const { error } = await db.from('gigsberg_catalogue_events').update({ inventory_status: inventoryStatus, inventory_checked_at: checkedAt }).eq('id', catalogueId)
+  if (error) throw new Error(error.message)
+  if (row.matched_event_id) await db.from('events').update({ gigsberg_inventory_status: inventoryStatus, gigsberg_inventory_checked_at: checkedAt }).eq('id', row.matched_event_id)
+  revalidatePath('/admin/gigsberg/matches')
+  redirect(`/admin/gigsberg/matches?inventory=${inventoryStatus}`)
 }
 
 export async function rejectGigsbergMatchAction(formData: FormData) {
@@ -83,8 +110,10 @@ export async function rejectGigsbergMatchAction(formData: FormData) {
 export async function createGigsbergEventAction(formData: FormData) {
   await checkAuth()
   const catalogueId = Number(formData.get('catalogue_id'))
+  const requestedHighlight = formData.get('highlight') === '1'
   if (!Number.isFinite(catalogueId)) throw new Error('Missing Gigsberg catalogue record')
   const { db, row } = await getCatalogueRow(catalogueId)
+  const highlight = requestedHighlight && row.inventory_status === 'available'
   if (!row.city || !row.venue) throw new Error('A city and venue are required before creating a public event page')
 
   const venueSlug = slugify(`${row.venue}-${row.city}`)
@@ -110,25 +139,38 @@ export async function createGigsbergEventAction(formData: FormData) {
     start_date: startDate,
     currency: 'GBP',
     gigsberg_affiliate_url: row.url,
+    gigsberg_highlighted: highlight,
+    gigsberg_highlight_until: highlight ? new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString() : null,
+    gigsberg_inventory_status: row.inventory_status === 'available' ? 'available' : null,
     source: 'gigsberg',
     source_url: row.url,
     status: 'upcoming',
   }).select('id').single()
   if (eventError || !event) throw new Error(eventError?.message ?? 'Could not create Showfinder event')
 
+  let artistImageUrl: string | null = null
   if (row.performer1) {
     const artistSlug = slugify(row.performer1)
-    const { data: existingArtist } = await db.from('artists').select('id').eq('slug', artistSlug).maybeSingle()
+    const { data: existingArtist } = await db.from('artists').select('id, image_url').eq('slug', artistSlug).maybeSingle()
     const artistId = existingArtist?.id as string | undefined
+    artistImageUrl = (existingArtist?.image_url as string | null | undefined) ?? null
     const finalArtistId = artistId ?? (await db.from('artists').insert({ name: row.performer1, slug: artistSlug }).select('id').single()).data?.id
     if (finalArtistId) await db.from('event_artists').insert({ event_id: event.id, artist_id: finalArtistId, is_headliner: true, order: 0 })
   }
+
+  const { error: imageError } = await db.from('events').update({
+    // Reuse an approved artist image when one exists. Otherwise use the
+    // site's branded fallback; no third-party image is scraped from Gigsberg.
+    image_url: artistImageUrl ?? 'https://www.theshowfinder.com/og-image.png',
+  }).eq('id', event.id)
+  if (imageError) throw new Error(imageError.message)
 
   const { error } = await db.from('gigsberg_catalogue_events').update({
     matched_event_id: event.id,
     match_status: 'approved_new',
     match_reason: 'New Showfinder page created by admin',
     match_checked_at: new Date().toISOString(),
+    image_status: artistImageUrl ? 'artist_image' : 'branded_fallback',
   }).eq('id', catalogueId)
   if (error) throw new Error(error.message)
 

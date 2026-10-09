@@ -45,6 +45,14 @@ export interface GigsbergAffiliateOrderSearch {
   lastPage: string | null
 }
 
+export interface GigsbergAffiliateListingSearch {
+  items: unknown[]
+  total: number
+  nextPage: string | null
+  prevPage: string | null
+  lastPage: string | null
+}
+
 function apiKey(): string {
   const key = process.env.GIGSBERG_AFFILIATE_API_KEY
   if (!key) throw new Error('Missing GIGSBERG_AFFILIATE_API_KEY environment variable')
@@ -94,6 +102,17 @@ export function searchGigsbergAffiliateEvents(params: {
 
 export function getGigsbergAffiliateEvent(eventId: number): Promise<GigsbergAffiliateEvent> {
   return request<GigsbergAffiliateEvent>(`/event/${eventId}`)
+}
+
+/** Retrieve the current listings for an event. A positive total means inventory is available. */
+export function searchGigsbergAffiliateListings(params: {
+  event_id: number
+  currency_code?: string
+}): Promise<GigsbergAffiliateListingSearch> {
+  return request<GigsbergAffiliateListingSearch>('/listing/search', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
 }
 
 /** Retrieve orders attributed to TheShowFinder's affiliate account. */

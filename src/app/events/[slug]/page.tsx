@@ -45,6 +45,9 @@ interface EventDetail {
   stubhub_url: string | null
   gigsberg_url: string | null
   gigsberg_affiliate_url: string | null
+  gigsberg_highlighted: boolean
+  gigsberg_highlight_until: string | null
+  gigsberg_inventory_status: string | null
   status: EventStatus
   tags: string[] | null
   venue: {
@@ -63,7 +66,8 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
       id, title, slug, description, category,
       start_date, end_date, doors_time,
       image_url, price_from, price_to, currency,
-      tickets_url, own_ticket_url, viagogo_url, stubhub_url, gigsberg_url, gigsberg_affiliate_url, status, tags,
+      tickets_url, own_ticket_url, viagogo_url, stubhub_url, gigsberg_url, gigsberg_affiliate_url,
+      gigsberg_highlighted, gigsberg_highlight_until, gigsberg_inventory_status, status, tags,
       venue:venues(id, name, slug, address, city, postcode, website),
       artists:event_artists(
         is_headliner, order,
@@ -79,11 +83,11 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
 
 // ── Ticket providers ────────────────────────────────────────────────────────
 
-function buildProviders(event: Pick<EventDetail, 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url'>) {
+function buildProviders(event: Pick<EventDetail, 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'gigsberg_inventory_status'>) {
   const primary = event.tickets_url
     ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: getTicketmasterAffiliateLink(event.tickets_url) }]
     : event.gigsberg_affiliate_url
-      ? [{ name: 'Gigsberg', tagline: 'Tickets available via Gigsberg', bg: '#1a1f6e', href: event.gigsberg_affiliate_url }]
+      ? [{ name: 'Gigsberg', tagline: event.gigsberg_inventory_status === 'available' ? 'Tickets available via Gigsberg' : 'Find tickets via Gigsberg', bg: '#1a1f6e', href: event.gigsberg_affiliate_url }]
     : []
   const resale = [
     ...(!event.gigsberg_affiliate_url && event.gigsberg_url && !isBareProviderHomepage(event.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(event.gigsberg_url) }] : []),
@@ -189,6 +193,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const isCancelledOrPostponed = event.status === 'cancelled' || event.status === 'postponed'
   const priceLabel = fmtPrice(event.price_from, event.price_to, event.currency)
   const { primary, resale } = buildProviders(event)
+  const highlightActive = event.gigsberg_highlighted && event.gigsberg_inventory_status === 'available' && (!event.gigsberg_highlight_until || new Date(event.gigsberg_highlight_until) > new Date())
   const headliners = event.artists
     .filter(a => a.is_headliner && a.artist)
     .sort((a, b) => a.order - b.order)
@@ -254,6 +259,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             {event.status === 'sold_out'  && <span className="text-xs font-bold uppercase tracking-wider bg-red-600 text-white px-3 py-1 rounded-full">Sold Out</span>}
             {event.status === 'cancelled' && <span className="text-xs font-bold uppercase tracking-wider bg-red-600 text-white px-3 py-1 rounded-full">Cancelled</span>}
             {event.status === 'postponed' && <span className="text-xs font-bold uppercase tracking-wider bg-orange-500 text-white px-3 py-1 rounded-full">Postponed</span>}
+            {highlightActive && <span className="text-xs font-bold uppercase tracking-wider bg-emerald-500 text-white px-3 py-1 rounded-full">Tickets available via Gigsberg</span>}
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight mb-6 max-w-3xl">
