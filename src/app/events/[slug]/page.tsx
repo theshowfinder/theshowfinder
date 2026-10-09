@@ -518,12 +518,13 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               </div>
             )}
 
-            {/* Resale — never for a cancelled/postponed show; still shown
-                for a genuinely sold_out one, since resale is the point. */}
+            {/* Additional ticket marketplaces — Ticketmaster stays primary
+                whenever it exists; Gigsberg and other providers appear below
+                as clearly separated alternatives. */}
             {!isCancelledOrPostponed && resale.length > 0 && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">More Options</h3>
-              <p className="text-xs text-slate-400 mb-4">Compare prices across resale platforms</p>
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">More Ticket Options</h3>
+              <p className="text-xs text-slate-400 mb-4">Compare availability across ticket marketplaces</p>
               <div className="grid grid-cols-2 gap-3">
                 {resale.map(({ name, bg, href }) => (
                   <TrackedTicketLink
