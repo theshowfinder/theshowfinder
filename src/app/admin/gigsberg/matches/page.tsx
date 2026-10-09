@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { approveExistingGigsbergMatchAction, createGigsbergEventAction, rejectGigsbergMatchAction } from '../actions'
 
 type MatchRow = {
   id: number
@@ -18,6 +19,8 @@ type MatchRow = {
   matched_event_id: string | null
 }
 
+type PossibleEvent = { id: string; title: string; slug: string }
+
 export default async function GigsbergMatchesPage() {
   await requireAdmin()
   const db = createAdminClient()
@@ -29,6 +32,11 @@ export default async function GigsbergMatchesPage() {
     .limit(500) as unknown as { data: MatchRow[] | null; error: { message: string } | null }
 
   const rows = data ?? []
+  const eventIds = rows.map(row => row.matched_event_id).filter((id): id is string => Boolean(id))
+  const { data: possibleEvents } = eventIds.length
+    ? await db.from('events').select('id, title, slug').in('id', eventIds)
+    : { data: [] as PossibleEvent[] }
+  const eventMap = new Map((possibleEvents ?? []).map(event => [event.id, event as PossibleEvent]))
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -56,8 +64,8 @@ export default async function GigsbergMatchesPage() {
                 <td className="px-4 py-4"><p className="font-bold text-slate-900">{row.name}</p><p className="text-xs text-slate-400 mt-1">{row.performer1 || 'Performer unknown'} · ID {row.id}</p></td>
                 <td className="px-4 py-4 text-slate-600 whitespace-nowrap">{new Date(row.event_date).toLocaleDateString('en-GB')}<p className="text-xs text-slate-400 mt-1">{row.venue || 'Venue unknown'}{row.city ? `, ${row.city}` : ''}</p></td>
                 <td className="px-4 py-4"><span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${row.match_status === 'review' ? 'bg-amber-100 text-amber-800' : row.match_status === 'pending' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>{row.match_status === 'review' ? 'Review' : row.match_status === 'pending' ? 'Awaiting match' : 'New event candidate'}</span></td>
-                <td className="px-4 py-4 text-slate-600">{row.match_reason || 'No close match found'}{row.match_confidence !== null && <p className="text-xs text-slate-400 mt-1">Confidence {Math.round(row.match_confidence * 100)}%</p>}</td>
-                <td className="px-4 py-4 whitespace-nowrap"><a href={row.url} target="_blank" rel="noreferrer" className="text-blue-600 font-semibold hover:underline">Open Gigsberg →</a></td>
+                <td className="px-4 py-4 text-slate-600">{row.match_reason || 'No close match found'}{row.match_confidence !== null && <p className="text-xs text-slate-400 mt-1">Confidence {Math.round(row.match_confidence * 100)}%</p>}{row.matched_event_id && eventMap.get(row.matched_event_id) && <Link href={`/events/${eventMap.get(row.matched_event_id)!.slug}`} target="_blank" className="block text-blue-600 font-semibold mt-2 hover:underline">Open Showfinder event →</Link>}</td>
+                <td className="px-4 py-4 whitespace-nowrap space-y-2"><a href={row.url} target="_blank" rel="noreferrer" className="block text-blue-600 font-semibold hover:underline">Open Gigsberg →</a>{row.match_status !== 'approved_existing' && row.match_status !== 'approved_new' && row.match_status !== 'rejected' && (row.matched_event_id ? <><form action={approveExistingGigsbergMatchAction}><input type="hidden" name="catalogue_id" value={row.id} /><input type="hidden" name="event_id" value={row.matched_event_id} /><button className="block text-green-700 font-bold hover:underline">Approve match</button></form><form action={rejectGigsbergMatchAction}><input type="hidden" name="catalogue_id" value={row.id} /><button className="block text-slate-500 font-semibold hover:underline">Reject</button></form></> : <><form action={createGigsbergEventAction}><input type="hidden" name="catalogue_id" value={row.id} /><button className="block text-green-700 font-bold hover:underline">Create Showfinder page</button></form><form action={rejectGigsbergMatchAction}><input type="hidden" name="catalogue_id" value={row.id} /><button className="block text-slate-500 font-semibold hover:underline">Reject</button></form></>)}</td>
               </tr>)}</tbody>
             </table>
           </div>
