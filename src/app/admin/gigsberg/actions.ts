@@ -107,6 +107,41 @@ export async function rejectGigsbergMatchAction(formData: FormData) {
   redirect('/admin/gigsberg/matches?approved=rejected')
 }
 
+export async function linkGigsbergToExistingEventAction(formData: FormData) {
+  await checkAuth()
+  const catalogueId = Number(formData.get('catalogue_id'))
+  const eventId = String(formData.get('event_id') ?? '')
+  if (!Number.isFinite(catalogueId) || !eventId) throw new Error('Missing Gigsberg or Showfinder event')
+
+  const { db, row } = await getCatalogueRow(catalogueId)
+  const { data: event, error: eventLookupError } = await db
+    .from('events')
+    .select('id, start_date')
+    .eq('id', eventId)
+    .maybeSingle()
+  if (eventLookupError || !event) throw new Error(eventLookupError?.message ?? 'Showfinder event not found')
+
+  const { error: eventError } = await db.from('events').update({
+    gigsberg_affiliate_url: row.url,
+    gigsberg_inventory_status: row.inventory_status,
+  }).eq('id', eventId)
+  if (eventError) throw new Error(eventError.message)
+
+  const { error } = await db.from('gigsberg_catalogue_events').update({
+    matched_event_id: eventId,
+    match_status: 'approved_existing',
+    match_confidence: null,
+    match_reason: 'Manually linked to an existing Showfinder event',
+    match_checked_at: new Date().toISOString(),
+  }).eq('id', catalogueId)
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin/gigsberg/matches')
+  revalidatePath('/admin/gigsberg/link')
+  revalidatePath('/events', 'layout')
+  redirect('/admin/gigsberg/matches?approved=existing')
+}
+
 export async function createGigsbergEventAction(formData: FormData) {
   await checkAuth()
   const catalogueId = Number(formData.get('catalogue_id'))
