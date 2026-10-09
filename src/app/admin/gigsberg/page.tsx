@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
+import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import RunMatchingButton from './RunMatchingButton'
 import {
   getGigsbergAffiliateOrders,
@@ -41,17 +42,20 @@ export default async function GigsbergAdminPage({
   let orderError: string | null = null
 
   const [{ data: showfinderRows }, { data: catalogueRows }] = await Promise.all([
-    db.from('events').select('start_date, venue:venues(city)').gte('start_date', new Date().toISOString()).limit(50000),
+    // Use the same public event view and live-status rules as the city pages.
+    // The previous venue join could undercount cities because it bypassed the
+    // view's normalised venue_city value and public status filtering.
+    db.from('events_with_venue').select('start_date, venue_city, status').gte('start_date', new Date().toISOString()).in('status', LIVE_EVENT_STATUSES).limit(50000),
     db.from('gigsberg_catalogue_events').select('event_date, city').limit(50000),
   ]) as unknown as [
-    { data: Array<{ start_date: string; venue: { city: string } | null }> | null },
+    { data: Array<{ start_date: string; venue_city: string | null; status: string }> | null },
     { data: Array<{ event_date: string; city: string | null }> | null },
   ]
   const normalise = (value: string | null | undefined) => (value ?? '').trim().toLowerCase()
   const showfinderCounts = new Map<string, number>()
   const catalogueCounts = new Map<string, number>()
   for (const row of showfinderRows ?? []) {
-    const cityName = normalise(row.venue?.city)
+    const cityName = normalise(row.venue_city)
     if (cityName) showfinderCounts.set(cityName, (showfinderCounts.get(cityName) ?? 0) + 1)
   }
   for (const row of catalogueRows ?? []) {
