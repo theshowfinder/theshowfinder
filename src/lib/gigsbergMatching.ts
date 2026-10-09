@@ -40,7 +40,18 @@ function normalize(value: string | null | undefined) {
 }
 
 function dateOnly(value: string) {
-  return value.slice(0, 10)
+  // Gigsberg supplies a local calendar date, while Showfinder stores event
+  // timestamps in UTC. Convert timestamps to the UK calendar date before
+  // comparing so late-night UTC values do not appear one day early.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value.slice(0, 10)
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
 }
 
 function tokenOverlap(left: string, right: string) {
