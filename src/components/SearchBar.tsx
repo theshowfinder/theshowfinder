@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { MagnifyingGlassIcon, MapPinIcon } from '@heroicons/react/24/outline'
 
 // Canonical fallback — used when no server-fetched list is passed in (e.g. homepage)
@@ -23,24 +22,15 @@ interface SearchBarProps {
 
 export default function SearchBar({ cities = FALLBACK_CITIES }: SearchBarProps) {
   const [query, setQuery] = useState('')
-  const [city,  setCity]  = useState('All UK')
-  const router = useRouter()
-
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault()
-    const params = new URLSearchParams()
-    if (query) params.set('q', query)
-    if (city && city !== 'All UK') params.set('city', city)
-    router.push(`/events?${params.toString()}`)
-  }
-
+  const [city,  setCity]  = useState('')
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2 w-full max-w-2xl">
+    <form action="/events" method="get" className="flex flex-col sm:flex-row gap-2 w-full max-w-2xl">
       {/* Keyword */}
       <div className="relative flex-1">
         <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
         <input
           type="text"
+          name="q"
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Artist, show or venue…"
@@ -58,7 +48,7 @@ export default function SearchBar({ cities = FALLBACK_CITIES }: SearchBarProps) 
           className="pl-9 pr-8 py-3.5 rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:border-transparent shadow-sm appearance-none cursor-pointer min-h-[52px]"
           style={{ '--tw-ring-color': '#E8003D' } as React.CSSProperties}
         >
-          {cities.map(c => <option key={c}>{c}</option>)}
+          {cities.map(c => <option key={c} value={c === 'All UK' ? '' : c}>{c}</option>)}
         </select>
       </div>
 

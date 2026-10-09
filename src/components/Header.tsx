@@ -3,24 +3,12 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { Bars3Icon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
-import { useRouter } from 'next/navigation'
 import { NAV_LINKS, PRIMARY_CTA } from '@/lib/headerLinks'
 
 export default function Header() {
   const [menuOpen,   setMenuOpen]   = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const router = useRouter()
-
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault()
-    if (query.trim()) {
-      router.push(`/events?q=${encodeURIComponent(query.trim())}`)
-      setSearchOpen(false)
-      setQuery('')
-    }
-  }
-
   return (
     <header className="sticky top-0 z-50 shadow-lg" style={{ backgroundColor: '#1A1A2E' }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -88,10 +76,11 @@ export default function Header() {
       {/* Search dropdown */}
       {searchOpen && (
         <div className="border-t border-white/10 px-4 py-3" style={{ backgroundColor: '#1A1A2E' }}>
-          <form onSubmit={handleSearch} className="max-w-2xl mx-auto flex gap-2">
+          <form action="/events" method="get" className="max-w-2xl mx-auto flex gap-2">
             <input
               autoFocus
               type="text"
+              name="q"
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Search artists, shows, venues…"
