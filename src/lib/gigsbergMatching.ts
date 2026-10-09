@@ -56,6 +56,7 @@ function score(catalogue: CatalogueRow, event: ShowfinderEvent) {
   const sameDate = dateOnly(catalogue.event_date) === dateOnly(event.start_date)
   const sameCity = normalize(catalogue.city) === normalize(event.venue?.city)
   const venueOverlap = tokenOverlap(catalogue.venue ?? '', event.venue?.name ?? '')
+  const sameVenue = Boolean(normalize(catalogue.venue) && normalize(catalogue.venue) === normalize(event.venue?.name))
   // Some catalogue records have the artist only in the event name and leave
   // performer1/performer2 empty. Keep the structured performer fields first,
   // but use the event name as a fallback so obvious artist/date/city matches
@@ -93,8 +94,8 @@ function score(catalogue: CatalogueRow, event: ShowfinderEvent) {
   value += titlePerformerExact ? 0.55 : linkedArtistExact ? 0.35 : performerOverlap * 0.55
   if (sameDate) value += 0.25
   if (sameCity) value += 0.1
-  value += venueOverlap * 0.1
-  return { value, sameDate, sameCity, venueOverlap, performerOverlap, performerExact, titlePerformerExact, linkedArtistExact }
+  value += sameVenue ? 0.1 : venueOverlap * 0.1
+  return { value, sameDate, sameCity, sameVenue, venueOverlap, performerOverlap, performerExact, titlePerformerExact, linkedArtistExact }
 }
 
 export async function matchGigsbergCatalogue(): Promise<GigsbergMatchResult> {
@@ -125,8 +126,10 @@ export async function matchGigsbergCatalogue(): Promise<GigsbergMatchResult> {
       .sort((a, b) => b.detail.value - a.detail.value)
     const best = ranked[0]
     const second = ranked[1]
+    const directIdentityMatch = Boolean(best && best.detail.titlePerformerExact && best.detail.sameDate && best.detail.sameCity && (best.detail.sameVenue || best.detail.venueOverlap >= 0.5))
     const confident = Boolean(best && (
-      (best.detail.titlePerformerExact && best.detail.sameDate && best.detail.value >= 0.78 && (!second || best.detail.value - second.detail.value >= 0.08))
+      directIdentityMatch
+      || (best.detail.titlePerformerExact && best.detail.sameDate && best.detail.sameCity && best.detail.value >= 0.78 && (!second || best.detail.value - second.detail.value >= 0.08))
       || (best.detail.performerOverlap >= 0.6 && best.detail.sameDate && best.detail.value >= 0.78 && (!second || best.detail.value - second.detail.value >= 0.12))
     ))
     const review = Boolean(best && !confident && best.detail.value >= 0.45)
