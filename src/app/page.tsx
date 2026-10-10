@@ -43,6 +43,22 @@ import NewsCardGrid from '@/components/NewsCardGrid'
 
 type FeaturedQueryResult = { data: EventWithVenue[] | null; error: { message: string } | null }
 
+function HomeSectionSkeleton() {
+  return (
+    <div className="min-h-[260px] py-10" aria-hidden="true">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="h-4 w-36 rounded bg-slate-200/70 animate-pulse mb-3" />
+        <div className="h-8 w-64 rounded bg-slate-200/70 animate-pulse mb-7" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="h-36 rounded-2xl bg-slate-200/60 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 async function queryFeaturedEvents(supabase: Awaited<ReturnType<typeof createClient>>, now: string): Promise<FeaturedQueryResult> {
   try {
     return await supabase
@@ -553,15 +569,15 @@ export default function HomePage() {
           <LocalHeroCopy />
 
           {/* Search bar */}
-          <div className="flex justify-center">
-            <Suspense>
+          <div className="flex justify-center min-h-[72px]">
+            <Suspense fallback={<div className="h-14 w-full max-w-3xl rounded-2xl bg-white/10 animate-pulse" aria-hidden="true" />}>
               <SearchBar />
             </Suspense>
           </div>
 
           {/* Category quick-filters */}
-          <div className="mt-6 max-w-xl mx-auto">
-            <Suspense>
+          <div className="mt-6 max-w-xl mx-auto min-h-[40px]">
+            <Suspense fallback={<div className="h-10 rounded-xl bg-white/10 animate-pulse" aria-hidden="true" />}>
               <CategoryStrip />
             </Suspense>
           </div>
@@ -579,31 +595,31 @@ export default function HomePage() {
       <LocalSpotlight />
 
       {/* ── ENTERTAINMENT NEWS (national, not city-scoped) ────────── */}
-      <Suspense fallback={null}>
+      <Suspense fallback={<HomeSectionSkeleton />}>
         <NationalNews />
       </Suspense>
 
       {/* ── ON SALE THIS WEEK ─────────────────────── */}
-      <Suspense fallback={null}>
+      <Suspense fallback={<HomeSectionSkeleton />}>
         <OnSaleThisWeek />
       </Suspense>
 
       {/* ── PRESALES OPEN NOW ─────────────────────── */}
-      <Suspense fallback={null}>
+      <Suspense fallback={<HomeSectionSkeleton />}>
         <PresalesOpenNow />
       </Suspense>
 
       {/* ── EVENTS THIS WEEK (national, biggest venues first) ───── */}
-      <Suspense fallback={null}>
+      <Suspense fallback={<HomeSectionSkeleton />}>
         <EventsThisWeekNational />
       </Suspense>
 
       {/* ── JUST ANNOUNCED ──────────────────────── */}
-      <Suspense fallback={null}>
+      <Suspense fallback={<HomeSectionSkeleton />}>
         <JustAnnounced />
       </Suspense>
 
-      <Suspense fallback={null}>
+      <Suspense fallback={<HomeSectionSkeleton />}>
         <GigsbergHighlights />
       </Suspense>
 
