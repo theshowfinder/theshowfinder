@@ -33,7 +33,7 @@ import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 import { CITY_HERO_IMAGES } from '@/lib/cityHeroImages'
 
 export async function generateStaticParams() {
-  return CITIES.map(c => ({ city: encodeURIComponent(c.name) }))
+  return CITIES.map(c => ({ city: c.name }))
 }
 
 export async function generateMetadata(

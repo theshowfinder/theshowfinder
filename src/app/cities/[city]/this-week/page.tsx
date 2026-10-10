@@ -24,7 +24,7 @@ import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import { buildCityCollectionSchema, cityThisWeekCanonicalUrl, cityThisWeekDescription, cityThisWeekTitle } from '@/lib/citySeo'
 
 export async function generateStaticParams() {
-  return CITIES.map(c => ({ city: encodeURIComponent(c.name) }))
+  return CITIES.map(c => ({ city: c.name }))
 }
 
 export async function generateMetadata(
