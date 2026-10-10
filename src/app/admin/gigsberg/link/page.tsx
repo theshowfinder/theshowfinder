@@ -21,7 +21,7 @@ type EventRow = {
   venue: { name: string; city: string } | null
 }
 
-export default async function LinkGigsbergEventPage({ searchParams }: { searchParams: Promise<{ catalogue_id?: string; q?: string }> }) {
+export default async function LinkGigsbergEventPage({ searchParams }: { searchParams: Promise<{ catalogue_id?: string; q?: string; return_to?: string }> }) {
   await requireAdmin()
   const params = await searchParams
   const catalogueId = Number(params.catalogue_id)
@@ -69,7 +69,7 @@ export default async function LinkGigsbergEventPage({ searchParams }: { searchPa
           {!events?.length ? <p className="p-6 text-slate-500">No matching future event was found. Try a shorter artist name or search term.</p> : <div className="divide-y divide-slate-100">
             {events.map(event => <div key={event.id} className="p-6 flex items-center justify-between gap-5">
               <div><p className="font-bold text-slate-900">{event.title}</p><p className="text-sm text-slate-500 mt-1">{new Date(event.start_date).toLocaleDateString('en-GB')} · {event.venue?.name ?? 'Venue unknown'}, {event.venue?.city ?? 'City unknown'}</p><Link href={`/events/${event.slug}`} target="_blank" className="text-blue-600 text-sm font-semibold hover:underline">Open event page →</Link></div>
-              <form action={linkGigsbergToExistingEventAction}><input type="hidden" name="catalogue_id" value={catalogue.id} /><input type="hidden" name="event_id" value={event.id} /><button className="rounded-lg bg-green-700 text-white font-bold px-4 py-2 whitespace-nowrap">Link this event</button></form>
+              <form action={linkGigsbergToExistingEventAction}><input type="hidden" name="catalogue_id" value={catalogue.id} /><input type="hidden" name="event_id" value={event.id} />{params.return_to && <input type="hidden" name="return_to" value={params.return_to} />}<button className="rounded-lg bg-green-700 text-white font-bold px-4 py-2 whitespace-nowrap">Link this event</button></form>
             </div>)}
           </div>}
         </div>

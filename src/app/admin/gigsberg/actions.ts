@@ -145,8 +145,11 @@ export async function linkGigsbergToExistingEventAction(formData: FormData) {
 
   revalidatePath('/admin/gigsberg/matches')
   revalidatePath('/admin/gigsberg/link')
+  revalidatePath('/admin/gigsberg/coverage')
   revalidatePath('/events', 'layout')
-  redirect('/admin/gigsberg/matches?approved=existing')
+  const returnTo = String(formData.get('return_to') ?? '')
+  if (returnTo.startsWith('/admin/gigsberg/')) redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}linked=1`)
+  redirect(`/admin/gigsberg/coverage?city=${encodeURIComponent(row.city ?? '')}&linked=1`)
 }
 
 export async function createGigsbergEventAction(formData: FormData) {
