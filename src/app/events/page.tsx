@@ -205,16 +205,6 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
 
   const { data: events, count } = await query
 
-  if (!events?.length) {
-    return (
-      <div className="text-center py-24">
-        <p className="text-6xl mb-4">🎭</p>
-        <h3 className="text-xl font-semibold text-slate-700 mb-2">No events found</h3>
-        <p className="text-slate-500">Try adjusting your filters or search term.</p>
-      </div>
-    )
-  }
-
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE)
 
   function buildHref(p: number) {
@@ -230,6 +220,16 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
   const validPage = clampPage(page, totalPages)
   if (validPage !== page && totalPages > 0) {
     redirect(buildHref(validPage))
+  }
+
+  if (!events?.length) {
+    return (
+      <div className="text-center py-24">
+        <p className="text-6xl mb-4">🎭</p>
+        <h3 className="text-xl font-semibold text-slate-700 mb-2">No events found</h3>
+        <p className="text-slate-500">Try adjusting your filters or search term.</p>
+      </div>
+    )
   }
 
   return (
