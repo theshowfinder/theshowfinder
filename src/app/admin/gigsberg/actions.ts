@@ -44,7 +44,7 @@ export async function manualGigsbergCityImportAction(formData: FormData) {
   }
   let result
   try {
-    result = await syncGigsbergCatalogue(city, from, to)
+    result = await syncGigsbergCatalogue(city, from, to, false)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The manual Gigsberg import failed.'
     redirect(`/admin/gigsberg?manualError=${encodeURIComponent(message)}`)

@@ -108,7 +108,7 @@ async function fetchAllEvents(cityOverride?: string, from = todayIso(), to = hor
   return { events: [...unique.values()], pages }
 }
 
-export async function syncGigsbergCatalogue(cityOverride?: string, from = todayIso(), to = horizonIso()): Promise<GigsbergCatalogueSyncResult> {
+export async function syncGigsbergCatalogue(cityOverride?: string, from = todayIso(), to = horizonIso(), advanceQueue = true): Promise<GigsbergCatalogueSyncResult> {
   const started = Date.now()
   const db = createAdminClient()
   const { data: syncState } = await db
@@ -150,7 +150,7 @@ export async function syncGigsbergCatalogue(cityOverride?: string, from = todayI
   const nextCityIndex = (effectiveCityIndex + 1) % CITIES.length
   await db.from('gigsberg_sync_state').update({
     status: 'idle',
-    current_city_index: nextCityIndex,
+    ...(advanceQueue ? { current_city_index: nextCityIndex } : {}),
     last_completed_at: new Date().toISOString(),
     total_listings_synced: updated,
   }).eq('id', 1)
