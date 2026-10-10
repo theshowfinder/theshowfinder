@@ -89,7 +89,9 @@ export async function checkGigsbergInventoryAction(formData: FormData) {
   if (error) throw new Error(error.message)
   if (row.matched_event_id) await db.from('events').update({ gigsberg_inventory_status: inventoryStatus, gigsberg_inventory_checked_at: checkedAt }).eq('id', row.matched_event_id)
   revalidatePath('/admin/gigsberg/matches')
-  redirect(`/admin/gigsberg/matches?inventory=${inventoryStatus}`)
+  revalidatePath('/admin/gigsberg/coverage')
+  const returnTo = String(formData.get('return_to') ?? '')
+  redirect(returnTo.startsWith('/admin/gigsberg/') ? `${returnTo}${returnTo.includes('?') ? '&' : '?'}inventory=${inventoryStatus}` : `/admin/gigsberg/matches?inventory=${inventoryStatus}`)
 }
 
 export async function rejectGigsbergMatchAction(formData: FormData) {
