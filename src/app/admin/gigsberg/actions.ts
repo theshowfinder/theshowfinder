@@ -93,6 +93,10 @@ export async function approveExistingGigsbergMatchAction(formData: FormData) {
 
   revalidatePath('/admin/gigsberg/matches')
   revalidatePath('/events', 'layout')
+  const returnTo = String(formData.get('return_to') ?? '')
+  if (returnTo.startsWith('/admin/gigsberg/')) {
+    redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}approved=existing`)
+  }
   redirect('/admin/gigsberg/matches?approved=existing')
 }
 
@@ -135,6 +139,10 @@ export async function rejectGigsbergMatchAction(formData: FormData) {
   }).eq('id', catalogueId)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/gigsberg/matches')
+  const returnTo = String(formData.get('return_to') ?? '')
+  if (returnTo.startsWith('/admin/gigsberg/')) {
+    redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}approved=rejected`)
+  }
   redirect('/admin/gigsberg/matches?approved=rejected')
 }
 
