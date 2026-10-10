@@ -45,7 +45,11 @@ describe('buildTonightTicketOffers', () => {
       { title: 'Unknown Act', tickets_url: 'https://www.ticketmaster.co.uk/event/123', own_ticket_url: null },
       [],
     )
-    assert.deepEqual(offers, [{ kind: 'official', label: 'Find tickets', href: 'https://www.ticketmaster.co.uk/event/123' }])
+    assert.deepEqual(offers, [{
+      kind: 'official',
+      label: 'Find tickets',
+      href: 'https://ticketmaster.evyy.net/c/7328658/1965662/24023?u=https%3A%2F%2Fwww.ticketmaster.co.uk%2Fevent%2F123',
+    }])
   })
 
   test('own_ticket_url present — "Check availability" direct offer', () => {
@@ -105,6 +109,10 @@ describe('buildTonightTicketOffers', () => {
       { title: 'A Completely Unknown Act', tickets_url: 'https://www.ticketmaster.co.uk/event/999', own_ticket_url: null },
       [makeArtist({ name: 'Someone Else' })],
     )
-    assert.deepEqual(offers, [{ kind: 'official', label: 'Find tickets', href: 'https://www.ticketmaster.co.uk/event/999' }])
+    assert.deepEqual(offers, [{
+      kind: 'official',
+      label: 'Find tickets',
+      href: 'https://ticketmaster.evyy.net/c/7328658/1965662/24023?u=https%3A%2F%2Fwww.ticketmaster.co.uk%2Fevent%2F999',
+    }])
   })
 })

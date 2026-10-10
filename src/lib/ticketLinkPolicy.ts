@@ -9,6 +9,15 @@
 
 import { extractArtistName } from './on-sale.ts'
 import { isBareProviderHomepage } from './intelligence.ts'
+import {
+  getTicketmasterAffiliateLink,
+  getSeeTicketsAffiliateLink,
+  getViagogoAffiliateLink,
+  getStubHubAffiliateLink,
+  getGigsbergAffiliateLink,
+  getVividSeatsAffiliateLink,
+  getEventimAffiliateLink,
+} from './affiliate.ts'
 import type { Artist } from './types/database'
 
 export interface TonightTicketEvent {
@@ -44,6 +53,18 @@ const RESALE_FIELDS: (keyof Pick<
   'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'vivid_seats_url' | 'see_tickets_url' | 'eventim_url' | 'axs_url' | 'gigantic_url'
 >)[] = ['viagogo_url', 'stubhub_url', 'gigsberg_url', 'vivid_seats_url', 'see_tickets_url', 'eventim_url', 'axs_url', 'gigantic_url']
 
+function affiliateUrl(field: string, url: string): string {
+  switch (field) {
+    case 'viagogo_url': return getViagogoAffiliateLink(url)
+    case 'stubhub_url': return getStubHubAffiliateLink(url)
+    case 'gigsberg_url': return getGigsbergAffiliateLink(url)
+    case 'vivid_seats_url': return getVividSeatsAffiliateLink(url)
+    case 'see_tickets_url': return getSeeTicketsAffiliateLink(url)
+    case 'eventim_url': return getEventimAffiliateLink(url)
+    default: return url
+  }
+}
+
 // The three possible offers, in display priority order, each included
 // only when a genuine, specific link exists:
 //  - official: event.tickets_url (Ticketmaster/sync-sourced — the real
@@ -60,7 +81,7 @@ export function buildTonightTicketOffers(event: TonightTicketEvent, artists: Art
   const offers: TicketOffer[] = []
 
   if (event.tickets_url) {
-    offers.push({ kind: 'official', label: 'Find tickets', href: event.tickets_url })
+    offers.push({ kind: 'official', label: 'Find tickets', href: getTicketmasterAffiliateLink(event.tickets_url) })
   }
   if (event.own_ticket_url) {
     offers.push({ kind: 'direct', label: 'Check availability', href: event.own_ticket_url })
@@ -71,7 +92,7 @@ export function buildTonightTicketOffers(event: TonightTicketEvent, artists: Art
     for (const field of RESALE_FIELDS) {
       const url = artist[field] as string | null
       if (url && !isBareProviderHomepage(url)) {
-        offers.push({ kind: 'resale', label: 'Resale tickets', href: url })
+        offers.push({ kind: 'resale', label: 'Resale tickets', href: affiliateUrl(field, url) })
         break
       }
     }
