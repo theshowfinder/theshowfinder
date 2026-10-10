@@ -30,6 +30,7 @@ import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
 import TonightEventCard from '@/components/TonightEventCard'
 import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
+import { CITY_HERO_IMAGES } from '@/lib/cityHeroImages'
 
 export async function generateStaticParams() {
   return CITIES.map(c => ({ city: encodeURIComponent(c.name) }))
@@ -227,6 +228,7 @@ export default async function CityPage({
   // displayed elsewhere on the site. No image for this city yet → falls
   // back to the solid colour + emoji treatment.
   const cityHeroImage = candidateVenues.find(v => v.image_url)?.image_url ?? null
+  const cityLandmarkImage = CITY_HERO_IMAGES[cityName] ?? null
   const venueCountResults = await Promise.all(
     candidateVenues.map(v =>
       supabase
@@ -293,18 +295,30 @@ export default async function CityPage({
         className="relative py-14 px-4 sm:px-6 lg:px-8 overflow-hidden"
         style={{ backgroundColor: '#1A1A2E' }}
       >
-        {cityHeroImage && (
+        {(cityHeroImage || cityLandmarkImage) && (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={cityHeroImage}
-              alt=""
-              aria-hidden="true"
-              className="absolute inset-0 w-full h-full object-cover opacity-30"
-            />
+            {cityHeroImage && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={cityHeroImage}
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            )}
+            {cityLandmarkImage && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={cityLandmarkImage}
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 w-full h-full object-cover opacity-55"
+                onError={(event) => { event.currentTarget.style.display = 'none' }}
+              />
+            )}
             <div
               className="absolute inset-0"
-              style={{ background: 'linear-gradient(180deg, rgba(26,26,46,0.55) 0%, #1A1A2E 90%)' }}
+              style={{ background: 'linear-gradient(180deg, rgba(26,26,46,0.58) 0%, rgba(26,26,46,0.82) 66%, #1A1A2E 100%)' }}
             />
           </>
         )}
