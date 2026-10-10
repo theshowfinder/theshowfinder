@@ -61,14 +61,41 @@ function HomeSectionSkeleton() {
 
 async function queryFeaturedEvents(supabase: Awaited<ReturnType<typeof createClient>>, now: string): Promise<FeaturedQueryResult> {
   try {
-    return await supabase
-      .from('events_with_venue')
-      .select('*')
+    // Query the indexed base table and join the small venue projection here.
+    // Sorting the denormalised events_with_venue view by venue_capacity made
+    // this homepage section the slowest query on the page and could hit the
+    // server timeout while the other sections continued to render.
+    const { data, error } = await supabase
+      .from('events')
+      .select(`
+        id, title, slug, description, category, start_date, end_date,
+        image_url, price_from, price_to, currency, tickets_url, status,
+        is_featured, onsale_date, public_onsale_start, public_onsale_end,
+        presale_start, presale_end, presale_name, on_sale_this_week,
+        presale_this_week, upcoming_presale, newly_announced, last_synced_at,
+        venue:venues(id, name, slug, city, postcode, capacity)
+      `)
       .gte('start_date', now)
       .in('status', LIVE_EVENT_STATUSES)
-      .order('venue_capacity', { ascending: false, nullsFirst: false })
-      .order('onsale_date',    { ascending: false, nullsFirst: true  })
+      .order('is_featured', { ascending: false })
+      .order('start_date', { ascending: true })
       .limit(100) as unknown as FeaturedQueryResult
+
+    if (error) return { data: null, error }
+
+    const events: EventWithVenue[] = (data ?? [])
+      .filter((row: any) => row.venue)
+      .map((row: any) => ({
+        ...row,
+        venue_id: row.venue.id,
+        venue_name: row.venue.name,
+        venue_slug: row.venue.slug,
+        venue_city: row.venue.city,
+        venue_postcode: row.venue.postcode,
+        venue_capacity: row.venue.capacity,
+      }))
+
+    return { data: events, error: null }
   } catch (err) {
     return { data: null, error: { message: err instanceof Error ? err.message : 'unknown error' } }
   }
