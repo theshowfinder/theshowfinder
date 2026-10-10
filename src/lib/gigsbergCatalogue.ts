@@ -85,9 +85,7 @@ async function fetchCityEvents(city: string, from: string, to: string): Promise<
   }
 }
 
-async function fetchAllEvents(cityOverride?: string): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
-  const from = todayIso()
-  const to = horizonIso()
+async function fetchAllEvents(cityOverride?: string, from = todayIso(), to = horizonIso()): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
   const unique = new Map<number, GigsbergAffiliateEvent>()
   let pages = 0
 
@@ -110,7 +108,7 @@ async function fetchAllEvents(cityOverride?: string): Promise<{ events: Gigsberg
   return { events: [...unique.values()], pages }
 }
 
-export async function syncGigsbergCatalogue(cityOverride?: string): Promise<GigsbergCatalogueSyncResult> {
+export async function syncGigsbergCatalogue(cityOverride?: string, from = todayIso(), to = horizonIso()): Promise<GigsbergCatalogueSyncResult> {
   const started = Date.now()
   const db = createAdminClient()
   const { data: syncState } = await db
@@ -125,7 +123,7 @@ export async function syncGigsbergCatalogue(cityOverride?: string): Promise<Gigs
   const effectiveCityIndex = CITIES.findIndex(item => item.name === city)
   await db.from('gigsberg_sync_state').update({ status: 'running', last_started_at: new Date().toISOString() }).eq('id', 1)
 
-  const { events, pages } = await fetchAllEvents(city)
+  const { events, pages } = await fetchAllEvents(city, from, to)
   let inserted = 0
   let updated = 0
   let errors = 0

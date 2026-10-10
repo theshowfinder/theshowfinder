@@ -7,6 +7,7 @@ import { CITIES } from '@/lib/cities'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import RunMatchingButton from './RunMatchingButton'
 import RunCatalogueImportButton from './RunCatalogueImportButton'
+import { manualGigsbergCityImportAction } from './actions'
 import {
   getGigsbergAffiliateOrders,
   searchGigsbergAffiliateEvents,
@@ -26,13 +27,17 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'The Gigsberg API could not be reached.'
 }
 
+function isoDate(date: Date) {
+  return date.toISOString().slice(0, 10)
+}
+
 export default async function GigsbergAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; city?: string; synced?: string; updated?: string; importCity?: string; nextCity?: string; syncError?: string }>
+  searchParams: Promise<{ q?: string; city?: string; synced?: string; updated?: string; importCity?: string; nextCity?: string; syncError?: string; manualCity?: string; manualFrom?: string; manualTo?: string; manualFetched?: string; manualSaved?: string; manualErrors?: string; manualError?: string }>
 }) {
   await requireAdmin()
-  const { q = '', city = '', synced, updated, importCity, nextCity, syncError } = await searchParams
+  const { q = '', city = '', synced, updated, importCity, nextCity, syncError, manualCity, manualFrom, manualTo, manualFetched, manualSaved, manualErrors, manualError } = await searchParams
   const query = q.trim()
   const cityQuery = city.trim()
   const db = createAdminClient()
@@ -116,6 +121,8 @@ export default async function GigsbergAdminPage({
 
         {synced && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">✓ {importCity || 'City'} import complete: {synced} current/future UK events fetched, {updated ?? synced} records saved. Existing catalogue records were preserved. Next city: {nextCity || 'the first city in the queue'}.</div>}
         {syncError && <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-3 text-sm">Catalogue import failed: {syncError}</div>}
+        {manualFetched && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">✓ Manual {manualCity} import complete: {manualFetched} events found, {manualSaved ?? 0} records saved{manualErrors && manualErrors !== '0' ? `, ${manualErrors} errors` : ''}.</div>}
+        {manualError && <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-3 text-sm">Manual Gigsberg import failed: {manualError}</div>}
 
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -125,6 +132,17 @@ export default async function GigsbergAdminPage({
           <RunCatalogueImportButton />
           <RunMatchingButton />
           <Link href="/admin/gigsberg/matches" className="text-blue-600 font-semibold text-sm hover:underline">Review catalogue →</Link>
+        </section>
+
+        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h2 className="text-lg font-extrabold text-slate-900">Manual city import</h2>
+          <p className="text-sm text-slate-500 mt-1 mb-5">Pull Gigsberg events for one UK city and a specific date range immediately. Up to 24 months can be requested.</p>
+          <form action={manualGigsbergCityImportAction} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 items-end">
+            <label className="text-sm font-semibold text-slate-600">City<select name="city" required defaultValue={manualCity ?? ''} className="block w-full mt-1 border border-slate-300 rounded-lg px-3 py-2"><option value="">Choose a city</option>{CITIES.map(item => <option key={item.name}>{item.name}</option>)}</select></label>
+            <label className="text-sm font-semibold text-slate-600">From<input type="date" name="from" required defaultValue={manualFrom ?? isoDate(new Date())} className="block w-full mt-1 border border-slate-300 rounded-lg px-3 py-2" /></label>
+            <label className="text-sm font-semibold text-slate-600">To<input type="date" name="to" required defaultValue={manualTo ?? isoDate(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000))} className="block w-full mt-1 border border-slate-300 rounded-lg px-3 py-2" /></label>
+            <button type="submit" className="bg-emerald-700 text-white font-bold rounded-lg px-5 py-2.5">Import city events</button>
+          </form>
         </section>
 
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">

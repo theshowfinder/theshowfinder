@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncGigsbergCatalogue } from '@/lib/gigsbergCatalogue'
+import { CITIES } from '@/lib/cities'
 import { searchGigsbergAffiliateListings } from '@/lib/gigsbergAffiliate'
 
 function slugify(value: string) {
@@ -28,6 +29,29 @@ export async function runGigsbergCatalogueSyncAction() {
     const message = error instanceof Error ? error.message : 'The catalogue import failed.'
     redirect(`/admin/gigsberg?syncError=${encodeURIComponent(message)}`)
   }
+}
+
+export async function manualGigsbergCityImportAction(formData: FormData) {
+  await requireAdmin()
+  const city = String(formData.get('city') ?? '').trim()
+  const from = String(formData.get('from') ?? '').trim()
+  const to = String(formData.get('to') ?? '').trim()
+  const start = new Date(`${from}T00:00:00Z`).getTime()
+  const end = new Date(`${to}T23:59:59Z`).getTime()
+  const maxWindow = 730 * 24 * 60 * 60 * 1000
+  if (!CITIES.some(item => item.name === city) || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || !Number.isFinite(start) || !Number.isFinite(end) || end < start || end - start > maxWindow) {
+    redirect('/admin/gigsberg?manualError=Choose a UK city and a valid date range of no more than 24 months.')
+  }
+  let result
+  try {
+    result = await syncGigsbergCatalogue(city, from, to)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'The manual Gigsberg import failed.'
+    redirect(`/admin/gigsberg?manualError=${encodeURIComponent(message)}`)
+  }
+  revalidatePath('/admin/gigsberg')
+  revalidatePath(`/admin/gigsberg/coverage?city=${encodeURIComponent(city)}`)
+  redirect(`/admin/gigsberg?manualCity=${encodeURIComponent(city)}&manualFrom=${from}&manualTo=${to}&manualFetched=${result.fetched}&manualSaved=${result.updated}&manualErrors=${result.errors}`)
 }
 
 async function getCatalogueRow(id: number) {
