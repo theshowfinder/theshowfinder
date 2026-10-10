@@ -238,5 +238,7 @@ export async function createGigsbergEventAction(formData: FormData) {
   revalidatePath('/admin/gigsberg/matches')
   revalidatePath('/events', 'layout')
   revalidatePath('/cities', 'layout')
-  redirect(`/admin/gigsberg/matches?approved=new&event=${encodeURIComponent(eventSlug)}`)
+  const returnTo = String(formData.get('return_to') ?? '')
+  if (returnTo.startsWith('/admin/gigsberg/')) redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}created=1`)
+  redirect(`/admin/gigsberg/coverage?city=${encodeURIComponent(row.city)}&created=1&event=${encodeURIComponent(eventSlug)}`)
 }
