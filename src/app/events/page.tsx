@@ -223,6 +223,8 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
   }
 
   if (!events?.length) {
+    if (page > 1) redirect(buildHref(1))
+
     return (
       <div className="text-center py-24">
         <p className="text-6xl mb-4">🎭</p>
