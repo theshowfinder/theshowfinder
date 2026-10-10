@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { getArtistSeoAlias, getEventSeoAlias } from '@/lib/seoAliases'
+import { CITIES } from '@/lib/cities'
 
 export const maxDuration = 60
 
@@ -83,15 +84,6 @@ async function fetchAllArtists(supabase: DbClient): Promise<SlugRow[]> {
   return pages.flatMap(p => p.data ?? [])
 }
 
-const CITIES = [
-  'London','Manchester','Birmingham','Glasgow','Edinburgh','Leeds','Liverpool',
-  'Bristol','Cardiff','Belfast','Nottingham','Newcastle','Leicester','Sheffield',
-  'Derby','Coventry','Southampton','Portsmouth','Norwich','Brighton','Oxford',
-  'Cambridge','Exeter','Plymouth','Hull','Middlesbrough','Sunderland','Bradford',
-  'Reading','Milton Keynes','Bournemouth','Ipswich','Stoke-on-Trent','Wolverhampton',
-  'Swansea','Aberdeen',
-]
-
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = await createClient()
   const now      = new Date().toISOString()
@@ -115,14 +107,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]
 
   const cityPages: MetadataRoute.Sitemap = CITIES.map(city => ({
-    url:             `${BASE}/cities/${encodeURIComponent(city)}`,
+    url:             `${BASE}/cities/${encodeURIComponent(city.name)}`,
     lastModified:    new Date(),
     changeFrequency: 'daily' as const,
     priority:        0.8,
   }))
 
   const cityThisWeekPages: MetadataRoute.Sitemap = CITIES.map(city => ({
-    url:             `${BASE}/cities/${encodeURIComponent(city)}/this-week`,
+    url:             `${BASE}/cities/${encodeURIComponent(city.name)}/this-week`,
     lastModified:    new Date(),
     changeFrequency: 'daily' as const,
     priority:        0.7,
