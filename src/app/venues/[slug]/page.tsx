@@ -40,7 +40,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!venue) return { title: 'Venue Not Found' }
 
   const capStr      = venue.capacity ? ` — Capacity ${venue.capacity.toLocaleString('en-GB')}` : ''
-  const title        = `${venue.name}, ${venue.city} | TheShowFinder`
+  // The root layout appends " | TheShowFinder" through its metadata template.
+  // Keep this page title bare so venue titles do not repeat the brand suffix.
+  const title        = `${venue.name}, ${venue.city}`
   const ogDescription = `Upcoming events at ${venue.name} in ${venue.city}${capStr}.`
   const canonical     = `https://www.theshowfinder.com/venues/${slug}`
   const ogImage       = 'https://www.theshowfinder.com/og-image.png'
