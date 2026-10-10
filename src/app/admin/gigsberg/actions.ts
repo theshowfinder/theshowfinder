@@ -91,7 +91,12 @@ export async function checkGigsbergInventoryAction(formData: FormData) {
   revalidatePath('/admin/gigsberg/matches')
   revalidatePath('/admin/gigsberg/coverage')
   const returnTo = String(formData.get('return_to') ?? '')
-  redirect(returnTo.startsWith('/admin/gigsberg/') ? `${returnTo}${returnTo.includes('?') ? '&' : '?'}inventory=${inventoryStatus}` : `/admin/gigsberg/matches?inventory=${inventoryStatus}`)
+  const anchor = String(formData.get('return_anchor') ?? '').replace(/[^a-zA-Z0-9_-]/g, '')
+  if (returnTo.startsWith('/admin/gigsberg/')) {
+    const [path, hash] = returnTo.split('#', 2)
+    redirect(`${path}${path.includes('?') ? '&' : '?'}inventory=${inventoryStatus}#${anchor || hash || ''}`)
+  }
+  redirect(`/admin/gigsberg/matches?inventory=${inventoryStatus}`)
 }
 
 export async function rejectGigsbergMatchAction(formData: FormData) {
