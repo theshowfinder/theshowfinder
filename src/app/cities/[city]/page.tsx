@@ -88,7 +88,12 @@ export default async function CityPage({
   searchParams: Promise<{ page?: string }>
 }) {
   const { city } = await params
-  const cityName = decodeURIComponent(city)
+  const requestedCityName = decodeURIComponent(city)
+
+  const cityConfig = CITIES.find(c => c.name.toLowerCase() === requestedCityName.toLowerCase())
+  if (!cityConfig) notFound()
+  const cityName = cityConfig.name
+  if (requestedCityName !== cityName) redirect(cityCanonicalUrl(cityName))
 
   // This route no longer paginates: the city page has its own focused pools
   // and the full event list lives at /events?city=. Old paginated city URLs
@@ -96,9 +101,6 @@ export default async function CityPage({
   // successful but empty page to crawlers.
   const { page } = await searchParams
   if (page) redirect(cityCanonicalUrl(cityName))
-
-  const cityConfig = CITIES.find(c => c.name === cityName)
-  if (!cityConfig) notFound()
 
   const supabase = await createClient()
   const now       = new Date()

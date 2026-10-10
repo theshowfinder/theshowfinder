@@ -12,7 +12,7 @@
 // after midnight rather than serving yesterday's window for a full hour.
 export const revalidate = 300
 
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
@@ -61,10 +61,12 @@ export default async function CityThisWeekPage({
   params: Promise<{ city: string }>
 }) {
   const { city } = await params
-  const cityName = decodeURIComponent(city)
+  const requestedCityName = decodeURIComponent(city)
 
-  const cityConfig = CITIES.find(c => c.name === cityName)
+  const cityConfig = CITIES.find(c => c.name.toLowerCase() === requestedCityName.toLowerCase())
   if (!cityConfig) notFound()
+  const cityName = cityConfig.name
+  if (requestedCityName !== cityName) redirect(cityThisWeekCanonicalUrl(cityName))
 
   const supabase = await createClient()
   const eventsThisWeek = await fetchEventsThisWeek(supabase, { city: cityName, limit: 30 })
