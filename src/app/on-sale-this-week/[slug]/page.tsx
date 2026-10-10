@@ -11,7 +11,7 @@ import { isBareProviderHomepage } from '@/lib/intelligence'
 import type { Artist } from '@/lib/types/database'
 import {
   getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
-  getStubHubAffiliateLink, getGigsbergAffiliateLink, getVividSeatsAffiliateLink,
+  getStubHubAffiliateLink, getGigsbergAffiliateLink, getVividSeatsAffiliateLink, getEventimAffiliateLink,
 } from '@/lib/affiliate'
 
 interface PageProps {
@@ -244,7 +244,7 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
                 </TrackedTicketLink>
               )}
               {dbArtist?.eventim_url && (
-                <TrackedTicketLink href={dbArtist.eventim_url} provider="Eventim" section="primary" context={slug}
+                <TrackedTicketLink href={getEventimAffiliateLink(dbArtist.eventim_url)} provider="Eventim" section="primary" context={slug}
                   className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: '#00a4e0' }}>
                   Eventim

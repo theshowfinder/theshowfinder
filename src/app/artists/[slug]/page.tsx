@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Artist, Tour, TourDate } from '@/lib/types/database'
 import {
   getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
-  getStubHubAffiliateLink, getGigsbergAffiliateLink, getVividSeatsAffiliateLink,
+  getStubHubAffiliateLink, getGigsbergAffiliateLink, getVividSeatsAffiliateLink, getEventimAffiliateLink,
 } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
@@ -290,7 +290,7 @@ export default async function ArtistPage({ params }: PageProps) {
               )}
               {artist.eventim_url && (
                 <TrackedTicketLink
-                  href={artist.eventim_url}
+                  href={getEventimAffiliateLink(artist.eventim_url)}
                   provider="Eventim"
                   section="primary"
                   context={artist.slug}
