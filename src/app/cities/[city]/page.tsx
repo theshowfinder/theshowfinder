@@ -313,7 +313,6 @@ export default async function CityPage({
                 alt=""
                 aria-hidden="true"
                 className="absolute inset-0 w-full h-full object-cover opacity-55"
-                onError={(event) => { event.currentTarget.style.display = 'none' }}
               />
             )}
             <div
