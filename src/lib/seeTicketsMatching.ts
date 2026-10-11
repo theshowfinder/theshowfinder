@@ -98,11 +98,11 @@ export async function matchSeeTicketsCatalogue(fullRescan = false): Promise<SeeT
   }
   const result: SeeTicketsMatchResult = { checked: 0, autoMatched: 0, review: 0, noMatch: 0, errors: 0 }
   async function processItem(item: CatalogueRow) {
-    const candidates = (eventsByDate.get(dateOnly(item.event_date)) ?? []).filter(event => {
-      const sameCity = normalize(item.city) === normalize(event.venue?.city)
-      const venueSimilarity = Math.max(overlap(item.venue, event.venue?.name ?? null), overlap(comparableVenue(item.venue), comparableVenue(event.venue?.name)))
-      return sameCity || venueSimilarity >= 0.4
-    })
+    // Do not discard a candidate merely because the feed's city or venue
+    // label differs. Ticket feeds commonly use abbreviations, local venue
+    // brands, or a nearby city. Score every event on the same date first;
+    // city and venue still remain confidence checks before auto-linking.
+    const candidates = eventsByDate.get(dateOnly(item.event_date)) ?? []
     const ranked = candidates.map(event => ({ event, detail: score(item, event) })).filter(candidate => candidate.detail.titleMatch || candidate.detail.titleOverlap >= 0.6).sort((a, b) => b.detail.value - a.detail.value)
     const best = ranked[0]
     const second = ranked[1]
