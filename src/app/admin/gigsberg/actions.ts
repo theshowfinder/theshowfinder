@@ -244,6 +244,40 @@ export async function linkSeeTicketsToExistingEventAction(formData: FormData) {
   redirect('/admin/see-tickets?linked=1')
 }
 
+export async function createSeeTicketsEventAction(formData: FormData) {
+  await checkAuth()
+  const catalogueId = String(formData.get('catalogue_id') ?? '')
+  if (!catalogueId) throw new Error('Missing See Tickets catalogue record')
+  const db = createAdminClient()
+  const { data: row, error: rowError } = await db.from('see_tickets_catalogue_events').select('id, name, event_date, venue, city, primary_artist, second_artist, url').eq('id', catalogueId).single()
+  if (rowError || !row) throw new Error(rowError?.message ?? 'See Tickets record not found')
+  if (!row.event_date || !row.city || !row.venue) throw new Error('A date, city and venue are required before creating a public event page')
+  const venueSlug = slugify(`${row.venue}-${row.city}`)
+  const { data: existingVenue } = await db.from('venues').select('id').eq('slug', venueSlug).maybeSingle()
+  let venueId = existingVenue?.id as string | undefined
+  if (!venueId) {
+    const { data: venue, error } = await db.from('venues').insert({ name: row.venue, slug: venueSlug, address: `${row.venue}, ${row.city}`, postcode: '', city: row.city, country: 'GB' }).select('id').single()
+    if (error || !venue) throw new Error(error?.message ?? 'Could not create venue')
+    venueId = venue.id
+  }
+  const eventSlug = `${slugify(`${row.name}-${row.event_date}-${row.city}`)}-${slugify(row.id).slice(0, 24)}`
+  const { data: event, error: eventError } = await db.from('events').insert({ title: row.name, slug: eventSlug, description: `Live event in ${row.city}. Check See Tickets for current ticket availability.`, category: 'concert', venue_id: venueId, start_date: new Date(`${row.event_date}T19:00:00Z`).toISOString(), currency: 'GBP', see_tickets_affiliate_url: row.url, source: 'see_tickets', source_url: row.url, status: 'upcoming', image_url: 'https://www.theshowfinder.com/og-image.png' }).select('id').single()
+  if (eventError || !event) throw new Error(eventError?.message ?? 'Could not create Showfinder event')
+  const artistName = row.primary_artist || row.second_artist
+  if (artistName) {
+    const artistSlug = slugify(artistName)
+    const { data: existingArtist } = await db.from('artists').select('id').eq('slug', artistSlug).maybeSingle()
+    const artistId = existingArtist?.id ?? (await db.from('artists').insert({ name: artistName, slug: artistSlug }).select('id').single()).data?.id
+    if (artistId) await db.from('event_artists').insert({ event_id: event.id, artist_id: artistId, is_headliner: true, order: 0 })
+  }
+  const { error: updateError } = await db.from('see_tickets_catalogue_events').update({ matched_event_id: event.id, match_status: 'approved_new', match_reason: 'New Showfinder page created by admin', match_checked_at: new Date().toISOString() }).eq('id', catalogueId)
+  if (updateError) throw new Error(updateError.message)
+  revalidatePath('/admin/see-tickets'); revalidatePath('/events', 'layout'); revalidatePath('/cities', 'layout')
+  const returnTo = String(formData.get('return_to') ?? '')
+  if (returnTo.startsWith('/admin/')) redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}created=1`)
+  redirect('/admin/see-tickets?created=1')
+}
+
 export async function createGigsbergEventAction(formData: FormData) {
   await checkAuth()
   const catalogueId = Number(formData.get('catalogue_id'))

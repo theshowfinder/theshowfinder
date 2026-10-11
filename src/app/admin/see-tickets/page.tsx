@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
+import { createSeeTicketsEventAction } from '@/app/admin/gigsberg/actions'
 
 type SearchParams = Promise<{ status?: string; city?: string; q?: string }>
 
@@ -96,7 +97,7 @@ export default async function SeeTicketsInventoryPage({ searchParams }: { search
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
           {error && <p className="p-6 text-red-700">Could not load See Tickets inventory: {error.message}</p>}
           <table className="w-full min-w-[1250px] text-sm">
-            <thead><tr className="border-b border-slate-100 bg-slate-50 text-left"><th className="px-4 py-3">Event</th><th className="px-4 py-3">Date / venue</th><th className="px-4 py-3">Inventory</th><th className="px-4 py-3">Match</th><th className="px-4 py-3">Showfinder page</th><th className="px-4 py-3">Source</th></tr></thead>
+            <thead><tr className="border-b border-slate-100 bg-slate-50 text-left"><th className="px-4 py-3">Event</th><th className="px-4 py-3">Date / venue</th><th className="px-4 py-3">Inventory</th><th className="px-4 py-3">Match</th><th className="px-4 py-3">Showfinder page</th><th className="px-4 py-3">Source / actions</th></tr></thead>
             <tbody>{(rows ?? []).map(row => {
               const linked = row.matched_event_id ? eventMap.get(row.matched_event_id) : null
               return <tr key={row.id} className="border-b border-slate-100 align-top">
@@ -105,7 +106,7 @@ export default async function SeeTicketsInventoryPage({ searchParams }: { search
                 <td className="px-4 py-4 text-slate-600">{row.availability_status || 'Unknown'}<p className="text-xs text-slate-400 mt-1">{money(row.min_price)}{row.max_price ? `–${money(row.max_price)}` : ''}</p></td>
                 <td className="px-4 py-4"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${row.match_status === 'auto_matched' ? 'bg-green-100 text-green-800' : row.match_status === 'review' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>{statusLabel(row.match_status)}</span><p className="text-xs text-slate-400 mt-2">{row.match_reason || 'Not checked yet'}</p></td>
                 <td className="px-4 py-4">{linked ? <Link href={`/events/${linked.slug}`} className="text-blue-600 font-semibold hover:underline">{linked.title} →</Link> : <Link href={`/admin/see-tickets/link?catalogue_id=${encodeURIComponent(row.id)}&return_to=${encodeURIComponent(`/admin/see-tickets${status || city || query ? `?${new URLSearchParams({ ...(status ? { status } : {}), ...(city ? { city } : {}), ...(query ? { q: query } : {}) }).toString()}` : ''}`)}`} className="text-green-700 font-bold hover:underline">Link event →</Link>}</td>
-                <td className="px-4 py-4"><a href={row.url} target="_blank" rel="noreferrer" className="text-blue-600 font-semibold hover:underline">Open See Tickets →</a></td>
+                <td className="px-4 py-4"><a href={row.url} target="_blank" rel="noreferrer" className="text-blue-600 font-semibold hover:underline">Open See Tickets →</a>{!linked && <form action={createSeeTicketsEventAction} className="mt-2"><input type="hidden" name="catalogue_id" value={row.id} /><input type="hidden" name="return_to" value={`/admin/see-tickets${status || city || query ? `?${new URLSearchParams({ ...(status ? { status } : {}), ...(city ? { city } : {}), ...(query ? { q: query } : {}) }).toString()}` : ''}`} /><button className="block text-green-700 font-bold hover:underline">Create Showfinder page</button></form>}</td>
               </tr>
             })}</tbody>
           </table>

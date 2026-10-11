@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { linkSeeTicketsToExistingEventAction } from '@/app/admin/gigsberg/actions'
+import { createSeeTicketsEventAction, linkSeeTicketsToExistingEventAction } from '@/app/admin/gigsberg/actions'
 
 export default async function SeeTicketsLinkPage({ searchParams }: { searchParams: Promise<{ catalogue_id?: string; q?: string; return_to?: string }> }) {
   await requireAdmin()
