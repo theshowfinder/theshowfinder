@@ -34,14 +34,15 @@ export async function runGigsbergCatalogueSyncAction() {
 
 export async function runSeeTicketsCatalogueSyncAction() {
   await requireAdmin()
+  let result
   try {
-    const result = await syncSeeTicketsCatalogue()
-    revalidatePath('/admin/gigsberg')
-    redirect(`/admin/gigsberg?seeFetched=${result.fetched}&seeEligible=${result.eligible}&seeInserted=${result.inserted}&seeUpdated=${result.updated}&seeErrors=${result.errors}`)
+    result = await syncSeeTicketsCatalogue()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The See Tickets import failed.'
     redirect(`/admin/gigsberg?seeError=${encodeURIComponent(message)}`)
   }
+  revalidatePath('/admin/gigsberg')
+  redirect(`/admin/gigsberg?seeFetched=${result.fetched}&seeEligible=${result.eligible}&seeInserted=${result.inserted}&seeUpdated=${result.updated}&seeErrors=${result.errors}`)
 }
 
 export async function manualGigsbergCityImportAction(formData: FormData) {
