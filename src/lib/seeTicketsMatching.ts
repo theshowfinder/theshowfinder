@@ -121,11 +121,20 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
     // brands, or a nearby city. Score every event on the same date first;
     // city and venue still remain confidence checks before auto-linking.
     const candidates = eventsByDate.get(dateOnly(item.event_date)) ?? []
-    const ranked = candidates.map(event => ({ event, detail: score(item, event) })).filter(candidate => candidate.detail.titleMatch || candidate.detail.titleOverlap >= 0.6).sort((a, b) => b.detail.value - a.detail.value)
+    // Keep a wider candidate set for the second pass. Feeds often add words
+    // such as "tickets", "live", "tour" or a sponsor name to the title, so
+    // a useful artist overlap can be below the first-pass threshold. Date,
+    // city and venue evidence still decide whether anything is linked.
+    const ranked = candidates
+      .map(event => ({ event, detail: score(item, event) }))
+      .filter(candidate => candidate.detail.titleMatch || candidate.detail.titleOverlap >= 0.35)
+      .sort((a, b) => b.detail.value - a.detail.value)
     const best = ranked[0]
     const second = ranked[1]
-    const confident = Boolean(best && best.detail.titleMatch && best.detail.sameDate && (best.detail.sameCity || best.detail.venueExact || best.detail.venueOverlap >= 0.5) && (!second || best.detail.value - second.detail.value >= 0.05))
-    const review = Boolean(best && !confident && best.detail.value >= 0.4)
+    const locationEvidence = Boolean(best && (best.detail.sameCity || best.detail.venueExact || best.detail.venueOverlap >= 0.5))
+    const strongTitle = Boolean(best && (best.detail.titleMatch || best.detail.titleOverlap >= 0.75))
+    const confident = Boolean(best && strongTitle && best.detail.sameDate && locationEvidence && (!second || best.detail.value - second.detail.value >= 0.05))
+    const review = Boolean(best && !confident && best.detail.sameDate && locationEvidence && best.detail.value >= 0.35)
     const status = confident ? 'auto_matched' : review ? 'review' : 'no_match'
     const { error } = await db.from('see_tickets_catalogue_events').update({ matched_event_id: confident ? best.event.id : null, match_status: status, match_confidence: best ? Number(best.detail.value.toFixed(3)) : null, match_reason: best ? `${best.event.title} (${Math.round(best.detail.value * 100)}% match)` : 'No close Showfinder event found', match_checked_at: new Date().toISOString() }).eq('id', item.id)
     if (error) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0 }
