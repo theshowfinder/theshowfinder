@@ -49,6 +49,10 @@ function value(row: Record<string, string>, key: string) {
   return (row[key] ?? '').trim() || null
 }
 
+function ticketValue(row: Record<string, string>, key: string) {
+  return value(row, key) ?? value(row, `Tickets:${key}`)
+}
+
 function dateOnly(rawValue: string | null) {
   if (!rawValue) return null
   const value = rawValue.trim()
@@ -80,21 +84,21 @@ export function parseSeeTicketsCsv(input: string): SeeTicketsRow[] {
     return {
       id: value(raw, 'aw_product_id') ?? value(raw, 'merchant_product_id') ?? '',
       merchant_product_id: value(raw, 'merchant_product_id'),
-      name: value(raw, 'event_name') ?? value(raw, 'product_name') ?? '',
-      event_date: dateOnly(value(raw, 'event_date')),
-      venue: value(raw, 'venue_name'),
-      city: value(raw, 'event_location_city'),
-      country: value(raw, 'event_location_country'),
-      primary_artist: value(raw, 'primary_artist'),
-      second_artist: value(raw, 'second_artist'),
-      genre: value(raw, 'genre'),
+      name: ticketValue(raw, 'event_name') ?? value(raw, 'product_name') ?? '',
+      event_date: dateOnly(ticketValue(raw, 'event_date')),
+      venue: ticketValue(raw, 'venue_name'),
+      city: ticketValue(raw, 'event_location_city'),
+      country: ticketValue(raw, 'event_location_country'),
+      primary_artist: ticketValue(raw, 'primary_artist'),
+      second_artist: ticketValue(raw, 'second_artist'),
+      genre: ticketValue(raw, 'genre'),
       url: value(raw, 'aw_deep_link') ?? '',
       availability_status: value(raw, 'stock_status') ?? value(raw, 'is_for_sale'),
-      available_from: timestamp(value(raw, 'available_from')),
-      valid_from: timestamp(value(raw, 'valid_from')),
-      valid_to: timestamp(value(raw, 'valid_to')),
-      min_price: numberValue(value(raw, 'min_price')),
-      max_price: numberValue(value(raw, 'max_price')),
+      available_from: timestamp(ticketValue(raw, 'available_from')),
+      valid_from: timestamp(ticketValue(raw, 'valid_from')),
+      valid_to: timestamp(ticketValue(raw, 'valid_to')),
+      min_price: numberValue(ticketValue(raw, 'min_price')),
+      max_price: numberValue(ticketValue(raw, 'max_price')),
       raw,
     }
   }).filter(row => row.id && row.name && row.url)

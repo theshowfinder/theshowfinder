@@ -29,3 +29,14 @@ test('parses named event dates', () => {
   ].join('\n'))
   assert.equal(rows[0].event_date, '2027-11-28')
 })
+
+test('maps Awin ticket columns with the Tickets prefix', () => {
+  const rows = parseSeeTicketsCsv([
+    'aw_product_id,Tickets:event_date,Tickets:event_name,Tickets:venue_name,Tickets:event_location_city,aw_deep_link',
+    '321,2027-12-02,Prefixed Show,The Venue,Manchester,https://example.test/ticket',
+  ].join('\n'))
+  assert.equal(rows[0].name, 'Prefixed Show')
+  assert.equal(rows[0].event_date, '2027-12-02')
+  assert.equal(rows[0].venue, 'The Venue')
+  assert.equal(rows[0].city, 'Manchester')
+})
