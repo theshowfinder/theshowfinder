@@ -147,6 +147,7 @@ export default async function GigsbergAdminPage({
           <RunSeeTicketsImportButton action={runSeeTicketsCatalogueSyncAction} />
           <RunSeeTicketsMatchingButton action={runSeeTicketsMatchingAction} />
           <RunMatchingButton />
+          <Link href="/admin/see-tickets" className="text-blue-600 font-semibold text-sm hover:underline">See Tickets inventory →</Link>
           <Link href="/admin/gigsberg/matches" className="text-blue-600 font-semibold text-sm hover:underline">Review catalogue →</Link>
         </section>
 
