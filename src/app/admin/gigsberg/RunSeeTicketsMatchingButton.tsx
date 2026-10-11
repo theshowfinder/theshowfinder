@@ -27,7 +27,7 @@ export default function RunSeeTicketsMatchingButton({ action: _action }: { actio
       do {
         const response = await fetch('/api/cron/match-see-tickets', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cursor, limit: 250 }),
+          body: JSON.stringify({ cursor, limit: 500 }),
         })
         const data = await response.json()
         if (!response.ok || !data.success) throw new Error(data.error || 'Matching failed')

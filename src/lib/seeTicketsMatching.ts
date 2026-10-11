@@ -143,7 +143,7 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
   // feed take several minutes and can exceed the Vercel function limit. Keep
   // the batch deliberately small so the database is not overwhelmed while
   // still completing a full catalogue in one request.
-  const batchSize = 25
+  const batchSize = 50
   for (let offset = 0; offset < rowsToProcess.length; offset += batchSize) {
     const batch = await Promise.all(rowsToProcess.slice(offset, offset + batchSize).map(processItem))
     result.checked += batch.length
