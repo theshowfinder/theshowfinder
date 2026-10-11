@@ -487,12 +487,36 @@ async function upsertEventArtists(
 
 type UpsertResult = 'inserted' | 'updated' | 'skipped' | 'error'
 
+type ExistingEventSnapshot = {
+  id: string
+  title: string
+  slug: string
+  category: EventCategory
+  venue_id: string
+  start_date: string
+  onsale_date: string | null
+  public_onsale_start: string | null
+  public_onsale_end: string | null
+  presale_start: string | null
+  presale_end: string | null
+  presale_name: string | null
+  image_url: string | null
+  description: string | null
+  price_from: number | null
+  price_to: number | null
+  currency: string
+  tickets_url: string | null
+  status: string
+  ticketmaster_id: string | null
+}
+
 async function upsertEvent(
   db: DbClient,
   tmEvent: TMEvent,
   venueId: string,
   defaultCategory: EventCategory,
   artistCache: Map<string, string>,
+  eventCache: Map<string, ExistingEventSnapshot | null>,
 ): Promise<UpsertResult> {
   const startDate = buildStartDate(tmEvent)
   if (!startDate) return 'skipped'
@@ -541,8 +565,53 @@ async function upsertEvent(
     currency:            price?.currency ?? 'GBP',
     tickets_url:         tmEvent.url     ?? null,
     status:              mapStatus(tmEvent),
-    is_featured:         false,
     ticketmaster_id:     tmEvent.id,
+  }
+
+  let existing = eventCache.get(tmEvent.id)
+  if (existing === undefined) {
+    const { data: current } = await db
+      .from('events')
+      .select('id, title, slug, category, venue_id, start_date, onsale_date, public_onsale_start, public_onsale_end, presale_start, presale_end, presale_name, image_url, description, price_from, price_to, currency, tickets_url, status, ticketmaster_id')
+      .eq('ticketmaster_id', tmEvent.id)
+      .maybeSingle()
+    existing = (current as ExistingEventSnapshot | null) ?? null
+    eventCache.set(tmEvent.id, existing)
+  }
+
+  const unchanged = existing &&
+    existing.title === eventData.title &&
+    existing.slug === eventData.slug &&
+    existing.category === eventData.category &&
+    existing.venue_id === eventData.venue_id &&
+    existing.start_date === eventData.start_date &&
+    existing.onsale_date === eventData.onsale_date &&
+    existing.public_onsale_start === eventData.public_onsale_start &&
+    existing.public_onsale_end === eventData.public_onsale_end &&
+    existing.presale_start === eventData.presale_start &&
+    existing.presale_end === eventData.presale_end &&
+    existing.presale_name === eventData.presale_name &&
+    existing.image_url === eventData.image_url &&
+    existing.description === eventData.description &&
+    existing.price_from === eventData.price_from &&
+    existing.price_to === eventData.price_to &&
+    existing.currency === eventData.currency &&
+    existing.tickets_url === eventData.tickets_url &&
+    existing.status === eventData.status &&
+    existing.ticketmaster_id === eventData.ticketmaster_id
+
+  if (unchanged && existing) {
+    // Keep the freshness signal current without rewriting the full event row,
+    // artist links, or manually curated fields such as is_featured.
+    const { error: touchError } = await db
+      .from('events')
+      .update({ last_synced_at: eventData.last_synced_at })
+      .eq('id', existing.id)
+    if (touchError) {
+      console.error(`[event] freshness update failed for "${tmEvent.name}" (${tmEvent.id}): ${touchError.message}`)
+      return 'error'
+    }
+    return 'skipped'
   }
 
   const { data, error } = await db
@@ -560,6 +629,8 @@ async function upsertEvent(
     await upsertEventArtists(db, data.id, tmEvent._embedded?.attractions, artistCache)
   }
 
+  eventCache.set(tmEvent.id, { ...eventData, id: data?.id ?? existing?.id ?? '' } as ExistingEventSnapshot)
+
   return 'inserted'
 }
 
@@ -575,6 +646,7 @@ async function processEvent(
   upsertCategory: EventCategory,
   venueCache: Map<string, string>,
   artistCache: Map<string, string>,
+  eventCache: Map<string, ExistingEventSnapshot | null>,
 ): Promise<UpsertResult | 'no-venue'> {
   const tmVenue = tmEvent._embedded?.venues?.[0]
   if (!tmVenue) return 'no-venue'
@@ -582,7 +654,7 @@ async function processEvent(
   const venueId = await upsertVenue(db, tmVenue, venueCache)
   if (!venueId) return 'error'
 
-  return upsertEvent(db, tmEvent, venueId, upsertCategory, artistCache)
+  return upsertEvent(db, tmEvent, venueId, upsertCategory, artistCache, eventCache)
 }
 
 export interface TargetedTicketmasterResult {
@@ -606,6 +678,7 @@ export async function syncTicketmasterTargeted(input: {
   const db = createAdminClient()
   const venueCache = new Map<string, string>()
   const artistCache = new Map<string, string>()
+  const eventCache = new Map<string, ExistingEventSnapshot | null>()
   const start = `${input.from}T00:00:00Z`
   const end = `${input.to}T23:59:59Z`
   let fetched = 0
@@ -620,7 +693,7 @@ export async function syncTicketmasterTargeted(input: {
       totalPages = Math.min(result.totalPages || 1, 6)
       fetched += result.events.length
       for (const event of result.events) {
-        const outcome = await processEvent(db, event, dbCategory, venueCache, artistCache)
+        const outcome = await processEvent(db, event, dbCategory, venueCache, artistCache, eventCache)
         if (outcome === 'inserted' || outcome === 'updated') inserted++
         else if (outcome === 'skipped' || outcome === 'no-venue') skipped++
         else errors++
@@ -641,6 +714,7 @@ export async function syncTicketmasterCityWindow(input: {
   const db = createAdminClient()
   const venueCache = new Map<string, string>()
   const artistCache = new Map<string, string>()
+  const eventCache = new Map<string, ExistingEventSnapshot | null>()
   const start = `${input.from}T00:00:00Z`
   const end = `${input.to}T23:59:59Z`
   let fetched = 0
@@ -655,7 +729,7 @@ export async function syncTicketmasterCityWindow(input: {
       totalPages = Math.min(result.totalPages || 1, 6)
       fetched += result.events.length
       for (const event of result.events) {
-        const outcome = await processEvent(db, event, dbCategory, venueCache, artistCache)
+        const outcome = await processEvent(db, event, dbCategory, venueCache, artistCache, eventCache)
         if (outcome === 'inserted' || outcome === 'updated') inserted++
         else if (outcome === 'skipped' || outcome === 'no-venue') skipped++
         else errors++
@@ -788,6 +862,7 @@ export async function syncTicketmasterEvents(
   await updateSyncState(db, { status: 'running', last_started_at: new Date().toISOString() })
   const venueCache = new Map<string, string>()
   const artistCache = new Map<string, string>()
+  const eventCache = new Map<string, ExistingEventSnapshot | null>()
 
   let total = 0, inserted = 0, skipped = 0, errors = 0, rateLimited = 0
   const byCategory: Record<string, number> = {}
@@ -840,7 +915,7 @@ export async function syncTicketmasterEvents(
       for (let i = 0; i < result.events.length; i += EVENT_CONCURRENCY) {
         const chunk = result.events.slice(i, i + EVENT_CONCURRENCY)
         const outcomes = await Promise.all(
-          chunk.map(ev => processEvent(db, ev, dbCategory, venueCache, artistCache))
+          chunk.map(ev => processEvent(db, ev, dbCategory, venueCache, artistCache, eventCache))
         )
         for (const outcome of outcomes) {
           if (outcome === 'inserted') {
@@ -919,7 +994,7 @@ export async function syncTicketmasterEvents(
           const outcomes = await Promise.all(
             chunk.map(ev => {
               const category = mapCategory(ev, dbCategory)
-              return processEvent(db, ev, category, venueCache, artistCache).then(outcome => ({ outcome, category }))
+              return processEvent(db, ev, category, venueCache, artistCache, eventCache).then(outcome => ({ outcome, category }))
             })
           )
           for (const { outcome, category } of outcomes) {
