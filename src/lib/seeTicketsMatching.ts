@@ -90,8 +90,7 @@ export async function matchSeeTicketsCatalogue(fullRescan = false): Promise<SeeT
     eventsByDateCity.set(key, bucket)
   }
   const result: SeeTicketsMatchResult = { checked: 0, autoMatched: 0, review: 0, noMatch: 0, errors: 0 }
-  for (const item of catalogue ?? []) {
-    result.checked++
+  async function processItem(item: CatalogueRow) {
     const candidates = eventsByDateCity.get(`${dateOnly(item.event_date)}|${normalize(item.city)}`) ?? []
     const ranked = candidates.map(event => ({ event, detail: score(item, event) })).filter(candidate => candidate.detail.titleMatch || candidate.detail.titleOverlap >= 0.6).sort((a, b) => b.detail.value - a.detail.value)
     const best = ranked[0]
@@ -100,15 +99,30 @@ export async function matchSeeTicketsCatalogue(fullRescan = false): Promise<SeeT
     const review = Boolean(best && !confident && best.detail.value >= 0.45)
     const status = confident ? 'auto_matched' : review ? 'review' : 'no_match'
     const { error } = await db.from('see_tickets_catalogue_events').update({ matched_event_id: confident ? best.event.id : null, match_status: status, match_confidence: best ? Number(best.detail.value.toFixed(3)) : null, match_reason: best ? `${best.event.title} (${Math.round(best.detail.value * 100)}% match)` : 'No close Showfinder event found', match_checked_at: new Date().toISOString() }).eq('id', item.id)
-    if (error) { result.errors++; continue }
+    if (error) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0 }
     if (confident) {
       const { error: linkError } = await db.from('events').update({ see_tickets_affiliate_url: item.url }).eq('id', best.event.id).is('see_tickets_affiliate_url', null)
-      if (linkError) result.errors++
-      else result.autoMatched++
+      if (linkError) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0 }
+      return { errors: 0, autoMatched: 1, review: 0, noMatch: 0 }
     } else {
       if (item.matched_event_id) await db.from('events').update({ see_tickets_affiliate_url: null }).eq('id', item.matched_event_id).eq('see_tickets_affiliate_url', item.url)
-      if (review) result.review++
-      else result.noMatch++
+      return { errors: 0, autoMatched: 0, review: review ? 1 : 0, noMatch: review ? 0 : 1 }
+    }
+  }
+
+  // Supabase writes are network-bound. Running them one-by-one makes a full
+  // feed take several minutes and can exceed the Vercel function limit. Keep
+  // the batch deliberately small so the database is not overwhelmed while
+  // still completing a full catalogue in one request.
+  const batchSize = 25
+  for (let offset = 0; offset < catalogue.length; offset += batchSize) {
+    const batch = await Promise.all(catalogue.slice(offset, offset + batchSize).map(processItem))
+    result.checked += batch.length
+    for (const outcome of batch) {
+      result.errors += outcome.errors
+      result.autoMatched += outcome.autoMatched
+      result.review += outcome.review
+      result.noMatch += outcome.noMatch
     }
   }
   return result
