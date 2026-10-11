@@ -51,8 +51,11 @@ function value(row: Record<string, string>, key: string) {
 
 function dateOnly(rawValue: string | null) {
   if (!rawValue) return null
-  const match = rawValue.match(/(\d{4})[-\/]?(\d{2})[-\/]?(\d{2})/)
-  return match ? `${match[1]}-${match[2]}-${match[3]}` : null
+  const value = rawValue.trim()
+  const isoMatch = value.match(/(\d{4})[-\/]?(\d{2})[-\/]?(\d{2})/)
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`
+  const ukMatch = value.match(/(\d{2})[-\/]?(\d{2})[-\/](\d{4})/)
+  return ukMatch ? `${ukMatch[3]}-${ukMatch[2]}-${ukMatch[1]}` : null
 }
 
 function numberValue(rawValue: string | null) {

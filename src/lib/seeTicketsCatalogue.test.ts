@@ -13,3 +13,11 @@ test('parses See Tickets event columns and quoted commas', () => {
   assert.equal(rows[0].event_date, '2027-11-28')
   assert.equal(rows[0].min_price, 35)
 })
+
+test('parses UK-formatted event dates', () => {
+  const rows = parseSeeTicketsCsv([
+    'aw_product_id,event_name,event_date,aw_deep_link',
+    '456,Another Show,28/11/2027,https://example.test/ticket',
+  ].join('\n'))
+  assert.equal(rows[0].event_date, '2027-11-28')
+})
