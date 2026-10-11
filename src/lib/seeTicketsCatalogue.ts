@@ -57,16 +57,18 @@ export async function syncSeeTicketsCatalogue(from = new Date(), to = dateAfterM
     for (const row of (data ?? []) as unknown as SeeTicketsRow[]) existingById.set(row.id, row)
   }
   let inserted = 0; let updated = 0; let skipped = 0; let errors = 0
-  for (let index = 0; index < eligibleRows.length; index += 100) {
-    const batch = eligibleRows.slice(index, index + 100)
+  for (let index = 0; index < eligibleRows.length; index += 25) {
+    const batch = eligibleRows.slice(index, index + 25)
     const changed = batch.filter(row => !existingById.has(row.id) || rowChanged(row, existingById.get(row.id)!))
     skipped += batch.length - changed.length
     if (!changed.length) continue
-    const { data, error } = await db.from('see_tickets_catalogue_events').upsert(changed.map(row => ({ ...row, last_seen_at: new Date().toISOString() })), { onConflict: 'id', ignoreDuplicates: false }).select('id')
+    // Keep writes small and do not ask PostgREST to return every written row.
+    // The feed can contain very large raw payloads, and returning them makes a
+    // bulk upsert much more likely to hit the database statement timeout.
+    const { error } = await db.from('see_tickets_catalogue_events').upsert(changed.map(row => ({ ...row, last_seen_at: new Date().toISOString() })), { onConflict: 'id', ignoreDuplicates: false })
     if (error) { errors += changed.length; console.error(`[see-tickets] catalogue batch failed: ${error.message}`); continue }
-    const written = new Set((data ?? []).map(row => row.id))
-    inserted += changed.filter(row => !existingById.has(row.id) && written.has(row.id)).length
-    updated += changed.filter(row => existingById.has(row.id) && written.has(row.id)).length
+    inserted += changed.filter(row => !existingById.has(row.id)).length
+    updated += changed.filter(row => existingById.has(row.id)).length
   }
   return {
     fetched: rows.length,
