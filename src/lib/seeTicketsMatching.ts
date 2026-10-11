@@ -21,7 +21,15 @@ type ShowfinderEvent = {
   venue: { name: string; city: string } | null
 }
 
-export type SeeTicketsMatchResult = { checked: number; autoMatched: number; review: number; noMatch: number; errors: number }
+export type SeeTicketsMatchResult = {
+  checked: number
+  autoMatched: number
+  review: number
+  noMatch: number
+  errors: number
+  nextCursor?: string | null
+  hasMore?: boolean
+}
 
 function normalize(value: string | null | undefined) {
   return (value ?? '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -69,17 +77,21 @@ function score(item: CatalogueRow, event: ShowfinderEvent) {
   return { value, titleMatch, titleOverlap, sameDate, sameCity, venueExact, venueOverlap }
 }
 
-export async function matchSeeTicketsCatalogue(fullRescan = false): Promise<SeeTicketsMatchResult> {
+export async function matchSeeTicketsCatalogue(fullRescan = false, options: { limit?: number; afterId?: string } = {}): Promise<SeeTicketsMatchResult> {
   const db = createAdminClient()
   const catalogue: CatalogueRow[] = []
+  const limit = options.limit && options.limit > 0 ? Math.min(options.limit, 500) : null
   for (let offset = 0; ; offset += 1000) {
-    let query = db.from('see_tickets_catalogue_events').select('id, name, event_date, venue, city, primary_artist, second_artist, url, matched_event_id, match_checked_at').range(offset, offset + 999)
+    let query = db.from('see_tickets_catalogue_events').select('id, name, event_date, venue, city, primary_artist, second_artist, url, matched_event_id, match_checked_at').order('id', { ascending: true })
     if (!fullRescan) query = query.in('match_status', ['pending', 'review', 'no_match'])
+    if (options.afterId) query = query.gt('id', options.afterId)
+    query = query.range(offset, offset + (limit ? limit : 999))
     const { data, error } = await query as unknown as { data: CatalogueRow[] | null; error: { message: string } | null }
     if (error) throw new Error(error.message)
     const rows = data ?? []
     catalogue.push(...rows)
-    if (rows.length < 1000) break
+    if (rows.length < (limit ? limit + 1 : 1000)) break
+    if (limit) break
   }
   const events: ShowfinderEvent[] = []
   for (let offset = 0; ; offset += 1000) {
@@ -96,7 +108,13 @@ export async function matchSeeTicketsCatalogue(fullRescan = false): Promise<SeeT
     bucket.push(event)
     eventsByDate.set(key, bucket)
   }
-  const result: SeeTicketsMatchResult = { checked: 0, autoMatched: 0, review: 0, noMatch: 0, errors: 0 }
+  const hasMore = Boolean(limit && catalogue.length > limit)
+  const rowsToProcess = limit ? catalogue.slice(0, limit) : catalogue
+  const result: SeeTicketsMatchResult = {
+    checked: 0, autoMatched: 0, review: 0, noMatch: 0, errors: 0,
+    hasMore,
+    nextCursor: rowsToProcess.length ? rowsToProcess[rowsToProcess.length - 1].id : null,
+  }
   async function processItem(item: CatalogueRow) {
     // Do not discard a candidate merely because the feed's city or venue
     // label differs. Ticket feeds commonly use abbreviations, local venue
@@ -126,8 +144,8 @@ export async function matchSeeTicketsCatalogue(fullRescan = false): Promise<SeeT
   // the batch deliberately small so the database is not overwhelmed while
   // still completing a full catalogue in one request.
   const batchSize = 25
-  for (let offset = 0; offset < catalogue.length; offset += batchSize) {
-    const batch = await Promise.all(catalogue.slice(offset, offset + batchSize).map(processItem))
+  for (let offset = 0; offset < rowsToProcess.length; offset += batchSize) {
+    const batch = await Promise.all(rowsToProcess.slice(offset, offset + batchSize).map(processItem))
     result.checked += batch.length
     for (const outcome of batch) {
       result.errors += outcome.errors
