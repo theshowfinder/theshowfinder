@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { gunzipSync } from 'node:zlib'
 import { parseSeeTicketsCsv, type SeeTicketsRow } from './seeTicketsCsv'
 
 const UK_COUNTRIES = new Set(['uk', 'gb', 'great britain', 'united kingdom', 'england', 'scotland', 'wales', 'northern ireland'])
@@ -35,7 +36,11 @@ export async function syncSeeTicketsCatalogue(from = new Date(), to = dateAfterM
   if (!feedUrl) throw new Error('Missing SEE_TICKETS_FEED_URL')
   const response = await fetch(feedUrl, { cache: 'no-store' })
   if (!response.ok) throw new Error(`See Tickets feed returned ${response.status}`)
-  const rows = parseSeeTicketsCsv(await response.text())
+  const bytes = Buffer.from(await response.arrayBuffer())
+  const body = bytes[0] === 0x1f && bytes[1] === 0x8b
+    ? gunzipSync(bytes).toString('utf8')
+    : bytes.toString('utf8')
+  const rows = parseSeeTicketsCsv(body)
   const eligibleRows = rows.filter(row => {
     const country = (row.country ?? '').toLowerCase()
     return (!country || UK_COUNTRIES.has(country)) && inWindow(row.event_date, from, to)

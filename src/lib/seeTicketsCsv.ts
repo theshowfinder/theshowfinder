@@ -20,6 +20,8 @@ export type SeeTicketsRow = {
 }
 
 function parseCsv(input: string) {
+  const firstLine = input.split(/\r?\n/, 1)[0] ?? ''
+  const delimiter = firstLine.includes('\t') ? '\t' : firstLine.includes('|') ? '|' : ','
   const rows: string[][] = []
   let row: string[] = []
   let cell = ''
@@ -30,7 +32,7 @@ function parseCsv(input: string) {
     if (char === '"') {
       if (quoted && next === '"') { cell += '"'; i++; continue }
       quoted = !quoted
-    } else if (char === ',' && !quoted) {
+    } else if (char === delimiter && !quoted) {
       row.push(cell); cell = ''
     } else if ((char === '\n' || char === '\r') && !quoted) {
       if (char === '\r' && next === '\n') i++
