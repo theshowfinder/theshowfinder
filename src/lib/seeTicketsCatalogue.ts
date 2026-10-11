@@ -12,6 +12,9 @@ export type SeeTicketsSyncResult = {
   skipped: number
   errors: number
   durationMs: number
+  datePopulated: number
+  sampleDates: string[]
+  sampleKeys: string[]
 }
 
 function inWindow(eventDate: string | null, from: Date, to: Date) {
@@ -65,5 +68,16 @@ export async function syncSeeTicketsCatalogue(from = new Date(), to = dateAfterM
     inserted += changed.filter(row => !existingById.has(row.id) && written.has(row.id)).length
     updated += changed.filter(row => existingById.has(row.id) && written.has(row.id)).length
   }
-  return { fetched: rows.length, eligible: eligibleRows.length, inserted, updated, skipped, errors, durationMs: Date.now() - started }
+  return {
+    fetched: rows.length,
+    eligible: eligibleRows.length,
+    inserted,
+    updated,
+    skipped,
+    errors,
+    durationMs: Date.now() - started,
+    datePopulated: rows.filter(row => Boolean(row.event_date)).length,
+    sampleDates: rows.slice(0, 5).map(row => row.raw.event_date ?? '').filter(Boolean),
+    sampleKeys: Object.keys(rows[0]?.raw ?? {}).slice(0, 30),
+  }
 }

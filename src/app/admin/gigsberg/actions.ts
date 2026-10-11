@@ -42,7 +42,7 @@ export async function runSeeTicketsCatalogueSyncAction() {
     redirect(`/admin/gigsberg?seeError=${encodeURIComponent(message)}`)
   }
   revalidatePath('/admin/gigsberg')
-  redirect(`/admin/gigsberg?seeFetched=${result.fetched}&seeEligible=${result.eligible}&seeInserted=${result.inserted}&seeUpdated=${result.updated}&seeErrors=${result.errors}`)
+    redirect(`/admin/gigsberg?seeFetched=${result.fetched}&seeEligible=${result.eligible}&seeInserted=${result.inserted}&seeUpdated=${result.updated}&seeErrors=${result.errors}&seeDatePopulated=${result.datePopulated}&seeSampleDates=${encodeURIComponent(result.sampleDates.join(' | '))}&seeSampleKeys=${encodeURIComponent(result.sampleKeys.join(', '))}`)
 }
 
 export async function manualGigsbergCityImportAction(formData: FormData) {
