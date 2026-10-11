@@ -7,7 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
 import { createSeeTicketsEventAction } from '@/app/admin/gigsberg/actions'
 
-type SearchParams = Promise<{ status?: string; city?: string; q?: string }>
+type SearchParams = Promise<{ status?: string; city?: string; q?: string; page?: string }>
 
 const STATUSES = ['pending', 'auto_matched', 'review', 'no_match'] as const
 
@@ -25,6 +25,8 @@ export default async function SeeTicketsInventoryPage({ searchParams }: { search
   const status = STATUSES.includes(params.status as typeof STATUSES[number]) ? params.status! : ''
   const city = (params.city ?? '').trim()
   const query = (params.q ?? '').trim()
+  const page = Math.max(1, Number.parseInt(params.page || '1', 10) || 1)
+  const pageSize = 150
   const db = createAdminClient()
   const today = new Date().toISOString().slice(0, 10)
 
@@ -36,20 +38,21 @@ export default async function SeeTicketsInventoryPage({ searchParams }: { search
     return request
   }
 
-  const [allCount, matchedCount, reviewCount, noMatchCount] = await Promise.all(
-    ['', 'auto_matched', 'review', 'no_match'].map(value => {
+  const [allCount, matchedCount, reviewCount, noMatchCount, filteredCount] = await Promise.all([
+    ...['', 'auto_matched', 'review', 'no_match'].map(value => {
       let request = db.from('see_tickets_catalogue_events').select('*', { count: 'exact', head: true }).gte('event_date', today)
       if (value) request = request.eq('match_status', value)
       return request
     }),
-  )
+    base(),
+  ])
 
   let rowsQuery = db.from('see_tickets_catalogue_events')
     .select('id, name, event_date, venue, city, primary_artist, second_artist, url, availability_status, min_price, max_price, match_status, match_confidence, match_reason, matched_event_id')
     .gte('event_date', today)
     .order('event_date', { ascending: true })
     .order('name', { ascending: true })
-    .limit(150)
+    .range((page - 1) * pageSize, page * pageSize - 1)
   if (status) rowsQuery = rowsQuery.eq('match_status', status)
   if (city) rowsQuery = rowsQuery.ilike('city', city)
   if (query) rowsQuery = rowsQuery.or(`name.ilike.%${query}%,primary_artist.ilike.%${query}%,venue.ilike.%${query}%`)
@@ -91,7 +94,7 @@ export default async function SeeTicketsInventoryPage({ searchParams }: { search
             <button className="bg-blue-700 text-white font-bold rounded-lg px-5 py-2.5">Filter</button>
             {(query || city || status) && <Link href="/admin/see-tickets" className="text-center border border-slate-300 text-slate-600 font-semibold rounded-lg px-5 py-2.5">Clear</Link>}
           </form>
-          <p className="text-sm text-slate-500 mt-4">Showing up to 150 upcoming records. Click a total above to focus on that group.</p>
+          <p className="text-sm text-slate-500 mt-4">Showing {filteredCount.count ?? 0} upcoming records matching these filters.</p>
         </section>
 
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
@@ -112,6 +115,13 @@ export default async function SeeTicketsInventoryPage({ searchParams }: { search
           </table>
           {!rows?.length && !error && <p className="p-10 text-center text-slate-500">No See Tickets records match these filters.</p>}
         </section>
+        {(filteredCount.count ?? 0) > pageSize && <nav className="flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-3 text-sm" aria-label="See Tickets inventory pages">
+          <span className="text-slate-500">Page {page} of {Math.ceil((filteredCount.count ?? 0) / pageSize)}</span>
+          <div className="flex gap-2">
+            {page > 1 && <Link href={`/admin/see-tickets?${new URLSearchParams({ ...(status ? { status } : {}), ...(city ? { city } : {}), ...(query ? { q: query } : {}), page: String(page - 1) }).toString()}`} className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-blue-700">Previous</Link>}
+            {page < Math.ceil((filteredCount.count ?? 0) / pageSize) && <Link href={`/admin/see-tickets?${new URLSearchParams({ ...(status ? { status } : {}), ...(city ? { city } : {}), ...(query ? { q: query } : {}), page: String(page + 1) }).toString()}`} className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-blue-700">Next</Link>}
+          </div>
+        </nav>}
       </main>
     </div>
   )
