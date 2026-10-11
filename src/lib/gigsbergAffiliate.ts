@@ -60,8 +60,12 @@ function apiKey(): string {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000)
+
   const response = await fetch(`${GIGSBERG_AFFILIATE_BASE}${path}`, {
     ...init,
+    signal: init.signal ?? controller.signal,
     headers: {
       Accept: 'application/json',
       'x-api-key': apiKey(),
@@ -69,7 +73,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       ...init.headers,
     },
     cache: 'no-store',
-  })
+  }).finally(() => clearTimeout(timeout))
 
   if (!response.ok) {
     throw new Error(`Gigsberg affiliate API failed: HTTP ${response.status}`)
