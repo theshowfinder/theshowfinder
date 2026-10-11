@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncGigsbergCatalogue } from '@/lib/gigsbergCatalogue'
+import { syncSeeTicketsCatalogue } from '@/lib/seeTicketsCatalogue'
 import { CITIES } from '@/lib/cities'
 import { searchGigsbergAffiliateListings } from '@/lib/gigsbergAffiliate'
 
@@ -28,6 +29,18 @@ export async function runGigsbergCatalogueSyncAction() {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The catalogue import failed.'
     redirect(`/admin/gigsberg?syncError=${encodeURIComponent(message)}`)
+  }
+}
+
+export async function runSeeTicketsCatalogueSyncAction() {
+  await requireAdmin()
+  try {
+    const result = await syncSeeTicketsCatalogue()
+    revalidatePath('/admin/gigsberg')
+    redirect(`/admin/gigsberg?seeFetched=${result.fetched}&seeEligible=${result.eligible}&seeInserted=${result.inserted}&seeUpdated=${result.updated}&seeErrors=${result.errors}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'The See Tickets import failed.'
+    redirect(`/admin/gigsberg?seeError=${encodeURIComponent(message)}`)
   }
 }
 

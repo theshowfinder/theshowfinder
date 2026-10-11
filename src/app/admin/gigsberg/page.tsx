@@ -7,7 +7,8 @@ import { CITIES } from '@/lib/cities'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import RunMatchingButton from './RunMatchingButton'
 import RunCatalogueImportButton from './RunCatalogueImportButton'
-import { manualGigsbergCityImportAction } from './actions'
+import RunSeeTicketsImportButton from './RunSeeTicketsImportButton'
+import { manualGigsbergCityImportAction, runSeeTicketsCatalogueSyncAction } from './actions'
 import {
   getGigsbergAffiliateOrders,
   searchGigsbergAffiliateEvents,
@@ -34,10 +35,10 @@ function isoDate(date: Date) {
 export default async function GigsbergAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; city?: string; synced?: string; updated?: string; importCity?: string; nextCity?: string; syncError?: string; manualCity?: string; manualFrom?: string; manualTo?: string; manualFetched?: string; manualSaved?: string; manualErrors?: string; manualError?: string }>
+  searchParams: Promise<{ q?: string; city?: string; synced?: string; updated?: string; importCity?: string; nextCity?: string; syncError?: string; manualCity?: string; manualFrom?: string; manualTo?: string; manualFetched?: string; manualSaved?: string; manualErrors?: string; manualError?: string; seeFetched?: string; seeEligible?: string; seeInserted?: string; seeUpdated?: string; seeErrors?: string; seeError?: string }>
 }) {
   await requireAdmin()
-  const { q = '', city = '', synced, updated, importCity, nextCity, syncError, manualCity, manualFrom, manualTo, manualFetched, manualSaved, manualErrors, manualError } = await searchParams
+  const { q = '', city = '', synced, updated, importCity, nextCity, syncError, manualCity, manualFrom, manualTo, manualFetched, manualSaved, manualErrors, manualError, seeFetched, seeEligible, seeInserted, seeUpdated, seeErrors, seeError } = await searchParams
   const query = q.trim()
   const cityQuery = city.trim()
   const db = createAdminClient()
@@ -123,6 +124,8 @@ export default async function GigsbergAdminPage({
         {syncError && <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-3 text-sm">Catalogue import failed: {syncError}</div>}
         {manualFetched && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">✓ Manual {manualCity} import complete: {manualFetched} events found, {manualSaved ?? 0} records saved{manualErrors && manualErrors !== '0' ? `, ${manualErrors} errors` : ''}.</div>}
         {manualError && <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-3 text-sm">Manual Gigsberg import failed: {manualError}</div>}
+        {seeFetched && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-3 text-sm font-semibold">✓ See Tickets import complete: {seeFetched} feed rows fetched, {seeEligible} UK events in the 24-month window, {seeInserted} new and {seeUpdated} updated records saved{seeErrors && seeErrors !== '0' ? `, ${seeErrors} errors` : ''}.</div>}
+        {seeError && <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-3 text-sm">See Tickets import failed: {seeError}</div>}
 
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -130,6 +133,7 @@ export default async function GigsbergAdminPage({
             <p className="text-sm text-slate-500 mt-1">Import the next UK city across the rolling 24-month window. Existing catalogue decisions are preserved.</p>
           </div>
           <RunCatalogueImportButton />
+          <RunSeeTicketsImportButton action={runSeeTicketsCatalogueSyncAction} />
           <RunMatchingButton />
           <Link href="/admin/gigsberg/matches" className="text-blue-600 font-semibold text-sm hover:underline">Review catalogue →</Link>
         </section>
