@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300
 
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
@@ -33,6 +34,14 @@ function isoDate(date: Date) {
   return date.toISOString().slice(0, 10)
 }
 
+async function runInBatches<T, R>(items: T[], size: number, task: (item: T) => Promise<R>) {
+  const results: R[] = []
+  for (let offset = 0; offset < items.length; offset += size) {
+    results.push(...await Promise.all(items.slice(offset, offset + size).map(task)))
+  }
+  return results
+}
+
 export default async function GigsbergAdminPage({
   searchParams,
 }: {
@@ -54,13 +63,13 @@ export default async function GigsbergAdminPage({
   // Count each city separately. A single large events query is subject to
   // Supabase/PostgREST's row cap, which can make later cities falsely appear
   // empty once the response has filled with rows from larger cities.
-  const showfinderResults = await Promise.all(CITIES.map(cityItem =>
+  const showfinderResults = await runInBatches(CITIES, 8, cityItem =>
     db.from('events_with_venue')
       .select('*', { count: 'exact', head: true })
       .ilike('venue_city', cityItem.name)
       .in('status', LIVE_EVENT_STATUSES)
       .gte('start_date', nowISO) as unknown as Promise<{ count: number | null; error: unknown }>
-  ))
+  )
   const showfinderCounts = new Map<string, number>()
   CITIES.forEach((cityItem, index) => {
     const result = showfinderResults[index]
@@ -69,12 +78,12 @@ export default async function GigsbergAdminPage({
 
   const catalogueCounts = new Map<string, number>()
   const today = new Date().toISOString().slice(0, 10)
-  const catalogueResults = await Promise.all(CITIES.map(cityItem =>
+  const catalogueResults = await runInBatches(CITIES, 8, cityItem =>
     db.from('gigsberg_catalogue_events')
       .select('*', { count: 'exact', head: true })
       .ilike('city', cityItem.name)
       .gte('event_date', today) as unknown as Promise<{ count: number | null; error: unknown }>
-  ))
+  )
   CITIES.forEach((cityItem, index) => {
     const result = catalogueResults[index]
     catalogueCounts.set(normalise(cityItem.name), result?.error ? 0 : (result?.count ?? 0))
