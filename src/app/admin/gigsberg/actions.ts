@@ -48,14 +48,15 @@ export async function runSeeTicketsCatalogueSyncAction() {
 
 export async function runSeeTicketsMatchingAction() {
   await requireAdmin()
+  let result
   try {
-    const result = await matchSeeTicketsCatalogue()
-    revalidatePath('/admin/gigsberg')
-    redirect(`/admin/gigsberg?seeMatchChecked=${result.checked}&seeMatched=${result.autoMatched}&seeReview=${result.review}&seeNoMatch=${result.noMatch}&seeMatchErrors=${result.errors}`)
+    result = await matchSeeTicketsCatalogue()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The See Tickets matching run failed.'
     redirect(`/admin/gigsberg?seeError=${encodeURIComponent(message)}`)
   }
+  revalidatePath('/admin/gigsberg')
+  redirect(`/admin/gigsberg?seeMatchChecked=${result.checked}&seeMatched=${result.autoMatched}&seeReview=${result.review}&seeNoMatch=${result.noMatch}&seeMatchErrors=${result.errors}`)
 }
 
 export async function manualGigsbergCityImportAction(formData: FormData) {
