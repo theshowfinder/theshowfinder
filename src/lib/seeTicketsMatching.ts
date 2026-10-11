@@ -27,6 +27,13 @@ function normalize(value: string | null | undefined) {
   return (value ?? '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
+function comparableVenue(value: string | null | undefined) {
+  return normalize(value)
+    .replace(/\b(the|o2|ao|live|venue|music|entertainment|centre|center|arena|hall|theatre|theater)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function dateOnly(value: string | null) {
   if (!value) return ''
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
@@ -53,8 +60,8 @@ function score(item: CatalogueRow, event: ShowfinderEvent) {
   const titleOverlap = Math.max(...names.map(name => overlap(name, event.title)), 0)
   const sameDate = dateOnly(item.event_date) === dateOnly(event.start_date)
   const sameCity = normalize(item.city) === normalize(event.venue?.city)
-  const venueExact = Boolean(normalize(item.venue) && normalize(item.venue) === normalize(event.venue?.name))
-  const venueOverlap = overlap(item.venue, event.venue?.name ?? null)
+  const venueExact = Boolean(comparableVenue(item.venue) && comparableVenue(item.venue) === comparableVenue(event.venue?.name))
+  const venueOverlap = Math.max(overlap(item.venue, event.venue?.name ?? null), overlap(comparableVenue(item.venue), comparableVenue(event.venue?.name)))
   let value = titleMatch ? 0.55 : titleOverlap * 0.55
   if (sameDate) value += 0.25
   if (sameCity) value += 0.1
@@ -82,21 +89,25 @@ export async function matchSeeTicketsCatalogue(fullRescan = false): Promise<SeeT
     events.push(...rows)
     if (rows.length < 1000) break
   }
-  const eventsByDateCity = new Map<string, ShowfinderEvent[]>()
+  const eventsByDate = new Map<string, ShowfinderEvent[]>()
   for (const event of events ?? []) {
-    const key = `${dateOnly(event.start_date)}|${normalize(event.venue?.city)}`
-    const bucket = eventsByDateCity.get(key) ?? []
+    const key = dateOnly(event.start_date)
+    const bucket = eventsByDate.get(key) ?? []
     bucket.push(event)
-    eventsByDateCity.set(key, bucket)
+    eventsByDate.set(key, bucket)
   }
   const result: SeeTicketsMatchResult = { checked: 0, autoMatched: 0, review: 0, noMatch: 0, errors: 0 }
   async function processItem(item: CatalogueRow) {
-    const candidates = eventsByDateCity.get(`${dateOnly(item.event_date)}|${normalize(item.city)}`) ?? []
+    const candidates = (eventsByDate.get(dateOnly(item.event_date)) ?? []).filter(event => {
+      const sameCity = normalize(item.city) === normalize(event.venue?.city)
+      const venueSimilarity = Math.max(overlap(item.venue, event.venue?.name ?? null), overlap(comparableVenue(item.venue), comparableVenue(event.venue?.name)))
+      return sameCity || venueSimilarity >= 0.4
+    })
     const ranked = candidates.map(event => ({ event, detail: score(item, event) })).filter(candidate => candidate.detail.titleMatch || candidate.detail.titleOverlap >= 0.6).sort((a, b) => b.detail.value - a.detail.value)
     const best = ranked[0]
     const second = ranked[1]
-    const confident = Boolean(best && best.detail.titleMatch && best.detail.sameDate && best.detail.sameCity && (best.detail.venueExact || best.detail.venueOverlap >= 0.5) && (!second || best.detail.value - second.detail.value >= 0.05))
-    const review = Boolean(best && !confident && best.detail.value >= 0.45)
+    const confident = Boolean(best && best.detail.titleMatch && best.detail.sameDate && (best.detail.sameCity || best.detail.venueExact || best.detail.venueOverlap >= 0.5) && (!second || best.detail.value - second.detail.value >= 0.05))
+    const review = Boolean(best && !confident && best.detail.value >= 0.4)
     const status = confident ? 'auto_matched' : review ? 'review' : 'no_match'
     const { error } = await db.from('see_tickets_catalogue_events').update({ matched_event_id: confident ? best.event.id : null, match_status: status, match_confidence: best ? Number(best.detail.value.toFixed(3)) : null, match_reason: best ? `${best.event.title} (${Math.round(best.detail.value * 100)}% match)` : 'No close Showfinder event found', match_checked_at: new Date().toISOString() }).eq('id', item.id)
     if (error) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0 }
