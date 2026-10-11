@@ -36,16 +36,26 @@ export async function runGigsbergCatalogueSyncAction() {
 export async function runSeeTicketsCatalogueSyncAction() {
   await requireAdmin()
   let result
-  let matching
   try {
     result = await syncSeeTicketsCatalogue()
-    matching = await matchSeeTicketsCatalogue()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The See Tickets import failed.'
     redirect(`/admin/gigsberg?seeError=${encodeURIComponent(message)}`)
   }
   revalidatePath('/admin/gigsberg')
-  redirect(`/admin/gigsberg?seeFetched=${result.fetched}&seeEligible=${result.eligible}&seeInserted=${result.inserted}&seeUpdated=${result.updated}&seeErrors=${result.errors}&seeMatched=${matching.autoMatched}&seeReview=${matching.review}&seeNoMatch=${matching.noMatch}&seeDatePopulated=${result.datePopulated}&seeSampleDates=${encodeURIComponent(result.sampleDates.join(' | '))}&seeSampleKeys=${encodeURIComponent(result.sampleKeys.join(', '))}`)
+  redirect(`/admin/gigsberg?seeFetched=${result.fetched}&seeEligible=${result.eligible}&seeInserted=${result.inserted}&seeUpdated=${result.updated}&seeErrors=${result.errors}&seeDatePopulated=${result.datePopulated}&seeSampleDates=${encodeURIComponent(result.sampleDates.join(' | '))}&seeSampleKeys=${encodeURIComponent(result.sampleKeys.join(', '))}`)
+}
+
+export async function runSeeTicketsMatchingAction() {
+  await requireAdmin()
+  try {
+    const result = await matchSeeTicketsCatalogue()
+    revalidatePath('/admin/gigsberg')
+    redirect(`/admin/gigsberg?seeMatchChecked=${result.checked}&seeMatched=${result.autoMatched}&seeReview=${result.review}&seeNoMatch=${result.noMatch}&seeMatchErrors=${result.errors}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'The See Tickets matching run failed.'
+    redirect(`/admin/gigsberg?seeError=${encodeURIComponent(message)}`)
+  }
 }
 
 export async function manualGigsbergCityImportAction(formData: FormData) {

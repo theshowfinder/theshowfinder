@@ -21,6 +21,10 @@
       "schedule": "45 3 * * *"
     },
     {
+      "path": "/api/cron/match-see-tickets",
+      "schedule": "15 4 * * *"
+    },
+    {
       "path": "/api/cron/match-gigsberg",
       "schedule": "0 3 * * *"
     },
