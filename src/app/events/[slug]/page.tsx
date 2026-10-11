@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { EventCategory, EventStatus } from '@/lib/types/database'
 import {
   getTicketmasterAffiliateLink, getViagogoAffiliateLink,
-  getStubHubAffiliateLink, getGigsbergAffiliateLink,
+  getStubHubAffiliateLink, getGigsbergAffiliateLink, getSeeTicketsAffiliateLink,
 } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
@@ -45,6 +45,7 @@ interface EventDetail {
   stubhub_url: string | null
   gigsberg_url: string | null
   gigsberg_affiliate_url: string | null
+  see_tickets_affiliate_url: string | null
   gigsberg_highlighted: boolean
   gigsberg_highlight_until: string | null
   gigsberg_inventory_status: string | null
@@ -66,7 +67,7 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
       id, title, slug, description, category,
       start_date, end_date, doors_time,
       image_url, price_from, price_to, currency,
-      tickets_url, own_ticket_url, viagogo_url, stubhub_url, gigsberg_url, gigsberg_affiliate_url,
+      tickets_url, own_ticket_url, viagogo_url, stubhub_url, gigsberg_url, gigsberg_affiliate_url, see_tickets_affiliate_url,
       gigsberg_highlighted, gigsberg_highlight_until, gigsberg_inventory_status, status, tags,
       venue:venues(id, name, slug, address, city, postcode, website),
       artists:event_artists(
@@ -83,13 +84,14 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
 
 // ── Ticket providers ────────────────────────────────────────────────────────
 
-function buildProviders(event: Pick<EventDetail, 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'gigsberg_inventory_status'>) {
+function buildProviders(event: Pick<EventDetail, 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>) {
   const primary = event.tickets_url
     ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: getTicketmasterAffiliateLink(event.tickets_url) }]
     : event.gigsberg_affiliate_url
       ? [{ name: 'Gigsberg', tagline: event.gigsberg_inventory_status === 'available' ? 'Secondary-market tickets via Gigsberg' : 'Check availability on Gigsberg', bg: '#1a1f6e', href: event.gigsberg_affiliate_url }]
     : []
   const resale = [
+    ...(event.see_tickets_affiliate_url ? [{ name: 'See Tickets', bg: '#E4022D', href: getSeeTicketsAffiliateLink(event.see_tickets_affiliate_url) }] : []),
     ...(event.tickets_url && event.gigsberg_affiliate_url ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: event.gigsberg_affiliate_url }] : []),
     ...(!event.tickets_url && !event.gigsberg_affiliate_url && event.gigsberg_url && !isBareProviderHomepage(event.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(event.gigsberg_url) }] : []),
     ...(event.viagogo_url && !isBareProviderHomepage(event.viagogo_url) ? [{ name: 'Viagogo', bg: '#00a650', href: getViagogoAffiliateLink(event.viagogo_url) }] : []),

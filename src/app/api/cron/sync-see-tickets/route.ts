@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { syncSeeTicketsCatalogue } from '@/lib/seeTicketsCatalogue'
+import { matchSeeTicketsCatalogue } from '@/lib/seeTicketsMatching'
 
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
@@ -11,7 +12,8 @@ export async function GET(request: Request) {
   }
   try {
     const result = await syncSeeTicketsCatalogue()
-    return NextResponse.json({ success: true, finished: new Date().toISOString(), ...result })
+    const matching = await matchSeeTicketsCatalogue()
+    return NextResponse.json({ success: true, finished: new Date().toISOString(), ...result, matching })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error('[sync] See Tickets catalogue failed:', message)

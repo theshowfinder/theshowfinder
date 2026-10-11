@@ -7,6 +7,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncGigsbergCatalogue } from '@/lib/gigsbergCatalogue'
 import { syncSeeTicketsCatalogue } from '@/lib/seeTicketsCatalogue'
+import { matchSeeTicketsCatalogue } from '@/lib/seeTicketsMatching'
 import { CITIES } from '@/lib/cities'
 import { searchGigsbergAffiliateListings } from '@/lib/gigsbergAffiliate'
 
@@ -37,6 +38,7 @@ export async function runSeeTicketsCatalogueSyncAction() {
   let result
   try {
     result = await syncSeeTicketsCatalogue()
+    await matchSeeTicketsCatalogue()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The See Tickets import failed.'
     redirect(`/admin/gigsberg?seeError=${encodeURIComponent(message)}`)
