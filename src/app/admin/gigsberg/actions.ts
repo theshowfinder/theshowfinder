@@ -212,6 +212,38 @@ export async function linkGigsbergToExistingEventAction(formData: FormData) {
   redirect(`/admin/gigsberg/coverage?city=${encodeURIComponent(row.city ?? '')}&linked=1`)
 }
 
+export async function linkSeeTicketsToExistingEventAction(formData: FormData) {
+  await checkAuth()
+  const catalogueId = String(formData.get('catalogue_id') ?? '')
+  const eventId = String(formData.get('event_id') ?? '')
+  if (!catalogueId || !eventId) throw new Error('Missing See Tickets or Showfinder event')
+  const db = createAdminClient()
+  const { data: catalogue, error: catalogueError } = await db.from('see_tickets_catalogue_events')
+    .select('id, url, match_status')
+    .eq('id', catalogueId)
+    .single()
+  if (catalogueError || !catalogue) throw new Error(catalogueError?.message ?? 'See Tickets record not found')
+  const { data: event, error: eventError } = await db.from('events').select('id').eq('id', eventId).maybeSingle()
+  if (eventError || !event) throw new Error(eventError?.message ?? 'Showfinder event not found')
+
+  const { error: linkError } = await db.from('events').update({ see_tickets_affiliate_url: catalogue.url }).eq('id', eventId)
+  if (linkError) throw new Error(linkError.message)
+  const { error: catalogueUpdateError } = await db.from('see_tickets_catalogue_events').update({
+    matched_event_id: eventId,
+    match_status: 'approved_existing',
+    match_confidence: null,
+    match_reason: 'Manually linked to an existing Showfinder event',
+    match_checked_at: new Date().toISOString(),
+  }).eq('id', catalogueId)
+  if (catalogueUpdateError) throw new Error(catalogueUpdateError.message)
+
+  revalidatePath('/admin/see-tickets')
+  revalidatePath('/events', 'layout')
+  const returnTo = String(formData.get('return_to') ?? '')
+  if (returnTo.startsWith('/admin/')) redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}linked=1`)
+  redirect('/admin/see-tickets?linked=1')
+}
+
 export async function createGigsbergEventAction(formData: FormData) {
   await checkAuth()
   const catalogueId = Number(formData.get('catalogue_id'))
