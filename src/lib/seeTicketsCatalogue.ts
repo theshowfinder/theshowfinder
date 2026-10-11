@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { gunzipSync } from 'node:zlib'
 import { parseSeeTicketsCsv, type SeeTicketsRow } from './seeTicketsCsv'
 
-const UK_COUNTRIES = new Set(['uk', 'gb', 'great britain', 'united kingdom', 'england', 'scotland', 'wales', 'northern ireland'])
+const UK_COUNTRIES = new Set(['uk', 'gb', 'gbr', 'great britain', 'united kingdom', 'england', 'scotland', 'wales', 'northern ireland'])
 
 export type SeeTicketsSyncResult = {
   fetched: number

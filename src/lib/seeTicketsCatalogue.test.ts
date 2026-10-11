@@ -21,3 +21,11 @@ test('parses UK-formatted event dates', () => {
   ].join('\n'))
   assert.equal(rows[0].event_date, '2027-11-28')
 })
+
+test('parses named event dates', () => {
+  const rows = parseSeeTicketsCsv([
+    'aw_product_id,event_name,event_date,aw_deep_link',
+    '789,Named Date Show,28 Nov 2027,https://example.test/ticket',
+  ].join('\n'))
+  assert.equal(rows[0].event_date, '2027-11-28')
+})

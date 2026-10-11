@@ -55,7 +55,9 @@ function dateOnly(rawValue: string | null) {
   const isoMatch = value.match(/(\d{4})[-\/]?(\d{2})[-\/]?(\d{2})/)
   if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`
   const ukMatch = value.match(/(\d{2})[-\/]?(\d{2})[-\/](\d{4})/)
-  return ukMatch ? `${ukMatch[3]}-${ukMatch[2]}-${ukMatch[1]}` : null
+  if (ukMatch) return `${ukMatch[3]}-${ukMatch[2]}-${ukMatch[1]}`
+  const namedDate = new Date(value)
+  return Number.isNaN(namedDate.getTime()) ? null : namedDate.toISOString().slice(0, 10)
 }
 
 function numberValue(rawValue: string | null) {
