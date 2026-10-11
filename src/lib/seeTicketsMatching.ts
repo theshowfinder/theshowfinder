@@ -64,14 +64,24 @@ function score(item: CatalogueRow, event: ShowfinderEvent) {
 
 export async function matchSeeTicketsCatalogue(fullRescan = false): Promise<SeeTicketsMatchResult> {
   const db = createAdminClient()
-  let query = db.from('see_tickets_catalogue_events').select('id, name, event_date, venue, city, primary_artist, second_artist, url, matched_event_id, match_checked_at').limit(50000)
-  if (!fullRescan) query = query.in('match_status', ['pending', 'review', 'no_match'])
-  const [{ data: catalogue, error: catalogueError }, { data: events, error: eventsError }] = await Promise.all([
-    query,
-    db.from('events').select('id, title, start_date, see_tickets_affiliate_url, venue:venues(name, city)').gte('start_date', new Date().toISOString()).limit(50000),
-  ]) as unknown as [{ data: CatalogueRow[] | null; error: { message: string } | null }, { data: ShowfinderEvent[] | null; error: { message: string } | null }]
-  if (catalogueError) throw new Error(catalogueError.message)
-  if (eventsError) throw new Error(eventsError.message)
+  const catalogue: CatalogueRow[] = []
+  for (let offset = 0; ; offset += 1000) {
+    let query = db.from('see_tickets_catalogue_events').select('id, name, event_date, venue, city, primary_artist, second_artist, url, matched_event_id, match_checked_at').range(offset, offset + 999)
+    if (!fullRescan) query = query.in('match_status', ['pending', 'review', 'no_match'])
+    const { data, error } = await query as unknown as { data: CatalogueRow[] | null; error: { message: string } | null }
+    if (error) throw new Error(error.message)
+    const rows = data ?? []
+    catalogue.push(...rows)
+    if (rows.length < 1000) break
+  }
+  const events: ShowfinderEvent[] = []
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await db.from('events').select('id, title, start_date, see_tickets_affiliate_url, venue:venues(name, city)').gte('start_date', new Date().toISOString()).range(offset, offset + 999) as unknown as { data: ShowfinderEvent[] | null; error: { message: string } | null }
+    if (error) throw new Error(error.message)
+    const rows = data ?? []
+    events.push(...rows)
+    if (rows.length < 1000) break
+  }
   const eventsByDateCity = new Map<string, ShowfinderEvent[]>()
   for (const event of events ?? []) {
     const key = `${dateOnly(event.start_date)}|${normalize(event.venue?.city)}`
