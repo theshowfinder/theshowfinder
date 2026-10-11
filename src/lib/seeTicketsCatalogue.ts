@@ -77,7 +77,7 @@ export async function syncSeeTicketsCatalogue(from = new Date(), to = dateAfterM
     errors,
     durationMs: Date.now() - started,
     datePopulated: rows.filter(row => Boolean(row.event_date)).length,
-    sampleDates: rows.slice(0, 5).map(row => row.raw.event_date ?? '').filter(Boolean),
+    sampleDates: rows.slice(0, 10).map(row => row.raw.event_date ?? row.raw['Tickets:event_date'] ?? '').filter(Boolean),
     sampleKeys: Object.keys(rows[0]?.raw ?? {}).slice(0, 30),
   }
 }
