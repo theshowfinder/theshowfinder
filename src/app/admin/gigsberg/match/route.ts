@@ -5,11 +5,12 @@ import { matchGigsbergCatalogue } from '@/lib/gigsbergMatching'
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(request: Request) {
   await requireAdmin()
 
   try {
-    const result = await matchGigsbergCatalogue()
+    const fullRescan = new URL(request.url).searchParams.get('full') === '1'
+    const result = await matchGigsbergCatalogue(fullRescan)
     const url = new URL('/admin/gigsberg/matches', process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.theshowfinder.com')
     url.searchParams.set('checked', String(result.checked))
     url.searchParams.set('matched', String(result.autoMatched))

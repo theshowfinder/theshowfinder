@@ -11,7 +11,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    return NextResponse.json({ success: true, ...await matchGigsbergCatalogue() })
+    const fullRescan = new URL(request.url).searchParams.get('full') === '1'
+    return NextResponse.json({ success: true, ...await matchGigsbergCatalogue(fullRescan) })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     return NextResponse.json({ success: false, error: message }, { status: 500 })

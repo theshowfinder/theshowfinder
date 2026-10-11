@@ -109,10 +109,36 @@ function score(catalogue: CatalogueRow, event: ShowfinderEvent) {
   return { value, sameDate, sameCity, sameVenue, venueOverlap, performerOverlap, performerExact, titlePerformerExact, linkedArtistExact }
 }
 
-export async function matchGigsbergCatalogue(): Promise<GigsbergMatchResult> {
+const MATCH_RETRY_AFTER_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Match only new rows and unresolved rows that have not been checked in the
+ * last day. Already auto-matched or recently reviewed rows are stable and do
+ * not need to be loaded, scored, and written again on every cron run.
+ * Pass fullRescan when the matching rules themselves have changed.
+ */
+export async function matchGigsbergCatalogue(fullRescan = false): Promise<GigsbergMatchResult> {
   const db = createAdminClient()
+  const retryBefore = new Date(Date.now() - MATCH_RETRY_AFTER_MS).toISOString()
+  const catalogueQuery = db
+    .from('gigsberg_catalogue_events')
+    .select('id, name, event_date, venue, city, performer1, performer2, url, matched_event_id, match_checked_at')
+    .limit(50000)
+
   const [{ data: catalogue, error: catalogueError }, { data: events, error: eventsError }] = await Promise.all([
-    db.from('gigsberg_catalogue_events').select('id, name, event_date, venue, city, performer1, performer2, url, matched_event_id').in('match_status', ['pending', 'review', 'no_match', 'auto_matched']).limit(50000),
+    fullRescan
+      ? catalogueQuery.in('match_status', ['pending', 'review', 'no_match', 'auto_matched'])
+      : Promise.all([
+          catalogueQuery.eq('match_status', 'pending'),
+          db.from('gigsberg_catalogue_events')
+            .select('id, name, event_date, venue, city, performer1, performer2, url, matched_event_id, match_checked_at')
+            .in('match_status', ['review', 'no_match'])
+            .or(`match_checked_at.is.null,match_checked_at.lt.${retryBefore}`)
+            .limit(50000),
+        ]).then(([pending, retry]) => ({
+          data: [...(pending.data ?? []), ...(retry.data ?? [])],
+          error: pending.error ?? retry.error,
+        })),
     db.from('events').select('id, title, start_date, gigsberg_affiliate_url, venue:venues(name, city), artists:event_artists(artist:artists(name))').gte('start_date', new Date().toISOString()).limit(50000),
   ]) as unknown as [
     { data: CatalogueRow[] | null; error: { message: string } | null },
