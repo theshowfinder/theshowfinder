@@ -55,6 +55,28 @@ function toCatalogueRow(event: GigsbergAffiliateEvent) {
   }
 }
 
+type CatalogueWriteRow = ReturnType<typeof toCatalogueRow>
+
+type ExistingCatalogueRow = Pick<CatalogueWriteRow,
+  'id' | 'name' | 'event_date' | 'event_time' | 'venue' | 'city' | 'country' |
+  'performer1' | 'performer2' | 'tour' | 'url' | 'min_price' | 'raw'
+>
+
+function catalogueRowChanged(next: CatalogueWriteRow, existing: ExistingCatalogueRow) {
+  return next.name !== existing.name
+    || next.event_date !== existing.event_date
+    || next.event_time !== existing.event_time
+    || next.venue !== existing.venue
+    || next.city !== existing.city
+    || next.country !== existing.country
+    || next.performer1 !== existing.performer1
+    || next.performer2 !== existing.performer2
+    || next.tour !== existing.tour
+    || next.url !== existing.url
+    || next.min_price !== existing.min_price
+    || JSON.stringify(next.raw) !== JSON.stringify(existing.raw)
+}
+
 function isUKEvent(event: GigsbergAffiliateEvent) {
   return UK_COUNTRIES.has((event.country ?? '').trim().toLowerCase())
 }
@@ -128,23 +150,46 @@ export async function syncGigsbergCatalogue(cityOverride?: string, from = todayI
   let updated = 0
   let errors = 0
 
-  for (let index = 0; index < events.length; index += 100) {
-    const batch = events.slice(index, index + 100).map(toCatalogueRow)
+  const existingById = new Map<number, ExistingCatalogueRow>()
+  for (let index = 0; index < events.length; index += 500) {
+    const ids = events.slice(index, index + 500).map(event => event.id)
+    if (!ids.length) continue
     const { data, error } = await db
       .from('gigsberg_catalogue_events')
-      .upsert(batch, { onConflict: 'id', ignoreDuplicates: false })
+      .select('id, name, event_date, event_time, venue, city, country, performer1, performer2, tour, url, min_price, raw')
+      .in('id', ids)
+    if (error) {
+      throw new Error(`Could not read the existing Gigsberg catalogue: ${error.message}`)
+    }
+    for (const row of (data ?? []) as ExistingCatalogueRow[]) existingById.set(row.id, row)
+  }
+
+  for (let index = 0; index < events.length; index += 100) {
+    const batch = events.slice(index, index + 100).map(toCatalogueRow)
+    const changedBatch = batch.filter(row => {
+      const existing = existingById.get(row.id)
+      return !existing || catalogueRowChanged(row, existing)
+    })
+
+    // The catalogue is also the durable matching/review queue. Leaving
+    // unchanged rows alone avoids needless Postgres writes and guarantees a
+    // routine import cannot reset a human decision or rematch a stable row.
+    if (!changedBatch.length) continue
+
+    const { data, error } = await db
+      .from('gigsberg_catalogue_events')
+      .upsert(changedBatch, { onConflict: 'id', ignoreDuplicates: false })
       .select('id, first_seen_at') as unknown as { data: Array<{ id: number; first_seen_at: string }> | null; error: { message: string } | null }
 
     if (error) {
       console.error(`[gigsberg] catalogue batch failed: ${error.message}`)
-      errors += batch.length
+      errors += changedBatch.length
       continue
     }
 
-    // Supabase does not expose inserted-vs-updated counts for an upsert. The
-    // sync result therefore reports successfully written rows as updated and
-    // keeps the precise catalogue state in the table itself.
-    updated += data?.length ?? batch.length
+    const writtenIds = new Set((data ?? changedBatch).map(row => row.id))
+    inserted += changedBatch.filter(row => !existingById.has(row.id) && writtenIds.has(row.id)).length
+    updated += changedBatch.filter(row => existingById.has(row.id) && writtenIds.has(row.id)).length
   }
 
   const nextCityIndex = (effectiveCityIndex + 1) % CITIES.length
@@ -152,7 +197,7 @@ export async function syncGigsbergCatalogue(cityOverride?: string, from = todayI
     status: 'idle',
     ...(advanceQueue ? { current_city_index: nextCityIndex } : {}),
     last_completed_at: new Date().toISOString(),
-    total_listings_synced: updated,
+    total_listings_synced: events.length,
   }).eq('id', 1)
 
   return {
