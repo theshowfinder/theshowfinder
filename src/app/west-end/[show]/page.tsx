@@ -9,6 +9,9 @@ import type { Metadata } from 'next'
 import ShowCard from '@/components/ShowCard'
 import { getWestEndShows } from '@/lib/showPool'
 import { eventImageUrl } from '@/lib/eventImages'
+import { TrackedTicketLink } from '@/components/TrackedTicketLink'
+import { getSeeTicketsAffiliateLink } from '@/lib/affiliate'
+import { seeTicketsUrlForShow } from '@/lib/seeTicketsWestEnd'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import type { ShowDate } from '@/lib/shows'
 
@@ -62,6 +65,7 @@ export default async function WestEndShowPage({ params }: { params: Promise<{ sh
   const imageUrl = eventImageUrl(show.imageUrl, 'theatre', show.title)
   const sym = show.currency === 'GBP' ? '£' : show.currency
   const dates = show.dates.slice(0, MAX_DATES_SHOWN)
+  const seeTicketsUrl = show.status !== 'sold_out' ? seeTicketsUrlForShow(show.title, show.venueName) : null
 
   const byMonth = new Map<string, ShowDate[]>()
   for (const d of dates) {
@@ -116,13 +120,30 @@ export default async function WestEndShowPage({ params }: { params: Promise<{ sh
             {show.priceFrom ? ` · from ${sym}${show.priceFrom}` : ''}
           </p>
           {show.status !== 'sold_out' && (
-            <Link
-              href={`/events/${show.nextEventSlug}`}
-              className="inline-flex items-center justify-center text-white font-bold px-6 py-3 rounded-xl min-h-[48px] hover:opacity-90"
-              style={{ backgroundColor: '#E8003D' }}
-            >
-              Compare tickets for the next performance
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-3">
+              {seeTicketsUrl && (
+                <TrackedTicketLink
+                  href={getSeeTicketsAffiliateLink(seeTicketsUrl)}
+                  provider="See Tickets"
+                  section="hero_cta"
+                  context={`west-end-show:${show.slug}`}
+                  rel="sponsored noopener noreferrer"
+                  className="inline-flex items-center justify-center text-white font-bold px-6 py-3 rounded-xl min-h-[48px] hover:opacity-90"
+                  style={{ backgroundColor: '#E4022D' }}
+                >
+                  Book {show.title} with See Tickets ↗
+                </TrackedTicketLink>
+              )}
+              <Link
+                href={`/events/${show.nextEventSlug}`}
+                className={seeTicketsUrl
+                  ? 'inline-flex items-center justify-center font-bold px-6 py-3 rounded-xl min-h-[48px] border-2 border-white/40 text-white hover:bg-white/10'
+                  : 'inline-flex items-center justify-center text-white font-bold px-6 py-3 rounded-xl min-h-[48px] hover:opacity-90'}
+                style={seeTicketsUrl ? undefined : { backgroundColor: '#E8003D' }}
+              >
+                Compare tickets for the next performance
+              </Link>
+            </div>
           )}
         </div>
       </div>

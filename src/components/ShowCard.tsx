@@ -2,6 +2,9 @@ import Link from 'next/link'
 import type { Show } from '@/lib/shows'
 import { eventImageUrl } from '@/lib/eventImages'
 import type { EventCategory } from '@/lib/types/database'
+import { TrackedTicketLink } from '@/components/TrackedTicketLink'
+import { getSeeTicketsAffiliateLink } from '@/lib/affiliate'
+import { seeTicketsUrlForShow } from '@/lib/seeTicketsWestEnd'
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', {
@@ -23,6 +26,7 @@ export default function ShowCard({ show, kind }: Props) {
   const imageUrl = eventImageUrl(show.imageUrl, category, show.title)
   const soldOut  = show.status === 'sold_out'
   const sym = show.currency === 'GBP' ? '£' : show.currency
+  const seeTicketsUrl = isWestEnd ? seeTicketsUrlForShow(show.title, show.venueName) : null
 
   return (
     <div className="group flex flex-col rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
@@ -82,6 +86,20 @@ export default function ShowCard({ show, kind }: Props) {
           >
             {isWestEnd ? 'Compare Tickets' : 'Get Tickets'}
           </Link>
+        )}
+
+        {seeTicketsUrl && !soldOut && (
+          <TrackedTicketLink
+            href={getSeeTicketsAffiliateLink(seeTicketsUrl)}
+            provider="See Tickets"
+            section="primary"
+            context={`west-end-card:${show.slug}`}
+            rel="sponsored noopener noreferrer"
+            className="w-full font-bold py-2.5 rounded-xl text-center text-sm border-2 hover:bg-red-50 transition-colors min-h-[44px] flex items-center justify-center"
+            style={{ borderColor: '#E4022D', color: '#E4022D' }}
+          >
+            Book with See Tickets ↗
+          </TrackedTicketLink>
         )}
       </div>
     </div>

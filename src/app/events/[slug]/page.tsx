@@ -86,13 +86,19 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
 // ── Ticket providers ────────────────────────────────────────────────────────
 
 function buildProviders(event: Pick<EventDetail, 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>) {
-  const primary = event.tickets_url
+  const mainPrimary = event.tickets_url
     ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: getTicketmasterAffiliateLink(event.tickets_url) }]
     : event.gigsberg_affiliate_url
       ? [{ name: 'Gigsberg', tagline: event.gigsberg_inventory_status === 'available' ? 'Secondary-market tickets via Gigsberg' : 'Check availability on Gigsberg', bg: '#1a1f6e', href: event.gigsberg_affiliate_url }]
     : []
+  // See Tickets is an official booking agent (primary, not resale), and it is
+  // the only affiliate partner for West End runs — list it with the primary
+  // sellers so those pages lead with it.
+  const seeTickets = event.see_tickets_affiliate_url
+    ? [{ name: 'See Tickets', tagline: 'Official booking agent', bg: '#E4022D', href: getSeeTicketsAffiliateLink(event.see_tickets_affiliate_url) }]
+    : []
+  const primary = [...mainPrimary, ...seeTickets]
   const resale = [
-    ...(event.see_tickets_affiliate_url ? [{ name: 'See Tickets', bg: '#E4022D', href: getSeeTicketsAffiliateLink(event.see_tickets_affiliate_url) }] : []),
     ...(event.tickets_url && event.gigsberg_affiliate_url ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: event.gigsberg_affiliate_url }] : []),
     ...(!event.tickets_url && !event.gigsberg_affiliate_url && event.gigsberg_url && !isBareProviderHomepage(event.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(event.gigsberg_url) }] : []),
     ...(event.viagogo_url && !isBareProviderHomepage(event.viagogo_url) ? [{ name: 'Viagogo', bg: '#00a650', href: getViagogoAffiliateLink(event.viagogo_url) }] : []),
