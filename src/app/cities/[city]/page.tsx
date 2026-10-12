@@ -126,7 +126,7 @@ export default async function CityPage({
     // Today only, Europe/London calendar day, soonest first — see
     // src/lib/tonight.ts for the exact rules (cancelled/postponed and
     // already-finished shows excluded).
-    fetchTonightEvents(supabase, { city: cityName, fetchLimit: 50 }),
+    fetchTonightEvents(supabase, { city: cityName }),
 
     // Tomorrow through the following 7 London days, biggest venues first
     // — ticketed shows and hand-curated local events (markets, community

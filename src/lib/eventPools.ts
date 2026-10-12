@@ -14,6 +14,7 @@ import {
 } from './on-sale.ts'
 import { londonDayWindow, londonDaysAheadWindow, type DateWindow } from './intelligence.ts'
 import { isTonightEvent, sortTonightEvents } from './tonight.ts'
+import { mixEvents, trimTonight } from './eventMix.ts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -65,16 +66,14 @@ export function dedupeEventsByTitle(pool: EventWithVenue[], limit: number): Even
 interface EventsThisWeekOpts {
   city?: string
   limit: number
-  /** Fetch pool size before dedupe/limit — leave generous room for repeats. */
+  /** Pool size fetched PER DAY (most prominent first) before mixing. */
   fetchLimit?: number
 }
 
-// Everything happening in the next 7 days, soonest first — this is a
-// "what's on, in order" list, not a prominence ranking (see fetchTopEvents
-// below for that), so the primary sort is the event's own start_date, not
-// venue capacity, sync time, or on-sale date. Same-date ties fall back to
-// featured status then venue capacity, purely to keep same-day ordering
-// stable rather than to override the date-first rule. Cancelled/postponed
+// A mixed selection of what's happening in the next 7 days, shown soonest
+// first (see fetchEventsThisWeek below for how the mix is chosen — it is no
+// longer "the first N rows by date", which let one day or one attraction
+// flood the list). Cancelled/postponed
 // rows are excluded (LIVE_EVENT_STATUSES) — a cancelled show was never a
 // genuine "happening this week" opportunity. Pass `city` to scope to one
 // city's page; omit it for the national homepage section.
@@ -97,27 +96,55 @@ export function eventsThisWeekWindow(now: Date = new Date()): DateWindow {
   }
 }
 
+// The 7 London calendar days of This Week as [start, end) windows, tomorrow
+// first. Built from the same boundaries as eventsThisWeekWindow so the pool
+// covers exactly that window.
+export function eventsThisWeekDayWindows(now: Date = new Date()): DateWindow[] {
+  const windows: DateWindow[] = []
+  for (let day = 1; day <= 7; day++) {
+    windows.push({
+      startISO: londonDaysAheadWindow(now, day).endISO,
+      endISO:   londonDaysAheadWindow(now, day + 1).endISO,
+    })
+  }
+  return windows
+}
+
+// A plain "soonest first" fetch lets the earliest day flood the list (every
+// timed-entry attraction starts at 10:00), so the pool is fetched per day —
+// the most prominent events of each day — and mixEvents then spreads the
+// final list across days and categories, one card per show, with a cap per
+// venue and on attractions. Output is still soonest first.
 export async function fetchEventsThisWeek(
   supabase: SupabaseClient,
-  { city, limit, fetchLimit = 60 }: EventsThisWeekOpts,
+  { city, limit, fetchLimit = 100 }: EventsThisWeekOpts,
 ): Promise<EventWithVenue[]> {
-  const { startISO, endISO } = eventsThisWeekWindow()
+  const windows = eventsThisWeekDayWindows()
 
-  let query = supabase
-    .from('events_with_venue')
-    .select('*')
-    .gte('start_date', startISO)
-    .lt('start_date', endISO)
-    .in('status', LIVE_EVENT_STATUSES)
-    .order('start_date',     { ascending: true })
-    .order('is_featured',    { ascending: false })
-    .order('venue_capacity', { ascending: false, nullsFirst: false })
-    .limit(fetchLimit)
+  const days = await Promise.all(windows.map(async ({ startISO, endISO }) => {
+    let query = supabase
+      .from('events_with_venue')
+      .select('*')
+      .gte('start_date', startISO)
+      .lt('start_date', endISO)
+      .in('status', LIVE_EVENT_STATUSES)
+      .order('is_featured',    { ascending: false })
+      .order('venue_capacity', { ascending: false, nullsFirst: false })
+      .order('start_date',     { ascending: true })
+      .limit(fetchLimit)
 
-  if (city) query = query.ilike('venue_city', city)
+    if (city) query = query.ilike('venue_city', city)
 
-  const { data } = await query as unknown as { data: EventWithVenue[] | null }
-  return dedupeEventsByTitle(data ?? [], limit)
+    const { data } = await query as unknown as { data: EventWithVenue[] | null }
+    return data ?? []
+  }))
+
+  return mixEvents(days.flat(), {
+    limit,
+    maxPerVenue: limit <= 12 ? 2 : 3,
+    maxAttractions: limit <= 12 ? 1 : 2,
+    mode: 'week',
+  })
 }
 
 // Tonight's row shape deliberately comes from the base `events` table
@@ -154,7 +181,7 @@ interface TonightEventRow {
 // by time).
 export async function fetchTonightEvents(
   supabase: SupabaseClient,
-  { city, fetchLimit = 100 }: { city?: string; fetchLimit?: number },
+  { city, fetchLimit = 400, limit = 60 }: { city?: string; fetchLimit?: number; limit?: number },
 ): Promise<TonightEvent[]> {
   const window = londonDayWindow(new Date())
   const now    = Date.now()
@@ -194,7 +221,9 @@ export async function fetchTonightEvents(
       venue_name: e.venue!.name, venue_slug: e.venue!.slug, venue_city: e.venue!.city,
     }))
   const filtered = rows.filter(e => isTonightEvent(e, now, window))
-  return sortTonightEvents(filtered)
+  // Chronological, but timed-entry attractions are collapsed to one entry each
+  // (and capped) so 10:00 entry slots don't bury the evening's shows.
+  return trimTonight(sortTonightEvents(filtered), { limit })
 }
 
 interface TopEventsOpts {
@@ -214,7 +243,7 @@ interface TopEventsOpts {
 // "coming up" regardless of how prominent it was.
 export async function fetchTopEvents(
   supabase: SupabaseClient,
-  { city, limit, fetchLimit = 60, horizonDays = 60 }: TopEventsOpts,
+  { city, limit, fetchLimit = 150, horizonDays = 60 }: TopEventsOpts,
 ): Promise<EventWithVenue[]> {
   const now = new Date()
   // Starts exactly where fetchEventsThisWeek's own window ends, rather
@@ -238,7 +267,8 @@ export async function fetchTopEvents(
   if (city) query = query.ilike('venue_city', city)
 
   const { data } = await query as unknown as { data: EventWithVenue[] | null }
-  return dedupeEventsByTitle(data ?? [], limit)
+  // Ranked by prominence, but one arena can't supply every card.
+  return mixEvents(data ?? [], { limit, maxPerVenue: 2, maxAttractions: 1, mode: 'ranked' })
 }
 
 interface PresalesOpenNowOpts {
