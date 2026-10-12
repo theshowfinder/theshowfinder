@@ -2,6 +2,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { buildFallbackDescription, cleanSourceDescription } from '@/lib/eventDescription'
 import type { EventCategory } from '@/lib/types/database'
 import { CITIES } from '@/lib/cities'
+import {
+  MAX_PERFORMANCES_PER_DAY,
+  countSlotSiblings,
+  normalizeSlotTitle,
+  londonDay,
+  sameDayWindow,
+} from '@/lib/timeSlotCap'
 
 type DbClient = ReturnType<typeof createAdminClient>
 
@@ -510,6 +517,53 @@ type ExistingEventSnapshot = {
   ticketmaster_id: string | null
 }
 
+
+// Per-run time-slot accounting, keyed by the run's eventCache (each sync run
+// creates exactly one). Events are processed concurrently, so each
+// title+venue+day group gets one baseline DB count (taken before any insert of
+// this run) plus a synchronous ticket counter; that keeps the cap exact even
+// when 40 slots of the same attraction are in flight at once.
+interface SlotGroupState { baseline: Promise<number>; taken: number }
+const slotStates = new WeakMap<object, Map<string, SlotGroupState>>()
+
+async function exceedsTimeSlotCap(
+  db: DbClient,
+  runKey: object,
+  venueId: string,
+  title: string,
+  startDate: string,
+): Promise<boolean> {
+  let groups = slotStates.get(runKey)
+  if (!groups) { groups = new Map(); slotStates.set(runKey, groups) }
+
+  const key = `${venueId}|${normalizeSlotTitle(title)}|${londonDay(startDate)}`
+  let state = groups.get(key)
+  if (!state) {
+    const { from, to } = sameDayWindow(startDate)
+    const candidate = { title, start_date: startDate }
+    state = {
+      taken: 0,
+      baseline: (async () => {
+        const { data, error } = await db
+          .from('events')
+          .select('title, start_date')
+          .eq('venue_id', venueId)
+          .gte('start_date', from)
+          .lte('start_date', to)
+          .limit(1000)
+        // If the lookup fails, do not drop events: treat the group as empty.
+        if (error || !data) return 0
+        return countSlotSiblings(candidate, data as { title: string; start_date: string }[])
+      })(),
+    }
+    groups.set(key, state)
+  }
+
+  const ticket = state.taken++
+  const baseline = await state.baseline
+  return baseline + ticket >= MAX_PERFORMANCES_PER_DAY
+}
+
 async function upsertEvent(
   db: DbClient,
   tmEvent: TMEvent,
@@ -577,6 +631,12 @@ async function upsertEvent(
       .maybeSingle()
     existing = (current as ExistingEventSnapshot | null) ?? null
     eventCache.set(tmEvent.id, existing)
+  }
+
+  // Brand-new event: skip extra time slots of the same title at the same venue
+  // on the same day (timed-entry attractions list dozens per day).
+  if (!existing && await exceedsTimeSlotCap(db, eventCache, venueId, tmEvent.name, startDate)) {
+    return 'skipped'
   }
 
   const unchanged = existing &&
