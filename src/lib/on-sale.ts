@@ -158,8 +158,8 @@ export function hasReliableOnSaleDate(event: Pick<EventWithVenue, 'onsale_date'>
 export function fmtOnSaleLabel(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Europe/London',
     weekday: 'short', day: 'numeric', month: 'short',
-    hour: '2-digit', minute: '2-digit',
-  }).replace(',', '') + ' GMT'
+    hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+  }).replace(',', '')
 }
 
 // ── Shared date windows ──────────────────────────────────────────────────

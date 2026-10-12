@@ -94,9 +94,9 @@ describe('groupEventsByArtist', () => {
 })
 
 describe('fmtOnSaleLabel', () => {
-  test('formats an ISO date as a short GMT label', () => {
-    const label = fmtOnSaleLabel('2026-05-08T09:00:00.000Z')
-    assert.match(label, /GMT$/)
+  test('labels winter times GMT and summer times BST, in London time', () => {
+    assert.equal(fmtOnSaleLabel('2026-12-11T09:00:00.000Z'), 'Fri 11 Dec 09:00 GMT')
+    assert.equal(fmtOnSaleLabel('2026-05-08T09:00:00.000Z'), 'Fri 8 May 10:00 BST')
   })
 })
 

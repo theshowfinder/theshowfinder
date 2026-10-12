@@ -150,8 +150,8 @@ export default async function ArtistPage({ params }: PageProps) {
   const onSaleLabel = artist.onsale_date
     ? new Date(artist.onsale_date).toLocaleDateString('en-GB', { timeZone: 'Europe/London',
         weekday: 'long', day: 'numeric', month: 'long',
-        hour: '2-digit', minute: '2-digit',
-      }).replace(',', '') + ' GMT'
+        hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+      }).replace(',', '')
     : null
 
   const canonicalUrl = `https://www.theshowfinder.com/artists/${artist.slug}`

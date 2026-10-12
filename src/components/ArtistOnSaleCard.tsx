@@ -13,8 +13,8 @@ interface Props {
 export default function ArtistOnSaleCard({ name, slug, href, image_url, tour_name, onsale_date, dates_count }: Props) {
   const onSaleLabel = onsale_date
     ? new Date(onsale_date).toLocaleDateString('en-GB', { timeZone: 'Europe/London',
-        weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-      }).replace(',', '') + ' GMT'
+        weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+      }).replace(',', '')
     : null
 
   const cardClass = 'group block rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5'
