@@ -10,11 +10,13 @@ import {
   sameDayWindow,
 } from '@/lib/timeSlotCap'
 
+import { extractEventDetails, extractVenueDetails, detailsKey, type TMEventExtras, type TMVenueExtras } from '@/lib/eventDetails'
+
 type DbClient = ReturnType<typeof createAdminClient>
 
 // ── Ticketmaster API types ──────────────────────────────────────────────────
 
-interface TMVenue {
+interface TMVenue extends TMVenueExtras {
   id: string
   name: string
   address?: { line1?: string; line2?: string }
@@ -54,7 +56,7 @@ interface TMPriceRange {
   max: number
 }
 
-interface TMEvent {
+interface TMEvent extends TMEventExtras {
   id: string
   name: string
   url?: string
@@ -329,10 +331,19 @@ async function upsertVenueUncached(db: DbClient, tmVenue: TMVenue): Promise<stri
   // 1. Look up by TM venue ID (fastest path on repeat runs)
   const { data: byTmId } = await db
     .from('venues')
-    .select('id')
+    .select('id, details')
     .eq('ticketmaster_id', tmVenue.id)
     .maybeSingle()
-  if (byTmId) return byTmId.id
+  if (byTmId) {
+    // Keep practical venue info (parking, access, child policy) current. This
+    // lookup runs once per venue per sync, so only write when it changed.
+    const details = extractVenueDetails(tmVenue)
+    if (details && detailsKey(details) !== detailsKey(byTmId.details as object | null)) {
+      const { error: detailsError } = await db.from('venues').update({ details }).eq('id', byTmId.id)
+      if (detailsError) console.error(`[venue] details update failed for "${tmVenue.name}": ${detailsError.message}`)
+    }
+    return byTmId.id
+  }
 
   // 2. Look up by slug (covers venues from seed data)
   const { data: bySlug } = await db
@@ -359,6 +370,7 @@ async function upsertVenueUncached(db: DbClient, tmVenue: TMVenue): Promise<stri
     lng:             tmVenue.location?.longitude ? parseFloat(tmVenue.location.longitude) : null,
     website:         tmVenue.url ?? null,
     ticketmaster_id: tmVenue.id,
+    details:         extractVenueDetails(tmVenue),
   }
 
   const { data, error } = await db.from('venues').insert(venueData).select('id').single()
@@ -515,6 +527,8 @@ type ExistingEventSnapshot = {
   tickets_url: string | null
   status: string
   ticketmaster_id: string | null
+  doors_time: string | null
+  details: object | null
 }
 
 
@@ -620,13 +634,15 @@ async function upsertEvent(
     tickets_url:         tmEvent.url     ?? null,
     status:              mapStatus(tmEvent),
     ticketmaster_id:     tmEvent.id,
+    doors_time:          tmEvent.doorsTimes?.dateTime ?? null,
+    details:             extractEventDetails(tmEvent),
   }
 
   let existing = eventCache.get(tmEvent.id)
   if (existing === undefined) {
     const { data: current } = await db
       .from('events')
-      .select('id, title, slug, category, venue_id, start_date, onsale_date, public_onsale_start, public_onsale_end, presale_start, presale_end, presale_name, image_url, description, price_from, price_to, currency, tickets_url, status, ticketmaster_id')
+      .select('id, title, slug, category, venue_id, start_date, onsale_date, public_onsale_start, public_onsale_end, presale_start, presale_end, presale_name, image_url, description, price_from, price_to, currency, tickets_url, status, ticketmaster_id, doors_time, details')
       .eq('ticketmaster_id', tmEvent.id)
       .maybeSingle()
     existing = (current as ExistingEventSnapshot | null) ?? null
@@ -658,7 +674,9 @@ async function upsertEvent(
     existing.currency === eventData.currency &&
     existing.tickets_url === eventData.tickets_url &&
     existing.status === eventData.status &&
-    existing.ticketmaster_id === eventData.ticketmaster_id
+    existing.ticketmaster_id === eventData.ticketmaster_id &&
+    (existing.doors_time ? new Date(existing.doors_time).getTime() : null) === (eventData.doors_time ? new Date(eventData.doors_time).getTime() : null) &&
+    detailsKey(existing.details) === detailsKey(eventData.details)
 
   if (unchanged && existing) {
     // Keep the freshness signal current without rewriting the full event row,

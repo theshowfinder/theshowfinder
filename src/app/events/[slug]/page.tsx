@@ -23,7 +23,7 @@ import {
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { jsonLdScript, buildEventSchema, buildBreadcrumbSchema } from '@/lib/jsonld'
-import { ticketPurchaseDisabledStatus } from '@/lib/eventPools'
+import { ticketPurchaseDisabledStatus, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getEventSeoAlias } from '@/lib/seoAliases'
 import { eventImageUrl } from '@/lib/eventImages'
@@ -31,6 +31,8 @@ import { cityPagePath } from '@/lib/cities'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { pickSeeTicketsPrice, type CatalogueRowPrice } from '@/lib/seeTicketsPrice'
 import NewsletterInline from '@/components/NewsletterInline'
+import { buildEventFaq, type EventDetails, type VenueDetails } from '@/lib/eventDetails'
+import { toArtistEventRows, type ArtistEventLink, type ArtistEventRow } from '@/lib/artistEvents'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +51,7 @@ interface EventDetail {
   start_date: string
   end_date: string | null
   doors_time: string | null
+  details: EventDetails | null
   image_url: string | null
   price_from: number | null
   price_to: number | null
@@ -67,33 +70,40 @@ interface EventDetail {
   tags: string[] | null
   venue: {
     id: string; name: string; slug: string | null; address: string; city: string; postcode: string; website: string | null
+    details: VenueDetails | null
   } | null
   artists: ArtistRow[]
 }
 
 // ── Data fetching ───────────────────────────────────────────────────────────
 
-const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
-  const supabase = createPublicClient()
-  const { data, error } = await supabase
-    .from('events')
-    .select(`
+const eventSelect = (withDetails: boolean) => `
       id, title, slug, description, category,
-      start_date, end_date, doors_time,
+      start_date, end_date, doors_time,${withDetails ? ' details,' : ''}
       image_url, price_from, price_to, currency,
       tickets_url, own_ticket_url, viagogo_url, stubhub_url, gigsberg_url, gigsberg_affiliate_url, see_tickets_affiliate_url,
       gigsberg_highlighted, gigsberg_highlight_until, gigsberg_inventory_status, status, tags,
-      venue:venues(id, name, slug, address, city, postcode, website),
+      venue:venues(id, name, slug, address, city, postcode, website${withDetails ? ', details' : ''}),
       artists:event_artists(
         is_headliner, order,
         artist:artists(id, name, genre, image_url)
       )
-    `)
-    .eq('slug', slug)
-    .single()
+    `
+
+const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
+  const supabase = createPublicClient()
+  let { data, error } = await supabase.from('events').select(eventSelect(true)).eq('slug', slug).single()
+  // "details" columns come from migration 049. If that has not been applied
+  // yet the query errors; fall back to the original columns so event pages
+  // keep working (PGRST116 just means "no such event").
+  if (error && error.code !== 'PGRST116') {
+    ;({ data, error } = await supabase.from('events').select(eventSelect(false)).eq('slug', slug).single())
+  }
 
   if (error || !data) return null
   const event = data as unknown as EventDetail
+  event.details = event.details ?? null
+  if (event.venue) event.venue.details = event.venue.details ?? null
 
   // Ticketmaster's UK feed almost never supplies a price. When this event is
   // matched to a See Tickets listing, use that listing's face-value minimum so
@@ -117,6 +127,39 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
     }
   }
   return event
+})
+
+// ── Related events (internal links) ─────────────────────────────────────────
+
+const getRelatedEvents = cache(async (event: EventDetail, headlinerId: string | null) => {
+  const supabase = createPublicClient()
+  const nowISO = new Date().toISOString()
+  const [venueRes, artistRes] = await Promise.all([
+    event.venue
+      ? supabase
+          .from('events')
+          .select('id, slug, title, start_date, status')
+          .eq('venue_id', event.venue.id)
+          .neq('id', event.id)
+          .gte('start_date', nowISO)
+          .in('status', LIVE_EVENT_STATUSES)
+          .order('start_date', { ascending: true })
+          .limit(6)
+      : Promise.resolve({ data: [] as { id: string; slug: string; title: string; start_date: string; status: string }[] }),
+    headlinerId
+      ? supabase
+          .from('event_artists')
+          .select('events!inner(id, slug, title, start_date, status, venue:venues(name, city))')
+          .eq('artist_id', headlinerId)
+          .neq('events.id', event.id)
+          .gte('events.start_date', nowISO)
+          .in('events.status', LIVE_EVENT_STATUSES)
+          .limit(40)
+      : Promise.resolve({ data: [] }),
+  ])
+  const venueEvents = (venueRes.data ?? []) as { id: string; slug: string; title: string; start_date: string }[]
+  const artistEvents: ArtistEventRow[] = toArtistEventRows(artistRes.data as unknown as ArtistEventLink[]).slice(0, 8)
+  return { venueEvents, artistEvents }
 })
 
 // ── Ticket providers ────────────────────────────────────────────────────────
@@ -255,6 +298,33 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const headliners = event.artists
     .filter(a => a.is_headliner && a.artist)
     .sort((a, b) => a.order - b.order)
+
+  const doorsLabel = event.doors_time ? fmtTime(event.doors_time) : null
+  const venue = event.venue
+  const directionsUrl = venue
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${venue.name}, ${venue.address}, ${venue.city} ${venue.postcode}`)}`
+    : null
+  const extraFacts = [
+    event.details?.support?.length ? { label: 'Also on the bill', value: event.details.support.join(', ') } : null,
+    event.details?.promoter ? { label: 'Promoter', value: event.details.promoter } : null,
+    event.details?.age ? { label: 'Age restrictions', value: event.details.age } : null,
+    event.details?.ticketLimit ? { label: 'Ticket limit', value: event.details.ticketLimit } : null,
+  ].filter((f): f is { label: string; value: string } => !!f)
+  const { venueEvents, artistEvents } = await getRelatedEvents(event, headliners[0]?.artist?.id ?? null)
+  const faq = buildEventFaq({
+    title: event.title,
+    venueName: venue?.name ?? null,
+    venueAddress: venue ? `${venue.address}, ${venue.postcode}` : null,
+    city: venue?.city ?? null,
+    dateLabel: fmtDate(event.start_date),
+    startLabel: fmtTime(event.start_date),
+    doorsLabel,
+    status: event.status,
+    details: event.details,
+    venueDetails: venue?.details ?? null,
+    providerNames: [...primary, ...resale].map(p => p.name),
+  })
+  const shortWhen = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
 
   const canonicalUrl = `https://www.theshowfinder.com/events/${event.slug}`
   const eventSchema = buildEventSchema({
@@ -480,6 +550,12 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                     <dd className="font-semibold text-slate-800">{fmtTime(event.doors_time)}</dd>
                   </div>
                 )}
+                {extraFacts.map(f => (
+                  <div key={f.label} className="bg-white border border-slate-200 rounded-xl p-4 sm:col-span-2">
+                    <dt className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">{f.label}</dt>
+                    <dd className="text-sm font-semibold text-slate-800">{f.value}</dd>
+                  </div>
+                ))}
                 {event.venue && (
                   <div className="bg-white border border-slate-200 rounded-xl p-4 sm:col-span-2">
                     <dt className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Venue</dt>
@@ -497,6 +573,79 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 )}
               </dl>
             </div>
+
+            {(directionsUrl || venue?.details?.parking || venue?.details?.accessibleSeating || venue?.details?.boxOffice || event.details?.seatmapUrl) && (
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-900 mb-4">Getting there &amp; venue info</h2>
+                <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3 text-sm text-slate-600 leading-relaxed">
+                  {venue && (
+                    <p>
+                      <span className="font-semibold text-slate-800">{venue.name}</span>, {venue.address}, {venue.city} {venue.postcode}.
+                    </p>
+                  )}
+                  {venue?.details?.parking && <p><span className="font-semibold text-slate-800">Parking: </span>{venue.details.parking}</p>}
+                  {(event.details?.accessibility || venue?.details?.accessibleSeating) && (
+                    <p><span className="font-semibold text-slate-800">Accessibility: </span>{[event.details?.accessibility, venue?.details?.accessibleSeating].filter(Boolean).join(' ')}</p>
+                  )}
+                  {venue?.details?.generalRule && <p><span className="font-semibold text-slate-800">Venue rules: </span>{venue.details.generalRule}</p>}
+                  {venue?.details?.boxOffice && <p><span className="font-semibold text-slate-800">Box office: </span>{venue.details.boxOffice}</p>}
+                  <div className="flex flex-wrap gap-4 pt-1 font-semibold">
+                    {directionsUrl && <a href={directionsUrl} target="_blank" rel="noopener nofollow" style={{ color: '#E8003D' }}>Get directions →</a>}
+                    {event.details?.seatmapUrl && <a href={event.details.seatmapUrl} target="_blank" rel="noopener nofollow" style={{ color: '#E8003D' }}>View seating map →</a>}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {faq.length > 0 && (
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-900 mb-4">Good to know</h2>
+                <div className="space-y-5">
+                  {faq.map(item => (
+                    <div key={item.q}>
+                      <h3 className="font-bold text-slate-900 mb-1">{item.q}</h3>
+                      <p className="text-slate-600 leading-relaxed">{item.a}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {artistEvents.length > 0 && (
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-900 mb-4">
+                  {headliners[0]?.artist ? `More ${headliners[0].artist.name} dates` : 'More dates'}
+                </h2>
+                <ul className="divide-y divide-slate-100 bg-white border border-slate-200 rounded-xl">
+                  {artistEvents.map(e => (
+                    <li key={e.id}>
+                      <Link href={`/events/${e.slug}`} className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-slate-50">
+                        <span className="font-semibold text-slate-800 text-sm">{e.venueName ?? e.title}{e.venueCity ? `, ${e.venueCity}` : ''}</span>
+                        <span className="text-sm text-slate-500 whitespace-nowrap">{shortWhen(e.startDate)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {venue && venueEvents.length > 0 && (
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-900 mb-4">
+                  More at {venue.slug ? <Link href={`/venues/${venue.slug}`} className="hover:underline">{venue.name}</Link> : venue.name}
+                </h2>
+                <ul className="divide-y divide-slate-100 bg-white border border-slate-200 rounded-xl">
+                  {venueEvents.map(e => (
+                    <li key={e.id}>
+                      <Link href={`/events/${e.slug}`} className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-slate-50">
+                        <span className="font-semibold text-slate-800 text-sm">{e.title}</span>
+                        <span className="text-sm text-slate-500 whitespace-nowrap">{shortWhen(e.start_date)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <NewsletterInline
               source="event"
