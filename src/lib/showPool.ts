@@ -78,7 +78,7 @@ async function fetchWestEndVenues(supabase: SupabaseClient): Promise<VenueRow[]>
 }
 
 /** Every West End show with upcoming performances (one entry per show). */
-export async function fetchWestEndShows(supabase: SupabaseClient, horizonDays = 150): Promise<Show[]> {
+export async function fetchWestEndShows(supabase: SupabaseClient, horizonDays = 365): Promise<Show[]> {
   try {
     const venues = await fetchWestEndVenues(supabase)
     if (venues.length === 0) {
