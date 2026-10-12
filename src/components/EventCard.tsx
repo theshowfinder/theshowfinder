@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { EventWithVenue } from '@/lib/types/database'
 import { ticketPurchaseDisabledStatus } from '@/lib/eventPools'
+import { eventImageUrl } from '@/lib/eventImages'
 
 const categoryConfig: Record<string, { label: string; colour: string }> = {
   concert:  { label: 'Concert',  colour: 'bg-red-100    text-red-700'    },
@@ -48,16 +49,17 @@ export default function EventCard({ event }: Props) {
   // a postponed event's card must not look identically buyable to an
   // on-sale one.
   const isSoldOut = ticketPurchaseDisabledStatus(event.status)
+  const imageUrl   = eventImageUrl(event.image_url, event.category, event.title)
 
   return (
     <div className="group flex flex-col rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
 
       {/* Image — CSS background-image avoids React hydration / onError race conditions */}
       <Link href={`/events/${event.slug}`} className="relative h-48 bg-slate-100 block overflow-hidden">
-        {event.image_url ? (
+        {imageUrl ? (
           <div
             className="absolute inset-0 bg-cover bg-center transition-transform duration-300 group-hover:scale-105"
-            style={{ backgroundImage: `url("${event.image_url}")` }}
+            style={{ backgroundImage: `url("${imageUrl}")` }}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-5xl bg-slate-50">

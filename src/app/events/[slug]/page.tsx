@@ -17,6 +17,7 @@ import { jsonLdScript, buildEventSchema, buildBreadcrumbSchema } from '@/lib/jso
 import { ticketPurchaseDisabledStatus } from '@/lib/eventPools'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getEventSeoAlias } from '@/lib/seoAliases'
+import { eventImageUrl } from '@/lib/eventImages'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -148,7 +149,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     ? `Get tickets for ${event.title} at ${venue.name} in ${venue.city} on ${dateStr}. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.`
     : event.description ?? `${event.title} — find tickets on TheShowFinder`
 
-  const ogImage   = event.image_url ?? 'https://www.theshowfinder.com/og-image.png'
+  const ogImage   = eventImageUrl(event.image_url, event.category, event.title)
   const canonical = `https://www.theshowfinder.com/events/${slug}`
 
   return {
@@ -199,6 +200,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   // shows none of them.
   const isCancelledOrPostponed = event.status === 'cancelled' || event.status === 'postponed'
   const priceLabel = fmtPrice(event.price_from, event.price_to, event.currency)
+  const imageUrl = eventImageUrl(event.image_url, event.category, event.title)
   const { primary, resale } = buildProviders(event)
   const ownTicketUrl = event.own_ticket_url && !isGigsbergUrl(event.own_ticket_url) ? event.own_ticket_url : null
   const highlightActive = event.gigsberg_highlighted && event.gigsberg_inventory_status === 'available' && (!event.gigsberg_highlight_until || new Date(event.gigsberg_highlight_until) > new Date())
@@ -213,7 +215,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     startDate:     event.start_date,
     endDate:       event.end_date,
     description:   event.description,
-    image:         event.image_url,
+    image:         imageUrl,
     status:        event.status,
     venue:         event.venue,
     priceFrom:     event.price_from,
@@ -240,9 +242,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
       />
       {/* ── HERO ──────────────────────────────────────────────── */}
       <section className="relative text-white overflow-hidden" style={{ backgroundColor: '#1A1A2E' }}>
-        {event.image_url && (
+        {imageUrl && (
           <>
-            <Image src={event.image_url} alt={event.title} fill className="object-cover opacity-20" priority />
+            <Image src={imageUrl} alt={event.title} fill className="object-cover opacity-20" priority />
             <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, #1A1A2E 40%, transparent)' }} />
           </>
         )}

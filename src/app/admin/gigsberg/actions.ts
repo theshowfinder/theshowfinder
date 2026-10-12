@@ -10,6 +10,7 @@ import { syncSeeTicketsCatalogue } from '@/lib/seeTicketsCatalogue'
 import { matchSeeTicketsCatalogue } from '@/lib/seeTicketsMatching'
 import { CITIES } from '@/lib/cities'
 import { searchGigsbergAffiliateListings } from '@/lib/gigsbergAffiliate'
+import { fallbackEventImage, inferEventCategory } from '@/lib/eventImages'
 
 function slugify(value: string) {
   return value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 90)
@@ -261,7 +262,8 @@ export async function createSeeTicketsEventAction(formData: FormData) {
     venueId = venue.id
   }
   const eventSlug = `${slugify(`${row.name}-${row.event_date}-${row.city}`)}-${slugify(row.id).slice(0, 24)}`
-  const { data: event, error: eventError } = await db.from('events').insert({ title: row.name, slug: eventSlug, description: `Live event in ${row.city}. Check See Tickets for current ticket availability.`, category: 'concert', venue_id: venueId, start_date: new Date(`${row.event_date}T19:00:00Z`).toISOString(), currency: 'GBP', see_tickets_affiliate_url: row.url, source: 'see_tickets', source_url: row.url, status: 'upcoming', image_url: 'https://www.theshowfinder.com/og-image.png' }).select('id').single()
+  const category = inferEventCategory(row.name)
+  const { data: event, error: eventError } = await db.from('events').insert({ title: row.name, slug: eventSlug, description: `Live event in ${row.city}. Check See Tickets for current ticket availability.`, category, venue_id: venueId, start_date: new Date(`${row.event_date}T19:00:00Z`).toISOString(), currency: 'GBP', see_tickets_affiliate_url: row.url, source: 'see_tickets', source_url: row.url, status: 'upcoming', image_url: fallbackEventImage(category, row.name) }).select('id').single()
   if (eventError || !event) throw new Error(eventError?.message ?? 'Could not create Showfinder event')
   const artistName = row.primary_artist || row.second_artist
   if (artistName) {
@@ -321,7 +323,7 @@ export async function createGigsbergEventAction(formData: FormData) {
     title: row.name,
     slug: eventSlug,
     description: `Live event in ${row.city}. Check Gigsberg for current ticket availability.`,
-    category: 'concert',
+    category: inferEventCategory(row.name),
     venue_id: venueId,
     start_date: startDate,
     currency: 'GBP',
@@ -348,7 +350,7 @@ export async function createGigsbergEventAction(formData: FormData) {
   const { error: imageError } = await db.from('events').update({
     // Reuse an approved artist image when one exists. Otherwise use the
     // site's branded fallback; no third-party image is scraped from Gigsberg.
-    image_url: artistImageUrl ?? 'https://www.theshowfinder.com/og-image.png',
+    image_url: artistImageUrl ?? fallbackEventImage(inferEventCategory(row.name), row.name),
   }).eq('id', event.id)
   if (imageError) throw new Error(imageError.message)
 
