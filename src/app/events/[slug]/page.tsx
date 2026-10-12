@@ -28,6 +28,8 @@ import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getEventSeoAlias } from '@/lib/seoAliases'
 import { eventImageUrl } from '@/lib/eventImages'
 import { cityPagePath } from '@/lib/cities'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { pickSeeTicketsPrice, type CatalogueRowPrice } from '@/lib/seeTicketsPrice'
 import NewsletterInline from '@/components/NewsletterInline'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -91,7 +93,30 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
     .single()
 
   if (error || !data) return null
-  return data as unknown as EventDetail
+  const event = data as unknown as EventDetail
+
+  // Ticketmaster's UK feed almost never supplies a price. When this event is
+  // matched to a See Tickets listing, use that listing's face-value minimum so
+  // the page can say "From £x" (and the Event schema can carry a real price).
+  // The catalogue table is not publicly readable, hence the server-side client;
+  // any failure just leaves the price blank.
+  if (event.price_from == null && event.see_tickets_affiliate_url) {
+    try {
+      const { data: rows } = await createAdminClient()
+        .from('see_tickets_catalogue_events')
+        .select('min_price, max_price')
+        .eq('matched_event_id', event.id) as unknown as { data: CatalogueRowPrice[] | null }
+      const price = pickSeeTicketsPrice(rows)
+      if (price) {
+        event.price_from = price.from
+        event.price_to = price.to
+        event.currency = 'GBP'
+      }
+    } catch (err) {
+      console.error('[event] See Tickets price lookup failed', err)
+    }
+  }
+  return event
 })
 
 // ── Ticket providers ────────────────────────────────────────────────────────
