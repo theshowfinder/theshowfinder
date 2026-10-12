@@ -1,25 +1,12 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-
-type CatalogueRow = {
-  id: number
-  name: string
-  event_date: string
-  venue: string | null
-  city: string | null
-  performer1: string | null
-  performer2: string | null
-  url: string
-  matched_event_id: string | null
-}
-
-type ShowfinderEvent = {
-  id: string
-  title: string
-  start_date: string
-  gigsberg_affiliate_url: string | null
-  venue: { name: string; city: string } | null
-  artists: { artist: { name: string } | null }[]
-}
+import { fetchAllPages } from '@/lib/pagedFetch'
+import {
+  bucketEventsByDate,
+  dateOnly,
+  decideMatch,
+  type CatalogueRow,
+  type ShowfinderEvent,
+} from '@/lib/gigsbergMatchScoring'
 
 export interface GigsbergMatchResult {
   checked: number
@@ -29,175 +16,103 @@ export interface GigsbergMatchResult {
   errors: number
 }
 
-function normalize(value: string | null | undefined) {
-  return (value ?? '')
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function dateOnly(value: string) {
-  // Gigsberg supplies a local calendar date, while Showfinder stores event
-  // timestamps in UTC. Convert timestamps to the UK calendar date before
-  // comparing so late-night UTC values do not appear one day early.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value.slice(0, 10)
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/London',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date)
-}
-
-function tokenOverlap(left: string, right: string) {
-  const a = new Set(normalize(left).split(' ').filter(token => token.length > 2))
-  const b = new Set(normalize(right).split(' ').filter(token => token.length > 2))
-  if (!a.size || !b.size) return 0
-  let shared = 0
-  for (const token of a) if (b.has(token)) shared++
-  return shared / Math.max(a.size, b.size)
-}
-
-function score(catalogue: CatalogueRow, event: ShowfinderEvent) {
-  const sameDate = dateOnly(catalogue.event_date) === dateOnly(event.start_date)
-  const sameCity = normalize(catalogue.city) === normalize(event.venue?.city)
-  const venueOverlap = tokenOverlap(catalogue.venue ?? '', event.venue?.name ?? '')
-  const sameVenue = Boolean(normalize(catalogue.venue) && normalize(catalogue.venue) === normalize(event.venue?.name))
-  // Some catalogue records have the artist only in the event name and leave
-  // performer1/performer2 empty. Keep the structured performer fields first,
-  // but use the event name as a fallback so obvious artist/date/city matches
-  // are not sent through manual review.
-  const cataloguePerformers = [...new Set(
-    [catalogue.performer1, catalogue.performer2, catalogue.name]
-      .filter((name): name is string => Boolean(name?.trim()))
-      .map(name => name.trim()),
-  )]
-  const titlePerformerExact = cataloguePerformers.some(catalogueName => {
-    const performerName = normalize(catalogueName)
-    const candidate = normalize(event.title)
-    return Boolean(performerName && candidate && (candidate === performerName || candidate.includes(performerName) || performerName.includes(candidate)))
-  })
-  const linkedArtistExact = cataloguePerformers.some(catalogueName => {
-    const performerName = normalize(catalogueName)
-    return (event.artists ?? []).some(row => {
-      const candidate = normalize(row.artist?.name)
-      return Boolean(performerName && candidate && (candidate === performerName || candidate.includes(performerName) || performerName.includes(candidate)))
-    })
-  })
-  const performerExact = titlePerformerExact || linkedArtistExact
-  // Deliberately compare against the event title only. Linked artist rows are
-  // useful evidence, but they must not manufacture a match when the title is
-  // a different headliner or stale relation.
-  const performerOverlap = Math.max(
-    ...cataloguePerformers.map(catalogueName => tokenOverlap(catalogueName, event.title)),
-    0,
-  )
-
-  // Artist evidence is mandatory. Date, city and venue refine a match but
-  // must never make two unrelated events match merely because they happen in
-  // the same city on the same day.
-  let value = 0
-  value += titlePerformerExact ? 0.55 : linkedArtistExact ? 0.35 : performerOverlap * 0.55
-  if (sameDate) value += 0.25
-  if (sameCity) value += 0.1
-  value += sameVenue ? 0.1 : venueOverlap * 0.1
-  return { value, sameDate, sameCity, sameVenue, venueOverlap, performerOverlap, performerExact, titlePerformerExact, linkedArtistExact }
-}
-
 const MATCH_RETRY_AFTER_MS = 24 * 60 * 60 * 1000
+const CATALOGUE_COLUMNS = 'id, name, event_date, venue, city, performer1, performer2, url, matched_event_id, match_checked_at'
+// Events carry a nested artists join, so keep pages smaller than the 1000-row
+// ceiling to stay well inside the database statement timeout.
+const EVENT_PAGE_SIZE = 500
+// Supabase writes are network-bound; small concurrent batches finish a full
+// catalogue in seconds without overwhelming the database.
+const WRITE_BATCH_SIZE = 50
+
+type Db = ReturnType<typeof createAdminClient>
+type PageResult<T> = { data: T[] | null; error: { message: string } | null }
+
+async function loadCatalogue(db: Db, fullRescan: boolean): Promise<CatalogueRow[]> {
+  const retryBefore = new Date(Date.now() - MATCH_RETRY_AFTER_MS).toISOString()
+  // PostgREST caps every request at 1000 rows whatever .limit() says, so each
+  // query is paged with range() and a stable order — the old .limit(50000)
+  // silently saw only the first 1000 rows.
+  const pageOf = (apply: (query: ReturnType<typeof base>) => ReturnType<typeof base>) =>
+    fetchAllPages<CatalogueRow>((from, to) =>
+      apply(base()).order('id', { ascending: true }).range(from, to) as unknown as PromiseLike<PageResult<CatalogueRow>>,
+    )
+  function base() {
+    return db.from('gigsberg_catalogue_events').select(CATALOGUE_COLUMNS)
+  }
+
+  if (fullRescan) {
+    return pageOf(query => query.in('match_status', ['pending', 'review', 'no_match', 'auto_matched']))
+  }
+  // Match new rows, plus unresolved rows not checked in the last day.
+  // Already auto-matched or recently reviewed rows are stable and are not
+  // loaded, scored, and written again on every run.
+  const [pending, retry] = await Promise.all([
+    pageOf(query => query.eq('match_status', 'pending')),
+    pageOf(query => query.in('match_status', ['review', 'no_match']).or(`match_checked_at.is.null,match_checked_at.lt.${retryBefore}`)),
+  ])
+  return [...pending, ...retry]
+}
+
+async function loadUpcomingEvents(db: Db): Promise<ShowfinderEvent[]> {
+  const now = new Date().toISOString()
+  return fetchAllPages<ShowfinderEvent>(
+    (from, to) => db
+      .from('events')
+      .select('id, title, start_date, gigsberg_affiliate_url, venue:venues(name, city), artists:event_artists(artist:artists(name))')
+      .gte('start_date', now)
+      .order('id', { ascending: true })
+      .range(from, to) as unknown as PromiseLike<PageResult<ShowfinderEvent>>,
+    EVENT_PAGE_SIZE,
+  )
+}
 
 /**
  * Match only new rows and unresolved rows that have not been checked in the
- * last day. Already auto-matched or recently reviewed rows are stable and do
- * not need to be loaded, scored, and written again on every cron run.
- * Pass fullRescan when the matching rules themselves have changed.
+ * last day. Pass fullRescan when the matching rules themselves have changed.
  */
 export async function matchGigsbergCatalogue(fullRescan = false): Promise<GigsbergMatchResult> {
   const db = createAdminClient()
-  const retryBefore = new Date(Date.now() - MATCH_RETRY_AFTER_MS).toISOString()
-  const catalogueQuery = db
-    .from('gigsberg_catalogue_events')
-    .select('id, name, event_date, venue, city, performer1, performer2, url, matched_event_id, match_checked_at')
-    .limit(50000)
-
-  const [{ data: catalogue, error: catalogueError }, { data: events, error: eventsError }] = await Promise.all([
-    fullRescan
-      ? catalogueQuery.in('match_status', ['pending', 'review', 'no_match', 'auto_matched'])
-      : Promise.all([
-          catalogueQuery.eq('match_status', 'pending'),
-          db.from('gigsberg_catalogue_events')
-            .select('id, name, event_date, venue, city, performer1, performer2, url, matched_event_id, match_checked_at')
-            .in('match_status', ['review', 'no_match'])
-            .or(`match_checked_at.is.null,match_checked_at.lt.${retryBefore}`)
-            .limit(50000),
-        ]).then(([pending, retry]) => ({
-          data: [...(pending.data ?? []), ...(retry.data ?? [])],
-          error: pending.error ?? retry.error,
-        })),
-    db.from('events').select('id, title, start_date, gigsberg_affiliate_url, venue:venues(name, city), artists:event_artists(artist:artists(name))').gte('start_date', new Date().toISOString()).limit(50000),
-  ]) as unknown as [
-    { data: CatalogueRow[] | null; error: { message: string } | null },
-    { data: ShowfinderEvent[] | null; error: { message: string } | null },
-  ]
-
-  if (catalogueError) throw new Error(catalogueError.message)
-  if (eventsError) throw new Error(eventsError.message)
+  const [catalogue, events] = await Promise.all([loadCatalogue(db, fullRescan), loadUpcomingEvents(db)])
+  const eventsByDate = bucketEventsByDate(events)
 
   const result: GigsbergMatchResult = { checked: 0, autoMatched: 0, review: 0, noMatch: 0, errors: 0 }
-  for (const item of catalogue ?? []) {
-    result.checked++
-    const ranked = (events ?? [])
-      .map(event => ({ event, detail: score(item, event) }))
-      // A linked artist row alone is not enough to identify the event. It can
-      // be stale or incorrectly attached to a different headliner (for
-      // example, Amon Amarth was being suggested as The Darkness). Require
-      // the performer to appear in the event title, or use token overlap for
-      // a genuinely similar title. This keeps unrelated same-day London
-      // events out of the review queue.
-      .filter(candidate => candidate.detail.titlePerformerExact || candidate.detail.performerOverlap >= 0.6)
-      .sort((a, b) => b.detail.value - a.detail.value)
-    const best = ranked[0]
-    const second = ranked[1]
-    const directIdentityMatch = Boolean(best && best.detail.titlePerformerExact && best.detail.sameDate && best.detail.sameCity && (best.detail.sameVenue || best.detail.venueOverlap >= 0.5))
-    const confident = Boolean(best && (
-      directIdentityMatch
-      || (best.detail.titlePerformerExact && best.detail.sameDate && best.detail.sameCity && best.detail.value >= 0.78 && (!second || best.detail.value - second.detail.value >= 0.08))
-      || (best.detail.performerOverlap >= 0.6 && best.detail.sameDate && best.detail.value >= 0.78 && (!second || best.detail.value - second.detail.value >= 0.12))
-    ))
-    const review = Boolean(best && !confident && best.detail.value >= 0.45)
-    const status = confident ? 'auto_matched' : review ? 'review' : 'no_match'
+
+  async function processItem(item: CatalogueRow) {
+    const decision = decideMatch(item, eventsByDate.get(dateOnly(item.event_date)) ?? [])
 
     const { error } = await db.from('gigsberg_catalogue_events').update({
-      matched_event_id: confident ? best.event.id : null,
-      match_status: status,
-      match_confidence: best ? Number(best.detail.value.toFixed(3)) : null,
-      match_reason: best ? `${best.event.title} (${Math.round(best.detail.value * 100)}% match${best.detail.titlePerformerExact ? ', title confirmed' : best.detail.linkedArtistExact ? ', linked artist only' : ''})` : 'No close Showfinder event found',
+      matched_event_id: decision.event?.id ?? null,
+      match_status: decision.status,
+      match_confidence: decision.confidence,
+      match_reason: decision.reason,
       match_checked_at: new Date().toISOString(),
     }).eq('id', item.id)
+    if (error) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0 }
 
-    if (error) {
-      result.errors++
-      continue
+    if (decision.event) {
+      const { error: linkError } = await db.from('events').update({ gigsberg_affiliate_url: item.url }).eq('id', decision.event.id)
+      if (linkError) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0 }
+      return { errors: 0, autoMatched: 1, review: 0, noMatch: 0 }
     }
 
-    if (confident) {
-      const { error: linkError } = await db.from('events').update({ gigsberg_affiliate_url: item.url }).eq('id', best.event.id)
-      if (linkError) result.errors++
-      else result.autoMatched++
-    } else {
-      // If a previous automatic match is now rejected by the stricter
-      // artist-first check, remove only the link created from this catalogue
-      // record. Manually curated or differently sourced links are untouched.
-      if (item.matched_event_id) {
-        await db.from('events').update({ gigsberg_affiliate_url: null }).eq('id', item.matched_event_id).eq('gigsberg_affiliate_url', item.url)
-      }
-      if (review) result.review++
-      else result.noMatch++
+    // If a previous automatic match is now rejected by the stricter
+    // artist-first check, remove only the link created from this catalogue
+    // record. Manually curated or differently sourced links are untouched.
+    if (item.matched_event_id) {
+      await db.from('events').update({ gigsberg_affiliate_url: null }).eq('id', item.matched_event_id).eq('gigsberg_affiliate_url', item.url)
+    }
+    return { errors: 0, autoMatched: 0, review: decision.status === 'review' ? 1 : 0, noMatch: decision.status === 'review' ? 0 : 1 }
+  }
+
+  for (let offset = 0; offset < catalogue.length; offset += WRITE_BATCH_SIZE) {
+    const batch = await Promise.all(catalogue.slice(offset, offset + WRITE_BATCH_SIZE).map(processItem))
+    result.checked += batch.length
+    for (const outcome of batch) {
+      result.errors += outcome.errors
+      result.autoMatched += outcome.autoMatched
+      result.review += outcome.review
+      result.noMatch += outcome.noMatch
     }
   }
 

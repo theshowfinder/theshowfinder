@@ -95,7 +95,7 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
   }
   const events: ShowfinderEvent[] = []
   for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await db.from('events').select('id, title, start_date, see_tickets_affiliate_url, venue:venues(name, city)').gte('start_date', new Date().toISOString()).range(offset, offset + 999) as unknown as { data: ShowfinderEvent[] | null; error: { message: string } | null }
+    const { data, error } = await db.from('events').select('id, title, start_date, see_tickets_affiliate_url, venue:venues(name, city)').gte('start_date', new Date().toISOString()).order('id', { ascending: true }).range(offset, offset + 999) as unknown as { data: ShowfinderEvent[] | null; error: { message: string } | null }
     if (error) throw new Error(error.message)
     const rows = data ?? []
     events.push(...rows)
