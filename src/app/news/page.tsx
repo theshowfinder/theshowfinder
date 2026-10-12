@@ -5,6 +5,7 @@ import { createPublicClient } from '@/lib/supabase/public'
 import { NEWS_HUB_SLUG } from '@/lib/cityNews'
 import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 import NewsCardGrid from '@/components/NewsCardGrid'
+import NewsletterInline from '@/components/NewsletterInline'
 import { jsonLdScript, buildItemListSchema } from '@/lib/jsonld'
 import type { CityNews } from '@/lib/types/database'
 
@@ -95,6 +96,14 @@ export default async function NewsPage() {
             <NewsCardGrid items={items} context="news-page" />
           </>
         )}
+
+        <div className="mt-12 max-w-2xl">
+          <NewsletterInline
+            source="news"
+            heading="Get the news in your inbox"
+            blurb="Tour announcements, presales and on-sale dates, curated and sent to you."
+          />
+        </div>
       </div>
     </div>
   )

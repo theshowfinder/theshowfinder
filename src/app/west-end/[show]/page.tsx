@@ -19,6 +19,7 @@ import { eventImageUrl } from '@/lib/eventImages'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { getSeeTicketsAffiliateLink } from '@/lib/affiliate'
 import { seeTicketsUrlForShow } from '@/lib/seeTicketsWestEnd'
+import NewsletterInline from '@/components/NewsletterInline'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import type { ShowDate } from '@/lib/shows'
 
@@ -212,6 +213,10 @@ export default async function WestEndShowPage({ params }: { params: Promise<{ sh
             <p className="text-sm text-slate-500 mt-4">Showing the next {MAX_DATES_SHOWN} performances.</p>
           )}
         </section>
+
+        <div className="max-w-2xl">
+          <NewsletterInline source="west-end-show" subject={show.title} />
+        </div>
 
         {related.length > 0 && (
           <section>

@@ -637,6 +637,9 @@ export default function HomePage() {
         <PresalesOpenNow />
       </Suspense>
 
+      {/* ── NEWSLETTER ──────────────────────────────────────────── */}
+      <NewsletterSignup />
+
       {/* ── WEST END (theatre is the best-paying ticket category) ── */}
       <Suspense fallback={<HomeSectionSkeleton />}>
         <WestEndStrip />
@@ -712,9 +715,6 @@ export default function HomePage() {
           </Suspense>
         </div>
       </section>
-
-      {/* ── NEWSLETTER ──────────────────────────────────────────── */}
-      <NewsletterSignup />
 
       {/* ── STATS BAND ──────────────────────────────────────────── */}
       <section className="py-14" style={{ backgroundColor: '#1A1A2E' }}>

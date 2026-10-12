@@ -12,6 +12,7 @@ import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { jsonLdScript, buildBreadcrumbSchema } from '@/lib/jsonld'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getArtistSeoAlias } from '@/lib/seoAliases'
+import NewsletterInline from '@/components/NewsletterInline'
 
 export const revalidate = 600
 
@@ -256,6 +257,10 @@ export default async function ArtistPage({ params }: PageProps) {
                 })}
               </div>
             )}
+
+            <div className="mt-8">
+              <NewsletterInline source="artist" subject={artist.name} />
+            </div>
           </div>
 
           {/* Sidebar */}

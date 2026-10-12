@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createPublicClient } from '@/lib/supabase/public'
 import EventCard from '@/components/EventCard'
 import Pagination from '@/components/Pagination'
+import NewsletterInline from '@/components/NewsletterInline'
 import type { EventWithVenue } from '@/lib/types/database'
 import { venuePageDescription } from '@/lib/venueBlurb'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
@@ -150,6 +151,10 @@ export default async function VenueView({ slug, page }: { slug: string; page: nu
             <Pagination currentPage={page} totalPages={totalPages} buildHref={buildHref} />
           </>
         )}
+
+        <div className="mt-12 max-w-2xl">
+          <NewsletterInline source="venue" subject={venue.name} />
+        </div>
       </div>
     </div>
   )

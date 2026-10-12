@@ -6,6 +6,7 @@ export const revalidate = 600
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import ShowCard from '@/components/ShowCard'
+import NewsletterInline from '@/components/NewsletterInline'
 import { getAttractionShows } from '@/lib/showPool'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 
@@ -74,6 +75,9 @@ export default async function AttractionsPage() {
             </Link>
           </div>
         )}
+        <div className="max-w-2xl">
+          <NewsletterInline source="attractions" heading="Get attraction & experience deals" blurb="New dates, offers and ticket alerts for UK attractions." />
+        </div>
         <Link href="/west-end" className="text-sm font-semibold hover:underline" style={{ color: '#026CDF' }}>Looking for a show? See the West End →</Link>
       </div>
     </div>

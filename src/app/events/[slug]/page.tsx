@@ -27,6 +27,7 @@ import { ticketPurchaseDisabledStatus } from '@/lib/eventPools'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getEventSeoAlias } from '@/lib/seoAliases'
 import { eventImageUrl } from '@/lib/eventImages'
+import NewsletterInline from '@/components/NewsletterInline'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -470,6 +471,11 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 )}
               </dl>
             </div>
+
+            <NewsletterInline
+              source="event"
+              subject={headliners[0]?.artist?.name ?? event.title}
+            />
           </div>
 
           {/* Right: tickets ─────────────────────────────────────── */}

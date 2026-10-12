@@ -3,6 +3,7 @@ export const revalidate = 3600
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { createPublicClient } from '@/lib/supabase/public'
+import NewsletterInline from '@/components/NewsletterInline'
 import { fmtOnSaleLabel, onSaleThisWeekWindow, type OnSaleGroup } from '@/lib/on-sale'
 import { fetchOnSaleThisWeek } from '@/lib/eventPools'
 import type { Artist } from '@/lib/types/database'
@@ -95,6 +96,14 @@ export default async function OnSaleThisWeekPage() {
             </div>
           </>
         )}
+
+        <div className="mt-12 max-w-2xl">
+          <NewsletterInline
+            source="on-sale"
+            heading="Never miss an on-sale"
+            blurb="We email the week's biggest on-sales and presales so you're ready when tickets drop."
+          />
+        </div>
       </div>
     </div>
   )

@@ -66,3 +66,41 @@ export function resolveSubscriberCityTag(city?: string | null): string | null {
 export function shouldBackfillCityTag(newCityTag: string | null): boolean {
   return newCityTag !== null
 }
+
+// ── Signup attribution & consent (newsletter capture) ────────────────────
+//
+// Every signup form tells the server which page type it came from
+// ("event", "artist", "homepage", ...) and optionally what the visitor was
+// looking at ("Hamilton", "Manchester"). Both are stored on the subscriber
+// row so we can see which pages actually convert, and the consent
+// timestamp records when they agreed to hear from us. These are untrusted
+// client strings, so they are reduced to a tight whitelist before storage.
+
+const SOURCE_RE = /[^a-z0-9:_-]/g
+const MAX_SOURCE_LENGTH = 60
+const MAX_INTEREST_LENGTH = 120
+
+// "Event Page!" -> "eventpage". Empty / non-string input -> null.
+export function resolveSignupSource(source?: string | null): string | null {
+  if (typeof source !== 'string') return null
+  const cleaned = source.trim().toLowerCase().replace(SOURCE_RE, '').slice(0, MAX_SOURCE_LENGTH)
+  return cleaned || null
+}
+
+// Free text describing what the visitor was looking at (an artist, show or
+// venue name). Control characters stripped, whitespace collapsed, capped.
+export function resolveSignupInterest(interest?: string | null): string | null {
+  if (typeof interest !== 'string') return null
+  const cleaned = interest.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_INTEREST_LENGTH)
+  return cleaned || null
+}
+
+// Postgres "undefined_column" (42703) or PostgREST's schema-cache miss
+// (PGRST204). Used so a deploy that lands before migration 048 has been run
+// still accepts signups (without the new attribution fields) rather than
+// silently losing every subscriber.
+export function isMissingColumnError(err: { code?: string; message?: string } | null | undefined): boolean {
+  if (!err) return false
+  if (err.code === '42703' || err.code === 'PGRST204') return true
+  return /column .* (of relation .*)?does not exist|could not find the .* column/i.test(err.message ?? '')
+}

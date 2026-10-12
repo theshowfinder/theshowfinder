@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, FormEvent } from 'react'
+import Link from 'next/link'
 import { subscribeNewsletter, type SubscribeResult } from '@/app/actions/newsletter'
 
 export default function CityNewsletterForm({ cityName }: { cityName: string }) {
@@ -14,7 +15,7 @@ export default function CityNewsletterForm({ cityName }: { cityName: string }) {
     if (!email.trim()) return
     setLoading(true)
     setError(null)
-    const result = await subscribeNewsletter(email, cityName)
+    const result = await subscribeNewsletter(email, cityName, { source: 'city' })
     setLoading(false)
     if (result.error) {
       setError(result.error)
@@ -77,7 +78,7 @@ export default function CityNewsletterForm({ cityName }: { cityName: string }) {
               <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold" style={{ backgroundColor: '#FFD84D', color: '#1A1A2E' }}>
                 <span aria-hidden="true">✓</span> Free to join
               </span>
-              <span className="ml-2 text-white/55 text-xs">No spam · unsubscribe any time</span>
+              <span className="ml-2 text-white/55 text-xs">No spam · unsubscribe any time · <Link href="/privacy-policy" className="underline hover:text-white">Privacy</Link></span>
             </p>
             {error && <p className="mt-2 text-white/90 text-xs font-semibold">{error}</p>}
           </>

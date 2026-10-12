@@ -10,6 +10,7 @@ import type { Metadata } from 'next'
 import ShowCard from '@/components/ShowCard'
 import { getWestEndShows } from '@/lib/showPool'
 import { summarizeVenues } from '@/lib/shows'
+import NewsletterInline from '@/components/NewsletterInline'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 
 const BASE = 'https://www.theshowfinder.com'
@@ -124,6 +125,14 @@ export default async function WestEndPage() {
             </ul>
           </section>
         )}
+
+        <div className="max-w-2xl">
+          <NewsletterInline
+            source="west-end"
+            heading="West End ticket alerts"
+            blurb="New shows, added dates and on-sale times for London theatre, straight to your inbox."
+          />
+        </div>
 
         <div className="pt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold" style={{ color: '#026CDF' }}>
           <Link href="/cities/London" className="hover:underline">Everything on in London →</Link>

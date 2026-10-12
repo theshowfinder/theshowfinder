@@ -2,7 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resend, FROM_EMAIL } from '@/lib/resend'
-import { normalizeEmail, isValidEmail, resolveSubscriberCityTag, shouldBackfillCityTag } from '@/lib/subscribers'
+import { normalizeEmail, isValidEmail, resolveSubscriberCityTag, shouldBackfillCityTag, resolveSignupSource, resolveSignupInterest, isMissingColumnError } from '@/lib/subscribers'
 import { buildWelcomeEmailText } from '@/lib/emailText'
 import WelcomeEmail from '@/emails/WelcomeEmail'
 
@@ -73,15 +73,34 @@ async function sendWelcomeEmail(trimmed: string): Promise<boolean> {
   }
 }
 
-export async function subscribeNewsletter(email: string, city?: string): Promise<SubscribeResult> {
+export interface SubscribeMeta {
+  // Which kind of page the form was on ("event", "artist", "homepage", ...).
+  source?: string
+  // What the visitor was looking at (an artist / show / venue name).
+  interest?: string
+}
+
+export async function subscribeNewsletter(email: string, city?: string, meta?: SubscribeMeta): Promise<SubscribeResult> {
   const trimmed = normalizeEmail(email)
   if (!isValidEmail(trimmed)) {
     return { error: 'Please enter a valid email address.' }
   }
   const cityTag = resolveSubscriberCityTag(city)
 
+  const source   = resolveSignupSource(meta?.source)
+  const interest = resolveSignupInterest(meta?.interest)
+
   const db = createAdminClient()
-  const { error: dbError } = await db.from('subscribers').insert({ email: trimmed, city: cityTag })
+  // consent_at / source / interest come from migration 048. If a deploy lands
+  // before that migration has been run, retry with the original columns so
+  // signups are never lost.
+  let { error: dbError } = await db
+    .from('subscribers')
+    .insert({ email: trimmed, city: cityTag, source, interest, consent_at: new Date().toISOString() })
+  if (isMissingColumnError(dbError)) {
+    console.warn('[newsletter] subscribers.source/interest/consent_at missing — run migration 048; saving without them')
+    ;({ error: dbError } = await db.from('subscribers').insert({ email: trimmed, city: cityTag }))
+  }
 
   if (dbError) {
     if (dbError.code === '23505') {
