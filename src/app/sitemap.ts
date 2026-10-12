@@ -174,6 +174,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority:        0.7,
   }))
 
+  const cityThisWeekendPages: MetadataRoute.Sitemap = CITIES.map(city => ({
+    url:             `${BASE}/cities/${encodeURIComponent(city.name)}/this-weekend`,
+    changeFrequency: 'daily' as const,
+    priority:        0.7,
+  }))
+
   const eventPages: MetadataRoute.Sitemap = eventRows.map(e => ({
     url:             `${BASE}/events/${e.slug}`,
     lastModified:    new Date(e.updated_at),
@@ -211,5 +217,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }))
     .filter(a => !getArtistSeoAlias(a.url.split('/').pop() ?? ''))
 
-  return [...staticPages, ...cityPages, ...cityThisWeekPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
+  return [...staticPages, ...cityPages, ...cityThisWeekPages, ...cityThisWeekendPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
 }

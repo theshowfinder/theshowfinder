@@ -160,7 +160,14 @@ export default async function CityThisWeekPage({
           </div>
         )}
 
-        <div className="pt-4">
+        <div className="pt-4 flex flex-wrap gap-x-6 gap-y-2">
+          <Link
+            href={`/cities/${encodeURIComponent(cityName)}/this-weekend`}
+            className="text-sm font-semibold hover:underline"
+            style={{ color: '#026CDF' }}
+          >
+            See what&rsquo;s on this weekend in {cityName} →
+          </Link>
           <Link
             href={`/cities/${encodeURIComponent(cityName)}`}
             className="text-sm font-semibold hover:underline"

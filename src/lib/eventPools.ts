@@ -12,7 +12,7 @@ import {
   onSaleThisWeekWindow, presaleOpenNowWindow,
   capGroupsBySeries,
 } from './on-sale.ts'
-import { londonDayWindow, londonDaysAheadWindow, type DateWindow } from './intelligence.ts'
+import { londonDayWindow, londonDaysAheadWindow, londonWeekendDayWindows, type DateWindow } from './intelligence.ts'
 import { isTonightEvent, sortTonightEvents } from './tonight.ts'
 import { mixEvents, trimTonight } from './eventMix.ts'
 
@@ -139,6 +139,35 @@ export async function fetchEventsThisWeek(
     return data ?? []
   }))
 
+  return mixEvents(days.flat(), {
+    limit,
+    maxPerVenue: limit <= 12 ? 2 : 3,
+    maxAttractions: limit <= 12 ? 1 : 2,
+    mode: 'week',
+  })
+}
+
+// Same per-day fetch + mix as fetchEventsThisWeek, over the coming weekend
+// (Fri 17:00 - Sun night) for the "{city} this weekend" pages.
+export async function fetchEventsThisWeekend(
+  supabase: SupabaseClient,
+  { city, limit, fetchLimit = 100 }: EventsThisWeekOpts,
+): Promise<EventWithVenue[]> {
+  const days = await Promise.all(londonWeekendDayWindows(new Date()).map(async ({ startISO, endISO }) => {
+    let query = supabase
+      .from('events_with_venue')
+      .select('*')
+      .gte('start_date', startISO)
+      .lt('start_date', endISO)
+      .in('status', LIVE_EVENT_STATUSES)
+      .order('is_featured',    { ascending: false })
+      .order('venue_capacity', { ascending: false, nullsFirst: false })
+      .order('start_date',     { ascending: true })
+      .limit(fetchLimit)
+    if (city) query = query.ilike('venue_city', city)
+    const { data } = await query as unknown as { data: EventWithVenue[] | null }
+    return data ?? []
+  }))
   return mixEvents(days.flat(), {
     limit,
     maxPerVenue: limit <= 12 ? 2 : 3,

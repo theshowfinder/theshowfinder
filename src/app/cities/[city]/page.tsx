@@ -341,6 +341,12 @@ export default async function CityPage({
             >
               Events this week
             </Link>
+            <Link
+              href={`/cities/${encodeURIComponent(cityName)}/this-weekend`}
+              className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
+            >
+              This weekend
+            </Link>
           </nav>
         </div>
       </div>

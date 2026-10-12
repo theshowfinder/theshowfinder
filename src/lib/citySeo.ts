@@ -8,6 +8,18 @@ export function cityThisWeekCanonicalUrl(cityName: string): string {
   return `${cityCanonicalUrl(cityName)}/this-week`
 }
 
+export function cityThisWeekendCanonicalUrl(cityName: string): string {
+  return `${cityCanonicalUrl(cityName)}/this-weekend`
+}
+
+export function cityThisWeekendTitle(cityName: string): string {
+  return `Things To Do in ${cityName} This Weekend`
+}
+
+export function cityThisWeekendDescription(cityName: string): string {
+  return `What's on in ${cityName} this weekend: gigs, concerts, theatre, comedy and sport from Friday evening to Sunday, with dates and ticket links.`
+}
+
 export function cityPageTitle(cityName: string): string {
   return `Concerts & Live Events in ${cityName}`
 }

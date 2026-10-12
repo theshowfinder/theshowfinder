@@ -104,6 +104,26 @@ export function londonDaysAheadWindow(now: Date, days: number): DateWindow {
   return { startISO: start.toISOString(), endISO: end.toISOString() }
 }
 
+// "This weekend" as per-day [start, end) windows, soonest first: Friday from
+// 17:00, then Saturday and Sunday (London calendar days). Mon-Fri look ahead to
+// the coming weekend; Saturday gives Sat+Sun; Sunday gives Sunday only. Used
+// for "{city} this weekend" pages, where per-day fetching keeps one busy day
+// from crowding out the rest.
+export function londonWeekendDayWindows(now: Date): DateWindow[] {
+  const dowName = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'Europe/London' }).format(now)
+  const idx = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(dowName)
+  const offsets = idx === 6 ? [0, 1] : idx === 0 ? [0] : [5 - idx, 6 - idx, 7 - idx]
+  const fridayFirst = idx >= 1 && idx <= 5
+  return offsets.map((offset, i) => {
+    const dayStart = londonDaysAheadWindow(now, offset).endISO
+    const dayEnd = londonDaysAheadWindow(now, offset + 1).endISO
+    const startISO = fridayFirst && i === 0
+      ? new Date(new Date(dayStart).getTime() + 17 * 3600_000).toISOString()
+      : dayStart
+    return { startISO, endISO: dayEnd }
+  })
+}
+
 // Monday 00:00 through the following Monday 00:00 (exclusive) — the
 // literal Mon-Sun UK calendar week containing `now`, not a rolling
 // N-day lookback. "On Sale This Week" (on-sale.ts's onSaleThisWeekWindow)

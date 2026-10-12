@@ -4,6 +4,7 @@ import {
   londonDayWindow,
   londonDaysAheadWindow,
   londonCalendarWeekWindow,
+  londonWeekendDayWindows,
   hasNoUsableTicketLink,
   isBareProviderHomepage,
   findBareProviderHomepages,
@@ -447,5 +448,31 @@ describe('newsCandidateDashboardStatus', () => {
 
   test('a pending manual candidate is "needs_review"', () => {
     assert.equal(newsCandidateDashboardStatus({ review_status: 'pending', intake_method: 'manual', ai_review_status: 'not_applicable' }, false), 'needs_review')
+  })
+})
+
+describe('londonWeekendDayWindows', () => {
+  test('Monday looks ahead to Friday 17:00 BST through Sunday night', () => {
+    const w = londonWeekendDayWindows(new Date('2026-10-12T10:00:00Z'))  // Mon
+    assert.equal(w.length, 3)
+    assert.equal(w[0].startISO, '2026-10-16T16:00:00.000Z')  // Fri 17:00 BST
+    assert.equal(w[0].endISO, '2026-10-16T23:00:00.000Z')    // Sat 00:00 BST
+    assert.equal(w[2].endISO, '2026-10-18T23:00:00.000Z')    // Mon 00:00 BST
+  })
+  test('Saturday gives Saturday and Sunday from the start of today', () => {
+    const w = londonWeekendDayWindows(new Date('2026-10-17T09:00:00Z'))
+    assert.equal(w.length, 2)
+    assert.equal(w[0].startISO, '2026-10-16T23:00:00.000Z')
+    assert.equal(w[1].endISO, '2026-10-18T23:00:00.000Z')
+  })
+  test('Sunday gives Sunday only', () => {
+    const w = londonWeekendDayWindows(new Date('2026-10-18T09:00:00Z'))
+    assert.equal(w.length, 1)
+    assert.equal(w[0].startISO, '2026-10-17T23:00:00.000Z')
+  })
+  test('uses the London day even when UTC is still the previous day', () => {
+    // Fri 16 Oct 00:30 BST is Thu 23:30 UTC: still the coming weekend, starting today at 17:00
+    const w = londonWeekendDayWindows(new Date('2026-10-15T23:30:00Z'))
+    assert.equal(w[0].startISO, '2026-10-16T16:00:00.000Z')
   })
 })
