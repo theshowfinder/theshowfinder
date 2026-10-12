@@ -8,7 +8,7 @@
 
 import { cache } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { createClient } from '@/lib/supabase/server'
+import { createPublicClient } from '@/lib/supabase/public'
 import { fetchAllPages, fetchAllPagesParallel } from './pagedFetch.ts'
 import { LIVE_EVENT_STATUSES } from './eventPools.ts'
 import { ATTRACTION_SEARCH_TERMS } from './eventMix.ts'
@@ -125,6 +125,6 @@ export async function fetchAttractionShows(supabase: SupabaseClient, horizonDays
 // Per-request cached versions for pages: a page's generateMetadata and its body
 // share one fetch instead of each paging through the database.
 export const getWestEndShows = cache(async (): Promise<Show[]> =>
-  fetchWestEndShows(await createClient()))
+  fetchWestEndShows(createPublicClient()))
 export const getAttractionShows = cache(async (): Promise<Show[]> =>
-  fetchAttractionShows(await createClient()))
+  fetchAttractionShows(createPublicClient()))

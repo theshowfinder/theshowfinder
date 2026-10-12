@@ -1,9 +1,16 @@
 export const revalidate = 3600
 
+// Opt this dynamic route into on-demand static generation: no pages are built
+// ahead of time, but each page is generated on first request, then cached on
+// the CDN and refreshed in the background (see `revalidate` above).
+export async function generateStaticParams() {
+  return []
+}
+
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import { createClient } from '@/lib/supabase/server'
+import { createPublicClient } from '@/lib/supabase/public'
 import { groupEventsByArtist, fmtOnSaleLabel, mergeEventsById } from '@/lib/on-sale'
 import { fetchOnSaleThisWeekEvents, fetchPresalesOpenNowEvents } from '@/lib/eventPools'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
@@ -20,7 +27,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug }  = await params
-  const supabase  = await createClient()
+  const supabase  = createPublicClient()
 
   // Resolves against the UNION of the same two pools that produce the
   // "On Sale This Week" and "Presales Open Now" cards elsewhere on the site
@@ -66,7 +73,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function OnSaleArtistPage({ params }: PageProps) {
   const { slug }   = await params
-  const supabase   = await createClient()
+  const supabase   = createPublicClient()
   const nowISO     = new Date().toISOString()
 
   // Resolves against the UNION of the "On Sale This Week" pool (public

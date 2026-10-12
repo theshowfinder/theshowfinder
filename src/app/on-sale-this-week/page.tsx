@@ -2,7 +2,7 @@ export const revalidate = 3600
 
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createPublicClient } from '@/lib/supabase/public'
 import { fmtOnSaleLabel, onSaleThisWeekWindow, type OnSaleGroup } from '@/lib/on-sale'
 import { fetchOnSaleThisWeek } from '@/lib/eventPools'
 import type { Artist } from '@/lib/types/database'
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
 }
 
 export default async function OnSaleThisWeekPage() {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   // "This week" means the literal Monday-Sunday UK week, not a rolling
   // 7-day lookahead from today — see on-sale.ts's onSaleThisWeekWindow.
   // ceilISO is the exclusive start of next Monday, so the week's own

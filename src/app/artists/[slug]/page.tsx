@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import { createClient } from '@/lib/supabase/server'
+import { createPublicClient } from '@/lib/supabase/public'
 import type { Artist, Tour, TourDate } from '@/lib/types/database'
 import {
   getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
@@ -13,7 +13,14 @@ import { jsonLdScript, buildBreadcrumbSchema } from '@/lib/jsonld'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getArtistSeoAlias } from '@/lib/seoAliases'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 600
+
+// Opt this dynamic route into on-demand static generation: no pages are built
+// ahead of time, but each page is generated on first request, then cached on
+// the CDN and refreshed in the background (see `revalidate` above).
+export async function generateStaticParams() {
+  return []
+}
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -21,7 +28,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params
-  const supabase  = await createClient()
+  const supabase  = createPublicClient()
   const { data: artist } = await supabase
     .from('artists')
     .select('name, bio, image_url')
@@ -65,7 +72,7 @@ export default async function ArtistPage({ params }: PageProps) {
   const seoAlias = getArtistSeoAlias(slug)
   if (seoAlias) redirect(`/artists/${seoAlias}`)
 
-  const supabase = await createClient()
+  const supabase = createPublicClient()
 
   const { data: artist } = await supabase
     .from('artists')

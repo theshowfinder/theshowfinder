@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createPublicClient } from '@/lib/supabase/public'
 import EventCard from '@/components/EventCard'
 import ArtistOnSaleCard from '@/components/ArtistOnSaleCard'
 import CategoryPills from '@/components/CategoryPills'
@@ -82,7 +82,7 @@ function normalizedSearch(value: string): string {
 }
 
 async function CityArtists({ city }: { city: string }) {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const now = new Date().toISOString()
 
   // Find featured_onsale artists that have upcoming tour dates in this city
@@ -145,7 +145,7 @@ async function CityArtists({ city }: { city: string }) {
 }
 
 async function EventsList({ searchParams }: { searchParams: SearchParams }) {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const requestedPage = Number(searchParams.page ?? 1)
   const page     = Number.isFinite(requestedPage) ? Math.max(1, Math.floor(requestedPage)) : 1
   const from     = (page - 1) * PAGE_SIZE

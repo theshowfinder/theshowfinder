@@ -1,7 +1,7 @@
 export const revalidate = 3600
 
 import type { Metadata } from 'next'
-import { createClient } from '@/lib/supabase/server'
+import { createPublicClient } from '@/lib/supabase/public'
 import { NEWS_HUB_SLUG } from '@/lib/cityNews'
 import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 import NewsCardGrid from '@/components/NewsCardGrid'
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
 // row here is editorial by construction — no is_editorial filter needed,
 // though every row this query returns will have it set to true anyway.
 export default async function NewsPage() {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
 
   const { data } = await supabase
     .from('city_news')

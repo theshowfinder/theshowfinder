@@ -1,11 +1,20 @@
-export const dynamic = 'force-dynamic'
+// Cached on the CDN and refreshed in the background (was force-dynamic, which
+// rebuilt the page from the database on every request).
+export const revalidate = 600
+
+// Opt this dynamic route into on-demand static generation: no pages are built
+// ahead of time, but each page is generated on first request, then cached on
+// the CDN and refreshed in the background (see `revalidate` above).
+export async function generateStaticParams() {
+  return []
+}
 
 import { cache } from 'react'
 import { notFound, redirect } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import { createClient } from '@/lib/supabase/server'
+import { createPublicClient } from '@/lib/supabase/public'
 import type { EventCategory, EventStatus } from '@/lib/types/database'
 import {
   getTicketmasterAffiliateLink, getViagogoAffiliateLink,
@@ -61,7 +70,7 @@ interface EventDetail {
 // ── Data fetching ───────────────────────────────────────────────────────────
 
 const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const { data, error } = await supabase
     .from('events')
     .select(`

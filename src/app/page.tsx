@@ -3,7 +3,7 @@ export const revalidate = 3600
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createPublicClient } from '@/lib/supabase/public'
 
 const HOME_OG_DESCRIPTION = 'Discover and compare tickets for concerts, theatre, comedy and live events across the UK. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.'
 const HOME_OG_IMAGE = 'https://www.theshowfinder.com/og-image.png'
@@ -60,7 +60,7 @@ function HomeSectionSkeleton() {
   )
 }
 
-async function queryFeaturedEvents(supabase: Awaited<ReturnType<typeof createClient>>, now: string): Promise<FeaturedQueryResult> {
+async function queryFeaturedEvents(supabase: ReturnType<typeof createPublicClient>, now: string): Promise<FeaturedQueryResult> {
   try {
     // Query the indexed base table and join the small venue projection here.
     // Sorting the denormalised events_with_venue view by venue_capacity made
@@ -103,7 +103,7 @@ async function queryFeaturedEvents(supabase: Awaited<ReturnType<typeof createCli
 }
 
 async function FeaturedEvents() {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const now = new Date().toISOString()
 
   // Root cause of the intermittent "blank until refresh" report: this
@@ -167,7 +167,7 @@ async function FeaturedEvents() {
 }
 
 async function GigsbergHighlights() {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const now = new Date().toISOString()
   const { data } = await supabase
     .from('events')
@@ -214,7 +214,7 @@ function fmtCount(n: number): string {
 }
 
 async function HomepageStats() {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const now = new Date().toISOString()
 
   const [{ count: eventCount }, { count: venueCount }] = await Promise.all([
@@ -244,7 +244,7 @@ async function HomepageStats() {
 }
 
 async function OnSaleThisWeek() {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const nowISO    = new Date().toISOString()
 
   // fetchOnSaleThisWeek (src/lib/eventPools.ts) is the single source of
@@ -376,7 +376,7 @@ async function OnSaleThisWeek() {
 }
 
 async function NationalNews() {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
 
   // General UK entertainment news, not tied to any city or to a specific
   // on-sale/presale date — the "big stories from all over" feed. Reuses the
@@ -413,7 +413,7 @@ async function NationalNews() {
 }
 
 async function PresalesOpenNow() {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
 
   const { data: artistsData } = await supabase.from('artists').select('*') as unknown as { data: Artist[] | null }
   const groups = await fetchPresalesOpenNow(supabase, artistsData ?? [], { limit: 6 })
@@ -441,7 +441,7 @@ async function PresalesOpenNow() {
 }
 
 async function EventsThisWeekNational() {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
 
   // Biggest venues first, next 7 days, no city filter — the "generalised,
   // biggest events, no small local stuff" version of Events This Week that
@@ -471,7 +471,7 @@ async function EventsThisWeekNational() {
 }
 
 async function JustAnnounced() {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const now = new Date()
   const nowISO = now.toISOString()
   const sevenDaysAgoISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()

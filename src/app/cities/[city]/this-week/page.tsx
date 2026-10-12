@@ -15,7 +15,7 @@ export const revalidate = 300
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import { createClient } from '@/lib/supabase/server'
+import { createPublicClient } from '@/lib/supabase/public'
 import EventCard from '@/components/EventCard'
 import { CITIES } from '@/lib/cities'
 import { fetchEventsThisWeek } from '@/lib/eventPools'
@@ -68,7 +68,7 @@ export default async function CityThisWeekPage({
   const cityName = cityConfig.name
   if (requestedCityName !== cityName) redirect(cityThisWeekCanonicalUrl(cityName))
 
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const eventsThisWeek = await fetchEventsThisWeek(supabase, { city: cityName, limit: 30 })
 
   const cityUrl  = `https://www.theshowfinder.com/cities/${encodeURIComponent(cityName)}`

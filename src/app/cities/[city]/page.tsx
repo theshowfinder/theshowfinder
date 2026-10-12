@@ -10,7 +10,7 @@ export const revalidate = 300
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import { createClient } from '@/lib/supabase/server'
+import { createPublicClient } from '@/lib/supabase/public'
 import EventCard from '@/components/EventCard'
 import SearchBarWrapper from '@/components/SearchBarWrapper'
 import { Suspense } from 'react'
@@ -83,10 +83,8 @@ function affiliateUrl(directUrl: string, envVar: string): string {
 
 export default async function CityPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ city: string }>
-  searchParams: Promise<{ page?: string }>
 }) {
   const { city } = await params
   const requestedCityName = decodeURIComponent(city)
@@ -97,13 +95,12 @@ export default async function CityPage({
   if (requestedCityName !== cityName) redirect(cityCanonicalUrl(cityName))
 
   // This route no longer paginates: the city page has its own focused pools
-  // and the full event list lives at /events?city=. Old paginated city URLs
-  // should resolve to the canonical city page instead of looking like a
-  // successful but empty page to crawlers.
-  const { page } = await searchParams
-  if (page) redirect(cityCanonicalUrl(cityName))
+  // and the full event list lives at /events?city=. It deliberately does not
+  // read searchParams (reading them forces dynamic rendering and disables the
+  // CDN cache), so an old paginated URL such as /cities/London?page=2 just
+  // renders this page, whose canonical tag points at the clean city URL.
 
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const now       = new Date()
   const nowISO    = now.toISOString()
 

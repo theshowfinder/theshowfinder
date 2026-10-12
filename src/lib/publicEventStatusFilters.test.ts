@@ -18,7 +18,7 @@ import { join } from 'node:path'
 
 const FIXED_FILES = [
   { label: 'Event browse/search listing',        path: 'src/app/events/page.tsx' },
-  { label: "A venue's own upcoming events list",  path: 'src/app/venues/[slug]/page.tsx' },
+  { label: "A venue's own upcoming events list",  path: 'src/app/venues/[slug]/VenueView.tsx' },
   { label: 'Homepage "Just Announced" section',   path: 'src/app/page.tsx' },
   { label: 'City-spotlight widget API route',     path: 'src/app/api/city-spotlight/route.ts' },
 ]

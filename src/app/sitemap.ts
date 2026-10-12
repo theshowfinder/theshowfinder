@@ -1,8 +1,12 @@
 import type { MetadataRoute } from 'next'
-import { createClient } from '@/lib/supabase/server'
+import { createPublicClient } from '@/lib/supabase/public'
 import { getArtistSeoAlias, getEventSeoAlias } from '@/lib/seoAliases'
 import { CITIES } from '@/lib/cities'
 import { fetchWestEndShows } from '@/lib/showPool'
+
+// Regenerated at most hourly (the sitemap was dynamic before; once public pages
+// stopped using cookies it became a static file frozen at build time).
+export const revalidate = 3600
 
 export const maxDuration = 60
 
@@ -21,7 +25,7 @@ const PAGE_SIZE = 1000
 
 type SlugRow        = { slug: string }
 type SlugUpdatedRow = { slug: string; updated_at: string }
-type DbClient       = Awaited<ReturnType<typeof createClient>>
+type DbClient       = ReturnType<typeof createPublicClient>
 
 async function fetchAllEvents(supabase: DbClient, nowISO: string): Promise<SlugUpdatedRow[]> {
   const { count } = await supabase
@@ -86,7 +90,7 @@ async function fetchAllArtists(supabase: DbClient): Promise<SlugRow[]> {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const now      = new Date().toISOString()
 
   const [eventRows, venueRows, artistRows, westEndShows] = await Promise.all([

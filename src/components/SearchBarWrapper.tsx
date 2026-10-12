@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
+import { createPublicClient } from '@/lib/supabase/public'
 import SearchBar from './SearchBar'
 
 // Fetches distinct cities that have at least one upcoming event, sorted alphabetically.
 // Falls back gracefully — SearchBar has its own fallback list if this query fails.
 export default async function SearchBarWrapper() {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
 
   const { data } = await (supabase
     .from('events_with_venue')

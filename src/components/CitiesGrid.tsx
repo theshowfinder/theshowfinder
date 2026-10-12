@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createPublicClient } from '@/lib/supabase/public'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { resolveCityEventCount, normalizeCityFilterValue } from '@/lib/cityEventCount'
 
@@ -43,7 +43,7 @@ const CITIES = [
 ]
 
 export default async function CitiesGrid() {
-  const supabase = await createClient()
+  const supabase = createPublicClient()
   const nowISO = new Date().toISOString()
 
   // One exact head-count per city, not a single unbounded select counted in
