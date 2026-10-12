@@ -149,7 +149,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     ? `Get tickets for ${event.title} at ${venue.name} in ${venue.city} on ${dateStr}. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.`
     : event.description ?? `${event.title} — find tickets on TheShowFinder`
 
-  const ogImage   = eventImageUrl(event.image_url, event.category, event.title)
+  const ogImagePath = eventImageUrl(event.image_url, event.category, event.title)
+  const ogImage   = new URL(ogImagePath, 'https://www.theshowfinder.com').toString()
   const canonical = `https://www.theshowfinder.com/events/${slug}`
 
   return {
