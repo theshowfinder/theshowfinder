@@ -14,10 +14,26 @@ export function getTicketmasterAffiliateLink(destinationUrl: string): string {
 const AWIN_PUBLISHER_ID    = '2896631'  // TheShowFinder's Awin publisher ID
 const SEE_TICKETS_MERCHANT_ID = '7816'  // See Tickets UK's advertiser ID on Awin
 
+// True for a URL that is already an Awin click-tracking link (awin1.com or a
+// subdomain), whether pclick.php from the product feed or cread.php.
+export function isAwinTrackingLink(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    return host === 'awin1.com' || host.endsWith('.awin1.com')
+  } catch {
+    return false
+  }
+}
+
 // Wraps a seetickets.com destination URL in TheShowFinder's Awin affiliate
 // tracking link so click-throughs are attributed correctly. Confirmed
 // against Awin's own Link Builder tool for the See Tickets UK programme.
 export function getSeeTicketsAffiliateLink(destinationUrl: string): string {
+  // The See Tickets product feed supplies its own Awin tracking link
+  // (aw_deep_link, already carrying our publisher and merchant IDs). Wrapping
+  // that in a second cread.php link nests one tracking link inside another,
+  // which risks lost attribution — so an existing Awin link is returned as is.
+  if (isAwinTrackingLink(destinationUrl)) return destinationUrl
   const encoded = encodeURIComponent(destinationUrl)
   return `https://www.awin1.com/cread.php?awinmid=${SEE_TICKETS_MERCHANT_ID}&awinaffid=${AWIN_PUBLISHER_ID}&ued=${encoded}`
 }

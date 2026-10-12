@@ -10,6 +10,7 @@ import assert from 'node:assert/strict'
 import {
   getTicketmasterAffiliateLink,
   getSeeTicketsAffiliateLink,
+  isAwinTrackingLink,
   wrapWithEnvTemplate,
   getViagogoAffiliateLink,
   getEventimAffiliateLink,
@@ -44,6 +45,35 @@ describe('getSeeTicketsAffiliateLink', () => {
     const link = getSeeTicketsAffiliateLink('https://www.seetickets.com/search?q=a&b=c')
     const encoded = link.split('ued=')[1]
     assert.equal(decodeURIComponent(encoded), 'https://www.seetickets.com/search?q=a&b=c')
+  })
+
+  test('returns a feed-supplied Awin pclick link unchanged — never nests one tracking link inside another', () => {
+    const feedLink = 'https://www.awin1.com/pclick.php?p=45810948876&a=2896631&m=7816'
+    assert.equal(getSeeTicketsAffiliateLink(feedLink), feedLink)
+  })
+
+  test('returns an existing Awin cread link unchanged too (idempotent)', () => {
+    const once = getSeeTicketsAffiliateLink('https://www.seetickets.com/event/123')
+    assert.equal(getSeeTicketsAffiliateLink(once), once)
+  })
+
+  test('still wraps a plain seetickets.com URL that merely mentions awin1.com in its query string', () => {
+    const link = getSeeTicketsAffiliateLink('https://www.seetickets.com/event/123?ref=https://www.awin1.com')
+    assert.ok(link.startsWith('https://www.awin1.com/cread.php?'))
+  })
+})
+
+describe('isAwinTrackingLink', () => {
+  test('recognises awin1.com and its subdomains', () => {
+    assert.equal(isAwinTrackingLink('https://www.awin1.com/pclick.php?p=1&a=2&m=3'), true)
+    assert.equal(isAwinTrackingLink('https://awin1.com/cread.php?x=1'), true)
+  })
+
+  test('rejects other hosts, look-alikes, and malformed input without throwing', () => {
+    assert.equal(isAwinTrackingLink('https://www.seetickets.com/event/1'), false)
+    assert.equal(isAwinTrackingLink('https://notawin1.com/x'), false)
+    assert.equal(isAwinTrackingLink('not a url'), false)
+    assert.equal(isAwinTrackingLink(''), false)
   })
 })
 
