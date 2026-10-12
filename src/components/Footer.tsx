@@ -39,11 +39,13 @@ const SOCIAL_ICONS: Record<string, () => React.ReactElement> = {
 const discover = [
   { label: 'News',     href: '/news' },
   { label: 'On Sale',  href: '/on-sale-this-week' },
+  { label: 'West End', href: '/west-end' },
   { label: 'Concerts', href: '/events?category=concert' },
   { label: 'Theatre',  href: '/events?category=theatre' },
   { label: 'Comedy',   href: '/events?category=comedy' },
   { label: 'Sports',   href: '/events?category=sports' },
   { label: 'Family',   href: '/events?category=family' },
+  { label: 'Attractions', href: '/attractions' },
 ]
 
 const cities = [

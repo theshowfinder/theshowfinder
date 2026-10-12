@@ -29,6 +29,7 @@ import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
 import TonightEventCard from '@/components/TonightEventCard'
+import WestEndStrip from '@/components/WestEndStrip'
 import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 import { CITY_HERO_IMAGES } from '@/lib/cityHeroImages'
 
@@ -385,6 +386,9 @@ export default async function CityPage({
             </div>
           </section>
         )}
+
+        {/* ── WEST END (London only — the best-paying ticket category) ── */}
+        {cityName === 'London' && <WestEndStrip inline />}
 
         {/* ── EVENTS THIS WEEK (ticketed shows + local events, merged) ── */}
         {eventsThisWeek.length > 0 && (

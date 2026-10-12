@@ -34,6 +34,13 @@ const ATTRACTION_NAMES = [
 // "Standard Entry", "Fast Track Experience", "Timed Entry", ...
 const ATTRACTION_TITLE = /\b(standard|fast[\s-]?track|priority|timed|general)\s+(entry|admission|experience)\b/i
 
+// Substrings for a database ILIKE pre-filter on the attractions hub (the
+// isAttraction() check is still the real test).
+export const ATTRACTION_SEARCH_TERMS: string[] = [
+  ...ATTRACTION_NAMES.map(n => n.replace(/[,()*%]/g, ' ').trim()),
+  'standard entry', 'standard experience', 'fast track', 'fasttrack', 'timed entry',
+]
+
 export function isAttraction(event: Pick<MixEvent, 'title' | 'venue_name'>): boolean {
   const hay = `${event.title} ${event.venue_name ?? ''}`.toLowerCase()
   if (ATTRACTION_NAMES.some(n => hay.includes(n))) return true

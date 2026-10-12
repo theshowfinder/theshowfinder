@@ -30,6 +30,7 @@ export interface NavLink {
 export const NAV_LINKS: NavLink[] = [
   { label: 'News',     href: '/news' },
   { label: 'On Sale',  href: '/on-sale-this-week' },
+  { label: 'West End', href: '/west-end' },
   { label: 'Concerts', href: '/events?category=concert' },
   { label: 'Theatre',  href: '/events?category=theatre' },
   { label: 'Comedy',   href: '/events?category=comedy'  },

@@ -33,6 +33,7 @@ import LocationBanner from '@/components/LocationBanner'
 import LocalSpotlight from '@/components/LocalSpotlight'
 import LocalHeroCopy from '@/components/LocalHeroCopy'
 import CategoryStrip from '@/components/CategoryStrip'
+import WestEndStrip from '@/components/WestEndStrip'
 import type { EventWithVenue, Artist, CityNews } from '@/lib/types/database'
 import { fmtOnSaleLabel, extractArtistName, toSlug } from '@/lib/on-sale'
 import { fetchEventsThisWeek, fetchPresalesOpenNow, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
@@ -634,6 +635,11 @@ export default function HomePage() {
       {/* ── PRESALES OPEN NOW ─────────────────────── */}
       <Suspense fallback={<HomeSectionSkeleton />}>
         <PresalesOpenNow />
+      </Suspense>
+
+      {/* ── WEST END (theatre is the best-paying ticket category) ── */}
+      <Suspense fallback={<HomeSectionSkeleton />}>
+        <WestEndStrip />
       </Suspense>
 
       {/* ── EVENTS THIS WEEK (national, biggest venues first) ───── */}

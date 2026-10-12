@@ -39,7 +39,7 @@ describe('isAccountAuthHref', () => {
 describe('NAV_LINKS', () => {
   test('contains the expected public site sections', () => {
     const labels = NAV_LINKS.map(l => l.label)
-    assert.deepEqual(labels, ['News', 'On Sale', 'Concerts', 'Theatre', 'Comedy', 'Sports', 'Family'])
+    assert.deepEqual(labels, ['News', 'On Sale', 'West End', 'Concerts', 'Theatre', 'Comedy', 'Sports', 'Family'])
   })
 
   // Regression guard for this change: public account registration

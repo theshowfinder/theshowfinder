@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { getArtistSeoAlias, getEventSeoAlias } from '@/lib/seoAliases'
 import { CITIES } from '@/lib/cities'
+import { fetchWestEndShows } from '@/lib/showPool'
 
 export const maxDuration = 60
 
@@ -88,16 +89,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = await createClient()
   const now      = new Date().toISOString()
 
-  const [eventRows, venueRows, artistRows] = await Promise.all([
+  const [eventRows, venueRows, artistRows, westEndShows] = await Promise.all([
     fetchAllEvents(supabase, now),
     fetchAllVenues(supabase),
     fetchAllArtists(supabase),
+    fetchWestEndShows(supabase),
   ])
 
   const staticPages: MetadataRoute.Sitemap = [
     { url: BASE,                          lastModified: new Date(), changeFrequency: 'daily',   priority: 1.0 },
     { url: `${BASE}/events`,              lastModified: new Date(), changeFrequency: 'daily',   priority: 0.9 },
     { url: `${BASE}/on-sale-this-week`,   lastModified: new Date(), changeFrequency: 'daily',   priority: 0.8 },
+    { url: `${BASE}/west-end`,            lastModified: new Date(), changeFrequency: 'daily',   priority: 0.9 },
+    { url: `${BASE}/attractions`,         lastModified: new Date(), changeFrequency: 'daily',   priority: 0.6 },
     // Phase 5A: the editorial news hub (/news) was never in here — every
     // other static top-level page was. Individual on-sale-this-week/[slug]
     // pages are deliberately NOT added here: each one represents "this
@@ -127,6 +131,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority:        0.6,
   })).filter(e => !getEventSeoAlias(e.url.split('/').pop() ?? ''))
 
+  // One page per West End show (not per performance).
+  const westEndShowPages: MetadataRoute.Sitemap = westEndShows.map(s => ({
+    url:             `${BASE}/west-end/${s.slug}`,
+    lastModified:    new Date(),
+    changeFrequency: 'daily' as const,
+    priority:        0.8,
+  }))
+
   const venuePages: MetadataRoute.Sitemap = venueRows.map(v => ({
     url:             `${BASE}/venues/${v.slug}`,
     lastModified:    new Date(),
@@ -141,5 +153,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority:        0.6,
   })).filter(a => !getArtistSeoAlias(a.url.split('/').pop() ?? ''))
 
-  return [...staticPages, ...cityPages, ...cityThisWeekPages, ...eventPages, ...venuePages, ...artistPages]
+  return [...staticPages, ...cityPages, ...cityThisWeekPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
 }
