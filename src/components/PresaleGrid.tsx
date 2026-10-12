@@ -7,7 +7,7 @@ import { fmtOnSaleLabel } from '@/lib/on-sale'
 // only lives in one place.
 export default function PresaleGrid({ groups }: { groups: OnSaleGroup[] }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
       {groups.map(group => {
         const presaleClose = group.events
           .map(ev => ev.presale_end)

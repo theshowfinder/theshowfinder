@@ -22,7 +22,7 @@ export default async function WestEndStrip({ limit = 4, inline = false }: { limi
             See all shows →
           </Link>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {shows.map(show => <ShowCard key={show.slug} show={show} kind="west-end" />)}
         </div>
     </>
@@ -32,7 +32,7 @@ export default async function WestEndStrip({ limit = 4, inline = false }: { limi
   // London city page); otherwise render as a full-width homepage section.
   if (inline) return <section>{body}</section>
   return (
-    <section className="bg-[#F5F5F0] py-14">
+    <section className="bg-[#F5F5F0] py-10 sm:py-14">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">{body}</div>
     </section>
   )

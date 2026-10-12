@@ -158,7 +158,7 @@ async function FeaturedEvents() {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
       {events.map(event => (
         <EventCard key={event.id} event={event} />
       ))}
@@ -192,14 +192,14 @@ async function GigsbergHighlights() {
 
   if (!events.length) return null
   return (
-    <section className="bg-slate-900 py-14">
+    <section className="bg-slate-900 py-10 sm:py-14">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-7">
           <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFD23F' }}>Tickets currently available</p>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Featured Gigsberg events</h2>
           <p className="text-white/60 mt-2 text-sm">Live UK events with inventory checked recently.</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {events.map(event => <EventCard key={event.id} event={event} />)}
         </div>
       </div>
@@ -284,7 +284,7 @@ async function OnSaleThisWeek() {
   }
 
   return (
-    <section className="bg-white py-14 border-t border-slate-100">
+    <section className="bg-white py-10 sm:py-14 border-t border-slate-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-end justify-between mb-7">
           <div>
@@ -306,7 +306,7 @@ async function OnSaleThisWeek() {
           </p>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {groups.map(group => {
                 const isPresale = group.saleType === 'presale'
                 return (
@@ -396,7 +396,7 @@ async function NationalNews() {
   if (!items.length) return null
 
   return (
-    <section className="bg-[#1A1A2E] py-12">
+    <section className="bg-[#1A1A2E] py-10 sm:py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-end justify-between mb-6">
           <div>
@@ -406,7 +406,7 @@ async function NationalNews() {
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Entertainment News</h2>
           </div>
         </div>
-        <NewsCardGrid items={items} context="homepage" />
+        <NewsCardGrid items={items} context="homepage" rail />
       </div>
     </section>
   )
@@ -421,7 +421,7 @@ async function PresalesOpenNow() {
   if (!groups.length) return null
 
   return (
-    <section className="bg-white py-14 border-t border-slate-100">
+    <section className="bg-white py-10 sm:py-14 border-t border-slate-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-end justify-between mb-7">
           <div>
@@ -452,7 +452,7 @@ async function EventsThisWeekNational() {
   if (!events.length) return null
 
   return (
-    <section className="bg-[#F5F5F0] py-14">
+    <section className="bg-[#F5F5F0] py-10 sm:py-14">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-end justify-between mb-7">
           <div>
@@ -462,7 +462,7 @@ async function EventsThisWeekNational() {
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Events This Week</h2>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {events.map(event => <EventCard key={event.id} event={event} />)}
         </div>
       </div>
@@ -524,7 +524,7 @@ async function JustAnnounced() {
   if (!events.length) return null
 
   return (
-    <section className="bg-white py-14 border-t border-slate-100">
+    <section className="bg-white py-10 sm:py-14 border-t border-slate-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-7">
           <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
@@ -532,7 +532,7 @@ async function JustAnnounced() {
           </p>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Just Announced</h2>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {events.map(event => <EventCard key={event.id} event={event} />)}
         </div>
       </div>
@@ -557,7 +557,7 @@ export default function HomePage() {
     <>
       {/* ── HERO ────────────────────────────────────────────────── */}
       <section
-        className="relative overflow-hidden flex flex-col items-center justify-center text-white min-h-[60vh] md:min-h-screen"
+        className="relative overflow-hidden flex flex-col items-center justify-center text-white min-h-[56vh] md:min-h-screen"
         style={{ backgroundColor: '#1A1A2E' }}
       >
         {/* Background image */}
@@ -577,7 +577,7 @@ export default function HomePage() {
         />
         <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full bg-white/5 translate-y-1/2 -translate-x-1/4 blur-3xl pointer-events-none" />
 
-        <div className="relative w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-0 text-center z-10">
+        <div className="relative w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-0 text-center z-10">
           {/* Location banner — client-only, renders nothing unless Vercel's
               edge geolocation matched one of our 36 cities (see
               middleware.ts + LocationBanner.tsx) */}
@@ -586,7 +586,7 @@ export default function HomePage() {
           </div>
 
           {/* Pre-headline */}
-          <p className="inline-flex items-center gap-2 font-bold text-sm uppercase tracking-widest mb-6 bg-white/5 px-4 py-2 rounded-full border border-white/10"
+          <p className="inline-flex items-center gap-2 font-bold text-xs sm:text-sm uppercase tracking-widest mb-4 sm:mb-6 bg-white/5 px-3 sm:px-4 py-2 rounded-full border border-white/10"
             style={{ color: '#FFD700' }}>
             🎟️ The UK&apos;s events discovery platform
           </p>
@@ -611,7 +611,7 @@ export default function HomePage() {
           </div>
 
           {/* Trust row */}
-          <div className="mt-8 flex flex-wrap justify-center gap-6 text-sm text-white/50">
+          <div className="mt-6 sm:mt-8 flex flex-wrap justify-center gap-x-5 gap-y-1 sm:gap-6 text-xs sm:text-sm text-white/50">
             <span>✓ Free to use</span>
             <span>✓ Updated daily</span>
             <span>✓ 50+ UK cities</span>
@@ -660,7 +660,7 @@ export default function HomePage() {
       </Suspense>
 
       {/* ── FEATURED EVENTS ─────────────────────────────────────── */}
-      <section className="bg-[#F5F5F0] py-14">
+      <section className="bg-[#F5F5F0] py-10 sm:py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between mb-7">
             <div>
@@ -691,7 +691,7 @@ export default function HomePage() {
       </section>
 
       {/* ── UK CITIES ───────────────────────────────────────────── */}
-      <section className="bg-slate-900 py-14">
+      <section className="bg-slate-900 py-10 sm:py-14">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between mb-7">
             <div>
@@ -717,7 +717,7 @@ export default function HomePage() {
       </section>
 
       {/* ── STATS BAND ──────────────────────────────────────────── */}
-      <section className="py-14" style={{ backgroundColor: '#1A1A2E' }}>
+      <section className="py-10 sm:py-14" style={{ backgroundColor: '#1A1A2E' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Suspense fallback={
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">

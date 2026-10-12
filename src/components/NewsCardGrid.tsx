@@ -21,9 +21,11 @@ function fmtNewsAge(publishedAt: string | null): string {
 // page to log a pageview for; the click itself is the signal, fired as a
 // GA4 'news_click' custom event). Client component only because of that
 // click handler — the markup itself is unchanged.
-export default function NewsCardGrid({ items, context }: { items: CityNews[]; context: string }) {
+// `rail` turns the grid into a swipeable row on phones (homepage only — the
+// /news archive and city pages stay a normal list).
+export default function NewsCardGrid({ items, context, rail = false }: { items: CityNews[]; context: string; rail?: boolean }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+    <div className={`${rail ? 'mobile-rail ' : ''}grid grid-cols-1 sm:grid-cols-2 gap-5`}>
       {items.map(item => (
         <a
           key={item.id}

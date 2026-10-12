@@ -26,3 +26,27 @@ body {
 /* Hide scrollbar but keep scrollability */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Mobile "rail": a card grid becomes a swipeable, snapping row on phones so a
+   section is one screen tall instead of a stack of 6-12 full-width cards.
+   From the sm breakpoint up the element behaves as the grid it already is. */
+@media (max-width: 639px) {
+  .mobile-rail {
+    display: flex !important;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 0.875rem !important;
+    margin-inline: -1rem;
+    padding-inline: 1rem;
+    padding-bottom: 0.5rem;
+    scroll-padding-inline: 1rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .mobile-rail::-webkit-scrollbar { display: none; }
+  .mobile-rail > * {
+    flex: 0 0 78%;
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+}

@@ -58,7 +58,7 @@ export default function LocalSpotlight() {
   if (!city || events.length === 0) return null
 
   return (
-    <section className="bg-white py-12 border-t border-slate-100">
+    <section className="bg-white py-10 sm:py-12 border-t border-slate-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-end justify-between mb-5">
           <div>
