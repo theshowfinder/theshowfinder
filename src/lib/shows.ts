@@ -27,8 +27,12 @@ export const WEST_END_VENUES: WestEndVenue[] = [
   { name: 'Apollo Theatre' },
   { name: 'Apollo Victoria Theatre' },
   { name: 'Arts Theatre' },
+  { name: 'The Arts at Marble Arch', aliases: ['Arts at Marble Arch'] },
   { name: 'Bridge Theatre' },
   { name: 'Cambridge Theatre' },
+  // County Hall also hosts attractions (Sea Life, London Dungeon, Shrek's
+  // Adventure) — westEndShows() drops those via isAttraction().
+  { name: 'County Hall' },
   { name: 'Criterion Theatre' },
   { name: 'Dominion Theatre' },
   { name: 'Duchess Theatre' },
@@ -202,8 +206,14 @@ export function groupShows(events: ShowEvent[], now: Date = new Date()): Show[] 
   return shows.sort((a, b) => b.dateCount - a.dateCount || a.title.localeCompare(b.title))
 }
 
+// West End venues only, and never an attraction (County Hall has both).
 export function westEndShows(events: ShowEvent[], now?: Date): Show[] {
-  return groupShows(events.filter(e => isWestEndVenue(e.venue_name, e.venue_city)), now)
+  return groupShows(
+    events.filter(e =>
+      isWestEndVenue(e.venue_name, e.venue_city) &&
+      !isAttraction({ title: e.title, venue_name: e.venue_name })),
+    now,
+  )
 }
 
 export function attractionShows(events: ShowEvent[], now?: Date): Show[] {

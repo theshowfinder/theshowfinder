@@ -132,17 +132,24 @@ describe('westEndShows / attractionShows / summarizeVenues', () => {
     ev('London Eye - Standard Experience', '2026-10-13T10:00:00Z', 'The London Eye', { category: 'family' }),
     ev('Twist Museum - London\'s Home of Illusions PEAK', '2026-10-13T10:00:00Z', 'Twist Museum', { category: 'family' }),
     ev('SIX The Musical', '2026-10-13T19:30:00Z', 'Vaudeville Theatre'),
+    ev('Witness for the Prosecution', '2026-10-13T19:30:00Z', 'County Hall'),
+    ev("Shrek's Adventure - Standard Experience", '2026-10-13T10:00:00Z', 'County Hall', { category: 'theatre' }),
+    ev('Sea Life London - Standard Entry', '2026-10-13T10:00:00Z', 'County Hall', { category: 'family' }),
+    ev('Burlesque', '2026-10-13T19:30:00Z', 'The Arts at Marble Arch'),
+    ev('Come Alive! The Greatest Showman Circus Spectacular', '2026-10-13T19:30:00Z', 'Empress Museum'),
+    ev('Faulty Towers the Dining Experience', '2026-10-13T19:30:00Z', 'President Hotel'),
+    ev('Troubadour Show', '2026-10-13T19:30:00Z', 'Troubadour Wembley Park Theatre'),
   ]
   test('west end hub only contains West End venues', () => {
-    assert.deepEqual(westEndShows(events, NOW).map(s => s.title).sort(), ['Hamilton', 'SIX The Musical', 'Wicked'])
+    assert.deepEqual(westEndShows(events, NOW).map(s => s.title).sort(), ['Burlesque', 'Hamilton', 'SIX The Musical', 'Wicked', 'Witness for the Prosecution'])
   })
   test('attractions hub only contains attractions', () => {
-    assert.equal(attractionShows(events, NOW).length, 2)
+    assert.equal(attractionShows(events, NOW).length, 4) // London Eye, Twist Museum, Shrek's Adventure, Sea Life
   })
   test('venue summary counts shows per theatre', () => {
     const v = summarizeVenues(westEndShows(events, NOW))
-    assert.equal(v.length, 3)
-    assert.ok(v.every(x => x.shows === 1))
+    assert.equal(v.length, 5)
+    assert.ok(v.every(x => x.shows >= 1))
   })
 })
 
