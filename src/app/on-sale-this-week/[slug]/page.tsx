@@ -46,7 +46,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const group  = groupEventsByArtist(merged, arResult.data ?? []).find(g => g.slug === slug)
   if (!group) return { title: 'On Sale This Week' }
 
-  const title       = `${group.artistName} — On Sale This Week | TheShowFinder`
+  const title       = `${group.artistName} — On Sale This Week`
+  const socialTitle = `${title} | TheShowFinder`
   const description = `${group.events.length} UK date${group.events.length !== 1 ? 's' : ''} going on sale ${fmtOnSaleLabel(group.onsale_date)}`
   const canonical    = `https://www.theshowfinder.com/on-sale-this-week/${slug}`
   const ogImage      = 'https://www.theshowfinder.com/og-image.png'
@@ -56,7 +57,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     description,
     alternates: { canonical },
     openGraph: {
-      title,
+      title: socialTitle,
       description,
       type:   'website',
       url:    canonical,
@@ -64,7 +65,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     },
     twitter: {
       card: 'summary_large_image',
-      title,
+      title: socialTitle,
       description,
       images: [ogImage],
     },

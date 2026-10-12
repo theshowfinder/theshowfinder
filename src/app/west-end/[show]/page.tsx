@@ -42,10 +42,11 @@ export async function generateMetadata(
 ): Promise<Metadata> {
   const { show: slug } = await params
   const { show } = await findShow(slug)
-  if (!show) return { title: 'Show not found | TheShowFinder', robots: { index: false } }
+  if (!show) return { title: 'Show not found', robots: { index: false } }
 
   const canonical = `${BASE}/west-end/${show.slug}`
-  const title = `${show.title} Tickets – ${show.venueName}, London | TheShowFinder`
+  const title = `${show.title} Tickets – ${show.venueName}, London`
+  const socialTitle = `${title} | TheShowFinder`
   const nextDay = fmtDay(show.nextDate)
   const description =
     `Compare tickets for ${show.title} at ${show.venueName}, London. ` +
@@ -58,8 +59,8 @@ export async function generateMetadata(
     title,
     description,
     alternates: { canonical },
-    openGraph: { title, description, url: canonical, images: [{ url: ogImage, alt: show.title }] },
-    twitter: { card: 'summary_large_image', title, description, images: [ogImage] },
+    openGraph: { title: socialTitle, description, url: canonical, images: [{ url: ogImage, alt: show.title }] },
+    twitter: { card: 'summary_large_image', title: socialTitle, description, images: [ogImage] },
   }
 }
 

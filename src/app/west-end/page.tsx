@@ -14,7 +14,8 @@ import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/
 
 const BASE = 'https://www.theshowfinder.com'
 const CANONICAL = `${BASE}/west-end`
-const TITLE = 'West End Shows & Tickets – Compare Prices | TheShowFinder'
+const TITLE = 'West End Shows & Tickets – Compare Prices'
+const SOCIAL_TITLE = `${TITLE} | TheShowFinder`
 const DESCRIPTION =
   "Find West End shows and compare ticket prices across providers. See what's on at every London theatre, with the next date, venue and ticket links for each show."
 
@@ -23,14 +24,14 @@ export const metadata: Metadata = {
   description: DESCRIPTION,
   alternates: { canonical: CANONICAL },
   openGraph: {
-    title: TITLE,
+    title: SOCIAL_TITLE,
     description: DESCRIPTION,
     url: CANONICAL,
     images: [{ url: `${BASE}/og-image.png`, width: 1200, height: 630, alt: TITLE }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: TITLE,
+    title: SOCIAL_TITLE,
     description: DESCRIPTION,
     images: [`${BASE}/og-image.png`],
   },

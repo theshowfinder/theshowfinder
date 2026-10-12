@@ -94,7 +94,6 @@ export function buildEventSchema(input: EventSchemaInput) {
       availability:  input.status === 'sold_out'
         ? 'https://schema.org/SoldOut'
         : 'https://schema.org/InStock',
-      validFrom:     new Date().toISOString(),
       ...(input.priceFrom != null && input.priceFrom >= 0 ? { price: input.priceFrom } : {}),
     },
   }

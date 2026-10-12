@@ -156,9 +156,14 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
 
+  // Short date keeps repeat performances (same show, same venue) distinct in
+  // search results instead of N identical titles.
+  const shortDate = new Date(event.start_date).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London',
+  })
   const title = venueStr
-    ? `${event.title} at ${venueStr}`
-    : event.title
+    ? `${event.title} at ${venueStr} – ${shortDate}`
+    : `${event.title} – ${shortDate}`
 
   const description = venue
     ? `Get tickets for ${event.title} at ${venue.name} in ${venue.city} on ${dateStr}. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.`
