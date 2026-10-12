@@ -32,7 +32,7 @@ export function TrackedTicketLink({
   section,
   context,
   target = '_blank',
-  rel = 'noopener noreferrer',
+  rel = 'sponsored noopener noreferrer',
   className,
   style,
   children,

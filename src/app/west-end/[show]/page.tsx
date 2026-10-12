@@ -154,6 +154,21 @@ export default async function WestEndShowPage({ params }: { params: Promise<{ sh
           <p className="text-slate-600 text-sm mb-6 max-w-2xl">
             Choose a date to compare ticket prices across providers. Times are London time.
           </p>
+          {seeTicketsUrl && (
+            <p className="text-slate-600 text-sm mb-6 max-w-2xl">
+              Can&apos;t see the date you want? Booking periods open in stages, so some dates may not be listed yet.{' '}
+              <TrackedTicketLink
+                href={getSeeTicketsAffiliateLink(seeTicketsUrl)}
+                provider="See Tickets"
+                section="primary"
+                context={`west-end-show-calendar:${show.slug}`}
+                className="font-semibold underline hover:no-underline"
+                style={{ color: '#E4022D' }}
+              >
+                Check the full {show.title} calendar on See Tickets ↗
+              </TrackedTicketLink>
+            </p>
+          )}
           <div className="space-y-8">
             {[...byMonth.entries()].map(([month, list]) => (
               <div key={month}>
