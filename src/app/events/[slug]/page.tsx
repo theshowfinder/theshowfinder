@@ -157,12 +157,12 @@ const categoryEmoji: Record<string, string> = {
 }
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', {
+  return new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Europe/London',
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
 }
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  return new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' })
 }
 function fmtPrice(from: number | null, to: number | null, currency: string) {
   if (!from) return null
@@ -179,7 +179,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   const venue     = event.venue
   const venueStr  = venue ? `${venue.name}, ${venue.city}` : null
-  const dateStr   = new Date(event.start_date).toLocaleDateString('en-GB', {
+  const dateStr   = new Date(event.start_date).toLocaleDateString('en-GB', { timeZone: 'Europe/London',
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
 

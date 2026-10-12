@@ -77,7 +77,7 @@ export default async function AdminEventsPage() {
                       <p className="text-slate-400 text-xs">/events/{event.slug}</p>
                     </td>
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
-                      {new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}
+                      {new Date(event.start_date).toLocaleDateString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short', year: '2-digit' })}
                     </td>
                     <td className="px-4 py-3 text-slate-600">
                       {event.venue ? `${event.venue.name}, ${event.venue.city}` : '—'}

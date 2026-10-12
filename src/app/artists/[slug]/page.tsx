@@ -148,7 +148,7 @@ export default async function ArtistPage({ params }: PageProps) {
   const dateCount = dates.length > 0 ? upcoming.length : eventRows.length
 
   const onSaleLabel = artist.onsale_date
-    ? new Date(artist.onsale_date).toLocaleDateString('en-GB', {
+    ? new Date(artist.onsale_date).toLocaleDateString('en-GB', { timeZone: 'Europe/London',
         weekday: 'long', day: 'numeric', month: 'long',
         hour: '2-digit', minute: '2-digit',
       }).replace(',', '') + ' GMT'
@@ -336,13 +336,13 @@ export default async function ArtistPage({ params }: PageProps) {
                       {/* Date block */}
                       <div className="text-center w-14 shrink-0">
                         <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                          {dt.toLocaleDateString('en-GB', { month: 'short' })}
+                          {dt.toLocaleDateString('en-GB', { timeZone: 'Europe/London', month: 'short' })}
                         </div>
                         <div className="text-3xl font-extrabold text-slate-900 leading-none">
                           {dt.getDate()}
                         </div>
                         <div className="text-xs text-slate-400">
-                          {dt.toLocaleDateString('en-GB', { weekday: 'short' })}
+                          {dt.toLocaleDateString('en-GB', { timeZone: 'Europe/London', weekday: 'short' })}
                         </div>
                       </div>
 
@@ -355,7 +355,7 @@ export default async function ArtistPage({ params }: PageProps) {
                       {/* Status / time */}
                       <div className="text-right shrink-0">
                         <p className="text-sm text-slate-400">
-                          {dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                          {dt.toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' })}
                         </p>
                         {d.status !== 'upcoming' && (
                           <span className="text-xs font-semibold text-orange-600 capitalize">{d.status}</span>

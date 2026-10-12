@@ -12,7 +12,7 @@ interface Props {
 
 export default function ArtistOnSaleCard({ name, slug, href, image_url, tour_name, onsale_date, dates_count }: Props) {
   const onSaleLabel = onsale_date
-    ? new Date(onsale_date).toLocaleDateString('en-GB', {
+    ? new Date(onsale_date).toLocaleDateString('en-GB', { timeZone: 'Europe/London',
         weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
       }).replace(',', '') + ' GMT'
     : null

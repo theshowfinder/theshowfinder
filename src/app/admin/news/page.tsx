@@ -59,7 +59,7 @@ const ATTENTION_LABEL: Record<NewsCandidateAttentionReason, string> = {
 
 function fmtDate(value: string | null): string {
   if (!value) return '—'
-  return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
+  return new Date(value).toLocaleDateString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short', year: '2-digit' })
 }
 
 function Chip({ label, active, href, tone }: { label: string; active: boolean; href: string; tone?: 'amber' }) {

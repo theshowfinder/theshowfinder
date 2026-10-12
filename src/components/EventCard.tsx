@@ -25,7 +25,7 @@ const categoryEmoji: Record<string, string> = {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', {
+  return new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Europe/London',
     weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
   })
 }

@@ -20,7 +20,7 @@ const CATEGORY_PREFIX: Record<EventCategory, (title: string) => string> = {
 function formatEventDate(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('en-GB', {
+  return d.toLocaleDateString('en-GB', { timeZone: 'Europe/London',
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
 }

@@ -146,7 +146,7 @@ export default async function AdminPage() {
                     <td className="px-4 py-3 text-slate-600">{artist.tour_name ?? '—'}</td>
                     <td className="px-4 py-3 text-slate-600">
                       {artist.onsale_date
-                        ? new Date(artist.onsale_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
+                        ? new Date(artist.onsale_date).toLocaleDateString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short', year: '2-digit' })
                         : '—'}
                     </td>
                     <td className="px-4 py-3">

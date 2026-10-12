@@ -45,7 +45,7 @@ function Chip({ label, active, href }: { label: string; active: boolean; href: s
 }
 
 function fmtDate(value: string): string {
-  return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
+  return new Date(value).toLocaleDateString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short', year: '2-digit' })
 }
 
 interface SearchParams {

@@ -171,13 +171,13 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
                     {/* Date block */}
                     <div className="text-center w-14 shrink-0">
                       <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                        {dt.toLocaleDateString('en-GB', { month: 'short' })}
+                        {dt.toLocaleDateString('en-GB', { timeZone: 'Europe/London', month: 'short' })}
                       </div>
                       <div className="text-3xl font-extrabold text-slate-900 leading-none">
                         {dt.getDate()}
                       </div>
                       <div className="text-xs text-slate-400">
-                        {dt.toLocaleDateString('en-GB', { weekday: 'short' })}
+                        {dt.toLocaleDateString('en-GB', { timeZone: 'Europe/London', weekday: 'short' })}
                       </div>
                     </div>
 
@@ -186,7 +186,7 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
                       <p className="font-bold text-slate-900 truncate">{event.venue_name}</p>
                       <p className="text-sm text-slate-500">{event.venue_city}</p>
                       <p className="text-xs text-slate-400 mt-0.5">
-                        {dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                        {dt.toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
 

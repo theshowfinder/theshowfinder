@@ -62,9 +62,9 @@ export default async function OnSaleThisWeekPage() {
             On Sale This Week
           </h1>
           <p className="text-white/60 text-base">
-            Tickets that went on general sale this week ({weekStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}
+            Tickets that went on general sale this week ({weekStart.toLocaleDateString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'long' })}
             {' '}–{' '}
-            {weekEnd.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}).
+            {weekEnd.toLocaleDateString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'long' })}).
           </p>
         </div>
       </div>

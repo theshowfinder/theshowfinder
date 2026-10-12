@@ -155,8 +155,8 @@ export default async function EditArtistPage({ params, searchParams }: PageProps
                 <div key={d.id} className="flex items-center gap-4 bg-slate-50 rounded-xl px-4 py-3">
                   <div className="flex-1">
                     <p className="font-semibold text-slate-900 text-sm">
-                      {new Date(d.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-                      {' '}· {new Date(d.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(d.date).toLocaleDateString('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                      {' '}· {new Date(d.date).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' })}
                     </p>
                     <p className="text-slate-500 text-sm">{d.venue_name}, {d.city}</p>
                   </div>

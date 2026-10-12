@@ -123,7 +123,7 @@ export default async function TicketLinksPage({ searchParams }: { searchParams: 
                         <p className="text-xs text-slate-400 mt-1">View event →</p>
                       </td>
                       <td className="px-4 py-4 text-slate-600 whitespace-nowrap">
-                        <p>{new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                        <p>{new Date(event.start_date).toLocaleDateString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short', year: 'numeric' })}</p>
                         <p className="text-xs text-slate-400 mt-1">{event.venue ? `${event.venue.name}, ${event.venue.city}` : 'Venue unknown'}</p>
                       </td>
                       {(['own_ticket_url', 'viagogo_url', 'stubhub_url', 'gigsberg_url'] as const).map(name => (
