@@ -18,11 +18,14 @@ import {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
+// NB: events_with_venue has no venue_slug column (src/lib/types/database.ts
+// claims it does, but the view doesn't — selecting it is a 400 from PostgREST,
+// which is what left /west-end empty). Venue slugs come from the venues table.
 const COLUMNS =
-  'id, slug, title, start_date, status, category, image_url, price_from, price_to, currency, venue_name, venue_slug, venue_city'
+  'id, slug, title, start_date, status, category, image_url, price_from, price_to, currency, venue_id, venue_name, venue_city'
 
 type DbError = { message: string } | null
-type Row = ShowEvent
+type Row = ShowEvent & { venue_id?: string | null }
 type Page<T> = { data: T[] | null; error: DbError }
 
 // Builds the shared part of an events query (window + live statuses) and lets
@@ -60,30 +63,32 @@ async function fetchEventRows(
   )
 }
 
-type VenueRow = { id: string; name: string; city: string | null }
+type VenueRow = { id: string; name: string; city: string | null; slug: string | null }
 
-async function fetchWestEndVenueIds(supabase: SupabaseClient): Promise<string[]> {
+async function fetchWestEndVenues(supabase: SupabaseClient): Promise<VenueRow[]> {
   const venues = await fetchAllPages<VenueRow>((from, to) =>
     supabase
       .from('venues')
-      .select('id, name, city')
+      .select('id, name, city, slug')
       .ilike('city', 'London')
       .order('id', { ascending: true })
       .range(from, to) as unknown as PromiseLike<Page<VenueRow>>,
   )
-  return venues.filter(v => isWestEndVenue(v.name, v.city)).map(v => v.id)
+  return venues.filter(v => isWestEndVenue(v.name, v.city))
 }
 
 /** Every West End show with upcoming performances (one entry per show). */
 export async function fetchWestEndShows(supabase: SupabaseClient, horizonDays = 150): Promise<Show[]> {
   try {
-    const venueIds = await fetchWestEndVenueIds(supabase)
-    if (venueIds.length === 0) {
+    const venues = await fetchWestEndVenues(supabase)
+    if (venues.length === 0) {
       console.error('[west-end] no London venues matched the West End venue list')
       return []
     }
+    const venueIds = venues.map(v => v.id)
+    const slugById = new Map(venues.map(v => [v.id, v.slug]))
     const rows = await fetchEventRows(supabase, horizonDays, q => q.in('venue_id', venueIds))
-    return westEndShows(rows)
+    return westEndShows(rows.map(r => ({ ...r, venue_slug: r.venue_id ? slugById.get(r.venue_id) ?? null : null })))
   } catch (err) {
     console.error('[west-end] fetch failed', err)
     return []
