@@ -3,6 +3,8 @@ import { createPublicClient } from '@/lib/supabase/public'
 import { getArtistSeoAlias, getEventSeoAlias } from '@/lib/seoAliases'
 import { CITIES } from '@/lib/cities'
 import { fetchWestEndShows } from '@/lib/showPool'
+import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { shouldListArtistInSitemap } from '@/lib/artistEvents'
 
 // Regenerated at most hourly (the sitemap was dynamic before; once public pages
 // stopped using cookies it became a static file frozen at build time).
@@ -24,6 +26,7 @@ const BASE = 'https://www.theshowfinder.com'
 const PAGE_SIZE = 1000
 
 type SlugRow        = { slug: string }
+type ArtistRow      = { id: string; slug: string; name: string | null; is_featured: boolean | null }
 type SlugUpdatedRow = { slug: string; updated_at: string }
 type DbClient       = ReturnType<typeof createPublicClient>
 
@@ -71,7 +74,7 @@ async function fetchAllVenues(supabase: DbClient): Promise<SlugRow[]> {
   return pages.flatMap(p => p.data ?? [])
 }
 
-async function fetchAllArtists(supabase: DbClient): Promise<SlugRow[]> {
+async function fetchAllArtists(supabase: DbClient): Promise<ArtistRow[]> {
   const { count } = await supabase.from('artists').select('*', { count: 'exact', head: true })
   const total = count ?? 0
   if (total === 0) return []
@@ -82,22 +85,58 @@ async function fetchAllArtists(supabase: DbClient): Promise<SlugRow[]> {
       const from = i * PAGE_SIZE
       return supabase
         .from('artists')
-        .select('slug')
-        .range(from, from + PAGE_SIZE - 1) as unknown as Promise<{ data: SlugRow[] | null }>
+        .select('id, slug, name, is_featured')
+        .order('id')
+        .range(from, from + PAGE_SIZE - 1) as unknown as Promise<{ data: ArtistRow[] | null }>
     }),
   )
   return pages.flatMap(p => p.data ?? [])
+}
+
+// artist_id -> number of upcoming, live events they are linked to. Used to keep
+// near-empty artist pages (no upcoming shows, or a single show that already has
+// its own page) out of the sitemap: thousands of those were sitting at
+// "Discovered - currently not indexed" in Search Console.
+async function fetchArtistUpcomingCounts(supabase: DbClient, nowISO: string): Promise<Map<string, number>> {
+  const { count } = await supabase
+    .from('event_artists')
+    .select('artist_id, events!inner(start_date, status)', { count: 'exact', head: true })
+    .gte('events.start_date', nowISO)
+    .in('events.status', LIVE_EVENT_STATUSES)
+  const total = count ?? 0
+  const counts = new Map<string, number>()
+  if (total === 0) return counts
+
+  const pageCount = Math.ceil(total / PAGE_SIZE)
+  const pages = await Promise.all(
+    Array.from({ length: pageCount }, (_, i) => {
+      const from = i * PAGE_SIZE
+      return supabase
+        .from('event_artists')
+        .select('artist_id, events!inner(start_date, status)')
+        .gte('events.start_date', nowISO)
+        .in('events.status', LIVE_EVENT_STATUSES)
+        .order('event_id')
+        .order('artist_id')
+        .range(from, from + PAGE_SIZE - 1) as unknown as Promise<{ data: { artist_id: string }[] | null }>
+    }),
+  )
+  for (const row of pages.flatMap(p => p.data ?? [])) {
+    counts.set(row.artist_id, (counts.get(row.artist_id) ?? 0) + 1)
+  }
+  return counts
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = createPublicClient()
   const now      = new Date().toISOString()
 
-  const [eventRows, venueRows, artistRows, westEndShows] = await Promise.all([
+  const [eventRows, venueRows, artistRows, westEndShows, artistCounts] = await Promise.all([
     fetchAllEvents(supabase, now),
     fetchAllVenues(supabase),
     fetchAllArtists(supabase),
     fetchWestEndShows(supabase),
+    fetchArtistUpcomingCounts(supabase, now),
   ])
 
   const staticPages: MetadataRoute.Sitemap = [
@@ -143,19 +182,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority:        0.8,
   }))
 
+  // No lastModified on venue/artist URLs: we have no real "last changed" date
+  // for them, and stamping every URL with "now" teaches Google to ignore the
+  // field for the whole sitemap (including events, where it IS accurate).
   const venuePages: MetadataRoute.Sitemap = venueRows.map(v => ({
     url:             `${BASE}/venues/${v.slug}`,
-    lastModified:    new Date(),
     changeFrequency: 'weekly' as const,
     priority:        0.7,
   }))
 
-  const artistPages: MetadataRoute.Sitemap = artistRows.map(a => ({
-    url:             `${BASE}/artists/${a.slug}`,
-    lastModified:    new Date(),
-    changeFrequency: 'weekly' as const,
-    priority:        0.6,
-  })).filter(a => !getArtistSeoAlias(a.url.split('/').pop() ?? ''))
+  const artistPages: MetadataRoute.Sitemap = artistRows
+    .filter(a => shouldListArtistInSitemap({
+      name: a.name,
+      upcomingEvents: artistCounts.get(a.id) ?? 0,
+      isFeatured: a.is_featured,
+    }))
+    .map(a => ({
+      url:             `${BASE}/artists/${a.slug}`,
+      changeFrequency: 'weekly' as const,
+      priority:        0.6,
+    }))
+    .filter(a => !getArtistSeoAlias(a.url.split('/').pop() ?? ''))
 
   return [...staticPages, ...cityPages, ...cityThisWeekPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
 }

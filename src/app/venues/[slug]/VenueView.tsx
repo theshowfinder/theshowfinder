@@ -4,6 +4,7 @@ import { createPublicClient } from '@/lib/supabase/public'
 import EventCard from '@/components/EventCard'
 import Pagination from '@/components/Pagination'
 import NewsletterInline from '@/components/NewsletterInline'
+import { cityPagePath } from '@/lib/cities'
 import type { EventWithVenue } from '@/lib/types/database'
 import { venuePageDescription } from '@/lib/venueBlurb'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
@@ -62,6 +63,9 @@ export default async function VenueView({ slug, page }: { slug: string; page: nu
     return `/venues/${slug}?page=${p}`
   }
 
+  // Only link to a city page when one exists (otherwise it would 404).
+  const cityHref = cityPagePath(venue.city)
+
   const description = venuePageDescription(
     venue.name,
     venue.city,
@@ -80,12 +84,13 @@ export default async function VenueView({ slug, page }: { slug: string; page: nu
           <nav className="flex items-center gap-1.5 text-sm text-white/50 mb-6 flex-wrap">
             <Link href="/" className="hover:text-white transition-colors">Home</Link>
             <span>/</span>
-            <Link
-              href={`/cities/${encodeURIComponent(venue.city)}`}
-              className="hover:text-white transition-colors"
-            >
-              {venue.city}
-            </Link>
+            {cityHref ? (
+              <Link href={cityHref} className="hover:text-white transition-colors">
+                {venue.city}
+              </Link>
+            ) : (
+              <span>{venue.city}</span>
+            )}
             <span>/</span>
             <span className="text-white/80">{venue.name}</span>
           </nav>
@@ -134,11 +139,11 @@ export default async function VenueView({ slug, page }: { slug: string; page: nu
             <h3 className="text-xl font-semibold text-slate-700 mb-2">No upcoming events</h3>
             <p className="text-slate-500 mb-6">No events are scheduled at this venue right now.</p>
             <Link
-              href={`/cities/${encodeURIComponent(venue.city)}`}
+              href={cityHref ?? '/events'}
               className="text-sm font-semibold hover:underline"
               style={{ color: '#E8003D' }}
             >
-              Browse all events in {venue.city} →
+              {cityHref ? `Browse all events in ${venue.city} →` : 'Browse all events →'}
             </Link>
           </div>
         ) : (

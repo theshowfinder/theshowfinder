@@ -27,6 +27,7 @@ import { ticketPurchaseDisabledStatus } from '@/lib/eventPools'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getEventSeoAlias } from '@/lib/seoAliases'
 import { eventImageUrl } from '@/lib/eventImages'
+import { cityPagePath } from '@/lib/cities'
 import NewsletterInline from '@/components/NewsletterInline'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -248,7 +249,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const breadcrumbSchema = buildBreadcrumbSchema([
     { name: 'Home',   url: 'https://www.theshowfinder.com' },
     { name: 'Events', url: 'https://www.theshowfinder.com/events' },
-    ...(event.venue ? [{ name: event.venue.city, url: `https://www.theshowfinder.com/cities/${encodeURIComponent(event.venue.city)}` }] : []),
+    ...(event.venue && cityPagePath(event.venue.city) ? [{ name: event.venue.city, url: `https://www.theshowfinder.com${cityPagePath(event.venue.city)}` }] : []),
     { name: event.title, url: canonicalUrl },
   ])
 

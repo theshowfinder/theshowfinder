@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
@@ -13,6 +14,11 @@ import { jsonLdScript, buildBreadcrumbSchema } from '@/lib/jsonld'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getArtistSeoAlias } from '@/lib/seoAliases'
 import NewsletterInline from '@/components/NewsletterInline'
+import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import {
+  toArtistEventRows, shouldIndexArtistPage, artistMetaDescription,
+  type ArtistEventLink, type ArtistEventRow,
+} from '@/lib/artistEvents'
 
 export const revalidate = 600
 
@@ -27,19 +33,51 @@ interface PageProps {
   params: Promise<{ slug: string }>
 }
 
+// Upcoming events this artist is linked to (event_artists -> events). This is
+// the real source of an artist's dates; tours/tour_dates only exist for a
+// couple of hand-curated artists. Cached per request so generateMetadata and
+// the page share one query.
+const getArtistUpcomingEvents = cache(async (artistId: string): Promise<ArtistEventRow[]> => {
+  const supabase = createPublicClient()
+  const { data } = await supabase
+    .from('event_artists')
+    .select('events!inner(id, slug, title, start_date, status, venue:venues(name, city))')
+    .eq('artist_id', artistId)
+    .gte('events.start_date', new Date().toISOString())
+    .in('events.status', LIVE_EVENT_STATUSES)
+    .limit(200) as unknown as { data: ArtistEventLink[] | null }
+  return toArtistEventRows(data)
+})
+
+const getArtistTourDateCount = cache(async (artistId: string): Promise<number> => {
+  const supabase = createPublicClient()
+  const { data: tours } = await supabase.from('tours').select('id').eq('artist_id', artistId).limit(1) as unknown as { data: { id: string }[] | null }
+  if (!tours?.[0]) return 0
+  const { count } = await supabase
+    .from('tour_dates').select('*', { count: 'exact', head: true })
+    .eq('tour_id', tours[0].id).gte('date', new Date().toISOString())
+  return count ?? 0
+})
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params
   const supabase  = createPublicClient()
   const { data: artist } = await supabase
     .from('artists')
-    .select('name, bio, image_url')
+    .select('id, name, bio, image_url')
     .eq('slug', slug)
-    .single() as unknown as { data: Pick<Artist, 'name' | 'bio' | 'image_url'> | null }
+    .single() as unknown as { data: Pick<Artist, 'id' | 'name' | 'bio' | 'image_url'> | null }
 
   if (!artist) return { title: 'Artist Not Found' }
 
   const title       = `${artist.name} UK Tour Dates & Tickets`
-  const description = `Find all ${artist.name} UK tour dates and compare ticket prices from all major providers including Ticketmaster, See Tickets and resale sites.`
+  const [upcomingEvents, tourDateCount] = await Promise.all([
+    getArtistUpcomingEvents(artist.id),
+    getArtistTourDateCount(artist.id),
+  ])
+  const description = artistMetaDescription(artist.name, upcomingEvents)
+  // Artists with nothing upcoming have an empty page — keep it out of the index
+  // until there is something on it.
+  const indexable = shouldIndexArtistPage({ upcomingEvents: upcomingEvents.length, tourDates: tourDateCount })
   const ogImage     = artist.image_url ?? 'https://www.theshowfinder.com/og-image.png'
   const canonical   = `https://www.theshowfinder.com/artists/${slug}`
 
@@ -47,6 +85,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title,
     description,
     alternates: { canonical },
+    ...(indexable ? {} : { robots: { index: false, follow: true } }),
     openGraph: {
       title:       `${title} | TheShowFinder`,
       description,
@@ -103,6 +142,10 @@ export default async function ArtistPage({ params }: PageProps) {
   const dates = tourDates ?? []
   const now = new Date().toISOString()
   const upcoming = dates.filter(d => d.date >= now)
+  // Real upcoming shows from the events table (see getArtistUpcomingEvents).
+  const eventRows = await getArtistUpcomingEvents(artist.id)
+  const nextShow = eventRows[0] ?? null
+  const dateCount = dates.length > 0 ? upcoming.length : eventRows.length
 
   const onSaleLabel = artist.onsale_date
     ? new Date(artist.onsale_date).toLocaleDateString('en-GB', {
@@ -144,6 +187,30 @@ export default async function ArtistPage({ params }: PageProps) {
     },
   }))
 
+  // Same idea for events-table dates: one MusicEvent each, pointing at that
+  // event's own page. Only used when there are no curated tour dates, so the
+  // two never double-count. No price — we won't invent one.
+  const eventsSchema = dates.length > 0 ? [] : eventRows.slice(0, 25).map(e => ({
+    '@type':    'MusicEvent',
+    name:       e.title,
+    url:        `https://www.theshowfinder.com/events/${e.slug}`,
+    startDate:  e.startDate,
+    eventStatus: 'https://schema.org/EventScheduled',
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    location: {
+      '@type':  'Place',
+      name:     e.venueName ?? 'United Kingdom',
+      address:  { '@type': 'PostalAddress', ...(e.venueCity ? { addressLocality: e.venueCity } : {}), addressCountry: 'GB' },
+    },
+    performer: { '@type': 'MusicGroup', name: artist.name },
+    offers: {
+      '@type':       'Offer',
+      url:            `https://www.theshowfinder.com/events/${e.slug}`,
+      priceCurrency:  'GBP',
+      availability:   e.status === 'sold_out' ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock',
+    },
+  }))
+
   const breadcrumbSchema = buildBreadcrumbSchema([
     { name: 'Home',    url: 'https://www.theshowfinder.com' },
     { name: 'On Sale', url: 'https://www.theshowfinder.com/on-sale-this-week' },
@@ -152,6 +219,12 @@ export default async function ArtistPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-[#F5F5F0]">
+      {eventsSchema.length > 0 && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdScript({ '@context': 'https://schema.org', '@graph': eventsSchema }) }}
+        />
+      )}
       {tourEventsSchema.length > 0 && (
         <script
           type="application/ld+json"
@@ -206,10 +279,46 @@ export default async function ArtistPage({ params }: PageProps) {
             )}
 
             <h2 className="text-xl font-extrabold text-slate-900 mb-5">
-              {upcoming.length > 0 ? `${upcoming.length} UK Date${upcoming.length !== 1 ? 's' : ''}` : 'Tour Dates'}
+              {dateCount > 0 ? `${dateCount} UK Date${dateCount !== 1 ? 's' : ''}` : 'Tour Dates'}
             </h2>
 
-            {dates.length === 0 ? (
+            {dates.length === 0 && eventRows.length > 0 ? (
+              <div className="space-y-3">
+                {eventRows.map(e => {
+                  const dt = new Date(e.startDate)
+                  return (
+                    <Link
+                      key={e.id}
+                      href={`/events/${e.slug}`}
+                      className="bg-white rounded-2xl border border-slate-200 shadow-sm px-4 sm:px-6 py-4 flex items-center gap-4 sm:gap-6 hover:border-slate-400 transition-colors"
+                    >
+                      <div className="text-center w-14 shrink-0">
+                        <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                          {dt.toLocaleDateString('en-GB', { month: 'short', timeZone: 'Europe/London' })}
+                        </div>
+                        <div className="text-3xl font-extrabold text-slate-900 leading-none">
+                          {dt.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'Europe/London' })}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          {dt.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'Europe/London' })}
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-slate-900 truncate">{e.venueName ?? e.title}</p>
+                        <p className="text-sm text-slate-500 truncate">
+                          {[e.venueCity, dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        {e.status === 'sold_out'
+                          ? <span className="text-xs font-semibold text-orange-600">Sold out · resale</span>
+                          : <span className="text-sm font-bold" style={{ color: '#E8003D' }}>Tickets →</span>}
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            ) : dates.length === 0 ? (
               <div className="bg-white rounded-2xl p-8 text-center border border-slate-200 shadow-sm">
                 <p className="text-slate-400 text-4xl mb-3">🗓</p>
                 <p className="text-slate-500">No dates announced yet — check back soon.</p>
@@ -266,6 +375,19 @@ export default async function ArtistPage({ params }: PageProps) {
           {/* Sidebar */}
           <div className="mt-10 lg:mt-0">
             <div className="sticky top-6 space-y-4">
+              {nextShow && !artist.tickets_url && !artist.see_tickets_url && (
+                <Link
+                  href={`/events/${nextShow.slug}`}
+                  className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
+                  style={{ backgroundColor: '#E8003D' }}
+                >
+                  Compare tickets · next show
+                  <span className="block text-sm font-semibold text-white/80">
+                    {new Date(nextShow.startDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' })}
+                    {nextShow.venueCity ? ` · ${nextShow.venueCity}` : ''}
+                  </span>
+                </Link>
+              )}
               {artist.tickets_url && (
                 <div>
                   <TrackedTicketLink

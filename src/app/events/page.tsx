@@ -9,6 +9,7 @@ import Pagination from '@/components/Pagination'
 import { clampPage } from '@/lib/pagination'
 import type { EventWithVenue, Artist } from '@/lib/types/database'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { cityPagePath } from '@/lib/cities'
 import type { Metadata } from 'next'
 
 // Search results must reflect newly imported Ticketmaster/Gigsberg events
@@ -255,8 +256,11 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams
 
   // Redirect pure city browsing to the dedicated city page (unified layout)
-  if (sp.city && !sp.category && !sp.q) {
-    redirect(`/cities/${encodeURIComponent(sp.city)}`)
+  // (only when that city has a page — otherwise fall through to the normal
+  // filtered list instead of redirecting into a 404).
+  const cityRedirect = sp.city && !sp.category && !sp.q ? cityPagePath(sp.city) : null
+  if (cityRedirect) {
+    redirect(cityRedirect)
   }
 
   return (
