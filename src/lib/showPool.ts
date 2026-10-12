@@ -1,16 +1,19 @@
 // Database fetchers for the West End and Attractions hubs. The grouping and
 // classification rules live in shows.ts / eventMix.ts (pure, tested); this file
-// only pre-filters in SQL (venue/title substrings) and pages through PostgREST's
-// 1000-row cap.
+// only narrows the query and pages through PostgREST's 1000-row cap.
+//
+// West End: look up London's venues first (a small table), keep the ones the
+// venue list recognises, then fetch events by venue_id. That is far more
+// reliable than a long text-match filter, and exact.
 
 import { cache } from 'react'
-import { createClient } from '@/lib/supabase/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { fetchAllPagesParallel } from './pagedFetch.ts'
+import { createClient } from '@/lib/supabase/server'
+import { fetchAllPages, fetchAllPagesParallel } from './pagedFetch.ts'
 import { LIVE_EVENT_STATUSES } from './eventPools.ts'
 import { ATTRACTION_SEARCH_TERMS } from './eventMix.ts'
 import {
-  attractionShows, westEndShows, westEndVenueSearchTerms, type Show, type ShowEvent,
+  attractionShows, isWestEndVenue, westEndShows, type Show, type ShowEvent,
 } from './shows.ts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -18,61 +21,68 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const COLUMNS =
   'id, slug, title, start_date, status, category, image_url, price_from, price_to, currency, venue_name, venue_slug, venue_city'
 
+type DbError = { message: string } | null
 type Row = ShowEvent
-type DbResult = { data: Row[] | null; error: { message: string } | null }
+type Page<T> = { data: T[] | null; error: DbError }
 
-// ilike values go inside a PostgREST or() list, so commas/parentheses/asterisks
-// are stripped from the terms by the callers and a literal % is not allowed.
-function orIlike(column: string, terms: string[]): string {
-  return terms.map(t => `${column}.ilike.*${t}*`).join(',')
-}
+// Builds the shared part of an events query (window + live statuses) and lets
+// the caller add its own filter.
+type Narrow = (q: any) => any // eslint-disable-line @typescript-eslint/no-explicit-any
 
-async function fetchRows(
+async function fetchEventRows(
   supabase: SupabaseClient,
-  orFilter: string,
   horizonDays: number,
-  cityIlike?: string,
+  narrow: Narrow,
 ): Promise<Row[]> {
   const nowISO = new Date().toISOString()
   const horizonISO = new Date(Date.now() + horizonDays * DAY_MS).toISOString()
 
-  const base = () => {
-    let q = supabase
-      .from('events_with_venue')
-      .select(COLUMNS)
-      .gte('start_date', nowISO)
-      .lte('start_date', horizonISO)
-      .in('status', LIVE_EVENT_STATUSES)
-      .or(orFilter)
-    if (cityIlike) q = q.ilike('venue_city', cityIlike)
-    return q
-  }
+  const windowed = (q: any) => // eslint-disable-line @typescript-eslint/no-explicit-any
+    narrow(
+      q.gte('start_date', nowISO)
+       .lte('start_date', horizonISO)
+       .in('status', LIVE_EVENT_STATUSES),
+    )
 
-  let countQuery = supabase
-    .from('events_with_venue')
-    .select('id', { count: 'exact', head: true })
-    .gte('start_date', nowISO)
-    .lte('start_date', horizonISO)
-    .in('status', LIVE_EVENT_STATUSES)
-    .or(orFilter)
-  if (cityIlike) countQuery = countQuery.ilike('venue_city', cityIlike)
-  const { count } = await countQuery
+  const { count, error: countError } = await windowed(
+    supabase.from('events_with_venue').select('id', { count: 'exact', head: true }),
+  ) as { count: number | null; error: DbError }
+  if (countError) throw new Error(`count failed: ${countError.message}`)
   const total = count ?? 0
   if (total === 0) return []
 
   return fetchAllPagesParallel<Row>(
     total,
-    (from, to) => base()
+    (from, to) => windowed(supabase.from('events_with_venue').select(COLUMNS))
       .order('start_date', { ascending: true })
       .order('id', { ascending: true })
-      .range(from, to) as unknown as PromiseLike<DbResult>,
+      .range(from, to) as PromiseLike<Page<Row>>,
   )
+}
+
+type VenueRow = { id: string; name: string; city: string | null }
+
+async function fetchWestEndVenueIds(supabase: SupabaseClient): Promise<string[]> {
+  const venues = await fetchAllPages<VenueRow>((from, to) =>
+    supabase
+      .from('venues')
+      .select('id, name, city')
+      .ilike('city', 'London')
+      .order('id', { ascending: true })
+      .range(from, to) as unknown as PromiseLike<Page<VenueRow>>,
+  )
+  return venues.filter(v => isWestEndVenue(v.name, v.city)).map(v => v.id)
 }
 
 /** Every West End show with upcoming performances (one entry per show). */
 export async function fetchWestEndShows(supabase: SupabaseClient, horizonDays = 150): Promise<Show[]> {
   try {
-    const rows = await fetchRows(supabase, orIlike('venue_name', westEndVenueSearchTerms()), horizonDays, 'London')
+    const venueIds = await fetchWestEndVenueIds(supabase)
+    if (venueIds.length === 0) {
+      console.error('[west-end] no London venues matched the West End venue list')
+      return []
+    }
+    const rows = await fetchEventRows(supabase, horizonDays, q => q.in('venue_id', venueIds))
     return westEndShows(rows)
   } catch (err) {
     console.error('[west-end] fetch failed', err)
@@ -80,15 +90,27 @@ export async function fetchWestEndShows(supabase: SupabaseClient, horizonDays = 
   }
 }
 
+// Splits the attraction terms into small groups so each query's filter stays
+// short; results are merged by event id.
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
+  return out
+}
+
 /** Every attraction / timed-entry experience with upcoming availability. */
 export async function fetchAttractionShows(supabase: SupabaseClient, horizonDays = 60): Promise<Show[]> {
   try {
-    const filter = [
-      orIlike('title', ATTRACTION_SEARCH_TERMS),
-      orIlike('venue_name', ATTRACTION_SEARCH_TERMS),
-    ].join(',')
-    const rows = await fetchRows(supabase, filter, horizonDays)
-    return attractionShows(rows)
+    const terms = ATTRACTION_SEARCH_TERMS.filter(t => !/[,()%*]/.test(t))
+    const groups = chunk(terms, 8)
+    const results = await Promise.all(groups.map(group =>
+      fetchEventRows(supabase, horizonDays, q => q.or(
+        group.flatMap(t => [`title.ilike.%${t}%`, `venue_name.ilike.%${t}%`]).join(','),
+      )),
+    ))
+    const byId = new Map<string, Row>()
+    for (const rows of results) for (const r of rows) byId.set(r.id, r)
+    return attractionShows([...byId.values()])
   } catch (err) {
     console.error('[attractions] fetch failed', err)
     return []
