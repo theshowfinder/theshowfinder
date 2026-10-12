@@ -158,6 +158,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // week's" on-sale group for an artist and goes stale within days, so
     // indexing them long-term isn't useful the way a stable page is.
     { url: `${BASE}/news`,                lastModified: new Date(), changeFrequency: 'daily',   priority: 0.8 },
+    { url: `${BASE}/widgets`,             changeFrequency: 'monthly', priority: 0.4 },
   ]
 
   const cityPages: MetadataRoute.Sitemap = CITIES.map(city => ({
