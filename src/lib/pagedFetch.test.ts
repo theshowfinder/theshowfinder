@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { fetchAllPages } from './pagedFetch.ts'
+import { fetchAllPages, fetchAllPagesParallel } from './pagedFetch.ts'
 
 // Simulates PostgREST: serves rows from a fixed table but never returns more
 // than `serverCap` rows per request, whatever range was asked for.
@@ -44,6 +44,30 @@ describe('fetchAllPages — gets every row past the 1000-row server cap', () => 
     await assert.rejects(
       fetchAllPages(async () => ({ data: null, error: { message: 'statement timeout' } })),
       /statement timeout/,
+    )
+  })
+})
+
+describe('fetchAllPagesParallel — known total, concurrent pages', () => {
+  test('returns every row, in order, across several concurrent groups', async () => {
+    const table = fakeTable(7300)
+    const all = await fetchAllPagesParallel(7300, table.fetchPage, 1000, 3)
+    assert.equal(all.length, 7300)
+    assert.deepEqual(all.map(r => r.id), table.rows.map(r => r.id))
+  })
+
+  test('a zero total makes no requests', async () => {
+    const table = fakeTable(0)
+    assert.deepEqual(await fetchAllPagesParallel(0, table.fetchPage), [])
+    assert.equal(table.calls.length, 0)
+  })
+
+  test('an error on any page is thrown', async () => {
+    await assert.rejects(
+      fetchAllPagesParallel(2500, async (from) => from === 1000
+        ? { data: null, error: { message: 'boom' } }
+        : { data: [], error: null }),
+      /boom/,
     )
   })
 })

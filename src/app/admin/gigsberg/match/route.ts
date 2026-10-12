@@ -17,6 +17,7 @@ export async function GET(request: Request) {
     url.searchParams.set('review', String(result.review))
     url.searchParams.set('noMatch', String(result.noMatch))
     url.searchParams.set('errors', String(result.errors))
+    if (result.incomplete) url.searchParams.set('incomplete', '1')
     return NextResponse.redirect(url)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The matching run failed.'

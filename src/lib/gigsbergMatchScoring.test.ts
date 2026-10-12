@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  normalize, dateOnly, tokenOverlap, bucketEventsByDate, decideMatch,
+  normalize, dateOnly, tokenOverlap, bucketEventsByDate, decideMatch, hasTitleEvidence,
   type CatalogueRow, type ShowfinderEvent,
 } from './gigsbergMatchScoring.ts'
 
@@ -131,5 +131,20 @@ describe('matching only considers the same date (bucketed candidates)', () => {
     const buckets = bucketEventsByDate([event({ start_date: '2026-06-30T23:30:00Z' })])
     const d = decideMatch(listing({ event_date: '2026-07-01' }), buckets.get('2026-07-01') ?? [])
     assert.equal(d.status, 'auto_matched')
+  })
+})
+
+describe('hasTitleEvidence — decides which events need their linked artists loaded', () => {
+  test('true when the performer is in the event title', () => {
+    assert.equal(hasTitleEvidence(listing(), event()), true)
+  })
+
+  test('false for an unrelated headliner, even if a stale artist link would have matched', () => {
+    const stale = event({ title: 'Amon Amarth', artists: [{ artist: { name: 'The Darkness' } }] })
+    assert.equal(hasTitleEvidence(listing(), stale), false)
+  })
+
+  test('true for a genuinely overlapping title that is not an exact containment', () => {
+    assert.equal(hasTitleEvidence(listing({ performer1: 'Robbie Williams Live', name: 'Robbie Williams Live' }), event({ title: 'Robbie Williams Tour' })), true)
   })
 })

@@ -122,6 +122,15 @@ export function bucketEventsByDate(events: ShowfinderEvent[]): Map<string, Showf
   return buckets
 }
 
+// The cheap first test every candidate must pass: the performer appears in
+// the event title, or the titles genuinely overlap. It does not look at
+// linked artists, so it can be run before those are loaded — which lets the
+// matcher fetch linked artists only for events that could actually match.
+export function hasTitleEvidence(item: CatalogueRow, event: ShowfinderEvent): boolean {
+  const detail = score(item, { ...event, artists: [] })
+  return detail.titlePerformerExact || detail.performerOverlap >= 0.6
+}
+
 export type MatchStatus = 'auto_matched' | 'review' | 'no_match'
 
 export interface MatchDecision {

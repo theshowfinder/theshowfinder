@@ -24,3 +24,26 @@ export async function fetchAllPages<T>(
   }
   return all
 }
+
+// When the total row count is already known, fetch the pages concurrently
+// (a few at a time) instead of one after another. Used for large tables
+// where sequential round trips would dominate the run time.
+export async function fetchAllPagesParallel<T>(
+  total: number,
+  fetchPage: (from: number, to: number) => PromiseLike<PageResult<T>>,
+  pageSize = SUPABASE_PAGE_SIZE,
+  concurrency = 6,
+): Promise<T[]> {
+  const starts: number[] = []
+  for (let from = 0; from < total; from += pageSize) starts.push(from)
+  const pages: T[][] = new Array(starts.length)
+  for (let i = 0; i < starts.length; i += concurrency) {
+    const group = starts.slice(i, i + concurrency)
+    const results = await Promise.all(group.map(from => fetchPage(from, from + pageSize - 1)))
+    results.forEach((result, index) => {
+      if (result.error) throw new Error(result.error.message)
+      pages[i + index] = result.data ?? []
+    })
+  }
+  return pages.flat()
+}

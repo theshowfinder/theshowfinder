@@ -24,7 +24,7 @@ type MatchRow = {
 
 type PossibleEvent = { id: string; title: string; slug: string; ticketmaster_id: string | null }
 
-export default async function GigsbergMatchesPage({ searchParams }: { searchParams: Promise<{ checked?: string; matched?: string; review?: string; noMatch?: string; errors?: string; approved?: string; error?: string; inventory?: string; view?: string; city?: string; filter?: string }> }) {
+export default async function GigsbergMatchesPage({ searchParams }: { searchParams: Promise<{ checked?: string; matched?: string; review?: string; noMatch?: string; errors?: string; incomplete?: string; approved?: string; error?: string; inventory?: string; view?: string; city?: string; filter?: string }> }) {
   await requireAdmin()
   const params = await searchParams
   const matchedView = params.view === 'matched'
@@ -65,7 +65,7 @@ export default async function GigsbergMatchesPage({ searchParams }: { searchPara
         </div>
       </header>
       <main className="max-w-[1500px] mx-auto px-4 sm:px-6 py-8">
-        {params.checked && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-4 mb-6 text-sm font-semibold">✓ Matching complete: {params.checked} checked, {params.matched ?? 0} matched automatically, {params.review ?? 0} needing review, {params.noMatch ?? 0} new event candidates{params.errors && params.errors !== '0' ? `, ${params.errors} errors` : ''}.</div>}
+        {params.checked && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-4 mb-6 text-sm font-semibold">✓ Matching complete: {params.checked} checked, {params.matched ?? 0} matched automatically, {params.review ?? 0} needing review, {params.noMatch ?? 0} new event candidates{params.errors && params.errors !== '0' ? `, ${params.errors} errors` : ''}.{params.incomplete === '1' ? ' Time ran out before every row was checked — run matching again to continue.' : ''}</div>}
         {params.approved && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-5 py-4 mb-6 text-sm font-semibold">✓ {params.approved === 'existing' ? 'Affiliate link approved on the existing Showfinder event.' : params.approved === 'new' ? 'New Showfinder event page created.' : 'Catalogue record rejected.'}</div>}
         {params.error && <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl px-5 py-4 mb-6 text-sm">Matching could not complete: {params.error}</div>}
         {params.inventory && <div className={`rounded-xl px-5 py-4 mb-6 text-sm font-semibold ${params.inventory === 'available' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-amber-50 border border-amber-200 text-amber-800'}`}>{params.inventory === 'available' ? '✓ Inventory found — this event can be highlighted.' : params.inventory === 'no_inventory' ? 'No current inventory found; keep this event unhighlighted.' : 'Inventory could not be confirmed.'}</div>}
