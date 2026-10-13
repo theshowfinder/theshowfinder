@@ -23,7 +23,7 @@ import {
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { jsonLdScript, buildEventSchema, buildBreadcrumbSchema } from '@/lib/jsonld'
-import { ticketPurchaseDisabledStatus, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { ticketPurchaseDisabledStatus, LIVE_EVENT_STATUSES, fetchCityEventsAhead } from '@/lib/eventPools'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getEventSeoAlias } from '@/lib/seoAliases'
 import { eventImageUrl } from '@/lib/eventImages'
@@ -31,6 +31,10 @@ import { cityPagePath } from '@/lib/cities'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { pickSeeTicketsPrice, type CatalogueRowPrice } from '@/lib/seeTicketsPrice'
 import NewsletterInline from '@/components/NewsletterInline'
+import ShareButton from '@/components/ShareButton'
+import EventCard from '@/components/EventCard'
+import { buildShareText } from '@/lib/shareText'
+import { googleCalendarUrl } from '@/lib/ics'
 import { buildEventFaq, type EventDetails, type VenueDetails } from '@/lib/eventDetails'
 import { toArtistEventRows, type ArtistEventLink, type ArtistEventRow } from '@/lib/artistEvents'
 
@@ -239,8 +243,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     ? `Get tickets for ${event.title} at ${venue.name} in ${venue.city} on ${dateStr}. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.`
     : event.description ?? `${event.title} — find tickets on TheShowFinder`
 
-  const ogImagePath = eventImageUrl(event.image_url, event.category, event.title)
-  const ogImage   = new URL(ogImagePath, 'https://www.theshowfinder.com').toString()
+  // Branded share card (artwork + date + venue) so a pasted link says where and
+  // when, not just who. Falls back to the plain artwork inside the route.
+  const ogImage   = `https://www.theshowfinder.com/api/share-image/${encodeURIComponent(slug)}`
   const canonical = `https://www.theshowfinder.com/events/${slug}`
 
   return {
@@ -311,6 +316,33 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     event.details?.ticketLimit ? { label: 'Ticket limit', value: event.details.ticketLimit } : null,
   ].filter((f): f is { label: string; value: string } => !!f)
   const { venueEvents, artistEvents } = await getRelatedEvents(event, headliners[0]?.artist?.id ?? null)
+  const cityEvents = venue?.city
+    ? await fetchCityEventsAhead(createPublicClient(), {
+        city: venue.city,
+        days: 14,
+        limit: 6,
+        excludeIds: [event.id, ...venueEvents.map(e => e.id), ...artistEvents.map(e => e.id)],
+        excludeTitle: event.title,
+      }).catch(() => [])
+    : []
+  const cityHasPage = venue?.city ? cityPagePath(venue.city) : null
+  const canShare = event.status !== 'cancelled' && event.status !== 'postponed'
+  const shareText = buildShareText({
+    title: event.title,
+    venueName: venue?.name ?? null,
+    city: venue?.city ?? null,
+    startISO: event.start_date,
+    status: event.status,
+  })
+  const calendarLocation = venue ? [venue.name, venue.address, venue.city, venue.postcode].filter(Boolean).join(', ') : null
+  const googleCalUrl = googleCalendarUrl({
+    uid: event.slug,
+    title: event.title,
+    startISO: event.start_date,
+    location: calendarLocation,
+    description: 'Compare tickets on TheShowFinder',
+    url: `https://www.theshowfinder.com/events/${event.slug}`,
+  })
   const faq = buildEventFaq({
     title: event.title,
     venueName: venue?.name ?? null,
@@ -444,6 +476,34 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           ) : (
             <div className="hidden md:inline-flex items-center bg-slate-700 text-white/60 font-bold text-lg px-8 py-4 rounded-xl cursor-not-allowed">
               Sold Out
+            </div>
+          )}
+
+          {/* Share / calendar */}
+          {canShare && (
+            <div className="mt-5 flex flex-wrap items-start gap-3">
+              <ShareButton
+                url={`https://www.theshowfinder.com/events/${event.slug}`}
+                title={event.title}
+                text={shareText}
+                itemId={event.slug}
+                variant="dark"
+              />
+              <a
+                href={`/events/${event.slug}/calendar.ics`}
+                rel="nofollow"
+                className="inline-flex items-center justify-center gap-2 min-h-[44px] px-5 rounded-xl border bg-white/10 border-white/30 text-white hover:bg-white/20 text-sm font-bold transition-colors"
+              >
+                <span aria-hidden="true">📅</span> Add to calendar
+              </a>
+              <a
+                href={googleCalUrl}
+                target="_blank"
+                rel="noopener nofollow"
+                className="inline-flex items-center justify-center min-h-[44px] px-3 text-sm font-semibold text-white/70 hover:text-white underline-offset-2 hover:underline"
+              >
+                Google Calendar
+              </a>
             </div>
           )}
         </div>
@@ -647,6 +707,27 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               </div>
             )}
 
+            {venue && cityEvents.length >= 3 && (
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-900 mb-4">
+                  More in {venue.city} over the next two weeks
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {cityEvents.map(e => <EventCard key={e.id} event={e} />)}
+                </div>
+                {cityHasPage && (
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 mt-5 text-sm font-semibold">
+                    <Link href={`/cities/${encodeURIComponent(venue.city)}/this-weekend`} style={{ color: '#E8003D' }}>
+                      Everything on this weekend in {venue.city} →
+                    </Link>
+                    <Link href={`/cities/${encodeURIComponent(venue.city)}/this-week`} style={{ color: '#E8003D' }}>
+                      Everything on this week in {venue.city} →
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+
             <NewsletterInline
               source="event"
               subject={headliners[0]?.artist?.name ?? event.title}
@@ -718,11 +799,6 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                         </div>
                         <span className="text-xl ml-3">→</span>
                       </TrackedTicketLink>
-                      {(name === 'Ticketmaster' || name === 'See Tickets') && (
-                        <div className="mt-2 flex justify-end">
-                          <CopyLinkButton link={href} label="Share with friends" />
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>

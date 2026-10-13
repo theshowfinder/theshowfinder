@@ -300,6 +300,48 @@ export async function fetchTopEvents(
   return mixEvents(data ?? [], { limit, maxPerVenue: 2, maxAttractions: 1, mode: 'ranked' })
 }
 
+interface CityEventsAheadOpts {
+  city: string
+  /** London calendar days ahead the window covers. */
+  days: number
+  limit: number
+  /** Events already shown elsewhere on the page (never repeated). */
+  excludeIds?: string[]
+  /** The show being viewed: other dates of it are not "more in the city". */
+  excludeTitle?: string
+  fetchLimit?: number
+}
+
+// "More in {city}" on an event page: the biggest shows in the same city over
+// the next `days` days, one card per show, at most two per venue, no
+// attraction tickets. Returned soonest first.
+export async function fetchCityEventsAhead(
+  supabase: SupabaseClient,
+  { city, days, limit, excludeIds = [], excludeTitle, fetchLimit = 120 }: CityEventsAheadOpts,
+): Promise<EventWithVenue[]> {
+  const now = new Date()
+  const endISO = londonDaysAheadWindow(now, days).endISO
+  const { data } = await supabase
+    .from('events_with_venue')
+    .select('*')
+    .gte('start_date', now.toISOString())
+    .lt('start_date', endISO)
+    .in('status', LIVE_EVENT_STATUSES)
+    .ilike('venue_city', city)
+    .order('is_featured',    { ascending: false })
+    .order('venue_capacity', { ascending: false, nullsFirst: false })
+    .order('start_date',     { ascending: true })
+    .limit(fetchLimit) as unknown as { data: EventWithVenue[] | null }
+
+  const skip = new Set(excludeIds)
+  const skipTitle = excludeTitle?.trim().toLowerCase()
+  const pool = (data ?? []).filter(e =>
+    !skip.has(e.id) && (!skipTitle || e.title.trim().toLowerCase() !== skipTitle),
+  )
+  const picked = mixEvents(pool, { limit, maxPerVenue: 2, maxAttractions: 0, mode: 'ranked' })
+  return picked.sort((a, b) => a.start_date.localeCompare(b.start_date))
+}
+
 interface PresalesOpenNowOpts {
   city?: string
   limit: number
