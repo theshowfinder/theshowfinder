@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { Bars3Icon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { NAV_LINKS, PRIMARY_CTA } from '@/lib/headerLinks'
+import SavedLink from '@/components/SavedLink'
 
 export default function Header() {
   const [menuOpen,   setMenuOpen]   = useState(false)
@@ -37,6 +38,7 @@ export default function Header() {
 
           {/* Desktop right */}
           <div className="hidden md:flex items-center gap-3">
+            <SavedLink />
             <button
               onClick={() => setSearchOpen(!searchOpen)}
               className="p-2 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors"
@@ -55,6 +57,7 @@ export default function Header() {
 
           {/* Mobile: search + hamburger */}
           <div className="flex md:hidden items-center gap-1">
+            <SavedLink onNavigate={() => { setMenuOpen(false); setSearchOpen(false) }} />
             <button
               className="p-3 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-colors"
               onClick={() => { setSearchOpen(!searchOpen); setMenuOpen(false) }}

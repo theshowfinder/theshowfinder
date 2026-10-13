@@ -32,6 +32,10 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { pickSeeTicketsPrice, type CatalogueRowPrice } from '@/lib/seeTicketsPrice'
 import NewsletterInline from '@/components/NewsletterInline'
 import ShareButton from '@/components/ShareButton'
+import SaveButton from '@/components/SaveButton'
+import EventReminder from '@/components/EventReminder'
+import { canRemind } from '@/lib/reminders'
+import { formatShareWhen } from '@/lib/shareText'
 import EventCard from '@/components/EventCard'
 import { buildShareText } from '@/lib/shareText'
 import { googleCalendarUrl } from '@/lib/ics'
@@ -54,6 +58,7 @@ interface EventDetail {
   category: EventCategory
   start_date: string
   end_date: string | null
+  onsale_date: string | null
   doors_time: string | null
   details: EventDetails | null
   image_url: string | null
@@ -83,7 +88,7 @@ interface EventDetail {
 
 const eventSelect = (withDetails: boolean) => `
       id, title, slug, description, category,
-      start_date, end_date, doors_time,${withDetails ? ' details,' : ''}
+      start_date, end_date, onsale_date, doors_time,${withDetails ? ' details,' : ''}
       image_url, price_from, price_to, currency,
       tickets_url, own_ticket_url, viagogo_url, stubhub_url, gigsberg_url, gigsberg_affiliate_url, see_tickets_affiliate_url,
       gigsberg_highlighted, gigsberg_highlight_until, gigsberg_inventory_status, status, tags,
@@ -327,6 +332,8 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     : []
   const cityHasPage = venue?.city ? cityPagePath(venue.city) : null
   const canShare = event.status !== 'cancelled' && event.status !== 'postponed'
+  const remindable = canRemind(event.onsale_date, event.status)
+  const onSaleWhen = remindable ? formatShareWhen(event.onsale_date) : null
   const shareText = buildShareText({
     title: event.title,
     venueName: venue?.name ?? null,
@@ -489,6 +496,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 itemId={event.slug}
                 variant="dark"
               />
+              <SaveButton slug={event.slug} title={event.title} variant="dark" />
               <a
                 href={`/events/${event.slug}/calendar.ics`}
                 rel="nofollow"
@@ -736,6 +744,14 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
           {/* Right: tickets ─────────────────────────────────────── */}
           <div id="tickets" className="space-y-5 lg:sticky lg:top-24 self-start">
+            {remindable && (
+              <EventReminder
+                slug={event.slug}
+                heading="Not on sale yet? Get an email before it is"
+                blurb={`Tickets go on sale ${onSaleWhen ?? 'soon'}. Popular shows can sell out in minutes, so we'll tell you up to a day before.`}
+              />
+            )}
+
             {/* Buy Direct — our own listing, shown above the standard provider sections */}
             {ownTicketUrl && !isCancelledOrPostponed && (
               <div className="relative bg-white border-2 rounded-2xl p-5 pt-6 shadow-sm" style={{ borderColor: '#E8003D' }}>

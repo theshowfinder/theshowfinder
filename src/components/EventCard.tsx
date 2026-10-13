@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { EventWithVenue } from '@/lib/types/database'
 import { ticketPurchaseDisabledStatus } from '@/lib/eventPools'
 import { eventImageUrl } from '@/lib/eventImages'
+import SaveButton from '@/components/SaveButton'
 
 const categoryConfig: Record<string, { label: string; colour: string }> = {
   concert:  { label: 'Concert',  colour: 'bg-red-100    text-red-700'    },
@@ -52,7 +53,7 @@ export default function EventCard({ event }: Props) {
   const imageUrl   = eventImageUrl(event.image_url, event.category, event.title)
 
   return (
-    <div className="group flex flex-col rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
+    <div className="group relative flex flex-col rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
 
       {/* Image — CSS background-image avoids React hydration / onError race conditions */}
       <Link href={`/events/${event.slug}`} className="relative h-48 bg-slate-100 block overflow-hidden">
@@ -72,6 +73,11 @@ export default function EventCard({ event }: Props) {
           </span>
         )}
       </Link>
+
+      {/* Save (heart) — sits over the artwork, top-left */}
+      <div className="absolute top-3 left-3 z-10">
+        <SaveButton slug={event.slug} title={event.title} variant="card" />
+      </div>
 
       {/* Body */}
       <div className="flex flex-col flex-1 p-4 gap-2">

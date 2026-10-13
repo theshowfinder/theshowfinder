@@ -6,7 +6,7 @@
 // link) with utm parameters per channel, so shares show up in analytics and
 // bring friends to the site.
 
-import { useEffect, useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { trackEvent } from '@/lib/gtag'
 import {
   trackedShareUrl, whatsappHref, facebookHref, xHref, mailtoHref, type ShareChannel,
@@ -25,13 +25,14 @@ interface ShareButtonProps {
 }
 
 export default function ShareButton({ url, title, text, itemId, variant = 'light', label = 'Share with friends' }: ShareButtonProps) {
-  const [canNative, setCanNative] = useState(false)
+  // Server render and first paint assume no native sharing; phones switch to it on hydration.
+  const canNative = useSyncExternalStore(
+    () => () => {},
+    () => typeof navigator !== 'undefined' && typeof navigator.share === 'function',
+    () => false,
+  )
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    setCanNative(typeof navigator !== 'undefined' && typeof navigator.share === 'function')
-  }, [])
 
   function track(method: ShareChannel) {
     trackEvent('share', { method, content_type: 'event', item_id: itemId })
