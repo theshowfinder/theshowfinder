@@ -4,6 +4,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { createPublicClient } from '@/lib/supabase/public'
 import NewsletterInline from '@/components/NewsletterInline'
+import SocialLandingBanner from '@/components/SocialLandingBanner'
 import { fmtOnSaleLabel, onSaleThisWeekWindow, type OnSaleGroup } from '@/lib/on-sale'
 import { fetchOnSaleThisWeek } from '@/lib/eventPools'
 import type { Artist } from '@/lib/types/database'
@@ -68,6 +69,9 @@ export default async function OnSaleThisWeekPage() {
           </p>
         </div>
       </div>
+
+      {/* Social visitors only (utm_source=tiktok/instagram/youtube): sign-up first */}
+      <SocialLandingBanner />
 
       {/* Results */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
