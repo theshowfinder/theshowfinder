@@ -8,8 +8,10 @@ import { fmtOnSaleLabel } from '@/lib/on-sale'
 import { chunkRecipients, buildUnsubscribeLink } from '@/lib/newsletterContent'
 import {
   digestWeekKey, digestSubject, hasEnoughContent, resolveDigestMode, resolvePreviewRecipient,
-  digestMarkerSubject, limitDigestContent, type DigestContent,
+  digestMarkerSubject, limitDigestContent, groupRecipientsByCity, resolveCityName, hasEnoughCityEvents,
+  type DigestContent, type DigestEventItem,
 } from '@/lib/weeklyDigest'
+import { CITIES } from '@/lib/cities'
 import WeeklyDigestEmail from '@/emails/WeeklyDigestEmail'
 import type { Artist } from '@/lib/types/database'
 
@@ -24,6 +26,11 @@ export const dynamic = 'force-dynamic'
 // it requires CRON_SECRET to be set, skips weeks with too little content, and
 // records a row in `newsletters` so a second run in the same week can't send
 // twice (pass ?force=1 to override, e.g. after a failed run).
+//
+// Subscribers who signed up with a city (subscribers.city) get the same email
+// with the "Happening this week" section showing THEIR city's shows and a link
+// to that city's this-weekend page; everyone else gets the national version.
+// Preview mode: add ?city=Manchester to preview a city's version.
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret && request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
@@ -57,7 +64,12 @@ export async function GET(request: Request) {
   ])
   const groups = await fetchOnSaleThisWeek(supabase, artists ?? [], { limit: 6 })
 
-  const content = limitDigestContent({
+  const toItems = (rows: typeof events): DigestEventItem[] => rows.map(e => ({
+    title: e.title, slug: e.slug, startDate: e.start_date,
+    venueName: e.venue_name, venueCity: e.venue_city,
+  }))
+
+  const nationalContent = limitDigestContent({
     onSale: groups.map(g => ({
       name: g.artistName,
       slug: g.slug,
@@ -65,10 +77,7 @@ export async function GET(request: Request) {
       whenLabel: fmtOnSaleLabel(g.onsale_date),
       saleType: g.saleType,
     })),
-    events: events.map(e => ({
-      title: e.title, slug: e.slug, startDate: e.start_date,
-      venueName: e.venue_name, venueCity: e.venue_city,
-    })),
+    events: toItems(events),
     // Shows with the most upcoming performances are the ones a reader can
     // actually book, so they lead.
     shows: [...shows].sort((a, b) => b.dateCount - a.dateCount).map(s => ({
@@ -76,23 +85,44 @@ export async function GET(request: Request) {
     })),
   } satisfies DigestContent)
 
-  if (!hasEnoughContent(content)) {
+  if (!hasEnoughContent(nationalContent)) {
     return NextResponse.json({ success: true, skipped: 'not enough content this week', weekKey })
   }
 
-  const subject = digestSubject(content)
+  // One city's version: its own shows when there are enough, else the national list.
+  const cityNames = CITIES.map(c => c.name)
+  const cityContentCache = new Map<string, DigestContent>()
+  async function contentFor(city: string | null): Promise<DigestContent> {
+    if (!city) return nationalContent
+    const cached = cityContentCache.get(city)
+    if (cached) return cached
+    const cityEvents = toItems(await fetchEventsThisWeek(supabase, { city, limit: 6 }))
+    const content = hasEnoughCityEvents(cityEvents)
+      ? limitDigestContent({ ...nationalContent, events: cityEvents, cityName: city })
+      : nationalContent
+    cityContentCache.set(city, content)
+    return content
+  }
 
   // ── Recipients ──────────────────────────────────────────────────────────
-  let recipients: string[]
+  interface SendGroup { city: string | null; emails: string[] }
+  let sendGroups: SendGroup[]
   if (mode === 'live') {
-    const { data: rows } = await admin.from('subscribers').select('email').is('unsubscribed_at', null)
-    recipients = (rows ?? []).map(r => r.email as string)
+    const { data: rows } = await admin.from('subscribers').select('email, city').is('unsubscribed_at', null)
+    sendGroups = groupRecipientsByCity(
+      (rows ?? []).map(r => ({ email: r.email as string, city: (r.city as string | null) ?? null })),
+      cityNames,
+    )
   } else {
-    recipients = [resolvePreviewRecipient(process.env.DIGEST_PREVIEW_EMAIL)]
+    const previewCity = resolveCityName(new URL(request.url).searchParams.get('city'), cityNames)
+    sendGroups = [{ city: previewCity, emails: [resolvePreviewRecipient(process.env.DIGEST_PREVIEW_EMAIL)] }]
   }
-  if (recipients.length === 0) {
+  const totalRecipients = sendGroups.reduce((n, g) => n + g.emails.length, 0)
+  if (totalRecipients === 0) {
     return NextResponse.json({ success: true, skipped: 'no recipients', weekKey, mode })
   }
+
+  const subject = digestSubject(nationalContent)
 
   // Lock first (live mode) so an overlapping second run can't double-send.
   let markerId: string | null = null
@@ -105,19 +135,24 @@ export async function GET(request: Request) {
   }
 
   let sent = 0
-  for (const batch of chunkRecipients(recipients)) {
-    const messages = batch.map(email => ({
-      from: FROM_EMAIL,
-      to: email,
-      subject: mode === 'preview' ? `[PREVIEW] ${subject}` : subject,
-      react: <WeeklyDigestEmail content={content} weekKey={weekKey} unsubscribeUrl={buildUnsubscribeLink(email)} />,
-    }))
-    try {
-      const { data, error } = await resend.batch.send(messages)
-      if (error) console.error('[digest] batch send error:', JSON.stringify(error))
-      else sent += data?.data?.length ?? 0
-    } catch (err) {
-      console.error('[digest] batch send threw:', err)
+  const cityVersions: string[] = []
+  for (const group of sendGroups) {
+    const content = await contentFor(group.city)
+    if (content.cityName) cityVersions.push(content.cityName)
+    for (const batch of chunkRecipients(group.emails)) {
+      const messages = batch.map(email => ({
+        from: FROM_EMAIL,
+        to: email,
+        subject: mode === 'preview' ? `[PREVIEW] ${subject}` : subject,
+        react: <WeeklyDigestEmail content={content} weekKey={weekKey} unsubscribeUrl={buildUnsubscribeLink(email)} />,
+      }))
+      try {
+        const { data, error } = await resend.batch.send(messages)
+        if (error) console.error('[digest] batch send error:', JSON.stringify(error))
+        else sent += data?.data?.length ?? 0
+      } catch (err) {
+        console.error('[digest] batch send threw:', err)
+      }
     }
   }
 
@@ -130,8 +165,8 @@ export async function GET(request: Request) {
     }
   }
 
-  console.log(`[digest] ${mode} ${weekKey}: sent ${sent}/${recipients.length} — "${subject}"`)
-  return NextResponse.json({ success: true, mode, weekKey, subject, recipients: recipients.length, sent, sections: {
-    onSale: content.onSale.length, events: content.events.length, shows: content.shows.length,
+  console.log(`[digest] ${mode} ${weekKey}: sent ${sent}/${totalRecipients} — "${subject}" (city versions: ${cityVersions.join(', ') || 'none'})`)
+  return NextResponse.json({ success: true, mode, weekKey, subject, recipients: totalRecipients, sent, cityVersions, sections: {
+    onSale: nationalContent.onSale.length, events: nationalContent.events.length, shows: nationalContent.shows.length,
   } })
 }

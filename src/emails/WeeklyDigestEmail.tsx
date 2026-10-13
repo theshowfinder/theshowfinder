@@ -3,7 +3,7 @@
 // matching WelcomeEmail.tsx / NewsletterEmail.tsx. Every link goes through
 // digestLink() so GA4 can attribute the traffic to this week's digest.
 
-import { digestLink, type DigestContent } from '@/lib/weeklyDigest'
+import { digestLink, cityWeekendPath, type DigestContent } from '@/lib/weeklyDigest'
 
 interface Props {
   content: DigestContent
@@ -49,7 +49,7 @@ function Row({ href, title, meta, cta }: { href: string; title: string; meta: st
 }
 
 export default function WeeklyDigestEmail({ content, weekKey, unsubscribeUrl }: Props) {
-  const { onSale, events, shows } = content
+  const { onSale, events, shows, cityName } = content
   return (
     <html lang="en-GB">
       <head>
@@ -70,10 +70,10 @@ export default function WeeklyDigestEmail({ content, weekKey, unsubscribeUrl }: 
                           TheShow<span style={{ color: RED }}>Finder</span>
                         </span>
                         <h1 style={{ margin: '14px 0 0', fontSize: '26px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.5px' }}>
-                          Your week in live events
+                          {cityName ? `Your week in ${cityName}` : 'Your week in live events'}
                         </h1>
                         <p style={{ margin: '6px 0 0', fontSize: '14px', color: '#94a3b8' }}>
-                          Tickets going on sale, what&apos;s on, and West End picks.
+                          {cityName ? `What's on in ${cityName}, tickets going on sale, and West End picks.` : 'Tickets going on sale, what&apos;s on, and West End picks.'}
                         </p>
                       </td>
                     </tr>
@@ -98,7 +98,7 @@ export default function WeeklyDigestEmail({ content, weekKey, unsubscribeUrl }: 
                     {events.length > 0 && (
                       <tr>
                         <td style={{ padding: '24px 32px 8px' }}>
-                          <SectionTitle kicker="Next 7 days" title="Happening this week" color={RED} />
+                          <SectionTitle kicker="Next 7 days" title={cityName ? `Happening in ${cityName}` : 'Happening this week'} color={RED} />
                           {events.map(e => (
                             <Row
                               key={e.slug}
@@ -108,6 +108,13 @@ export default function WeeklyDigestEmail({ content, weekKey, unsubscribeUrl }: 
                               cta="Tickets"
                             />
                           ))}
+                          {cityName && (
+                            <p style={{ margin: '12px 0 0', fontSize: '14px' }}>
+                              <a href={digestLink(cityWeekendPath(cityName), weekKey, 'city-weekend')} style={{ color: RED, fontWeight: 700, textDecoration: 'none' }}>
+                                Everything on this weekend in {cityName} →
+                              </a>
+                            </p>
+                          )}
                         </td>
                       </tr>
                     )}

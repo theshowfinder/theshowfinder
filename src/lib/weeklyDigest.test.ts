@@ -4,6 +4,7 @@ import {
   digestWeekKey, digestCampaignId, digestLink, digestSubject, hasEnoughContent,
   resolveDigestMode, resolvePreviewRecipient, digestMarkerSubject, limitDigestContent,
   DEFAULT_PREVIEW_EMAIL, type DigestContent,
+  resolveCityName, groupRecipientsByCity, hasEnoughCityEvents, cityWeekendPath, MIN_CITY_EVENTS,
 } from './weeklyDigest.ts'
 
 const item = (n: number) => ({ name: `Act ${n}`, slug: `act-${n}`, dateCount: 2, whenLabel: 'Fri 9 Oct 09:00 GMT', saleType: 'onsale' as const })
@@ -89,5 +90,48 @@ describe('digestMarkerSubject / limitDigestContent', () => {
     }
     const l = limitDigestContent(big)
     assert.deepEqual([l.onSale.length, l.events.length, l.shows.length], [6, 6, 3])
+  })
+})
+
+describe('city-personalised digest', () => {
+  const cities = ['Manchester', 'London', 'Newcastle']
+
+  test('resolveCityName matches case-insensitively and rejects unknowns', () => {
+    assert.equal(resolveCityName(' manchester ', cities), 'Manchester')
+    assert.equal(resolveCityName('Swindon', cities), null)
+    assert.equal(resolveCityName(null, cities), null)
+    assert.equal(resolveCityName('', cities), null)
+  })
+
+  test('groupRecipientsByCity puts every subscriber in exactly one group and de-duplicates', () => {
+    const groups = groupRecipientsByCity([
+      { email: 'A@x.com', city: 'manchester' },
+      { email: 'a@x.com', city: 'Manchester' },
+      { email: 'b@x.com', city: 'Swindon' },
+      { email: 'c@x.com', city: null },
+      { email: 'd@x.com', city: 'London' },
+      { email: '  ', city: 'London' },
+    ], cities)
+    assert.deepEqual(groups, [
+      { city: 'London', emails: ['d@x.com'] },
+      { city: 'Manchester', emails: ['a@x.com'] },
+      { city: null, emails: ['b@x.com', 'c@x.com'] },
+    ])
+    assert.equal(groups.reduce((n, g) => n + g.emails.length, 0), 4)
+  })
+
+  test('a city needs enough shows for its own section', () => {
+    assert.equal(hasEnoughCityEvents(Array.from({ length: MIN_CITY_EVENTS - 1 }, (_, i) => ev(i))), false)
+    assert.equal(hasEnoughCityEvents(Array.from({ length: MIN_CITY_EVENTS }, (_, i) => ev(i))), true)
+  })
+
+  test('limitDigestContent keeps the city name', () => {
+    assert.equal(limitDigestContent({ ...empty, cityName: 'Manchester' }).cityName, 'Manchester')
+    assert.equal(limitDigestContent(empty).cityName, null)
+  })
+
+  test('weekend path is encoded', () => {
+    assert.equal(cityWeekendPath('Newcastle'), '/cities/Newcastle/this-weekend')
+    assert.equal(cityWeekendPath('Stoke on Trent'), '/cities/Stoke%20on%20Trent/this-weekend')
   })
 })

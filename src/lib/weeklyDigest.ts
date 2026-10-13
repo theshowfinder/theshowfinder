@@ -37,6 +37,11 @@ export interface DigestContent {
   onSale: DigestOnSaleItem[]
   events: DigestEventItem[]
   shows: DigestShowItem[]
+  /**
+   * Set for a subscriber who signed up with a city: `events` then holds that
+   * city's shows for the week and the email says so. Null/absent = national.
+   */
+  cityName?: string | null
 }
 
 // Which Monday this digest belongs to, as YYYY-MM-DD in UK time. Used for the
@@ -111,5 +116,55 @@ export function limitDigestContent(content: DigestContent): DigestContent {
     onSale: content.onSale.slice(0, 6),
     events: content.events.slice(0, 6),
     shows: content.shows.slice(0, 3),
+    cityName: content.cityName ?? null,
   }
+}
+
+// A city only gets its own section when it has enough shows to be worth a
+// heading; otherwise those subscribers get the national list like everyone else.
+export const MIN_CITY_EVENTS = 3
+
+export function hasEnoughCityEvents(events: DigestEventItem[]): boolean {
+  return events.length >= MIN_CITY_EVENTS
+}
+
+// Match a subscriber's free-text city tag to one of our city names
+// (case/space-insensitive). Anything else is treated as "no city".
+export function resolveCityName(raw: string | null | undefined, cityNames: string[]): string | null {
+  const wanted = (raw ?? '').trim().toLowerCase()
+  if (!wanted) return null
+  return cityNames.find(n => n.toLowerCase() === wanted) ?? null
+}
+
+export interface DigestSubscriber {
+  email: string
+  city: string | null
+}
+
+export interface RecipientGroup {
+  /** Canonical city name, or null for the national digest. */
+  city: string | null
+  emails: string[]
+}
+
+// One group per city that has subscribers, plus the national group. Emails are
+// de-duplicated and every subscriber lands in exactly one group.
+export function groupRecipientsByCity(subscribers: DigestSubscriber[], cityNames: string[]): RecipientGroup[] {
+  const groups = new Map<string | null, Set<string>>()
+  for (const s of subscribers) {
+    const email = s.email.trim().toLowerCase()
+    if (!email) continue
+    const key = resolveCityName(s.city, cityNames)
+    const set = groups.get(key) ?? new Set<string>()
+    set.add(email)
+    groups.set(key, set)
+  }
+  return [...groups.entries()]
+    .map(([city, set]) => ({ city, emails: [...set] }))
+    .sort((a, b) => (a.city === null ? 1 : 0) - (b.city === null ? 1 : 0) || (a.city ?? '').localeCompare(b.city ?? ''))
+}
+
+// "/cities/<city>/this-weekend" — the page the city section links to.
+export function cityWeekendPath(cityName: string): string {
+  return `/cities/${encodeURIComponent(cityName)}/this-weekend`
 }
