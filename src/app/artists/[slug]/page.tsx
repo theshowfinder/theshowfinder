@@ -1,5 +1,6 @@
 import { cache } from 'react'
 import { notFound, redirect } from 'next/navigation'
+import { after } from 'next/server'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
@@ -16,9 +17,11 @@ import { getArtistSeoAlias } from '@/lib/seoAliases'
 import NewsletterInline from '@/components/NewsletterInline'
 import FollowButton from '@/components/FollowButton'
 import type { ArtistSocialLinks } from '@/lib/artistEnrich'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { enrichArtist } from '@/lib/artistEnrichRun'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import {
-  toArtistEventRows, shouldIndexArtistPage, artistMetaDescription,
+  toArtistEventRows, shouldIndexArtistPage, artistMetaDescription, buildArtistSummary, fallbackGenreLabel,
   type ArtistEventLink, type ArtistEventRow,
 } from '@/lib/artistEvents'
 
@@ -43,7 +46,7 @@ const getArtistUpcomingEvents = cache(async (artistId: string): Promise<ArtistEv
   const supabase = createPublicClient()
   const { data } = await supabase
     .from('event_artists')
-    .select('events!inner(id, slug, title, start_date, status, venue:venues(name, city))')
+    .select('events!inner(id, slug, title, start_date, status, category, venue:venues(name, city))')
     .eq('artist_id', artistId)
     .gte('events.start_date', new Date().toISOString())
     .in('events.status', LIVE_EVENT_STATUSES)
@@ -221,8 +224,24 @@ export default async function ArtistPage({ params }: PageProps) {
 
   // Profile info filled in by the enrich-artists job (see migration 052). All
   // optional: an artist with none of it just shows dates, as before.
-  const extras = artist as Artist & { wikipedia_url?: string | null; bio_source?: string | null; social_links?: ArtistSocialLinks | null }
-  const aboutText = artist.description || artist.bio || null
+  const extras = artist as Artist & { wikipedia_url?: string | null; bio_source?: string | null; social_links?: ArtistSocialLinks | null; enriched_at?: string | null }
+
+  // First time anyone opens an artist we haven't enriched: fetch genre, links
+  // and bio in the background (after the response is sent), so it shows on the
+  // next refresh of this page. The nightly job covers the rest.
+  if (!extras.enriched_at && artist.ticketmaster_id) {
+    after(async () => {
+      try { await enrichArtist(createAdminClient(), { ...artist, enriched_at: null }) } catch { /* best effort */ }
+    })
+  }
+
+  // Always something to say: the real bio when we have one, otherwise a factual
+  // summary built from this artist's own dates. Genre falls back to the kind of
+  // show (live music, comedy, theatre...).
+  const factSummary = dates.length > 0 ? '' : buildArtistSummary(artist.name, eventRows)
+  const hasRealAbout = Boolean(artist.description || artist.bio)
+  const aboutText = artist.description || artist.bio || factSummary || null
+  const genreLabel = artist.genre || fallbackGenreLabel(eventRows)
   const social = extras.social_links ?? {}
   const profileLinks: { label: string; href: string }[] = [
     artist.website ? { label: 'Official site', href: artist.website } : null,
@@ -238,7 +257,7 @@ export default async function ArtistPage({ params }: PageProps) {
     name: artist.name,
     url: canonicalUrl,
     ...(artist.image_url ? { image: artist.image_url } : {}),
-    ...(artist.genre ? { genre: artist.genre } : {}),
+    ...(genreLabel ? { genre: genreLabel } : {}),
     ...(aboutText ? { description: aboutText } : {}),
     ...(profileLinks.length || extras.wikipedia_url
       ? { sameAs: [...profileLinks.map(l => l.href), ...(extras.wikipedia_url ? [extras.wikipedia_url] : [])] }
@@ -307,14 +326,14 @@ export default async function ArtistPage({ params }: PageProps) {
 
           {/* Tour dates */}
           <div className="lg:col-span-2">
-            {(aboutText || artist.genre || profileLinks.length > 0) && (
+            {(aboutText || genreLabel || profileLinks.length > 0) && (
               <section aria-label={`About ${artist.name}`} className="bg-white rounded-2xl p-6 mb-8 shadow-sm border border-slate-200">
                 <h2 className="text-xl font-extrabold text-slate-900 mb-3">About {artist.name}</h2>
-                {artist.genre && (
-                  <span className="inline-block text-xs font-bold uppercase tracking-wider text-slate-700 bg-slate-100 px-2.5 py-1 rounded-full mb-3">{artist.genre}</span>
+                {genreLabel && (
+                  <span className="inline-block text-xs font-bold uppercase tracking-wider text-slate-700 bg-slate-100 px-2.5 py-1 rounded-full mb-3">{genreLabel}</span>
                 )}
                 {aboutText && <p className="text-slate-700 leading-relaxed">{aboutText}</p>}
-                {extras.bio_source === 'wikipedia' && !artist.description && extras.wikipedia_url && (
+                {hasRealAbout && extras.bio_source === 'wikipedia' && !artist.description && extras.wikipedia_url && (
                   <p className="mt-2 text-xs text-slate-400">
                     Source: <a href={extras.wikipedia_url} target="_blank" rel="noopener noreferrer" className="underline">Wikipedia</a> (CC BY-SA)
                   </p>

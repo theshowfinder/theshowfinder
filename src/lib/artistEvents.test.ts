@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  toArtistEventRows, shouldIndexArtistPage, shouldListArtistInSitemap, artistMetaDescription,
+  toArtistEventRows, shouldIndexArtistPage, shouldListArtistInSitemap, artistMetaDescription, buildArtistSummary, fallbackGenreLabel,
   type ArtistEventLink,
 } from './artistEvents.ts'
 
@@ -65,5 +65,25 @@ describe('artistMetaDescription', () => {
   })
   test('no events falls back to the generic line', () => {
     assert.match(artistMetaDescription('Act', []), /^Find Act UK tour dates/)
+  })
+})
+
+describe('buildArtistSummary / fallbackGenreLabel', () => {
+  const row = (id: string, d: string, venueName: string, venueCity: string, category: string | null = 'concert') =>
+    ({ id, slug: id, title: id, startDate: d, status: 'on_sale', venueName, venueCity, category })
+  test('multi-date summary names first/last show and cities', () => {
+    const s = buildArtistSummary('Will Young', [
+      row('a', '2027-03-16T19:00:00Z', 'The London Palladium', 'London'),
+      row('b', '2027-03-18T19:00:00Z', 'O2 Apollo Manchester', 'Manchester'),
+    ])
+    assert.equal(s, 'Will Young has 2 upcoming UK dates, from 16 March 2027 (The London Palladium, London) to 18 March 2027 (O2 Apollo Manchester, Manchester) across 2 cities including London, Manchester.')
+  })
+  test('single date, no venue, and no dates', () => {
+    assert.equal(buildArtistSummary('X', [row('a', '2027-03-16T19:00:00Z', 'O2', 'London')]), 'X plays the UK on 16 March 2027 at O2, London.')
+    assert.equal(buildArtistSummary('X', []), '')
+  })
+  test('fallback genre is the most common category', () => {
+    assert.equal(fallbackGenreLabel([row('a', '2027-01-01', 'v', 'c', 'comedy'), row('b', '2027-01-02', 'v', 'c', 'comedy'), row('c', '2027-01-03', 'v', 'c', 'concert')]), 'Comedy')
+    assert.equal(fallbackGenreLabel([row('a', '2027-01-01', 'v', 'c', null)]), null)
   })
 })

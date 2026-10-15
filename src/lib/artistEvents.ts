@@ -16,6 +16,7 @@ export interface ArtistEventRow {
   status: string
   venueName: string | null
   venueCity: string | null
+  category?: string | null
 }
 
 // Shape of one `event_artists` row as returned by PostgREST for
@@ -28,6 +29,7 @@ export interface ArtistEventLink {
         title: string
         start_date: string
         status: string
+        category?: string | null
         venue: { name: string; city: string } | null
       }
     | null
@@ -51,6 +53,7 @@ export function toArtistEventRows(links: ArtistEventLink[] | null | undefined): 
       status: e.status,
       venueName: e.venue?.name ?? null,
       venueCity: e.venue?.city ?? null,
+      category: e.category ?? null,
     })
   }
   return rows.sort((a, b) => a.startDate.localeCompare(b.startDate))
@@ -91,4 +94,49 @@ export function artistMetaDescription(name: string, upcoming: ArtistEventRow[]):
     ? `${name} plays ${first.venueName ?? 'the UK'}${where} on ${when}.`
     : `${upcoming.length} upcoming UK dates, next ${when}${where}.`
   return `${name} UK tour dates and tickets. ${count} Compare prices from Ticketmaster, See Tickets and resale sites.`
+}
+
+// ── Profile info that needs no outside source ────────────────────────────────
+// Every artist page gets a factual "about" line and a genre label built from our
+// own event data, so no page is ever a bare list of dates even before (or
+// without) a Wikipedia bio. It only states what the data shows.
+
+const CATEGORY_LABELS: Record<string, string> = {
+  concert: 'Live music',
+  comedy: 'Comedy',
+  theatre: 'Theatre',
+  sports: 'Sport',
+  family: 'Family',
+}
+
+// The most common event category across the artist's upcoming shows, as a label.
+export function fallbackGenreLabel(rows: ArtistEventRow[]): string | null {
+  const counts = new Map<string, number>()
+  for (const r of rows) if (r.category && CATEGORY_LABELS[r.category]) counts.set(r.category, (counts.get(r.category) ?? 0) + 1)
+  let best: string | null = null
+  for (const [cat, n] of counts) if (!best || n > (counts.get(best) ?? 0)) best = cat
+  return best ? CATEGORY_LABELS[best] : null
+}
+
+function longDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' })
+}
+
+// "Will Young has 2 upcoming UK dates, from 16 March 2027 (The London Palladium, London)
+// to 18 March 2027 (O2 Apollo Manchester, Manchester)." Empty string when no dates.
+export function buildArtistSummary(name: string, rows: ArtistEventRow[]): string {
+  if (rows.length === 0) return ''
+  const first = rows[0]
+  const last = rows[rows.length - 1]
+  const at = (r: ArtistEventRow) => [r.venueName, r.venueCity].filter(Boolean).join(', ')
+  const cities = [...new Set(rows.map(r => r.venueCity).filter((c): c is string => !!c))]
+  if (rows.length === 1) {
+    const where = at(first)
+    return `${name} plays the UK on ${longDate(first.startDate)}${where ? ` at ${where}` : ''}.`
+  }
+  const span = `from ${longDate(first.startDate)}${at(first) ? ` (${at(first)})` : ''} to ${longDate(last.startDate)}${at(last) ? ` (${at(last)})` : ''}`
+  const cityPart = cities.length > 1
+    ? ` across ${cities.length} cities including ${cities.slice(0, 3).join(', ')}`
+    : ''
+  return `${name} has ${rows.length} upcoming UK dates, ${span}${cityPart}.`
 }
