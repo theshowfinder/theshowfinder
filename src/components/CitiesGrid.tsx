@@ -122,8 +122,7 @@ export default async function CitiesGrid() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={photo}
-                  alt=""
-                  aria-hidden="true"
+                  alt={`${name} city centre`}
                   className="absolute inset-0 w-full h-full object-cover"
                 />
                 <div

@@ -564,7 +564,7 @@ export default function HomePage() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/heroshowfinder.png"
-          alt=""
+          alt="Crowd at a live concert with stage lights"
           className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none select-none"
         />
         {/* Dark overlay */}

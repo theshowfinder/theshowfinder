@@ -301,8 +301,7 @@ export default async function CityPage({
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={cityHeroImage}
-                alt=""
-                aria-hidden="true"
+                alt={`${cityName} city centre`}
                 className="absolute inset-0 w-full h-full object-cover"
               />
             )}
@@ -310,8 +309,7 @@ export default async function CityPage({
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={cityLandmarkImage}
-                alt=""
-                aria-hidden="true"
+                alt={`${cityName} landmark`}
                 className="absolute inset-0 w-full h-full object-cover opacity-55"
               />
             )}

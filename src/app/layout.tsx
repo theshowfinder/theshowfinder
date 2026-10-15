@@ -21,7 +21,11 @@ export const metadata: Metadata = {
     'Discover and compare tickets for concerts, theatre, comedy and live events across the UK. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.',
   keywords: ['UK events', 'concerts', 'theatre', 'comedy', 'sports', 'tickets', 'live events'],
   metadataBase: new URL(BASE_URL),
-  alternates: { canonical: BASE_URL },
+  // No site-wide canonical here on purpose: a layout-level canonical is inherited
+  // by every page that doesn't set its own (login, signup, saved, 404s, ...) and
+  // makes them all claim to be the homepage, which Bing flags as "same canonical
+  // URL used for a large number of pages". Every indexable page sets its own
+  // (guarded by src/lib/canonicalCoverage.test.ts).
   openGraph: {
     title:       'TheShowFinder | Find Concerts & Live Events in the UK',
     description: 'Discover and compare tickets for concerts, theatre, comedy and live events across the UK. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.',
