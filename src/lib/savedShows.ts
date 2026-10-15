@@ -5,8 +5,10 @@
 export const SAVED_STORAGE_KEY = 'tsf_saved_v1'
 export const MAX_SAVED = 200
 
-// Event slugs are lowercase letters, digits and hyphens.
-const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,159}$/
+// Slugs are letters, digits, hyphens and underscores. Mixed case matters: event
+// slugs end in a Ticketmaster-style id (e.g. "mogwai-Gkdm1EmH"), so a
+// lowercase-only check silently rejected almost every real event.
+const SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$/
 
 export function isValidSlug(value: unknown): value is string {
   return typeof value === 'string' && SLUG_RE.test(value)

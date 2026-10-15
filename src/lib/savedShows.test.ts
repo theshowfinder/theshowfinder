@@ -32,4 +32,16 @@ describe('toggleSaved', () => {
     assert.deepEqual(parseSaved(serializeSaved(removeSaved(['a', 'b'], 'a'))), ['b'])
     assert.equal(isValidSlug('nickelback-the-o2-2026-10-17'), true)
   })
+  test('accepts the mixed-case and underscore slugs real events use', () => {
+    assert.equal(isValidSlug('mogwai-Gkdm1EmH'), true)
+    assert.equal(isValidSlug('underscores-6G2uNi5A'), true)
+    assert.equal(isValidSlug('a_b-C9'), true)
+    assert.deepEqual(toggleSaved([], 'mogwai-Gkdm1EmH'), ['mogwai-Gkdm1EmH'])
+    assert.deepEqual(parseSaved(serializeSaved(['mogwai-Gkdm1EmH'])), ['mogwai-Gkdm1EmH'])
+  })
+  test('still rejects unsafe slugs', () => {
+    for (const bad of ['', ' ', 'a b', '-lead', '<script>', 'a/b', "x'--", 'a'.repeat(161)]) {
+      assert.equal(isValidSlug(bad), false, bad)
+    }
+  })
 })
