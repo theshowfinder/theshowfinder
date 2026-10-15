@@ -4,6 +4,7 @@
 // overlay for event cards; "dark" is the labelled pill for the event page hero.
 
 import { trackEvent } from '@/lib/gtag'
+import { showToast } from '@/lib/toast'
 import { toggleSaved } from '@/lib/savedShows'
 import { useSavedSlugs, writeSaved } from './savedStore'
 
@@ -30,6 +31,8 @@ export default function SaveButton({ slug, title, variant = 'card' }: SaveButton
     e.preventDefault()
     e.stopPropagation()
     writeSaved(toggleSaved(saved, slug))
+    if (isSaved) showToast('Removed from your saved shows')
+    else showToast('Saved to your shows', { href: '/saved', label: 'View saved' })
     trackEvent('save_show', { action: isSaved ? 'remove' : 'add', item_id: slug })
   }
 
@@ -56,7 +59,7 @@ export default function SaveButton({ slug, title, variant = 'card' }: SaveButton
       onClick={onClick}
       aria-pressed={isSaved}
       aria-label={label}
-      className="flex items-center justify-center h-11 w-11 rounded-full bg-white/90 text-slate-700 shadow hover:bg-white active:scale-95 transition"
+      className="flex items-center justify-center h-11 w-11 rounded-full bg-white/90 text-slate-700 shadow border border-slate-200 hover:bg-white active:scale-95 transition"
     >
       <Heart filled={isSaved} className="h-6 w-6" />
     </button>

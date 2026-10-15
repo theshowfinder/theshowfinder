@@ -4,6 +4,7 @@ import Script from 'next/script'
 import './globals.css'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
+import Toast from '@/components/Toast'
 import { jsonLdScript, buildWebsiteSchema, buildOrganizationSchema } from '@/lib/jsonld'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -87,6 +88,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Header />
         <main className="flex-1">{children}</main>
         <Footer />
+        <Toast />
 
         {/* Google Analytics 4 — beforeInteractive so Next.js injects these
             into the document <head> regardless of where they're written in

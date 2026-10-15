@@ -8,6 +8,7 @@ import { useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { followTarget, unfollowTarget } from '@/app/actions/follow'
 import { trackEvent } from '@/lib/gtag'
+import { showToast } from '@/lib/toast'
 import { followKey, toggleFollowed, type FollowKind } from '@/lib/follows'
 import { useFollowedKeys, writeFollowed, useRememberedEmail, rememberEmail } from './followStore'
 
@@ -55,6 +56,7 @@ export default function FollowButton({ kind, slug, name, source, variant = 'dark
     writeFollowed(toggleFollowed(keys.filter(k => k !== key), key))
     setOpen(false)
     setJustFollowed(true)
+    showToast(`Following ${name}. We'll email you about new shows.`)
     trackEvent('follow', { kind, item_id: slug, source })
   }
 
@@ -63,6 +65,7 @@ export default function FollowButton({ kind, slug, name, source, variant = 'dark
     if (following) {
       writeFollowed(keys.filter(k => k !== key))
       setJustFollowed(false)
+      showToast(`Stopped following ${name}`)
       if (savedEmail) void unfollowTarget(savedEmail, kind, slug)
       trackEvent('unfollow', { kind, item_id: slug, source })
       return

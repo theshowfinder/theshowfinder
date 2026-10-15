@@ -14,6 +14,8 @@ import { createPublicClient } from '@/lib/supabase/public'
 import { groupEventsByArtist, fmtOnSaleLabel, mergeEventsById } from '@/lib/on-sale'
 import { fetchOnSaleThisWeekEvents, fetchPresalesOpenNowEvents } from '@/lib/eventPools'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
+import FollowButton from '@/components/FollowButton'
+import SaveButton from '@/components/SaveButton'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import type { Artist } from '@/lib/types/database'
 import {
@@ -137,9 +139,14 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
             <h1 className="text-5xl sm:text-6xl font-extrabold text-white leading-tight mb-3">
               {artistName}
             </h1>
-            <span className="inline-flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-full text-white" style={{ backgroundColor: isPresale ? '#E8003D' : '#026CDF' }}>
-              🎟️ {isPresale ? 'Presale opens' : 'On sale'} {onSaleLabel}
-            </span>
+            <div className="flex flex-wrap items-start gap-3">
+              <span className="inline-flex items-center gap-2 text-sm font-bold px-4 min-h-[44px] rounded-full text-white" style={{ backgroundColor: isPresale ? '#E8003D' : '#026CDF' }}>
+                🎟️ {isPresale ? 'Presale opens' : 'On sale'} {onSaleLabel}
+              </span>
+              {dbArtist?.slug && (
+                <FollowButton kind="artist" slug={dbArtist.slug} name={artistName} source="onsale" />
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -189,6 +196,8 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
                         {dt.toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
+
+                    <SaveButton slug={event.slug} title={event.title} variant="card" />
 
                     {/* Price + ticket link */}
                     <div className="shrink-0 text-right">
