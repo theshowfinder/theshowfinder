@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   console.log(`[sync] Starting Ticketmaster event sync (on-sale-soon pass) at ${started}`)
 
   try {
-    const result = await syncTicketmasterEvents({ pass: 'onsale' })
+    const result = await syncTicketmasterEvents({ pass: 'onsale', deadlineMs: Date.now() + 285_000 })
     return NextResponse.json({
       success: true,
       started,

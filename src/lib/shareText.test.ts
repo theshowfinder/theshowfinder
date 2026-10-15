@@ -57,3 +57,18 @@ describe('buildArtistShareText', () => {
     assert.equal(buildArtistShareText('Nickelback', 0), 'Have a look at Nickelback on TheShowFinder:')
   })
 })
+
+import { cardSafeText } from './shareText.ts'
+describe('cardSafeText', () => {
+  test('keeps normal titles, accents and punctuation', () => {
+    assert.equal(cardSafeText("Florence + the Machine: Café Tour – 2027 £25"), "Florence + the Machine: Café Tour – 2027 £25")
+  })
+  test('drops emoji, zero-width and variation-selector characters', () => {
+    assert.equal(cardSafeText('Lion King 🦁 ​ Live️'), 'Lion King Live')
+  })
+  test('curly quotes become plain quotes; empty/nullish becomes empty string', () => {
+    assert.equal(cardSafeText('Don’t Stop'), "Don't Stop")
+    assert.equal(cardSafeText(null), '')
+    assert.equal(cardSafeText('日本語'), '')
+  })
+})

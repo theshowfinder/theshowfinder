@@ -6,7 +6,7 @@
 import { ImageResponse } from 'next/og'
 import { createPublicClient } from '@/lib/supabase/public'
 import { eventImageUrl } from '@/lib/eventImages'
-import { formatShareWhen } from '@/lib/shareText'
+import { formatShareWhen, cardSafeText } from '@/lib/shareText'
 import type { EventCategory } from '@/lib/types/database'
 
 export const revalidate = 3600
@@ -50,9 +50,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   if (!event) return new Response('Not found', { status: 404 })
 
   const artwork = await loadArtwork(eventImageUrl(event.image_url, event.category, event.title))
-  const when = formatShareWhen(event.start_date)
-  const where = event.venue ? `${event.venue.name}, ${event.venue.city}` : null
-  const titleSize = event.title.length <= 28 ? 84 : event.title.length <= 50 ? 66 : 52
+  const when = cardSafeText(formatShareWhen(event.start_date))
+  const where = event.venue ? cardSafeText(`${event.venue.name}, ${event.venue.city}`) || null : null
+  const title = cardSafeText(event.title) || 'Live event'
+  const titleSize = title.length <= 28 ? 84 : title.length <= 50 ? 66 : 52
   const badge = event.status === 'sold_out' ? 'SOLD OUT' : event.status === 'cancelled' ? 'CANCELLED' : event.status === 'postponed' ? 'POSTPONED' : null
 
   return new ImageResponse(
@@ -74,7 +75,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
           </div>
         )}
         <div style={{ position: 'absolute', left: 64, right: 64, bottom: 56, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', fontSize: titleSize, lineHeight: 1.05, fontWeight: 800, maxWidth: 1070 }}>{event.title}</div>
+          <div style={{ display: 'flex', fontSize: titleSize, lineHeight: 1.05, fontWeight: 800, maxWidth: 1070 }}>{title}</div>
           {when && <div style={{ display: 'flex', fontSize: 42, marginTop: 22, color: '#ffffff' }}>{when}</div>}
           {where && <div style={{ display: 'flex', fontSize: 36, marginTop: 8, color: 'rgba(255,255,255,0.78)' }}>{where}</div>}
           <div style={{ display: 'flex', fontSize: 28, marginTop: 26, color: '#E8003D' }}>Compare tickets · theshowfinder.com</div>

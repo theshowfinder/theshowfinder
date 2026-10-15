@@ -70,3 +70,18 @@ export function xHref(text: string, url: string): string {
 export function mailtoHref(subject: string, text: string, url: string): string {
   return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`${text}\n\n${url}`)}`
 }
+
+// Text for the 1200x630 share card. next/og only ships a Latin font; any other
+// character (emoji, symbols, CJK, zero-width or variation-selector marks that
+// are invisible in the title) makes it try to download a "dynamic font" and log
+// "Failed to download dynamic font. Status: 400". Keep Latin letters, digits,
+// common punctuation and currency; drop the rest.
+export function cardSafeText(value: string | null | undefined): string {
+  return (value ?? '')
+    .normalize('NFC')
+    .replace(/[‘’‛]/g, "'")
+    .replace(/[“”„]/g, '"')
+    .replace(/[^ -~ -ɏ‐-―•…€]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}

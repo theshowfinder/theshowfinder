@@ -882,6 +882,7 @@ export async function syncTicketmasterAttractions(
 }
 
 const EVENT_CONCURRENCY = 20  // events processed in parallel per TM API page
+const SEGMENT_BUDGET_MS = 120_000  // worst-case time for one on-sale (category, band) segment
 
 // ── On-sale-soon fetch ───────────────────────────────────────────────────────
 // Fetches one page of UK events whose public-sale period STARTS within the
@@ -987,7 +988,7 @@ function worstStatus(results: FetchResult[]): { status: 'ok' | 'rate_limited' | 
 // ── Main entry point ─────────────────────────────────────────────────────────
 
 export async function syncTicketmasterEvents(
-  opts?: { startDateTime?: string; pass?: 'main' | 'onsale' | 'both'; bandIndex?: number },
+  opts?: { startDateTime?: string; pass?: 'main' | 'onsale' | 'both'; bandIndex?: number; deadlineMs?: number },
 ): Promise<SyncResult> {
   const t0 = Date.now()
   const db = createAdminClient()
@@ -1004,6 +1005,7 @@ export async function syncTicketmasterEvents(
   const eventCache = new Map<string, ExistingEventSnapshot | null>()
 
   let total = 0, inserted = 0, skipped = 0, errors = 0, rateLimited = 0
+  let onSaleStoppedEarly = false
   const byCategory: Record<string, number> = {}
 
   if (pass !== 'onsale') {
@@ -1111,8 +1113,20 @@ export async function syncTicketmasterEvents(
 
   console.log(`\n[TM] ── On-sale-soon pass (${onSaleStartDT} → ${onSaleEndDT}) ──`)
 
-  for (const { classificationName, dbCategory } of SEGMENT_QUERIES) {
-    for (const { label, start, end } of bands) {
+  // Band-major (nearest dates first, every category within a band) rather than
+  // category-major: one category's 18 bands used to use up the whole time budget,
+  // so theatre/sports/family/comedy never ran and the closing flag calculation
+  // below was never reached when the function was killed at the time limit.
+  // Each (category, band) can take 80-115s, so we stop starting new ones once
+  // there is no longer room for another and still finish cleanly.
+  onSaleLoop:
+  for (const { label, start, end } of bands) {
+    for (const { classificationName, dbCategory } of SEGMENT_QUERIES) {
+      if (opts?.deadlineMs && Date.now() + SEGMENT_BUDGET_MS > opts.deadlineMs) {
+        onSaleStoppedEarly = true
+        console.log(`[TM] ── Stopping on-sale pass early to stay inside the time limit (next: "${classificationName}" ${label}) ──`)
+        break onSaleLoop
+      }
       console.log(`[TM]    "${classificationName}" ${label}`)
       const segmentStarted = new Date().toISOString()
       const segmentResults: FetchResult[] = []
@@ -1189,6 +1203,7 @@ export async function syncTicketmasterEvents(
   console.log(`[TM]    total=${total} inserted=${inserted} skipped=${skipped} errors=${errors} rateLimited=${rateLimited}`)
   console.log(`[TM]    by category:`, byCategory)
   console.log(`[TM]    flags updated: ${flagsUpdated}`)
+  if (onSaleStoppedEarly) console.log('[TM]    on-sale pass stopped early (time budget); later bands were not reached this run (nearest dates are always done first)')
   if (rateLimited > 0) {
     console.error(`[TM]    ⚠ ${rateLimited} segment(s) hit Ticketmaster's rate limit even after retrying — some events were very likely missed this run. Check the sync_log table for status='rate_limited' rows.`)
   }
