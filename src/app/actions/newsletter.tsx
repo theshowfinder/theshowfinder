@@ -169,5 +169,14 @@ export async function unsubscribeNewsletter(email: string): Promise<{ error?: st
     return { error: 'Something went wrong. Please try again.' }
   }
 
+  // The same link is in the follow emails: it stops those too. Never fails the
+  // unsubscribe (the table only exists once migration 051 has been run).
+  const { error: followError } = await db
+    .from('follows')
+    .update({ unsubscribed_at: new Date().toISOString() })
+    .eq('email', trimmed)
+    .is('unsubscribed_at', null)
+  if (followError) console.error('[newsletter] could not stop follow emails:', followError.message)
+
   return {}
 }

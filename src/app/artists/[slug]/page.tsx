@@ -14,6 +14,7 @@ import { jsonLdScript, buildBreadcrumbSchema } from '@/lib/jsonld'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getArtistSeoAlias } from '@/lib/seoAliases'
 import NewsletterInline from '@/components/NewsletterInline'
+import FollowButton from '@/components/FollowButton'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import {
   toArtistEventRows, shouldIndexArtistPage, artistMetaDescription,
@@ -258,11 +259,14 @@ export default async function ArtistPage({ params }: PageProps) {
             <h1 className="text-5xl sm:text-6xl font-extrabold text-white leading-tight mb-3">
               {artist.name}
             </h1>
-            {onSaleLabel && (
-              <span className="inline-flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-full text-white" style={{ backgroundColor: '#026CDF' }}>
-                🎟️ On sale {onSaleLabel}
-              </span>
-            )}
+            <div className="flex flex-wrap items-start gap-3">
+              {onSaleLabel && (
+                <span className="inline-flex items-center gap-2 text-sm font-bold px-4 min-h-[44px] rounded-full text-white" style={{ backgroundColor: '#026CDF' }}>
+                  🎟️ On sale {onSaleLabel}
+                </span>
+              )}
+              <FollowButton kind="artist" slug={artist.slug} name={artist.name} source="artist" />
+            </div>
           </div>
         </div>
       </div>
