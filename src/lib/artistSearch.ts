@@ -9,6 +9,8 @@ export interface ArtistListRow {
   genre?: string | null
   upcoming_count: number
   next_date: string | null
+  /** Optional line shown instead of the default date count. */
+  subtitle?: string
 }
 
 // Lowercase, strip accents and punctuation, collapse whitespace:

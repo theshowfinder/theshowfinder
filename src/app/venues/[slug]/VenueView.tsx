@@ -5,6 +5,7 @@ import EventCard from '@/components/EventCard'
 import Pagination from '@/components/Pagination'
 import NewsletterInline from '@/components/NewsletterInline'
 import FollowButton from '@/components/FollowButton'
+import { ArtistsInCity, SimilarArtists } from '@/components/RelatedArtists'
 import ShareButton from '@/components/ShareButton'
 import { cityPagePath } from '@/lib/cities'
 import type { EventWithVenue } from '@/lib/types/database'
@@ -171,6 +172,11 @@ export default async function VenueView({ slug, page }: { slug: string; page: nu
             <Pagination currentPage={page} totalPages={totalPages} buildHref={buildHref} />
           </>
         )}
+
+        <div className="mt-12 max-w-3xl space-y-10">
+          {venue.city && <ArtistsInCity city={venue.city} />}
+          <SimilarArtists title="Popular right now" />
+        </div>
 
         <div className="mt-12 max-w-2xl">
           <NewsletterInline source="venue" subject={venue.name} />

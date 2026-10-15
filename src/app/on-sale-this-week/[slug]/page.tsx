@@ -18,6 +18,7 @@ import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import FollowButton from '@/components/FollowButton'
 import SaveButton from '@/components/SaveButton'
 import ShareButton from '@/components/ShareButton'
+import { ArtistsInCity, SimilarArtists } from '@/components/RelatedArtists'
 import { buildArtistShareText } from '@/lib/shareText'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import type { EventWithVenue } from '@/lib/types/database'
@@ -283,6 +284,11 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
                   </div>
                 )
               })}
+            </div>
+
+            <div className="mt-10 space-y-10">
+              {events[0]?.venue_city && <ArtistsInCity city={events[0].venue_city} excludeArtistIds={dbArtist ? [dbArtist.id] : []} />}
+              <SimilarArtists genre={dbArtist?.genre ?? null} excludeArtistIds={dbArtist ? [dbArtist.id] : []} />
             </div>
           </div>
 

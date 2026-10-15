@@ -17,6 +17,7 @@ import { getArtistSeoAlias } from '@/lib/seoAliases'
 import NewsletterInline from '@/components/NewsletterInline'
 import FollowButton from '@/components/FollowButton'
 import ShareButton from '@/components/ShareButton'
+import { ArtistsInCity, SimilarArtists } from '@/components/RelatedArtists'
 import { buildArtistShareText } from '@/lib/shareText'
 import type { ArtistSocialLinks } from '@/lib/artistEnrich'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -449,6 +450,11 @@ export default async function ArtistPage({ params }: PageProps) {
                 })}
               </div>
             )}
+
+            <div className="mt-10 space-y-10">
+              {nextShow?.venueCity && <ArtistsInCity city={nextShow.venueCity} excludeArtistIds={[artist.id]} />}
+              <SimilarArtists genre={artist.genre} excludeArtistIds={[artist.id]} />
+            </div>
 
             <div className="mt-8">
               <NewsletterInline source="artist" subject={artist.name} />

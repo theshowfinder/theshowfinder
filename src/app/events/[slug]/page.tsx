@@ -32,6 +32,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { pickSeeTicketsPrice, type CatalogueRowPrice } from '@/lib/seeTicketsPrice'
 import NewsletterInline from '@/components/NewsletterInline'
 import ShareButton from '@/components/ShareButton'
+import { ArtistsInCity, SimilarArtists } from '@/components/RelatedArtists'
 import SaveButton from '@/components/SaveButton'
 import EventReminder from '@/components/EventReminder'
 import { canRemind } from '@/lib/reminders'
@@ -759,6 +760,14 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 )}
               </div>
             )}
+
+            {venue?.city && (
+              <ArtistsInCity city={venue.city} excludeArtistIds={headliners.map(h => h.artist?.id).filter((id): id is string => !!id)} />
+            )}
+            <SimilarArtists
+              genre={headliners[0]?.artist?.genre ?? null}
+              excludeArtistIds={headliners.map(h => h.artist?.id).filter((id): id is string => !!id)}
+            />
 
             <NewsletterInline
               source="event"

@@ -18,7 +18,7 @@ export default function ArtistResultCard({ artist }: { artist: ArtistListRow }) 
       </div>
       <div className="min-w-0">
         <p className="truncate font-extrabold text-slate-900 group-hover:text-red-600 transition-colors">{artist.name}</p>
-        <p className="truncate text-sm text-slate-500">{dateCountLabel(artist.upcoming_count, artist.next_date)}</p>
+        <p className="truncate text-sm text-slate-500">{artist.subtitle ?? dateCountLabel(artist.upcoming_count, artist.next_date)}</p>
       </div>
     </Link>
   )
