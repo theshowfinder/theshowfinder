@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import ScrollRail from '@/components/ScrollRail'
 import ShowCard from '@/components/ShowCard'
 import { getWestEndShows } from '@/lib/showPool'
 
@@ -22,9 +23,9 @@ export default async function WestEndStrip({ limit = 4, inline = false }: { limi
             See all shows →
           </Link>
         </div>
-        <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <ScrollRail label="West End shows" columns={4}>
           {shows.map(show => <ShowCard key={show.slug} show={show} kind="west-end" />)}
-        </div>
+        </ScrollRail>
     </>
   )
 

@@ -77,3 +77,8 @@ body {
   .h-rail-4 > * { flex-basis: calc((100% - 3 * var(--rail-gap)) / 4); }
 }
 @media (prefers-reduced-motion: reduce) { .h-rail { scroll-behavior: auto; } }
+
+/* Six-across variant (homepage city tiles): ~2.4 tiles on a phone, 3 on a tablet. */
+.h-rail-6 > * { flex-basis: 42%; }
+@media (min-width: 640px)  { .h-rail-6 > * { flex-basis: calc((100% - 2 * var(--rail-gap)) / 3); } }
+@media (min-width: 1024px) { .h-rail-6 > * { flex-basis: calc((100% - 5 * var(--rail-gap)) / 6); } }

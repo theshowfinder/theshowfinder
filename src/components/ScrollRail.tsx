@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 // four-across variant used by the venue tiles.
 export default function ScrollRail({
   children, label, columns = 3,
-}: { children: ReactNode; label: string; columns?: 3 | 4 }) {
+}: { children: ReactNode; label: string; columns?: 3 | 4 | 6 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [canPrev, setCanPrev] = useState(false)
   const [canNext, setCanNext] = useState(false)
@@ -41,7 +41,7 @@ export default function ScrollRail({
 
   return (
     <div className="relative">
-      <div ref={ref} role="region" aria-label={label} tabIndex={0} className={`h-rail${columns === 4 ? ' h-rail-4' : ''}`}>
+      <div ref={ref} role="region" aria-label={label} tabIndex={0} className={`h-rail${columns === 4 ? ' h-rail-4' : columns === 6 ? ' h-rail-6' : ''}`}>
         {children}
       </div>
       {canPrev && (

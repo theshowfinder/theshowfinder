@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { SOCIAL_LINKS } from '@/lib/socialLinks'
+import { DIRECTORY_LETTERS } from '@/lib/artistSearch'
 
 function InstagramIcon() {
   return (
@@ -58,6 +59,28 @@ const cities = [
   'Middlesbrough', 'Sunderland', 'Bradford', 'Reading', 'Milton Keynes',
   'Bournemouth', 'Ipswich', 'Stoke-on-Trent', 'Wolverhampton', 'Swansea',
   'Aberdeen',
+]
+
+// Site-wide internal links, on every page: they give crawlers a short path into
+// the pages that matter most (big venues, weekend listings, the artist
+// directory), and give visitors a useful shortcut. Kept to genuinely useful
+// destinations (no keyword lists). The venue slugs are the arenas with the most
+// upcoming shows; if a venue is ever renamed, update its slug here.
+const weekendCities = ['London', 'Manchester', 'Birmingham', 'Glasgow', 'Edinburgh', 'Leeds', 'Liverpool', 'Bristol', 'Cardiff', 'Newcastle']
+
+const topVenues = [
+  { name: 'The O2, London',                   slug: 'the-o2-london' },
+  { name: 'Wembley Stadium',                  slug: 'wembley-stadium-london' },
+  { name: 'OVO Arena Wembley',                slug: 'ovo-arena-wembley-london' },
+  { name: 'Co-op Live, Manchester',           slug: 'co-op-live-manchester' },
+  { name: 'AO Arena, Manchester',             slug: 'ao-arena-manchester' },
+  { name: 'OVO Hydro, Glasgow',               slug: 'ovo-hydro-glasgow' },
+  { name: 'bp pulse LIVE, Birmingham',        slug: 'bp-pulse-live-birmingham' },
+  { name: 'Utilita Arena Birmingham',         slug: 'utilita-arena-birmingham-birmingham' },
+  { name: 'First Direct Bank Arena, Leeds',   slug: 'leeds-first-direct-bank-arena-leeds' },
+  { name: 'M&S Bank Arena, Liverpool',        slug: 'ms-bank-arena-liverpool-liverpool' },
+  { name: 'Utilita Arena Newcastle',          slug: 'utilita-arena-newcastle-newcastle-upon-tyne' },
+  { name: 'Motorpoint Arena, Nottingham',     slug: 'motorpoint-arena-nottingham-nottingham' },
 ]
 
 export default function Footer() {
@@ -130,6 +153,53 @@ export default function Footer() {
             </ul>
           </div>
         </div>
+
+        {/* Popular shortcuts */}
+        <nav aria-label="Popular pages" className="grid grid-cols-1 sm:grid-cols-3 gap-10 pt-10 mb-12 border-t border-white/10">
+          <div>
+            <h3 className="text-xs font-extrabold text-white uppercase tracking-widest mb-4">What&apos;s on this weekend</h3>
+            <ul className="space-y-2.5">
+              {weekendCities.map(city => (
+                <li key={city}>
+                  <Link href={`/cities/${encodeURIComponent(city)}/this-weekend`} className="text-sm hover:text-white transition-colors">
+                    This weekend in {city}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-extrabold text-white uppercase tracking-widest mb-4">Biggest UK venues</h3>
+            <ul className="space-y-2.5">
+              {topVenues.map(v => (
+                <li key={v.slug}>
+                  <Link href={`/venues/${v.slug}`} className="text-sm hover:text-white transition-colors">{v.name}</Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-extrabold text-white uppercase tracking-widest mb-4">Artists A&ndash;Z</h3>
+            <ul className="flex flex-wrap gap-2">
+              {DIRECTORY_LETTERS.map(l => (
+                <li key={l}>
+                  <Link
+                    href={`/artists?letter=${encodeURIComponent(l)}`}
+                    aria-label={l === '#' ? 'Artists starting with a number or symbol' : `Artists starting with ${l}`}
+                    className="flex h-8 w-8 items-center justify-center rounded-md bg-white/10 text-sm font-semibold hover:bg-[#E8003D] hover:text-white transition-colors"
+                  >
+                    {l}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <p className="text-sm text-white/50 mt-4 leading-relaxed">
+              Every artist with upcoming UK dates, with tour dates, tickets and where they&apos;re playing near you.
+            </p>
+          </div>
+        </nav>
 
         {/* Bottom bar */}
         <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-5">

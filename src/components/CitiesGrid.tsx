@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import ScrollRail from '@/components/ScrollRail'
 import { createPublicClient } from '@/lib/supabase/public'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { resolveCityEventCount, normalizeCityFilterValue } from '@/lib/cityEventCount'
@@ -104,7 +105,7 @@ export default async function CitiesGrid() {
   }
 
   return (
-    <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2 md:grid md:grid-cols-4 lg:grid-cols-6 md:gap-4 md:pb-0">
+    <ScrollRail label="UK cities" columns={6}>
       {CITIES.map(({ name, gradient, emoji }) => {
         const count = countMap[name] ?? 0
         const hasCountError = countErrorMap[name] ?? false
@@ -114,7 +115,7 @@ export default async function CitiesGrid() {
           <Link
             key={name}
             href={`/cities/${encodeURIComponent(name)}`}
-            className="flex-none w-40 md:w-auto relative flex flex-col justify-end p-4 rounded-2xl overflow-hidden h-32 md:h-36 hover:scale-[1.02] hover:shadow-xl transition-all duration-200 group"
+            className="relative flex flex-col justify-end p-4 rounded-2xl overflow-hidden h-32 md:h-36 hover:scale-[1.02] hover:shadow-xl transition-all duration-200 group"
             style={{ background: gradient }}
           >
             {photo && (
@@ -157,6 +158,6 @@ export default async function CitiesGrid() {
           </Link>
         )
       })}
-    </div>
+    </ScrollRail>
   )
 }

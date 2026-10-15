@@ -42,6 +42,7 @@ import { NATIONAL_SLUG } from '@/lib/cityNews'
 import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
+import ScrollRail from '@/components/ScrollRail'
 
 type FeaturedQueryResult = { data: EventWithVenue[] | null; error: { message: string } | null }
 
@@ -159,11 +160,11 @@ async function FeaturedEvents() {
   }
 
   return (
-    <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    <ScrollRail label="Featured shows">
       {events.map(event => (
         <EventCard key={event.id} event={event} />
       ))}
-    </div>
+    </ScrollRail>
   )
 }
 
@@ -200,9 +201,9 @@ async function GigsbergHighlights() {
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Featured Gigsberg events</h2>
           <p className="text-white/60 mt-2 text-sm">Live UK events with inventory checked recently.</p>
         </div>
-        <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <ScrollRail label="Events">
           {events.map(event => <EventCard key={event.id} event={event} />)}
-        </div>
+        </ScrollRail>
       </div>
     </section>
   )
@@ -305,7 +306,7 @@ async function OnSaleThisWeek() {
           </p>
         ) : (
           <>
-            <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <ScrollRail label="On sale this week">
               {groups.map(group => {
                 const isPresale = group.saleType === 'presale'
                 return (
@@ -355,7 +356,7 @@ async function OnSaleThisWeek() {
                 </Link>
                 )
               })}
-            </div>
+            </ScrollRail>
             {overflow > 0 && (
               <div className="mt-10 text-center">
                 <Link
@@ -405,7 +406,7 @@ async function NationalNews() {
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Entertainment News</h2>
           </div>
         </div>
-        <NewsCardGrid items={items} context="homepage" rail />
+        <NewsCardGrid items={items} context="homepage" scroll />
       </div>
     </section>
   )
@@ -433,7 +434,7 @@ async function PresalesOpenNow() {
             View all →
           </Link>
         </div>
-        <PresaleGrid groups={groups} />
+        <PresaleGrid groups={groups} scroll />
       </div>
     </section>
   )
@@ -461,9 +462,9 @@ async function EventsThisWeekNational() {
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Events This Week</h2>
           </div>
         </div>
-        <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <ScrollRail label="Events">
           {events.map(event => <EventCard key={event.id} event={event} />)}
-        </div>
+        </ScrollRail>
       </div>
     </section>
   )
@@ -531,9 +532,9 @@ async function JustAnnounced() {
           </p>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Just Announced</h2>
         </div>
-        <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <ScrollRail label="Just announced" columns={4}>
           {events.map(event => <EventCard key={event.id} event={event} />)}
-        </div>
+        </ScrollRail>
       </div>
     </section>
   )
