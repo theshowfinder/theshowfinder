@@ -34,7 +34,7 @@ describe('parseAttractionProfile', () => {
     assert.deepEqual(p.social, {})
   })
   test('survives garbage input', () => {
-    assert.deepEqual(parseAttractionProfile(null), { genre: null, website: null, wikipediaUrl: null, social: {} })
+    assert.deepEqual(parseAttractionProfile(null), { genre: null, musicbrainzId: null, website: null, wikipediaUrl: null, social: {} })
     assert.equal(safeHttpsUrl('not a url'), null)
   })
 })
@@ -62,5 +62,15 @@ describe('cleanWikiExtract', () => {
   test('always keeps at least the first sentence', () => {
     const one = 'A '.repeat(300).trim() + '. Second sentence here that is long enough to matter.'
     assert.ok(cleanWikiExtract(one)!.length > 100)
+  })
+})
+
+describe('parseAttractionProfile musicbrainz id', () => {
+  test('reads the id from {id} or {url} entries and ignores junk', () => {
+    const id = '0b2a2d6e-6a3b-4a66-9b6c-0c5c2f7f1e11'
+    assert.equal(parseAttractionProfile({ externalLinks: { musicbrainz: [{ id }] } }).musicbrainzId, id)
+    assert.equal(parseAttractionProfile({ externalLinks: { musicbrainz: [{ url: `https://musicbrainz.org/artist/${id}` }] } }).musicbrainzId, id)
+    assert.equal(parseAttractionProfile({ externalLinks: { musicbrainz: [{ id: 'nope' }] } }).musicbrainzId, null)
+    assert.equal(parseAttractionProfile({}).musicbrainzId, null)
   })
 })

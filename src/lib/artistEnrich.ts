@@ -14,12 +14,24 @@ export interface ArtistSocialLinks {
 
 export interface AttractionProfile {
   genre: string | null
+  musicbrainzId: string | null
   website: string | null
   wikipediaUrl: string | null
   social: ArtistSocialLinks
 }
 
-type LinkList = Array<{ url?: unknown }> | undefined
+type LinkList = Array<{ url?: unknown; id?: unknown }> | undefined
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Accepts a bare MusicBrainz id or a musicbrainz.org/artist/<id> URL.
+export function mbidFromLink(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const v = value.trim()
+  if (UUID_RE.test(v)) return v.toLowerCase()
+  const m = v.match(/musicbrainz\.org\/artist\/([0-9a-f-]{36})/i)
+  return m && UUID_RE.test(m[1]) ? m[1].toLowerCase() : null
+}
 
 // Only plain https URLs are kept (no javascript:, no data:, no http).
 export function safeHttpsUrl(value: unknown): string | null {
@@ -60,9 +72,16 @@ export function parseAttractionProfile(attraction: unknown): AttractionProfile {
   const twitter = firstUrl(links.twitter);     if (twitter)   social.twitter = twitter
   const facebook = firstUrl(links.facebook);   if (facebook)  social.facebook = facebook
 
+  let musicbrainzId: string | null = null
+  for (const item of links.musicbrainz ?? []) {
+    musicbrainzId = mbidFromLink(item?.id) ?? mbidFromLink(item?.url)
+    if (musicbrainzId) break
+  }
+
   const wiki = firstUrl(links.wiki)
   return {
     genre,
+    musicbrainzId,
     website: firstUrl(links.homepage),
     wikipediaUrl: wiki && /^https:\/\/([a-z]+\.)?wikipedia\.org\/wiki\//.test(wiki) ? wiki : null,
     social,

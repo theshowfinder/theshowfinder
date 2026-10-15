@@ -7,7 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { parseAttractionProfile, wikiTitleFromUrl, cleanWikiExtract } from '@/lib/artistEnrich'
 
 const TM_BASE = 'https://app.ticketmaster.com/discovery/v2'
-const UA = 'TheShowFinder/1.0 (https://www.theshowfinder.com; hello@theshowfinder.com)'
+export const ENRICH_UA = 'TheShowFinder/1.0 (https://www.theshowfinder.com; hello@theshowfinder.com)'
 
 export type EnrichableArtist = {
   id: string
@@ -20,13 +20,13 @@ export type EnrichableArtist = {
 
 export type EnrichOutcome = 'enriched' | 'rate_limited' | 'skipped' | 'error' | 'missing_columns'
 
-async function fetchWikiSummary(wikiUrl: string): Promise<{ text: string | null; url: string | null }> {
+export async function fetchWikiSummary(wikiUrl: string): Promise<{ text: string | null; url: string | null }> {
   const parsed = wikiTitleFromUrl(wikiUrl)
   if (!parsed) return { text: null, url: null }
   try {
     const res = await fetch(
       `https://${parsed.lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(parsed.title.replace(/ /g, '_'))}`,
-      { headers: { 'User-Agent': UA, Accept: 'application/json' }, cache: 'no-store' },
+      { headers: { 'User-Agent': ENRICH_UA, Accept: 'application/json' }, cache: 'no-store' },
     )
     if (!res.ok) return { text: null, url: null }
     const json = await res.json() as { extract?: unknown; type?: unknown; content_urls?: { desktop?: { page?: string } } }
@@ -53,6 +53,7 @@ export async function enrichArtist(
     const update: Record<string, unknown> = { enriched_at: new Date().toISOString() }
     if (profile) {
       if (profile.genre && !artist.genre) { update.genre = profile.genre; if (counters) counters.withGenre++ }
+      if (profile.musicbrainzId) update.musicbrainz_id = profile.musicbrainzId
       if (profile.website && !artist.website) update.website = profile.website
       if (Object.keys(profile.social).length) update.social_links = profile.social
       if (profile.wikipediaUrl) {
@@ -68,7 +69,12 @@ export async function enrichArtist(
         }
       }
     }
-    const { error } = await db.from('artists').update(update).eq('id', artist.id)
+    let { error } = await db.from('artists').update(update).eq('id', artist.id)
+    if (error && 'musicbrainz_id' in update && /musicbrainz_id/i.test(error.message)) {
+      // Migration 053 not run yet: save everything else so the job still works.
+      delete update.musicbrainz_id
+      ;({ error } = await db.from('artists').update(update).eq('id', artist.id))
+    }
     if (error) return /column .* does not exist/i.test(error.message) ? 'missing_columns' : 'error'
     return 'enriched'
   } catch {

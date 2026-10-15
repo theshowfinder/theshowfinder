@@ -227,7 +227,7 @@ export default async function ArtistPage({ params }: PageProps) {
 
   // Profile info filled in by the enrich-artists job (see migration 052). All
   // optional: an artist with none of it just shows dates, as before.
-  const extras = artist as Artist & { wikipedia_url?: string | null; bio_source?: string | null; social_links?: ArtistSocialLinks | null; enriched_at?: string | null }
+  const extras = artist as Artist & { wikipedia_url?: string | null; bio_source?: string | null; social_links?: ArtistSocialLinks | null; musicbrainz_id?: string | null; enriched_at?: string | null }
 
   // First time anyone opens an artist we haven't enriched: fetch genre, links
   // and bio in the background (after the response is sent), so it shows on the
@@ -348,6 +348,11 @@ export default async function ArtistPage({ params }: PageProps) {
                 {hasRealAbout && extras.bio_source === 'wikipedia' && !artist.description && extras.wikipedia_url && (
                   <p className="mt-2 text-xs text-slate-400">
                     Source: <a href={extras.wikipedia_url} target="_blank" rel="noopener noreferrer" className="underline">Wikipedia</a> (CC BY-SA)
+                  </p>
+                )}
+                {hasRealAbout && extras.bio_source === 'musicbrainz' && !artist.description && extras.musicbrainz_id && (
+                  <p className="mt-2 text-xs text-slate-400">
+                    Source: <a href={`https://musicbrainz.org/artist/${extras.musicbrainz_id}`} target="_blank" rel="noopener noreferrer" className="underline">MusicBrainz</a>
                   </p>
                 )}
                 {profileLinks.length > 0 && (

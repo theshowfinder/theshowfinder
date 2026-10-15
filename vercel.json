@@ -17,6 +17,10 @@
       "schedule": "50 2 * * *"
     },
     {
+      "path": "/api/cron/enrich-musicbrainz",
+      "schedule": "5 3 * * *"
+    },
+    {
       "path": "/api/cron/sync-gigsberg",
       "schedule": "30 2 * * *"
     },
