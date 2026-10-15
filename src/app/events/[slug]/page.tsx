@@ -47,7 +47,7 @@ import { toArtistEventRows, type ArtistEventLink, type ArtistEventRow } from '@/
 interface ArtistRow {
   is_headliner: boolean
   order: number
-  artist: { id: string; name: string; genre: string | null; image_url: string | null } | null
+  artist: { id: string; name: string; slug: string | null; genre: string | null; image_url: string | null } | null
 }
 
 interface EventDetail {
@@ -95,7 +95,7 @@ const eventSelect = (withDetails: boolean) => `
       venue:venues(id, name, slug, address, city, postcode, website${withDetails ? ', details' : ''}),
       artists:event_artists(
         is_headliner, order,
-        artist:artists(id, name, genre, image_url)
+        artist:artists(id, name, slug, genre, image_url)
       )
     `
 
@@ -587,15 +587,34 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 </h2>
                 <div className="flex flex-wrap gap-3">
                   {headliners.map(({ artist }) => artist && (
-                    <div key={artist.id} className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-extrabold text-white" style={{ backgroundColor: '#E8003D' }}>
-                        {artist.name[0]}
+                    artist.slug ? (
+                      <Link
+                        key={artist.id}
+                        href={`/artists/${artist.slug}`}
+                        className="group flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm hover:border-slate-400 hover:shadow-md transition"
+                      >
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-extrabold text-white overflow-hidden" style={{ backgroundColor: '#E8003D' }}>
+                          {artist.image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={artist.image_url} alt="" className="h-full w-full object-cover object-top" />
+                          ) : artist.name[0]}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900 text-sm group-hover:text-red-600 transition-colors">{artist.name}</p>
+                          <p className="text-xs text-slate-500">{artist.genre ? `${artist.genre} · ` : ''}All dates &amp; info →</p>
+                        </div>
+                      </Link>
+                    ) : (
+                      <div key={artist.id} className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-extrabold text-white" style={{ backgroundColor: '#E8003D' }}>
+                          {artist.name[0]}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900 text-sm">{artist.name}</p>
+                          {artist.genre && <p className="text-xs text-slate-500">{artist.genre}</p>}
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-bold text-slate-900 text-sm">{artist.name}</p>
-                        {artist.genre && <p className="text-xs text-slate-500">{artist.genre}</p>}
-                      </div>
-                    </div>
+                    )
                   ))}
                 </div>
               </div>
@@ -681,9 +700,14 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
             {artistEvents.length > 0 && (
               <div>
-                <h2 className="text-xl font-extrabold text-slate-900 mb-4">
-                  {headliners[0]?.artist ? `More ${headliners[0].artist.name} dates` : 'More dates'}
-                </h2>
+                <div className="flex items-baseline justify-between gap-4 mb-4">
+                  <h2 className="text-xl font-extrabold text-slate-900">
+                    {headliners[0]?.artist ? `More ${headliners[0].artist.name} dates` : 'More dates'}
+                  </h2>
+                  {headliners[0]?.artist?.slug && (
+                    <Link href={`/artists/${headliners[0].artist.slug}`} className="text-sm font-semibold underline text-slate-600 whitespace-nowrap">See all dates →</Link>
+                  )}
+                </div>
                 <ul className="divide-y divide-slate-100 bg-white border border-slate-200 rounded-xl">
                   {artistEvents.map(e => (
                     <li key={e.id}>
