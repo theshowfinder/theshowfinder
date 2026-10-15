@@ -9,6 +9,10 @@
       "schedule": "15 2 * * *"
     },
     {
+      "path": "/api/cron/expand-tours",
+      "schedule": "35 2 * * *"
+    },
+    {
       "path": "/api/cron/sync-gigsberg",
       "schedule": "30 2 * * *"
     },

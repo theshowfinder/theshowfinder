@@ -11,13 +11,13 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
-import { groupEventsByArtist, fmtOnSaleLabel, mergeEventsById } from '@/lib/on-sale'
-import { fetchOnSaleThisWeekEvents, fetchPresalesOpenNowEvents } from '@/lib/eventPools'
+import { groupEventsByArtist, fmtOnSaleLabel, mergeEventsById, mergeTourDates, extractArtistName, toSlug } from '@/lib/on-sale'
+import { fetchOnSaleThisWeekEvents, fetchPresalesOpenNowEvents, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import FollowButton from '@/components/FollowButton'
 import SaveButton from '@/components/SaveButton'
 import { isBareProviderHomepage } from '@/lib/intelligence'
-import type { Artist } from '@/lib/types/database'
+import type { Artist, EventWithVenue } from '@/lib/types/database'
 import {
   getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
   getStubHubAffiliateLink, getGigsbergAffiliateLink, getVividSeatsAffiliateLink, getEventimAffiliateLink,
@@ -101,7 +101,37 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
   const group  = groups.find(g => g.slug === slug)
   if (!group) notFound()
 
-  const { artistName, image_url, onsale_date, saleType, events, dbArtist } = group
+  const { artistName, image_url, onsale_date, saleType, dbArtist } = group
+
+  // The pools above only hold dates whose sale starts this week. Pull in the
+  // artist's other upcoming dates too, so the page shows the whole tour.
+  const otherEvents: EventWithVenue[] = []
+  if (dbArtist?.id) {
+    const { data: links } = await supabase
+      .from('event_artists')
+      .select('event_id, events!inner(start_date, status)')
+      .eq('artist_id', dbArtist.id)
+      .gte('events.start_date', nowISO)
+      .in('events.status', LIVE_EVENT_STATUSES)
+      .limit(200) as unknown as { data: { event_id: string }[] | null }
+    const ids = (links ?? []).map(l => l.event_id)
+    if (ids.length) {
+      const { data } = await supabase.from('events_with_venue').select('*').in('id', ids) as unknown as { data: EventWithVenue[] | null }
+      otherEvents.push(...(data ?? []))
+    }
+  } else {
+    // No artist record: same-name events by title (matches how the group formed).
+    const like = artistName.replace(/[%_\\]/g, ' ').trim()
+    const { data } = await supabase
+      .from('events_with_venue').select('*')
+      .ilike('title', `${like}%`)
+      .gte('start_date', nowISO)
+      .in('status', LIVE_EVENT_STATUSES)
+      .limit(200) as unknown as { data: EventWithVenue[] | null }
+    otherEvents.push(...(data ?? []).filter(e => toSlug(extractArtistName(e.title)) === slug))
+  }
+  const { events, newIds } = mergeTourDates(group.events, otherEvents)
+  const newCount = events.filter(e => newIds.has(e.id)).length
   const onSaleLabel = fmtOnSaleLabel(onsale_date)
   const isPresale   = saleType === 'presale'
 
@@ -162,9 +192,14 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
               </div>
             )}
 
-            <h2 className="text-xl font-extrabold text-slate-900 mb-5">
-              {events.length} UK Date{events.length !== 1 ? 's' : ''} Going On Sale
+            <h2 className="text-xl font-extrabold text-slate-900 mb-1">
+              {events.length} UK Date{events.length !== 1 ? 's' : ''}
             </h2>
+            <p className="text-sm text-slate-500 mb-5">
+              {newCount === events.length
+                ? `All dates ${isPresale ? 'in presale' : 'on sale'} ${onSaleLabel}.`
+                : `${newCount} newly ${isPresale ? 'in presale' : 'on sale'} (marked New) — plus the rest of the tour.`}
+            </p>
 
             <div className="space-y-3">
               {events.map(event => {
@@ -190,7 +225,12 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
 
                     {/* Venue info */}
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-slate-900 truncate">{event.venue_name}</p>
+                      <p className="font-bold text-slate-900 truncate">
+                        {event.venue_name}
+                        {newIds.has(event.id) && newCount !== events.length && (
+                          <span className="ml-2 align-middle text-[10px] font-extrabold uppercase tracking-wide text-white px-1.5 py-0.5 rounded" style={{ backgroundColor: '#E8003D' }}>New</span>
+                        )}
+                      </p>
                       <p className="text-sm text-slate-500">{event.venue_city}</p>
                       <p className="text-xs text-slate-400 mt-0.5">
                         {dt.toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' })}
@@ -322,6 +362,14 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
                 </div>
               </div>}
 
+              {dbArtist?.slug && (
+                <Link
+                  href={`/artists/${dbArtist.slug}`}
+                  className="block text-center text-sm font-bold py-3 px-5 rounded-xl bg-slate-900 text-white hover:bg-slate-700 transition-colors"
+                >
+                  All {artistName} dates &amp; tickets →
+                </Link>
+              )}
               <Link
                 href="/on-sale-this-week"
                 className="block text-center text-sm font-semibold py-3 px-5 rounded-xl border-2 border-slate-200 text-slate-600 hover:border-slate-400 transition-colors"

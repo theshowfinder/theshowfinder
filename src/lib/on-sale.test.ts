@@ -8,6 +8,7 @@ import {
   onSaleThisWeekWindow,
   presaleOpenNowWindow,
   mergeEventsById,
+  mergeTourDates,
   extractSeriesKey,
   capGroupsBySeries,
   hasReliableOnSaleDate,
@@ -312,5 +313,31 @@ describe('hasReliableOnSaleDate', () => {
 describe('ON_SALE_MAX_PER_SERIES', () => {
   test('is a small positive integer (sanity check on the exported, documented cap)', () => {
     assert.ok(ON_SALE_MAX_PER_SERIES >= 1 && ON_SALE_MAX_PER_SERIES <= 5)
+  })
+})
+
+describe('mergeTourDates', () => {
+  const ev = (id: string, date: string, extra: Record<string, unknown> = {}) =>
+    fakeEvent({ id, title: 'Will Young', start_date: `${date}T19:00:00.000Z`, venue_id: `v-${id}`, venue_name: `Venue ${id}`, ...extra })
+
+  test('adds the artist\'s other dates, soonest first, and flags the new ones', () => {
+    const win = [ev('a', '2027-03-16')]
+    const other = [ev('b', '2027-03-10'), ev('c', '2027-04-01')]
+    const { events, newIds } = mergeTourDates(win, other)
+    assert.deepEqual(events.map(e => e.id), ['b', 'a', 'c'])
+    assert.deepEqual([...newIds], ['a'])
+  })
+  test('does not double-list an event already in the window', () => {
+    const win = [ev('a', '2027-03-16')]
+    assert.equal(mergeTourDates(win, [ev('a', '2027-03-16')]).events.length, 1)
+  })
+  test('skips VIP / hospitality / experience rows and same-venue-same-day duplicates', () => {
+    const win = [ev('a', '2027-03-16', { venue_id: 'v1' })]
+    const other = [
+      ev('vip', '2027-03-17', { title: 'Will Young Official VIP Ticket Experiences' }),
+      ev('dup', '2027-03-16', { venue_id: 'v1' }),
+      ev('ok',  '2027-03-18'),
+    ]
+    assert.deepEqual(mergeTourDates(win, other).events.map(e => e.id), ['a', 'ok'])
   })
 })

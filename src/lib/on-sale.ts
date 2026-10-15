@@ -226,3 +226,35 @@ export function mergeEventsById(...pools: EventWithVenue[][]): EventWithVenue[] 
   }
   return [...map.values()].sort((a, b) => a.start_date.localeCompare(b.start_date))
 }
+
+// ── Whole-tour view for /on-sale-this-week/[slug] ─────────────────────────
+// The on-sale pools only contain dates whose sale starts inside the window, so
+// an artist announcing a tour used to show 1-2 dates even when 20 were booked.
+// This merges the artist's other upcoming events in, marking which ones are the
+// newly on-sale dates so the page can still say what just opened.
+
+// Separate products sold against the same show (VIP/hospitality bundles) are
+// not extra tour dates.
+const NOT_A_TOUR_DATE = /\b(vip|hospitality|ticket experiences?|packages?|meet\s*(?:&|and)?\s*greets?)\b/i
+
+export function mergeTourDates(
+  windowEvents: EventWithVenue[],
+  otherEvents:  EventWithVenue[],
+): { events: EventWithVenue[]; newIds: Set<string> } {
+  const newIds = new Set(windowEvents.map(e => e.id))
+  const dayKey = (e: EventWithVenue) => `${(e as { venue_id?: string | null }).venue_id ?? e.venue_name}|${e.start_date.slice(0, 10)}`
+  const taken  = new Set(windowEvents.map(dayKey))
+  const all    = new Map(windowEvents.map(e => [e.id, e]))
+
+  for (const e of otherEvents) {
+    if (all.has(e.id)) continue
+    if (NOT_A_TOUR_DATE.test(e.title)) continue
+    const key = dayKey(e)
+    if (taken.has(key)) continue      // same venue + day already listed
+    taken.add(key)
+    all.set(e.id, e)
+  }
+
+  const events = [...all.values()].sort((a, b) => a.start_date.localeCompare(b.start_date))
+  return { events, newIds }
+}

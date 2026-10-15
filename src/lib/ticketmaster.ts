@@ -820,6 +820,67 @@ export async function syncTicketmasterCityWindow(input: {
   return { keyword: null, city: input.city, from: input.from, to: input.to, fetched, inserted, skipped, errors }
 }
 
+// ── Whole-tour completion ────────────────────────────────────────────────────
+// The date-band passes find a show when ONE of its dates falls in the window
+// being walked, so a newly announced tour can arrive with only some of its UK
+// dates (the rest sit in other bands, or sell from different dates). Asking TM
+// for every UK event of a specific attraction (exact id, so no keyword noise)
+// fills the tour in. Time-boxed: stops cleanly when `deadlineMs` (epoch ms)
+// passes, and reports how many attractions it got through.
+export interface AttractionSyncResult {
+  attractions: number
+  completed: number
+  fetched: number
+  inserted: number
+  errors: number
+  stoppedEarly: boolean
+}
+
+export async function syncTicketmasterAttractions(
+  attractionIds: string[],
+  opts?: { deadlineMs?: number },
+): Promise<AttractionSyncResult> {
+  const db = createAdminClient()
+  const venueCache = new Map<string, string>()
+  const artistCache = new Map<string, string>()
+  const eventCache = new Map<string, ExistingEventSnapshot | null>()
+  const out: AttractionSyncResult = { attractions: attractionIds.length, completed: 0, fetched: 0, inserted: 0, errors: 0, stoppedEarly: false }
+
+  for (const attractionId of attractionIds) {
+    if (opts?.deadlineMs && Date.now() > opts.deadlineMs) { out.stoppedEarly = true; break }
+    let totalPages = 1
+    for (let page = 0; page < totalPages; page++) {
+      const url = new URL(`${TM_BASE}/events.json`)
+      url.searchParams.set('apikey',      process.env.TICKETMASTER_API_KEY!)
+      url.searchParams.set('countryCode', 'GB')
+      url.searchParams.set('attractionId', attractionId)
+      url.searchParams.set('size',        '200')
+      url.searchParams.set('page',        String(page))
+      url.searchParams.set('locale',      'en-us')
+      url.searchParams.set('sort',        'date,asc')
+      const result = await fetchWithRetry(url, `attraction ${attractionId} page ${page}`)
+      if (result.status !== 'ok') { out.errors++; break }
+      totalPages = Math.min(result.totalPages || 1, 6)
+      out.fetched += result.events.length
+      for (let i = 0; i < result.events.length; i += EVENT_CONCURRENCY) {
+        const chunk = result.events.slice(i, i + EVENT_CONCURRENCY)
+        const outcomes = await Promise.all(
+          chunk.map(ev => processEvent(db, ev, mapCategory(ev, 'concert'), venueCache, artistCache, eventCache)),
+        )
+        for (const o of outcomes) {
+          if (o === 'inserted') out.inserted++
+          else if (o === 'error') out.errors++
+        }
+      }
+      if (!result.events.length) break
+      if (page + 1 < totalPages) await sleep(RATE_LIMIT_MS)
+    }
+    out.completed++
+    await sleep(RATE_LIMIT_MS)
+  }
+  return out
+}
+
 const EVENT_CONCURRENCY = 20  // events processed in parallel per TM API page
 
 // ── On-sale-soon fetch ───────────────────────────────────────────────────────
