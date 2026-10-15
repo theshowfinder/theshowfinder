@@ -3,6 +3,9 @@ import { redirect } from 'next/navigation'
 import { createPublicClient } from '@/lib/supabase/public'
 import EventCard from '@/components/EventCard'
 import ArtistOnSaleCard from '@/components/ArtistOnSaleCard'
+import ArtistResultCard from '@/components/ArtistResultCard'
+import Link from 'next/link'
+import { rankArtists, normalizeArtistText, type ArtistListRow } from '@/lib/artistSearch'
 import CategoryPills from '@/components/CategoryPills'
 import SearchBarWrapper from '@/components/SearchBarWrapper'
 import Pagination from '@/components/Pagination'
@@ -142,6 +145,37 @@ async function CityArtists({ city }: { city: string }) {
         ))}
       </div>
     </div>
+  )
+}
+
+// Artists matching the search, shown above the event results so searching for
+// a name lands on the artist (all their dates) rather than a list of loose shows.
+async function ArtistMatches({ q }: { q: string }) {
+  const supabase = createPublicClient()
+  const normalized = normalizeArtistText(q)
+  const token = (normalized.split(' ')[0] ?? '').length >= 2 ? normalized.split(' ')[0] : normalized.replace(/ /g, '')
+  const term = token.replace(/[%_,()\\]/g, '')
+  if (!term) return null
+  const { data } = await supabase
+    .from('artists_with_upcoming')
+    .select('id, name, slug, image_url, genre, upcoming_count, next_date')
+    .or(`name.ilike.%${term}%,slug.ilike.%${term}%`)
+    .limit(300) as unknown as { data: ArtistListRow[] | null }
+  const matches = rankArtists(q, data ?? [])
+  if (!matches.length) return null
+  const shown = matches.slice(0, 6)
+  return (
+    <section aria-label="Matching artists" className="mb-10">
+      <div className="flex items-baseline justify-between mb-3">
+        <h2 className="text-lg font-extrabold text-slate-900">Artists</h2>
+        <Link href={`/artists?q=${encodeURIComponent(q)}`} className="text-sm font-semibold text-slate-600 underline">
+          {matches.length > shown.length ? `See all ${matches.length} artists` : 'Artist directory'}
+        </Link>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {shown.map(a => <ArtistResultCard key={a.id} artist={a} />)}
+      </div>
+    </section>
   )
 }
 
@@ -295,6 +329,11 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
         {sp.city && (
           <Suspense fallback={null}>
             <CityArtists city={sp.city} />
+          </Suspense>
+        )}
+        {sp.q && (!sp.page || sp.page === '1') && (
+          <Suspense fallback={null}>
+            <ArtistMatches q={sp.q} />
           </Suspense>
         )}
         <Suspense fallback={

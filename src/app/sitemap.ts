@@ -151,6 +151,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/events`,              lastModified: new Date(), changeFrequency: 'daily',   priority: 0.9 },
     { url: `${BASE}/on-sale-this-week`,   lastModified: new Date(), changeFrequency: 'daily',   priority: 0.8 },
     { url: `${BASE}/west-end`,            lastModified: new Date(), changeFrequency: 'daily',   priority: 0.9 },
+    { url: `${BASE}/artists`,             lastModified: new Date(), changeFrequency: 'daily',   priority: 0.7 },
     { url: `${BASE}/attractions`,         lastModified: new Date(), changeFrequency: 'daily',   priority: 0.6 },
     // Phase 5A: the editorial news hub (/news) was never in here — every
     // other static top-level page was. Individual on-sale-this-week/[slug]

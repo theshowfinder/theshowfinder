@@ -15,6 +15,7 @@ import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getArtistSeoAlias } from '@/lib/seoAliases'
 import NewsletterInline from '@/components/NewsletterInline'
 import FollowButton from '@/components/FollowButton'
+import type { ArtistSocialLinks } from '@/lib/artistEnrich'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import {
   toArtistEventRows, shouldIndexArtistPage, artistMetaDescription,
@@ -214,9 +215,35 @@ export default async function ArtistPage({ params }: PageProps) {
 
   const breadcrumbSchema = buildBreadcrumbSchema([
     { name: 'Home',    url: 'https://www.theshowfinder.com' },
-    { name: 'On Sale', url: 'https://www.theshowfinder.com/on-sale-this-week' },
+    { name: 'Artists', url: 'https://www.theshowfinder.com/artists' },
     { name: artist.name, url: canonicalUrl },
   ])
+
+  // Profile info filled in by the enrich-artists job (see migration 052). All
+  // optional: an artist with none of it just shows dates, as before.
+  const extras = artist as Artist & { wikipedia_url?: string | null; bio_source?: string | null; social_links?: ArtistSocialLinks | null }
+  const aboutText = artist.description || artist.bio || null
+  const social = extras.social_links ?? {}
+  const profileLinks: { label: string; href: string }[] = [
+    artist.website ? { label: 'Official site', href: artist.website } : null,
+    social.spotify ? { label: 'Spotify', href: social.spotify } : null,
+    social.youtube ? { label: 'YouTube', href: social.youtube } : null,
+    social.instagram ? { label: 'Instagram', href: social.instagram } : null,
+    social.twitter ? { label: 'X / Twitter', href: social.twitter } : null,
+    social.facebook ? { label: 'Facebook', href: social.facebook } : null,
+  ].filter((l): l is { label: string; href: string } => l !== null)
+  const artistSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'MusicGroup',
+    name: artist.name,
+    url: canonicalUrl,
+    ...(artist.image_url ? { image: artist.image_url } : {}),
+    ...(artist.genre ? { genre: artist.genre } : {}),
+    ...(aboutText ? { description: aboutText } : {}),
+    ...(profileLinks.length || extras.wikipedia_url
+      ? { sameAs: [...profileLinks.map(l => l.href), ...(extras.wikipedia_url ? [extras.wikipedia_url] : [])] }
+      : {}),
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F0]">
@@ -235,6 +262,10 @@ export default async function ArtistPage({ params }: PageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLdScript(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(artistSchema) }}
       />
       {/* Hero */}
       <div className="relative h-[50vh] min-h-[380px] overflow-hidden bg-slate-900">
@@ -276,10 +307,28 @@ export default async function ArtistPage({ params }: PageProps) {
 
           {/* Tour dates */}
           <div className="lg:col-span-2">
-            {artist.description && (
-              <div className="bg-white rounded-2xl p-6 mb-8 shadow-sm border border-slate-200">
-                <p className="text-slate-700 leading-relaxed">{artist.description}</p>
-              </div>
+            {(aboutText || artist.genre || profileLinks.length > 0) && (
+              <section aria-label={`About ${artist.name}`} className="bg-white rounded-2xl p-6 mb-8 shadow-sm border border-slate-200">
+                <h2 className="text-xl font-extrabold text-slate-900 mb-3">About {artist.name}</h2>
+                {artist.genre && (
+                  <span className="inline-block text-xs font-bold uppercase tracking-wider text-slate-700 bg-slate-100 px-2.5 py-1 rounded-full mb-3">{artist.genre}</span>
+                )}
+                {aboutText && <p className="text-slate-700 leading-relaxed">{aboutText}</p>}
+                {extras.bio_source === 'wikipedia' && !artist.description && extras.wikipedia_url && (
+                  <p className="mt-2 text-xs text-slate-400">
+                    Source: <a href={extras.wikipedia_url} target="_blank" rel="noopener noreferrer" className="underline">Wikipedia</a> (CC BY-SA)
+                  </p>
+                )}
+                {profileLinks.length > 0 && (
+                  <ul className="mt-4 flex flex-wrap gap-2">
+                    {profileLinks.map(l => (
+                      <li key={l.label}>
+                        <a href={l.href} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex items-center min-h-[36px] px-3 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:border-slate-400">{l.label} ↗</a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
             )}
 
             <h2 className="text-xl font-extrabold text-slate-900 mb-5">
