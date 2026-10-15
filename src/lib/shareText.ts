@@ -41,6 +41,13 @@ export function buildShareText(input: ShareInput): string {
   return `Fancy this? ${base}. Compare tickets:`
 }
 
+// Message for sharing an artist (or venue) page rather than a single show.
+export function buildArtistShareText(name: string, upcomingCount: number): string {
+  if (upcomingCount > 1) return `${name} has ${upcomingCount} UK dates coming up. Compare tickets:`
+  if (upcomingCount === 1) return `${name} is playing the UK soon. Compare tickets:`
+  return `Have a look at ${name} on TheShowFinder:`
+}
+
 // Tracked copy of the page URL for a channel. The canonical URL (in <head>
 // and the sitemap) never carries these parameters.
 export function trackedShareUrl(url: string, channel: ShareChannel): string {

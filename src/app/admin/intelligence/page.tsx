@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 
+import { fetchAllArtists } from '@/lib/allArtists'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -164,7 +165,7 @@ export default async function IntelligenceDashboardPage() {
     syncStateResult,
     syncLogResult,
   ] = await Promise.all([
-    db.from('artists').select('*').order('name', { ascending: true }) as unknown as Promise<{ data: Artist[] | null }>,
+    fetchAllArtists(db).then(data => ({ data: data.sort((x, y) => x.name.localeCompare(y.name)) })),
     db.from('events').select(EVENT_SELECT).gte('onsale_date', today.startISO).lt('onsale_date', today.endISO).order('onsale_date', { ascending: true }).limit(100) as unknown as Promise<{ data: DashboardEventRow[] | null }>,
     db.from('events').select(EVENT_SELECT).gte('presale_start', today.startISO).lt('presale_start', today.endISO).order('presale_start', { ascending: true }).limit(100) as unknown as Promise<{ data: DashboardEventRow[] | null }>,
     db.from('events').select(EVENT_SELECT).gte('start_date', today.startISO).lt('start_date', today.endISO).order('start_date', { ascending: true }).limit(100) as unknown as Promise<{ data: DashboardEventRow[] | null }>,

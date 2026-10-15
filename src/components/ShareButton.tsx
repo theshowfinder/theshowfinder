@@ -22,9 +22,11 @@ interface ShareButtonProps {
   itemId: string
   variant?: 'dark' | 'light'
   label?: string
+  /** For analytics: what is being shared. */
+  contentType?: 'event' | 'artist' | 'venue'
 }
 
-export default function ShareButton({ url, title, text, itemId, variant = 'light', label = 'Share with friends' }: ShareButtonProps) {
+export default function ShareButton({ url, title, text, itemId, variant = 'light', label = 'Share with friends', contentType = 'event' }: ShareButtonProps) {
   // Server render and first paint assume no native sharing; phones switch to it on hydration.
   const canNative = useSyncExternalStore(
     () => () => {},
@@ -35,7 +37,7 @@ export default function ShareButton({ url, title, text, itemId, variant = 'light
   const [copied, setCopied] = useState(false)
 
   function track(method: ShareChannel) {
-    trackEvent('share', { method, content_type: 'event', item_id: itemId })
+    trackEvent('share', { method, content_type: contentType, item_id: itemId })
   }
 
   async function onMainClick() {

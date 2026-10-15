@@ -5,6 +5,7 @@ import EventCard from '@/components/EventCard'
 import Pagination from '@/components/Pagination'
 import NewsletterInline from '@/components/NewsletterInline'
 import FollowButton from '@/components/FollowButton'
+import ShareButton from '@/components/ShareButton'
 import { cityPagePath } from '@/lib/cities'
 import type { EventWithVenue } from '@/lib/types/database'
 import { venuePageDescription } from '@/lib/venueBlurb'
@@ -114,7 +115,18 @@ export default async function VenueView({ slug, page }: { slug: string; page: nu
             {description}
           </p>
 
-          <FollowButton kind="venue" slug={venue.slug} name={venue.name} source="venue" />
+          <div className="flex flex-wrap items-start gap-3">
+            <FollowButton kind="venue" slug={venue.slug} name={venue.name} source="venue" />
+            <ShareButton
+              url={`https://www.theshowfinder.com/venues/${venue.slug}`}
+              title={venue.name}
+              text={`What's on at ${venue.name}? Compare tickets:`}
+              itemId={venue.slug}
+              contentType="venue"
+              variant="dark"
+              label="Share"
+            />
+          </div>
         </div>
       </div>
 

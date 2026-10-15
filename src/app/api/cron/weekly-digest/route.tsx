@@ -1,3 +1,4 @@
+import { fetchAllArtists } from '@/lib/allArtists'
 import { NextResponse } from 'next/server'
 import { createPublicClient } from '@/lib/supabase/public'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -13,7 +14,6 @@ import {
 } from '@/lib/weeklyDigest'
 import { CITIES } from '@/lib/cities'
 import WeeklyDigestEmail from '@/emails/WeeklyDigestEmail'
-import type { Artist } from '@/lib/types/database'
 
 export const maxDuration = 120
 export const dynamic = 'force-dynamic'
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
   // ── Content ─────────────────────────────────────────────────────────────
   const supabase = createPublicClient()
   const [{ data: artists }, events, shows] = await Promise.all([
-    supabase.from('artists').select('*') as unknown as Promise<{ data: Artist[] | null }>,
+    fetchAllArtists(supabase).then(data => ({ data })),
     fetchEventsThisWeek(supabase, { limit: 6 }),
     fetchWestEndShows(supabase),
   ])

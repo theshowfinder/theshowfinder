@@ -1,5 +1,6 @@
 export const revalidate = 3600
 
+import { fetchAllArtists } from '@/lib/allArtists'
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import Link from 'next/link'
@@ -34,7 +35,7 @@ import LocalSpotlight from '@/components/LocalSpotlight'
 import LocalHeroCopy from '@/components/LocalHeroCopy'
 import CategoryStrip from '@/components/CategoryStrip'
 import WestEndStrip from '@/components/WestEndStrip'
-import type { EventWithVenue, Artist, CityNews } from '@/lib/types/database'
+import type { EventWithVenue, CityNews } from '@/lib/types/database'
 import { fmtOnSaleLabel, extractArtistName, toSlug } from '@/lib/on-sale'
 import { fetchEventsThisWeek, fetchPresalesOpenNow, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { NATIONAL_SLUG } from '@/lib/cityNews'
@@ -252,9 +253,7 @@ async function OnSaleThisWeek() {
   // detail page resolves every card against the same merged pool this
   // produces, so a card rendered here can never 404 on click from a window
   // mismatch (see on-sale.ts's onSaleThisWeekWindow for the full history).
-  const { data: artistsData } = await supabase
-    .from('artists')
-    .select('*') as unknown as { data: Artist[] | null }
+  const artistsData = await fetchAllArtists(supabase)
 
   const allGroups = await fetchOnSaleThisWeek(supabase, artistsData ?? [], { limit: 500 })
   const groups    = allGroups.slice(0, 12)
@@ -415,7 +414,7 @@ async function NationalNews() {
 async function PresalesOpenNow() {
   const supabase = createPublicClient()
 
-  const { data: artistsData } = await supabase.from('artists').select('*') as unknown as { data: Artist[] | null }
+  const artistsData = await fetchAllArtists(supabase)
   const groups = await fetchPresalesOpenNow(supabase, artistsData ?? [], { limit: 6 })
 
   if (!groups.length) return null

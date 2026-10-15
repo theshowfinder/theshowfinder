@@ -1,5 +1,6 @@
 export const revalidate = 3600
 
+import { fetchAllArtists } from '@/lib/allArtists'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { createPublicClient } from '@/lib/supabase/public'
@@ -7,7 +8,6 @@ import NewsletterInline from '@/components/NewsletterInline'
 import SocialLandingBanner from '@/components/SocialLandingBanner'
 import { fmtOnSaleLabel, onSaleThisWeekWindow, type OnSaleGroup } from '@/lib/on-sale'
 import { fetchOnSaleThisWeek } from '@/lib/eventPools'
-import type { Artist } from '@/lib/types/database'
 
 const OSW_OG_IMAGE = 'https://www.theshowfinder.com/og-image.png'
 
@@ -44,9 +44,7 @@ export default async function OnSaleThisWeekPage() {
   // detail page resolves every card against the same merged pool this
   // produces, so a card rendered here can never 404 on click from a window
   // mismatch (see on-sale.ts's onSaleThisWeekWindow for the full history).
-  const { data: artistsData } = await supabase
-    .from('artists')
-    .select('*') as unknown as { data: Artist[] | null }
+  const artistsData = await fetchAllArtists(supabase)
 
   const groups = await fetchOnSaleThisWeek(supabase, artistsData ?? [], { limit: 500 })
 

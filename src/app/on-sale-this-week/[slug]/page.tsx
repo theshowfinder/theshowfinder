@@ -7,6 +7,7 @@ export async function generateStaticParams() {
   return []
 }
 
+import { fetchAllArtists } from '@/lib/allArtists'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
@@ -16,8 +17,10 @@ import { fetchOnSaleThisWeekEvents, fetchPresalesOpenNowEvents, LIVE_EVENT_STATU
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import FollowButton from '@/components/FollowButton'
 import SaveButton from '@/components/SaveButton'
+import ShareButton from '@/components/ShareButton'
+import { buildArtistShareText } from '@/lib/shareText'
 import { isBareProviderHomepage } from '@/lib/intelligence'
-import type { Artist, EventWithVenue } from '@/lib/types/database'
+import type { EventWithVenue } from '@/lib/types/database'
 import {
   getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
   getStubHubAffiliateLink, getGigsbergAffiliateLink, getVividSeatsAffiliateLink, getEventimAffiliateLink,
@@ -41,7 +44,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const [onSaleEvents, presaleEvents, arResult] = await Promise.all([
     fetchOnSaleThisWeekEvents(supabase, { fetchLimit: 1000 }),
     fetchPresalesOpenNowEvents(supabase, { fetchLimit: 1000 }),
-    supabase.from('artists').select('*') as unknown as Promise<{ data: Artist[] | null }>,
+    fetchAllArtists(supabase).then(data => ({ data })),
   ])
 
   const merged = mergeEventsById(onSaleEvents, presaleEvents)
@@ -92,9 +95,7 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
   const [onSaleEvents, presaleEvents, arResult] = await Promise.all([
     fetchOnSaleThisWeekEvents(supabase, { fetchLimit: 1000 }),
     fetchPresalesOpenNowEvents(supabase, { fetchLimit: 1000 }),
-    supabase
-      .from('artists')
-      .select('*') as unknown as Promise<{ data: Artist[] | null }>,
+    fetchAllArtists(supabase).then(data => ({ data })),
   ])
 
   const groups = groupEventsByArtist(mergeEventsById(onSaleEvents, presaleEvents), arResult.data ?? [])
@@ -176,6 +177,15 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
               {dbArtist?.slug && (
                 <FollowButton kind="artist" slug={dbArtist.slug} name={artistName} source="onsale" />
               )}
+              <ShareButton
+                url={dbArtist?.slug ? `https://www.theshowfinder.com/artists/${dbArtist.slug}` : `https://www.theshowfinder.com/on-sale-this-week/${slug}`}
+                title={`${artistName} tickets`}
+                text={buildArtistShareText(artistName, events.length)}
+                itemId={dbArtist?.slug ?? slug}
+                contentType="artist"
+                variant="dark"
+                label="Share"
+              />
             </div>
           </div>
         </div>

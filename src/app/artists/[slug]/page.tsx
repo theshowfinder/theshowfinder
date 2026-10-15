@@ -16,6 +16,8 @@ import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getArtistSeoAlias } from '@/lib/seoAliases'
 import NewsletterInline from '@/components/NewsletterInline'
 import FollowButton from '@/components/FollowButton'
+import ShareButton from '@/components/ShareButton'
+import { buildArtistShareText } from '@/lib/shareText'
 import type { ArtistSocialLinks } from '@/lib/artistEnrich'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enrichArtist } from '@/lib/artistEnrichRun'
@@ -316,6 +318,15 @@ export default async function ArtistPage({ params }: PageProps) {
                 </span>
               )}
               <FollowButton kind="artist" slug={artist.slug} name={artist.name} source="artist" />
+              <ShareButton
+                url={canonicalUrl}
+                title={`${artist.name} tickets`}
+                text={buildArtistShareText(artist.name, dateCount)}
+                itemId={artist.slug}
+                contentType="artist"
+                variant="dark"
+                label="Share"
+              />
             </div>
           </div>
         </div>

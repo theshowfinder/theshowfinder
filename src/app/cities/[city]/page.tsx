@@ -7,6 +7,7 @@ export const revalidate = 300
 // midnight. 5 minutes bounds the worst-case staleness to a small,
 // acceptable window without regenerating on every request.
 
+import { fetchAllArtists } from '@/lib/allArtists'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
@@ -14,7 +15,6 @@ import { createPublicClient } from '@/lib/supabase/public'
 import EventCard from '@/components/EventCard'
 import SearchBarWrapper from '@/components/SearchBarWrapper'
 import { Suspense } from 'react'
-import type { Artist } from '@/lib/types/database'
 import { fmtOnSaleLabel } from '@/lib/on-sale'
 import { CITIES } from '@/lib/cities'
 import { venueCardBlurb } from '@/lib/venueBlurb'
@@ -107,7 +107,7 @@ export default async function CityPage({
   // Artists fetched up front — fetchPresalesOpenNow and fetchOnSaleThisWeek
   // both group their pool by artist and need the list to do it, so neither
   // can run inside the Promise.all below alongside the query it groups.
-  const { data: artistsData } = await supabase.from('artists').select('*') as unknown as { data: Artist[] | null }
+  const artistsData = await fetchAllArtists(supabase)
   const artists = artistsData ?? []
 
   const [

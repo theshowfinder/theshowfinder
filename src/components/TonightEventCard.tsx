@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { Artist } from '@/lib/types/database'
 import type { TonightEvent } from '@/lib/eventPools.ts'
 import { buildTonightTicketOffers } from '@/lib/ticketLinkPolicy'
+import SaveButton from '@/components/SaveButton'
 
 const statusConfig: Record<string, { label: string; classes: string }> = {
   sold_out: { label: 'Sold Out', classes: 'bg-red-600 text-white' },
@@ -49,6 +50,8 @@ export default function TonightEventCard({ event, artists }: { event: TonightEve
           )}
         </p>
       </div>
+
+      <SaveButton slug={event.slug} title={event.title} variant="card" />
 
       <div className="flex flex-wrap gap-2 shrink-0">
         {offers.length > 0 ? (

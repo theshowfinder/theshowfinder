@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  formatShareWhen, buildShareText, trackedShareUrl, whatsappHref, facebookHref, xHref, mailtoHref,
+  formatShareWhen, buildShareText, trackedShareUrl, whatsappHref, facebookHref, xHref, mailtoHref, buildArtistShareText,
 } from './shareText.ts'
 
 describe('formatShareWhen', () => {
@@ -47,5 +47,13 @@ describe('share URLs', () => {
     assert.ok(facebookHref('https://x.test/a').includes('u=https%3A%2F%2Fx.test%2Fa'))
     assert.ok(xHref('t', 'https://x.test/a').includes('&url='))
     assert.ok(mailtoHref('S', 'Body', 'https://x.test/a').startsWith('mailto:?subject=S&body=Body%0A%0A'))
+  })
+})
+
+describe('buildArtistShareText', () => {
+  test('wording follows the number of dates', () => {
+    assert.equal(buildArtistShareText('Nickelback', 5), 'Nickelback has 5 UK dates coming up. Compare tickets:')
+    assert.equal(buildArtistShareText('Nickelback', 1), 'Nickelback is playing the UK soon. Compare tickets:')
+    assert.equal(buildArtistShareText('Nickelback', 0), 'Have a look at Nickelback on TheShowFinder:')
   })
 })
