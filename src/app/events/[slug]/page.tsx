@@ -17,7 +17,7 @@ import type { Metadata } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
 import type { EventCategory, EventStatus } from '@/lib/types/database'
 import {
-  getTicketmasterAffiliateLink, getViagogoAffiliateLink,
+  getTicketmasterAffiliateLink, getViagogoAffiliateLink, isTicketmasterCommissionEligible,
   getStubHubAffiliateLink, getGigsbergAffiliateLink, getSeeTicketsAffiliateLink,
 } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
@@ -60,6 +60,8 @@ interface EventDetail {
   start_date: string
   end_date: string | null
   onsale_date: string | null
+  presale_start: string | null
+  public_onsale_start: string | null
   doors_time: string | null
   details: EventDetails | null
   image_url: string | null
@@ -89,7 +91,7 @@ interface EventDetail {
 
 const eventSelect = (withDetails: boolean) => `
       id, title, slug, description, category,
-      start_date, end_date, onsale_date, doors_time,${withDetails ? ' details,' : ''}
+      start_date, end_date, onsale_date, presale_start, public_onsale_start, doors_time,${withDetails ? ' details,' : ''}
       image_url, price_from, price_to, currency,
       tickets_url, own_ticket_url, viagogo_url, stubhub_url, gigsberg_url, gigsberg_affiliate_url, see_tickets_affiliate_url,
       gigsberg_highlighted, gigsberg_highlight_until, gigsberg_inventory_status, status, tags,
@@ -174,9 +176,9 @@ const getRelatedEvents = cache(async (event: EventDetail, headlinerId: string | 
 
 // ── Ticket providers ────────────────────────────────────────────────────────
 
-function buildProviders(event: Pick<EventDetail, 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>) {
+function buildProviders(event: Pick<EventDetail, 'slug' | 'presale_start' | 'public_onsale_start' | 'onsale_date' | 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>) {
   const mainPrimary = event.tickets_url
-    ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: getTicketmasterAffiliateLink(event.tickets_url) }]
+    ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: getTicketmasterAffiliateLink(event.tickets_url, `evt-${event.slug}`) }]
     : event.gigsberg_affiliate_url
       ? [{ name: 'Gigsberg', tagline: event.gigsberg_inventory_status === 'available' ? 'Secondary-market tickets via Gigsberg' : 'Check availability on Gigsberg', bg: '#1a1f6e', href: event.gigsberg_affiliate_url }]
     : []
@@ -184,9 +186,15 @@ function buildProviders(event: Pick<EventDetail, 'tickets_url' | 'viagogo_url' |
   // the only affiliate partner for West End runs — list it with the primary
   // sellers so those pages lead with it.
   const seeTickets = event.see_tickets_affiliate_url
-    ? [{ name: 'See Tickets', tagline: 'Official booking agent', bg: '#E4022D', href: getSeeTicketsAffiliateLink(event.see_tickets_affiliate_url) }]
+    ? [{ name: 'See Tickets', tagline: 'Official booking agent', bg: '#E4022D', href: getSeeTicketsAffiliateLink(event.see_tickets_affiliate_url, `evt-${event.slug}`) }]
     : []
-  const primary = [...mainPrimary, ...seeTickets]
+  // Ticketmaster pays no commission during presale and the first 24 hours of
+  // general on-sale. In that window, when See Tickets (the official booking agent,
+  // which does pay) also has this show, list it first. Ticketmaster stays right
+  // there as the second option, so fans can still get presale access.
+  const primary = !isTicketmasterCommissionEligible(event) && seeTickets.length
+    ? [...seeTickets, ...mainPrimary]
+    : [...mainPrimary, ...seeTickets]
   const resale = [
     ...(event.tickets_url && event.gigsberg_affiliate_url ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: event.gigsberg_affiliate_url }] : []),
     ...(!event.tickets_url && !event.gigsberg_affiliate_url && event.gigsberg_url && !isBareProviderHomepage(event.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(event.gigsberg_url) }] : []),

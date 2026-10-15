@@ -121,3 +121,44 @@ describe('provider-specific env-template wrappers', () => {
     })
   }
 })
+
+
+import { cleanSubId, isTicketmasterCommissionEligible } from './affiliate.ts'
+
+describe('sub-IDs', () => {
+  test('cleanSubId keeps safe characters only and caps at 50', () => {
+    assert.equal(cleanSubId('evt-donny-osmond_hydro'), 'evt-donny-osmond_hydro')
+    assert.equal(cleanSubId('a b&c=d?e'), 'a-b-c-d-e')
+    assert.equal(cleanSubId('x'.repeat(80)).length, 50)
+    assert.equal(cleanSubId(undefined), '')
+  })
+  test('Ticketmaster link gains subId1 only when a tag is given; See Tickets gains clickref', () => {
+    assert.ok(!getTicketmasterAffiliateLink('https://www.ticketmaster.co.uk/x').includes('subId1'))
+    assert.ok(getTicketmasterAffiliateLink('https://www.ticketmaster.co.uk/x', 'evt-abc').endsWith('&subId1=evt-abc'))
+    assert.ok(getSeeTicketsAffiliateLink('https://www.seetickets.com/x', 'evt-abc').endsWith('&clickref=evt-abc'))
+    assert.ok(!getSeeTicketsAffiliateLink('https://www.seetickets.com/x').includes('clickref'))
+  })
+})
+
+describe('isTicketmasterCommissionEligible', () => {
+  const at = (iso: string) => new Date(iso)
+  test('no on-sale dates known -> eligible', () => {
+    assert.equal(isTicketmasterCommissionEligible({}, at('2026-10-15T12:00:00Z')), true)
+  })
+  test('inside the first 24h of general on-sale -> not eligible; just after -> eligible', () => {
+    const ev = { public_onsale_start: '2026-10-15T09:00:00Z' }
+    assert.equal(isTicketmasterCommissionEligible(ev, at('2026-10-15T20:00:00Z')), false)
+    assert.equal(isTicketmasterCommissionEligible(ev, at('2026-10-16T09:00:01Z')), true)
+  })
+  test('presale through the first 24h is one window; before presale opens is eligible', () => {
+    const ev = { presale_start: '2026-10-13T09:00:00Z', public_onsale_start: '2026-10-15T09:00:00Z' }
+    assert.equal(isTicketmasterCommissionEligible(ev, at('2026-10-12T09:00:00Z')), true)
+    assert.equal(isTicketmasterCommissionEligible(ev, at('2026-10-14T09:00:00Z')), false)
+    assert.equal(isTicketmasterCommissionEligible(ev, at('2026-10-16T08:00:00Z')), false)
+    assert.equal(isTicketmasterCommissionEligible(ev, at('2026-10-16T10:00:00Z')), true)
+  })
+  test('falls back to onsale_date, and ignores unparseable dates', () => {
+    assert.equal(isTicketmasterCommissionEligible({ onsale_date: '2026-10-15T09:00:00Z' }, at('2026-10-15T10:00:00Z')), false)
+    assert.equal(isTicketmasterCommissionEligible({ public_onsale_start: 'nonsense' }, at('2026-10-15T10:00:00Z')), true)
+  })
+})
