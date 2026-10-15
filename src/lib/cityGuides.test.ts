@@ -31,3 +31,17 @@ describe('CITY_GUIDE_INTROS', () => {
     }
   })
 })
+
+import { splitIntro } from './cityGuides.ts'
+describe('splitIntro', () => {
+  test('every city intro splits into a short lead plus a body', () => {
+    for (const [city, text] of Object.entries(CITY_GUIDE_INTROS)) {
+      const { lead, rest } = splitIntro(text)
+      assert.ok(lead.length > 20 && lead.length <= 400, `${city} lead length ${lead.length}`)
+      assert.equal(`${lead} ${rest}`.trim(), text.trim(), `${city} loses no text`)
+    }
+  })
+  test('single sentence stays whole', () => {
+    assert.deepEqual(splitIntro('Just one sentence here.'), { lead: 'Just one sentence here.', rest: '' })
+  })
+})

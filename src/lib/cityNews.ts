@@ -1,7 +1,7 @@
 import Parser from 'rss-parser'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
-import { selectStaleCityNewsIds } from './newsPublishing.ts'
+import { selectStaleCityNewsIds, selectExpiredRssNewsIds } from './newsPublishing.ts'
 import {
   type NewsItem,
   NEWS_EXCLUDE_TERMS,
@@ -324,6 +324,28 @@ export async function syncCityNews(): Promise<CityNewsSyncResult> {
     perCity.push({ city: feed.name, fetched: result.fetched, upserted: result.upserted, status: result.status, error: result.error })
 
     await sleep(CITY_DELAY_MS)
+  }
+
+  // Expire old RSS stories everywhere, even for feeds whose fetch came back
+  // empty today (syncOneFeed only prunes when it fetched something, which used
+  // to leave small cities showing week-old headlines indefinitely). Editorial
+  // rows are never touched.
+  try {
+    const { data: aged } = await db
+      .from('city_news')
+      .select('id, published_at, is_editorial')
+      .eq('is_editorial', false)
+      .lt('published_at', new Date(Date.now() - 7 * 86_400_000).toISOString()) as unknown as {
+        data: { id: string; published_at: string | null; is_editorial: boolean }[] | null
+      }
+    const expired = selectExpiredRssNewsIds(aged ?? [], Date.now())
+    for (let i = 0; i < expired.length; i += 200) {
+      const { error } = await db.from('city_news').delete().in('id', expired.slice(i, i + 200))
+      if (error) { console.error(`[city-news] expiry cleanup failed (non-fatal): ${error.message}`); break }
+      totalDeleted += Math.min(200, expired.length - i)
+    }
+  } catch (err) {
+    console.error('[city-news] expiry cleanup failed (non-fatal):', err instanceof Error ? err.message : err)
   }
 
   console.log(`[city-news] ── Sync complete ──`)

@@ -3,6 +3,7 @@
 import type { CityNews } from '@/lib/types/database'
 import { trackEvent } from '@/lib/gtag'
 import { buildNewsClickEvent } from '@/lib/analytics'
+import ScrollRail from '@/components/ScrollRail'
 
 // "Today" / "X days ago" for a news item's published_at.
 function fmtNewsAge(publishedAt: string | null): string {
@@ -23,9 +24,9 @@ function fmtNewsAge(publishedAt: string | null): string {
 // click handler — the markup itself is unchanged.
 // `rail` turns the grid into a swipeable row on phones (homepage only — the
 // /news archive and city pages stay a normal list).
-export default function NewsCardGrid({ items, context, rail = false }: { items: CityNews[]; context: string; rail?: boolean }) {
-  return (
-    <div className={`${rail ? 'mobile-rail ' : ''}grid grid-cols-1 sm:grid-cols-2 gap-5`}>
+export default function NewsCardGrid({ items, context, rail = false, scroll = false }: { items: CityNews[]; context: string; rail?: boolean; scroll?: boolean }) {
+  const cards = (
+    <>
       {items.map(item => (
         <a
           key={item.id}
@@ -33,7 +34,7 @@ export default function NewsCardGrid({ items, context, rail = false }: { items: 
           target="_blank"
           rel="noopener noreferrer nofollow"
           onClick={() => trackEvent('news_click', buildNewsClickEvent({ destination: item.url, context }))}
-          className="block bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-5"
+          className="block h-full bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-5"
         >
           <h3 className="font-bold text-slate-900 text-base leading-snug mb-2 hover:text-red-600 transition-colors">
             {item.headline}
@@ -44,6 +45,8 @@ export default function NewsCardGrid({ items, context, rail = false }: { items: 
           </p>
         </a>
       ))}
-    </div>
+    </>
   )
+  if (scroll) return <ScrollRail label="Entertainment news">{cards}</ScrollRail>
+  return <div className={`${rail ? 'mobile-rail ' : ''}grid grid-cols-1 sm:grid-cols-2 gap-5`}>{cards}</div>
 }

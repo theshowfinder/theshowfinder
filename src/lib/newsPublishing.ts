@@ -681,3 +681,49 @@ export function matchesNewsQueueFilters(
   if (params.attention === '1' && reasons.length === 0) return false
   return true
 }
+
+// ── Freshness: what a city page may show, and what the sync may delete ──────
+//
+// The RSS sync only prunes a feed when that day's fetch returned something, so
+// a small city whose search comes back empty kept its last stories forever (a
+// city page showing two-week-old headlines). These two pure helpers fix that at
+// both ends: the page never shows an RSS story older than the cutoff, and the
+// sync deletes expired RSS rows even on an empty fetch. Editorial rows
+// (published by hand from the News Inbox) are never expired here.
+export const CITY_NEWS_MAX_AGE_DAYS = 7
+
+export interface AgedNewsRow { id?: string; published_at: string | null; is_editorial?: boolean }
+
+export function isNewsFreshEnough(publishedAt: string | null, nowMs: number, maxAgeDays = CITY_NEWS_MAX_AGE_DAYS): boolean {
+  if (!publishedAt) return false
+  const t = new Date(publishedAt).getTime()
+  return Number.isFinite(t) && nowMs - t <= maxAgeDays * 86_400_000
+}
+
+// RSS (non-editorial) rows older than the cutoff. Rows with no date are left
+// alone (we can't tell their age, and editorial rows always carry one).
+export function selectExpiredRssNewsIds(rows: Array<AgedNewsRow & { id: string }>, nowMs: number, maxAgeDays = CITY_NEWS_MAX_AGE_DAYS): string[] {
+  return rows
+    .filter(r => !r.is_editorial && r.published_at && !isNewsFreshEnough(r.published_at, nowMs, maxAgeDays))
+    .map(r => r.id)
+}
+
+export interface CityNewsPick<T> { items: T[]; localCount: number }
+
+// City stories first (fresh only, newest first); if the city has fewer than
+// `minLocal`, top up with fresh UK-wide stories so the section is never stale
+// or empty. `localCount` lets the page say honestly which it is showing.
+export function pickNewsForCityPage<T extends AgedNewsRow & { url: string }>(
+  cityRows: T[],
+  nationalRows: T[],
+  nowMs: number,
+  { limit = 8, minLocal = 3, maxAgeDays = CITY_NEWS_MAX_AGE_DAYS }: { limit?: number; minLocal?: number; maxAgeDays?: number } = {},
+): CityNewsPick<T> {
+  const time = (r: T) => (r.published_at ? new Date(r.published_at).getTime() : -Infinity)
+  const fresh = (rows: T[]) => rows.filter(r => isNewsFreshEnough(r.published_at, nowMs, maxAgeDays)).sort((a, b) => time(b) - time(a))
+  const local = fresh(cityRows).slice(0, limit)
+  if (local.length >= minLocal) return { items: local, localCount: local.length }
+  const seen = new Set(local.map(r => r.url))
+  const topUp = fresh(nationalRows).filter(r => !seen.has(r.url))
+  return { items: [...local, ...topUp].slice(0, limit), localCount: local.length }
+}

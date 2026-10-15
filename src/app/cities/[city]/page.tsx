@@ -18,7 +18,7 @@ import { Suspense } from 'react'
 import { fmtOnSaleLabel } from '@/lib/on-sale'
 import { CITIES } from '@/lib/cities'
 import { venueCardBlurb } from '@/lib/venueBlurb'
-import { citySlug } from '@/lib/cityNews'
+import { citySlug, NATIONAL_SLUG } from '@/lib/cityNews'
 import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import { buildCityCollectionSchema, cityCanonicalUrl, cityPageDescription, cityPageTitle } from '@/lib/citySeo'
@@ -30,7 +30,9 @@ import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
 import TonightEventCard from '@/components/TonightEventCard'
 import WestEndStrip from '@/components/WestEndStrip'
-import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
+import { pickNewsForCityPage, CITY_NEWS_MAX_AGE_DAYS } from '@/lib/newsPublishing'
+import ScrollRail from '@/components/ScrollRail'
+import CityIntro from '@/components/CityIntro'
 import { CITY_HERO_IMAGES } from '@/lib/cityHeroImages'
 
 export async function generateStaticParams() {
@@ -120,6 +122,7 @@ export default async function CityPage({
     venuesResult,
     localBusinessesResult,
     cityNewsResult,
+    nationalNewsResult,
   ] = await Promise.all([
     // Today only, Europe/London calendar day, soonest first — see
     // src/lib/tonight.ts for the exact rules (cancelled/postponed and
@@ -187,24 +190,32 @@ export default async function CityPage({
       .order('display_order', { ascending: true })
       .limit(24) as unknown as Promise<{ data: LocalBusiness[] | null }>,
 
-    // Local entertainment news for this city
+    // Local entertainment news for this city (newest 30; freshness is applied below)
     supabase
       .from('city_news')
       .select('*')
       .eq('city_slug', citySlug(cityName))
       .order('published_at', { ascending: false })
-      .limit(5) as unknown as Promise<{ data: CityNews[] | null }>,
+      .limit(30) as unknown as Promise<{ data: CityNews[] | null }>,
+
+    // UK-wide entertainment news, used to top up a city with few fresh local stories
+    supabase
+      .from('city_news')
+      .select('*')
+      .eq('city_slug', NATIONAL_SLUG)
+      .gte('published_at', new Date(now.getTime() - CITY_NEWS_MAX_AGE_DAYS * 86_400_000).toISOString())
+      .order('published_at', { ascending: false })
+      .limit(20) as unknown as Promise<{ data: CityNews[] | null }>,
   ])
 
   const localBusinesses = localBusinessesResult.data ?? []
-  // Re-applies the same recency ranking the query above already expresses
-  // (.order('published_at', {ascending:false}).limit(5)) as an explicit,
-  // unit-tested contract — see rankCityNewsForDisplay in newsPublishing.ts
-  // for why an editorial story's published_at is the Showfinder publish
-  // time, not the source article's own date, and why that's what lets it
-  // compete fairly (not permanently) against RSS rows for one of these 5
-  // slots.
-  const cityNews = rankCityNewsForDisplay(cityNewsResult.data ?? [], 5)
+  // Only stories from the last CITY_NEWS_MAX_AGE_DAYS days are ever shown. A city
+  // with fewer than 3 fresh local stories is topped up with fresh UK-wide ones, so
+  // the section is neither stale nor empty (and hides if nothing is fresh at all).
+  const newsPick = pickNewsForCityPage(cityNewsResult.data ?? [], nationalNewsResult.data ?? [], now.getTime(), { limit: 8, minLocal: 3 })
+  const cityNews = newsPick.items
+  const newsIsLocal = newsPick.localCount >= 3
+
   // A query error must not be presented the same way as a genuine
   // zero-event city — see cityEventCount.ts for the intermittent
   // "Coming soon"-style bug this was found causing on the navigation
@@ -353,17 +364,14 @@ export default async function CityPage({
 
         {/* ── CITY GUIDE INTRO (only renders for cities with a written entry) ── */}
         {CITY_GUIDE_INTROS[cityName] && (
-          <section>
-            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
-              About {cityName}
-            </p>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-4">
-              {cityName}&rsquo;s Live Scene
-            </h2>
-            <p className="text-slate-600 leading-relaxed max-w-3xl">
-              {CITY_GUIDE_INTROS[cityName]}
-            </p>
-          </section>
+          <CityIntro
+            cityName={cityName}
+            emoji={cityConfig.emoji}
+            intro={CITY_GUIDE_INTROS[cityName]}
+            totalCount={totalCount}
+            venueCount={cityVenues.length}
+            venues={cityVenues.map(v => ({ name: v.name, slug: v.slug, capacity: v.capacity }))}
+          />
         )}
 
         {/* ── NEWSLETTER (city-scoped) ── */}
@@ -411,11 +419,11 @@ export default async function CityPage({
                 See all →
               </Link>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <ScrollRail label={`Events this week in ${cityName}`}>
               {eventsThisWeek.map(event => (
                 <EventCard key={event.id} event={event} />
               ))}
-            </div>
+            </ScrollRail>
           </section>
         )}
 
@@ -424,13 +432,14 @@ export default async function CityPage({
           <section>
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
-                In the news
+                {newsIsLocal ? 'In the news' : `${cityName} + UK`}
               </p>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                {cityName} Entertainment News
+                {newsIsLocal ? `${cityName} Entertainment News` : 'Latest Entertainment News'}
               </h2>
+              <p className="text-sm text-slate-500 mt-1">Updated twice a day &middot; stories from the last week</p>
             </div>
-            <NewsCardGrid items={cityNews} context={`city:${city}`} />
+            <NewsCardGrid items={cityNews} context={`city:${city}`} scroll />
           </section>
         )}
 
@@ -445,7 +454,7 @@ export default async function CityPage({
                 Presales Open Now in {cityName}
               </h2>
             </div>
-            <PresaleGrid groups={presaleGroups} />
+            <PresaleGrid groups={presaleGroups} scroll />
           </section>
         )}
 
@@ -470,7 +479,7 @@ export default async function CityPage({
               View all →
             </Link>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <ScrollRail label={`On sale this week in ${cityName}`}>
               {onsaleGroups.map(group => (
                 <Link
                   key={group.slug}
@@ -509,7 +518,7 @@ export default async function CityPage({
                   </div>
                 </Link>
               ))}
-          </div>
+          </ScrollRail>
         </section>}
 
         {/* ── TOP EVENTS (beyond this week, up to ~2 months out) ── */}
@@ -523,11 +532,11 @@ export default async function CityPage({
                 Top Events in {cityName}
               </h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <ScrollRail label={`Top events in ${cityName}`}>
               {topEvents.map(event => (
                 <EventCard key={event.id} event={event} />
               ))}
-            </div>
+            </ScrollRail>
           </section>
         )}
 
@@ -544,12 +553,12 @@ export default async function CityPage({
                 </h2>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            <ScrollRail label={`Venues in ${cityName}`} columns={4}>
               {cityVenues.map(venue => (
                 <Link
                   key={venue.id}
                   href={`/venues/${venue.slug}`}
-                  className="block bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-5"
+                  className="block h-full bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-5"
                 >
                   <h3 className="font-bold text-slate-900 text-base leading-snug mb-1 hover:text-red-600 transition-colors">
                     {venue.name}
@@ -570,7 +579,7 @@ export default async function CityPage({
                   </div>
                 </Link>
               ))}
-            </div>
+            </ScrollRail>
           </section>
         )}
 
@@ -632,7 +641,7 @@ export default async function CityPage({
                 Recommended in {cityName}
               </h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <ScrollRail label={`Recommended in ${cityName}`}>
               {localBusinesses.map(biz => {
                 const card = (
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-5 h-full">
@@ -663,7 +672,7 @@ export default async function CityPage({
                   <div key={biz.id}>{card}</div>
                 )
               })}
-            </div>
+            </ScrollRail>
           </section>
         )}
 

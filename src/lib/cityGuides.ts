@@ -88,3 +88,12 @@ export const CITY_GUIDE_INTROS: Record<string, string> = {
 
   Aberdeen: `Aberdeen's live scene is unusually strong for its size — P&J Live, Scotland's largest indoor arena, hosted what's been called the largest indoor concert ever held in Scotland when Gerry Cinnamon sold out its 15,000 capacity in 2019. Two Frank Matcham-designed theatres, His Majesty's Theatre and the Tivoli, plus the Archibald Simpson-designed Music Hall, give the city a strong classical and touring-theatre tradition alongside its modern arena. Whatever the show, TheShowFinder tracks tickets across every major provider so you can compare prices before you buy.`,
 }
+
+// First sentence = a short lead for the city intro block; everything after it =
+// the body (shown behind "Read more"). Splits on ". " before a capital so
+// abbreviations mid-text stay intact; falls back to all-lead if no clean split.
+export function splitIntro(text: string): { lead: string; rest: string } {
+  const m = text.match(/^([\s\S]+?[.!?])\s+(?=[A-Z"'(])/)
+  if (!m || m[1].length > 400) return { lead: text, rest: '' }
+  return { lead: m[1], rest: text.slice(m[0].length).trim() }
+}

@@ -50,3 +50,30 @@ body {
     scroll-snap-align: start;
   }
 }
+
+/* Sideways-scrolling card rails (city pages). Unlike .mobile-rail this scrolls
+   at every width: one card + a peek on phones, two on tablets, three on desktop.
+   `.h-rail-4` shows four at the widest size (venue tiles). */
+.h-rail {
+  --rail-gap: 1.25rem;
+  display: flex;
+  gap: var(--rail-gap);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  padding: 0.25rem 1rem 0.75rem;
+  margin-inline: -1rem;
+  scroll-padding-inline: 1rem;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.h-rail::-webkit-scrollbar { display: none; }
+.h-rail > * { flex: 0 0 78%; min-width: 0; scroll-snap-align: start; }
+@media (min-width: 640px) {
+  .h-rail > * { flex-basis: calc((100% - var(--rail-gap)) / 2); }
+}
+@media (min-width: 1024px) {
+  .h-rail > * { flex-basis: calc((100% - 2 * var(--rail-gap)) / 3); }
+  .h-rail-4 > * { flex-basis: calc((100% - 3 * var(--rail-gap)) / 4); }
+}
+@media (prefers-reduced-motion: reduce) { .h-rail { scroll-behavior: auto; } }

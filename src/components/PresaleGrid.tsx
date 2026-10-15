@@ -1,13 +1,14 @@
 import Link from 'next/link'
 import type { OnSaleGroup } from '@/lib/on-sale'
 import { fmtOnSaleLabel } from '@/lib/on-sale'
+import ScrollRail from '@/components/ScrollRail'
 
 // Shared "presale open now" card grid — used by both the national homepage
 // section and each city page's Presales Open Now section, so the card design
 // only lives in one place.
-export default function PresaleGrid({ groups }: { groups: OnSaleGroup[] }) {
-  return (
-    <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+export default function PresaleGrid({ groups, scroll = false }: { groups: OnSaleGroup[]; scroll?: boolean }) {
+  const cards = (
+    <>
       {groups.map(group => {
         const presaleClose = group.events
           .map(ev => ev.presale_end)
@@ -53,6 +54,8 @@ export default function PresaleGrid({ groups }: { groups: OnSaleGroup[] }) {
           </Link>
         )
       })}
-    </div>
+    </>
   )
+  if (scroll) return <ScrollRail label="Presales open now">{cards}</ScrollRail>
+  return <div className="mobile-rail grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">{cards}</div>
 }

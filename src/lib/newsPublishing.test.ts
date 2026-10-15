@@ -1214,3 +1214,49 @@ describe('filterSupportedCityTargets — "never invent... unsupported cities"', 
     assert.deepEqual(filterSupportedCityTargets([], SUPPORTED), [])
   })
 })
+
+import { isNewsFreshEnough, selectExpiredRssNewsIds, pickNewsForCityPage } from './newsPublishing.ts'
+
+describe('news freshness', () => {
+  const now = Date.parse('2026-10-15T12:00:00Z')
+  const day = (n: number) => new Date(now - n * 86_400_000).toISOString()
+
+  test('isNewsFreshEnough: within 7 days yes, older or undated no', () => {
+    assert.equal(isNewsFreshEnough(day(2), now), true)
+    assert.equal(isNewsFreshEnough(day(7), now), true)
+    assert.equal(isNewsFreshEnough(day(8), now), false)
+    assert.equal(isNewsFreshEnough(null, now), false)
+    assert.equal(isNewsFreshEnough('garbage', now), false)
+  })
+
+  test('selectExpiredRssNewsIds expires old RSS rows but never editorial or undated rows', () => {
+    const ids = selectExpiredRssNewsIds([
+      { id: 'old-rss',  published_at: day(10), is_editorial: false },
+      { id: 'new-rss',  published_at: day(1),  is_editorial: false },
+      { id: 'old-edit', published_at: day(30), is_editorial: true },
+      { id: 'undated',  published_at: null,    is_editorial: false },
+    ], now)
+    assert.deepEqual(ids, ['old-rss'])
+  })
+
+  test('pickNewsForCityPage: enough fresh local stories -> local only, newest first', () => {
+    const city = [1, 3, 2, 5].map(n => ({ url: `c${n}`, published_at: day(n) }))
+    const nat = [{ url: 'n1', published_at: day(0) }]
+    const pick = pickNewsForCityPage(city, nat, now, { minLocal: 3 })
+    assert.deepEqual(pick.items.map(i => i.url), ['c1', 'c2', 'c3', 'c5'])
+    assert.equal(pick.localCount, 4)
+  })
+
+  test('pickNewsForCityPage: stale city rows are dropped and national tops up, no duplicates', () => {
+    const city = [{ url: 'old', published_at: day(12) }, { url: 'shared', published_at: day(2) }]
+    const nat = [{ url: 'shared', published_at: day(2) }, { url: 'n1', published_at: day(1) }, { url: 'n2-old', published_at: day(20) }]
+    const pick = pickNewsForCityPage(city, nat, now, { minLocal: 3 })
+    assert.deepEqual(pick.items.map(i => i.url), ['shared', 'n1'])
+    assert.equal(pick.localCount, 1)
+  })
+
+  test('pickNewsForCityPage: nothing fresh anywhere -> empty (section hides)', () => {
+    const pick = pickNewsForCityPage([{ url: 'a', published_at: day(30) }], [], now)
+    assert.deepEqual(pick.items, [])
+  })
+})
