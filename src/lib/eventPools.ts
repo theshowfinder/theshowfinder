@@ -15,6 +15,7 @@ import {
 import { londonDayWindow, londonDaysAheadWindow, londonWeekendDayWindows, type DateWindow } from './intelligence.ts'
 import { isTonightEvent, sortTonightEvents } from './tonight.ts'
 import { mixEvents, trimTonight } from './eventMix.ts'
+import { nearbyOrFilter, type NearbyArea } from './nearbyAreas.ts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -463,4 +464,65 @@ export async function fetchOnSaleThisWeek(
   const groups        = groupEventsByArtist(deduped, artists)
   const diversified   = capGroupsBySeries(groups)
   return diversified.slice(0, limit)
+}
+
+interface NearbyEventsOpts {
+  areas: NearbyArea[]
+  limit: number
+  /** How far ahead to look. Nearby towns are a "worth the trip" list, so wider than this week. */
+  horizonDays?: number
+  fetchLimit?: number
+}
+
+// Shows in the towns around a hub city (see nearbyAreas.ts), soonest first.
+// Same live-status rules and per-venue / attraction caps as the other pools, so
+// one venue can't fill the strip. No page of its own exists for these towns:
+// they appear on the hub's city page.
+export async function fetchNearbyEvents(
+  supabase: SupabaseClient,
+  { areas, limit, horizonDays = 45, fetchLimit = 120 }: NearbyEventsOpts,
+): Promise<EventWithVenue[]> {
+  const filter = nearbyOrFilter(areas)
+  if (!filter) return []
+  const now = new Date()
+  const horizon = new Date(now.getTime() + horizonDays * DAY_MS).toISOString()
+
+  const { data } = await supabase
+    .from('events_with_venue')
+    .select('*')
+    .gte('start_date', now.toISOString())
+    .lte('start_date', horizon)
+    .in('status', LIVE_EVENT_STATUSES)
+    .or(filter)
+    .order('is_featured',    { ascending: false })
+    .order('venue_capacity', { ascending: false, nullsFirst: false })
+    .order('start_date',     { ascending: true })
+    .limit(fetchLimit) as unknown as { data: EventWithVenue[] | null }
+
+  const picked = mixEvents(data ?? [], { limit, maxPerVenue: 2, maxAttractions: 1, mode: 'ranked' })
+  return picked.sort((a, b) => a.start_date.localeCompare(b.start_date))
+}
+
+export const BROWSE_CATEGORIES = ['concert', 'theatre', 'comedy', 'sports', 'family'] as const
+
+// How many upcoming shows a city has in each main category, for the
+// "browse by type" strip (only types that have shows are offered). One cheap
+// head-count per category. A failed count is treated as "unknown", not zero,
+// so a transient error never hides the strip's real options as an empty city.
+export async function fetchCityCategoryCounts(
+  supabase: SupabaseClient,
+  city: string,
+): Promise<Record<string, number | null>> {
+  const nowISO = new Date().toISOString()
+  const results = await Promise.all(BROWSE_CATEGORIES.map(async category => {
+    const res = await supabase
+      .from('events_with_venue')
+      .select('id', { count: 'exact', head: true })
+      .ilike('venue_city', city)
+      .eq('category', category)
+      .in('status', LIVE_EVENT_STATUSES)
+      .gte('start_date', nowISO) as unknown as { count: number | null; error: unknown }
+    return [category, res.error ? null : (res.count ?? 0)] as const
+  }))
+  return Object.fromEntries(results)
 }

@@ -23,7 +23,7 @@ import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import { buildCityCollectionSchema, cityCanonicalUrl, cityPageDescription, cityPageTitle } from '@/lib/citySeo'
 import CityNewsletterForm from '@/components/CityNewsletterForm'
-import { fetchEventsThisWeek, fetchTopEvents, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { fetchEventsThisWeek, fetchTopEvents, fetchNearbyEvents, fetchCityCategoryCounts, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { resolveCityEventCount, normalizeCityFilterValue } from '@/lib/cityEventCount'
 import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import PresaleGrid from '@/components/PresaleGrid'
@@ -34,6 +34,9 @@ import { pickNewsForCityPage, CITY_NEWS_MAX_AGE_DAYS } from '@/lib/newsPublishin
 import ScrollRail from '@/components/ScrollRail'
 import CityIntro from '@/components/CityIntro'
 import { CITY_HERO_IMAGES } from '@/lib/cityHeroImages'
+import { getNearbyAreas, areasWithEvents } from '@/lib/nearbyAreas'
+import CityBrowse from '@/components/CityBrowse'
+import CityTicketSources from '@/components/CityTicketSources'
 
 export async function generateStaticParams() {
   return CITIES.map(c => ({ city: c.name }))
@@ -112,6 +115,8 @@ export default async function CityPage({
   const artistsData = await fetchAllArtists(supabase)
   const artists = artistsData ?? []
 
+  const nearbyAreas = getNearbyAreas(cityName)
+
   const [
     tonightEvents,
     eventsThisWeek,
@@ -123,6 +128,8 @@ export default async function CityPage({
     localBusinessesResult,
     cityNewsResult,
     nationalNewsResult,
+    nearbyEvents,
+    categoryCounts,
   ] = await Promise.all([
     // Today only, Europe/London calendar day, soonest first — see
     // src/lib/tonight.ts for the exact rules (cancelled/postponed and
@@ -206,9 +213,17 @@ export default async function CityPage({
       .gte('published_at', new Date(now.getTime() - CITY_NEWS_MAX_AGE_DAYS * 86_400_000).toISOString())
       .order('published_at', { ascending: false })
       .limit(20) as unknown as Promise<{ data: CityNews[] | null }>,
+
+    // Shows in the towns around this hub (none for cities without a nearby-areas
+    // entry). They join this page rather than getting thin pages of their own.
+    nearbyAreas.length > 0 ? fetchNearbyEvents(supabase, { areas: nearbyAreas, limit: 12 }) : Promise.resolve([]),
+
+    // Per-type counts for the "browse by type" chips
+    fetchCityCategoryCounts(supabase, cityName),
   ])
 
   const localBusinesses = localBusinessesResult.data ?? []
+  const nearbyTowns = areasWithEvents(nearbyAreas, nearbyEvents)
   // Only stories from the last CITY_NEWS_MAX_AGE_DAYS days are ever shown. A city
   // with fewer than 3 fresh local stories is topped up with fresh UK-wide ones, so
   // the section is neither stale nor empty (and hides if nothing is fresh at all).
@@ -377,6 +392,9 @@ export default async function CityPage({
         {/* ── NEWSLETTER (city-scoped) ── */}
         <CityNewsletterForm cityName={cityName} />
 
+        {/* ── BROWSE BY TYPE ── */}
+        <CityBrowse cityName={cityName} counts={categoryCounts} />
+
         {/* ── TONIGHT (hidden completely when there are no valid events) ── */}
         {tonightEvents.length > 0 && (
           <section>
@@ -421,6 +439,28 @@ export default async function CityPage({
             </div>
             <ScrollRail label={`Events this week in ${cityName}`}>
               {eventsThisWeek.map(event => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </ScrollRail>
+          </section>
+        )}
+
+        {/* ── AROUND THE CITY: nearby towns' shows (hidden when none) ── */}
+        {nearbyEvents.length > 0 && (
+          <section>
+            <div className="mb-7">
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+                Worth the trip
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                Around {cityName}
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">
+                Upcoming shows in {nearbyTowns.map(t => t.name).join(', ').replace(/, ([^,]*)$/, ' and $1')}
+              </p>
+            </div>
+            <ScrollRail label={`Shows around ${cityName}`}>
+              {nearbyEvents.map(event => (
                 <EventCard key={event.id} event={event} />
               ))}
             </ScrollRail>
@@ -582,6 +622,9 @@ export default async function CityPage({
             </ScrollRail>
           </section>
         )}
+
+        {/* ── HOW TICKET COMPARISON WORKS ── */}
+        <CityTicketSources cityName={cityName} />
 
         {/* ── GETTING THERE & STAYING (hidden entirely if neither affiliate
              template env var is configured — see hasBookingAffiliate/

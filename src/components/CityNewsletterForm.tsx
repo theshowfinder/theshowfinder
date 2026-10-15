@@ -26,7 +26,8 @@ export default function CityNewsletterForm({ cityName }: { cityName: string }) {
 
   return (
     <section
-      className="relative overflow-hidden rounded-2xl px-6 py-8 sm:px-10 sm:py-10 flex flex-col sm:flex-row items-center gap-7 sm:gap-10"
+      id="ticket-alerts"
+      className="relative overflow-hidden rounded-2xl px-6 py-8 sm:px-10 sm:py-10 flex flex-col sm:flex-row items-center gap-7 sm:gap-10 scroll-mt-6"
       style={{ background: 'linear-gradient(135deg, #1A1A2E 0%, #25254A 60%, #3B1D4A 100%)' }}
     >
       <div className="absolute -right-12 -top-16 h-40 w-40 rounded-full opacity-20" style={{ backgroundColor: '#FFB800' }} aria-hidden="true" />
