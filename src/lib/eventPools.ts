@@ -15,7 +15,7 @@ import {
 import { londonDayWindow, londonDaysAheadWindow, londonWeekendDayWindows, type DateWindow } from './intelligence.ts'
 import { isTonightEvent, sortTonightEvents } from './tonight.ts'
 import { mixEvents, trimTonight } from './eventMix.ts'
-import { nearbyOrFilter, type NearbyArea } from './nearbyAreas.ts'
+import { nearbyOrFilter, areaForVenueCity, type NearbyArea } from './nearbyAreas.ts'
 import { LIVE_EVENT_STATUSES, listedEventsCount, dropDuplicateEvents } from './listedEvents.ts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -527,26 +527,49 @@ interface NearbyEventsOpts {
 // they appear on the hub's city page.
 export async function fetchNearbyEvents(
   supabase: SupabaseClient,
-  { areas, limit, horizonDays = 90, fetchLimit = 150 }: NearbyEventsOpts,
+  { areas, limit, horizonDays = 90, fetchLimit = 40 }: NearbyEventsOpts,
 ): Promise<EventWithVenue[]> {
-  const filter = nearbyOrFilter(areas)
-  if (!filter) return []
+  if (!nearbyOrFilter(areas)) return []
   const now = new Date()
   const horizon = new Date(now.getTime() + horizonDays * DAY_MS).toISOString()
 
-  const { data } = await supabase
-    .from('listed_events_with_venue')
-    .select('*')
-    .gte('start_date', now.toISOString())
-    .lte('start_date', horizon)
-    .in('status', LIVE_EVENT_STATUSES)
-    .or(filter)
-    .order('is_featured',    { ascending: false })
-    .order('venue_capacity', { ascending: false, nullsFirst: false })
-    .order('start_date',     { ascending: true })
-    .limit(fetchLimit) as unknown as { data: EventWithVenue[] | null }
+  // One query per town, so a big arena city (or a stadium with a run of fixtures)
+  // can never push a small town's shows out of the pool.
+  const perTown = await Promise.all(areas.map(async area => {
+    const filter = nearbyOrFilter([area])
+    if (!filter) return [] as EventWithVenue[]
+    const { data } = await supabase
+      .from('listed_events_with_venue')
+      .select('*')
+      .gte('start_date', now.toISOString())
+      .lte('start_date', horizon)
+      .in('status', LIVE_EVENT_STATUSES)
+      .or(filter)
+      .order('is_featured',    { ascending: false })
+      .order('venue_capacity', { ascending: false, nullsFirst: false })
+      .order('start_date',     { ascending: true })
+      .limit(fetchLimit) as unknown as { data: EventWithVenue[] | null }
+    // Per-town pick: at most 2 per venue, 1 attraction, and no more than 4 in all.
+    return mixEvents(data ?? [], { limit: 4, maxPerVenue: 2, maxAttractions: 1, mode: 'ranked' })
+  }))
 
-  const picked = mixEvents(data ?? [], { limit, maxPerVenue: 2, maxAttractions: 1, mode: 'ranked' })
+  // Round-robin across the towns (one show from each town per pass), so the strip
+  // mixes places, venues and categories instead of three fixtures from one ground.
+  const queues = perTown.filter(q => q.length > 0)
+  const picked: EventWithVenue[] = []
+  const seenCategoryByTown = new Map<string, number>()
+  for (let round = 0; picked.length < limit && queues.some(q => q.length > 0); round++) {
+    for (const q of queues) {
+      if (picked.length >= limit) break
+      if (q.length === 0) continue
+      // Prefer a show whose category this town hasn't contributed yet.
+      const town = areaForVenueCity(areas, q[0].venue_city)?.name ?? ''
+      const idx = q.findIndex(e => !seenCategoryByTown.has(`${town}|${e.category}`))
+      const [e] = q.splice(idx === -1 ? 0 : idx, 1)
+      seenCategoryByTown.set(`${town}|${e.category}`, 1)
+      picked.push(e)
+    }
+  }
   return picked.sort((a, b) => a.start_date.localeCompare(b.start_date))
 }
 

@@ -22,6 +22,8 @@ export const NEARBY_AREAS: Record<string, NearbyArea[]> = {
     { name: 'Ilkeston', match: ['Ilkeston'] },
     { name: 'Long Eaton', match: ['Long Eaton'] },
     { name: 'Castle Donington', match: ['Castle Donington', 'Donington Park'] },
+    { name: 'Buxton', match: ['Buxton'] },
+    { name: 'Mansfield', match: ['Mansfield'] },
   ],
   Manchester: [
     { name: 'Salford', match: ['Salford'] },
@@ -253,6 +255,19 @@ export const NEARBY_AREAS: Record<string, NearbyArea[]> = {
 export function getNearbyAreas(cityName: string): NearbyArea[] {
   const key = Object.keys(NEARBY_AREAS).find(k => k.toLowerCase() === cityName.trim().toLowerCase())
   return key ? NEARBY_AREAS[key] : []
+}
+
+// Neighbouring cities that have their own city page but are close enough to be a
+// real night out from the hub. They are only added to the hub's "Around <city>"
+// show strip (with a per-town cap so a big arena city cannot crowd out small
+// towns); they are never treated as nearby towns for venues or the intro line.
+export const NEIGHBOUR_CITIES: Record<string, string[]> = {
+  Derby: ['Nottingham', 'Leicester', 'Sheffield', 'Stoke-on-Trent'],
+}
+
+export function getNeighbourCities(cityName: string): NearbyArea[] {
+  const key = Object.keys(NEIGHBOUR_CITIES).find(k => k.toLowerCase() === cityName.trim().toLowerCase())
+  return key ? NEIGHBOUR_CITIES[key].map(name => ({ name, match: [name] })) : []
 }
 
 // PostgREST `or` filter value for "venue_city is one of these spellings".

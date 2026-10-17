@@ -39,7 +39,7 @@ import CityIntro from '@/components/CityIntro'
 import { CITY_HERO_IMAGES } from '@/lib/cityHeroImages'
 import CalendarSubscribe from '@/components/CalendarSubscribe'
 import { cityFeedPath } from '@/lib/calendarFeeds'
-import { getNearbyAreas, areasWithEvents, nearbyIntroSentence } from '@/lib/nearbyAreas'
+import { getNearbyAreas, getNeighbourCities, areasWithEvents, nearbyIntroSentence } from '@/lib/nearbyAreas'
 import CityBrowse from '@/components/CityBrowse'
 import CityTicketSources from '@/components/CityTicketSources'
 
@@ -131,6 +131,8 @@ export default async function CityPage({
   const artists = artistsData ?? []
 
   const nearbyAreas = getNearbyAreas(cityName)
+  // The Around-<city> show strip also draws on neighbouring cities (Derby: Nottingham, Sheffield...).
+  const stripAreas = [...nearbyAreas, ...getNeighbourCities(cityName)]
 
   const [
     tonightEvents,
@@ -228,7 +230,7 @@ export default async function CityPage({
 
     // Shows in the towns around this hub (none for cities without a nearby-areas
     // entry). They join this page rather than getting thin pages of their own.
-    nearbyAreas.length > 0 ? fetchNearbyEvents(supabase, { areas: nearbyAreas, limit: 12 }) : Promise.resolve([]),
+    nearbyAreas.length > 0 ? fetchNearbyEvents(supabase, { areas: stripAreas, limit: 12 }) : Promise.resolve([]),
 
     // Per-type counts for the "browse by type" chips
     fetchCityCategoryCounts(supabase, cityName),
@@ -238,7 +240,7 @@ export default async function CityPage({
   ])
 
   const localBusinesses = localBusinessesResult.data ?? []
-  const nearbyTowns = areasWithEvents(nearbyAreas, nearbyEvents)
+  const nearbyTowns = areasWithEvents(stripAreas, nearbyEvents)
   // The written intro gains one factual line naming the nearby towns that have
   // shows below (Derby's hand-written intro already says this itself).
   const baseIntro = CITY_GUIDE_INTROS[cityName]

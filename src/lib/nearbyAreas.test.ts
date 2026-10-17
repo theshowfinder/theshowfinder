@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { getNearbyAreas, nearbyOrFilter, areaForVenueCity, areasWithEvents, nearbyIntroSentence, NEARBY_AREAS } from './nearbyAreas.ts'
+import { getNearbyAreas, getNeighbourCities, NEIGHBOUR_CITIES, nearbyOrFilter, areaForVenueCity, areasWithEvents, nearbyIntroSentence, NEARBY_AREAS } from './nearbyAreas.ts'
 import { CITIES } from './cities.ts'
 
 test('getNearbyAreas is case-insensitive and empty for unconfigured cities', () => {
@@ -64,4 +64,19 @@ test('nearbyIntroSentence names the towns naturally', () => {
     nearbyIntroSentence([{ name: 'A', match: [] }, { name: 'B', match: [] }, { name: 'C', match: [] }]),
     'Shows in nearby A, B and C are gathered further down this page.',
   )
+})
+
+test('neighbouring cities are real city pages, never the hub itself, and only feed the show strip', () => {
+  const cityNames = new Set(CITIES.map(c => c.name.toLowerCase()))
+  for (const [hub, names] of Object.entries(NEIGHBOUR_CITIES)) {
+    assert.ok(cityNames.has(hub.toLowerCase()), `${hub} is not in CITIES`)
+    for (const n of names) {
+      assert.ok(cityNames.has(n.toLowerCase()), `${n} is not a city page`)
+      assert.notEqual(n.toLowerCase(), hub.toLowerCase())
+    }
+  }
+  assert.deepEqual(getNeighbourCities('derby').map(a => a.name), ['Nottingham', 'Leicester', 'Sheffield', 'Stoke-on-Trent'])
+  assert.deepEqual(getNeighbourCities('Atlantis'), [])
+  // They are not part of the nearby-town list used for venues and the intro line.
+  assert.ok(!getNearbyAreas('Derby').some(a => a.name === 'Nottingham'))
 })
