@@ -25,7 +25,7 @@ import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import { buildCityCollectionSchema, cityCanonicalUrl, cityPageDescription, cityPageTitle } from '@/lib/citySeo'
 import CityNewsletterForm from '@/components/CityNewsletterForm'
-import { fetchEventsThisWeek, fetchTopEvents, fetchNearbyEvents, fetchCityCategoryCounts, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { fetchEventsThisWeek, fetchTopEvents, fetchNearbyEvents, fetchRecentlyAddedEvents, fetchCityCategoryCounts, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { resolveCityEventCount, normalizeCityFilterValue } from '@/lib/cityEventCount'
 import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import PresaleGrid from '@/components/PresaleGrid'
@@ -137,6 +137,7 @@ export default async function CityPage({
     nationalNewsResult,
     nearbyEvents,
     categoryCounts,
+    recentlyAdded,
   ] = await Promise.all([
     // Today only, Europe/London calendar day, soonest first — see
     // src/lib/tonight.ts for the exact rules (cancelled/postponed and
@@ -227,6 +228,9 @@ export default async function CityPage({
 
     // Per-type counts for the "browse by type" chips
     fetchCityCategoryCounts(supabase, cityName),
+
+    // Shows first listed in the last 7 days: the page's own freshness signal
+    fetchRecentlyAddedEvents(supabase, { city: cityName, limit: 12 }),
   ])
 
   const localBusinesses = localBusinessesResult.data ?? []
@@ -462,6 +466,26 @@ export default async function CityPage({
             </div>
             <ScrollRail label={`Events this week in ${cityName}`}>
               {eventsThisWeek.map(event => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </ScrollRail>
+          </section>
+        )}
+
+        {/* ── JUST ADDED: shows first listed in the last 7 days (hidden when fewer than 3) ── */}
+        {recentlyAdded.length >= 3 && (
+          <section>
+            <div className="mb-7">
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+                New this week
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                Just Added in {cityName}
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">Shows listed for the first time in the last 7 days</p>
+            </div>
+            <ScrollRail label={`Just added in ${cityName}`}>
+              {recentlyAdded.map(event => (
                 <EventCard key={event.id} event={event} />
               ))}
             </ScrollRail>

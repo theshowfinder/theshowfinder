@@ -343,6 +343,49 @@ export async function fetchCityEventsAhead(
   return picked.sort((a, b) => a.start_date.localeCompare(b.start_date))
 }
 
+interface RecentlyAddedOpts {
+  city: string
+  limit: number
+  days?: number
+}
+
+// "Just added in {city}": shows that first appeared in our listings in the last
+// `days` days (events.created_at), at upcoming dates, one card per show with the
+// usual per-venue cap and no attraction tickets. A real freshness signal for the
+// page, not a recycled "featured" list. Soonest date first.
+export async function fetchRecentlyAddedEvents(
+  supabase: SupabaseClient,
+  { city, limit, days = 7 }: RecentlyAddedOpts,
+): Promise<EventWithVenue[]> {
+  const now = new Date()
+  const since = new Date(now.getTime() - days * DAY_MS).toISOString()
+
+  // events_with_venue has no created_at, so find the new ids on the events table.
+  const { data: recent } = await supabase
+    .from('events')
+    .select('id, venue:venues!inner(city)')
+    .ilike('venues.city', city)
+    .gte('created_at', since)
+    .gte('start_date', now.toISOString())
+    .in('status', LIVE_EVENT_STATUSES)
+    .order('created_at', { ascending: false })
+    .limit(150) as unknown as { data: { id: string }[] | null }
+
+  const ids = (recent ?? []).map(r => r.id)
+  if (!ids.length) return []
+
+  const { data } = await supabase
+    .from('events_with_venue')
+    .select('*')
+    .in('id', ids)
+    .order('is_featured',    { ascending: false })
+    .order('venue_capacity', { ascending: false, nullsFirst: false })
+    .order('start_date',     { ascending: true }) as unknown as { data: EventWithVenue[] | null }
+
+  const picked = mixEvents(data ?? [], { limit, maxPerVenue: 2, maxAttractions: 0, mode: 'ranked' })
+  return picked.sort((a, b) => a.start_date.localeCompare(b.start_date))
+}
+
 interface PresalesOpenNowOpts {
   city?: string
   limit: number
