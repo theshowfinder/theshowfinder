@@ -93,8 +93,18 @@ export const NEARBY_AREAS: Record<string, NearbyArea[]> = {
     { name: 'Christchurch', match: ['Christchurch'] },
   ],
   Bristol: [
-    { name: 'Bath', match: ['Bath'] },
     { name: 'Weston-super-Mare', match: ['Weston-super-Mare', 'Weston super Mare'] },
+  ],
+  Blackpool: [
+    { name: 'Lytham St Annes', match: ['Lytham St Annes', 'Lytham St. Annes'] },
+    { name: 'Fleetwood', match: ['Fleetwood'] },
+    { name: 'Preston', match: ['Preston'] },
+    { name: 'Morecambe', match: ['Morecambe'] },
+  ],
+  Scarborough: [
+    { name: 'Whitby', match: ['Whitby'] },
+    { name: 'Bridlington', match: ['Bridlington'] },
+    { name: 'Filey', match: ['Filey'] },
   ],
   Cardiff: [
     { name: 'Newport', match: ['Newport'] },

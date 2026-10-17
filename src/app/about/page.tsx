@@ -30,7 +30,7 @@ export default function AboutPage() {
           </p>
 
           <p>
-            We cover <strong className="text-slate-900">36 cities</strong> across the UK with thousands
+            We cover <strong className="text-slate-900">40 cities</strong> across the UK with thousands
             of upcoming events updated daily.
           </p>
 

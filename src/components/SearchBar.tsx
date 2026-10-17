@@ -6,14 +6,14 @@ import { MagnifyingGlassIcon, MapPinIcon, ChevronDownIcon } from '@heroicons/rea
 // Canonical fallback — used when no server-fetched list is passed in (e.g. homepage)
 const FALLBACK_CITIES = [
   'All UK',
-  'Aberdeen', 'Belfast', 'Birmingham', 'Bournemouth', 'Bradford',
+  'Aberdeen', 'Bath', 'Belfast', 'Birmingham', 'Blackpool', 'Bournemouth', 'Bradford',
   'Brighton', 'Bristol', 'Cambridge', 'Cardiff', 'Coventry',
   'Derby', 'Edinburgh', 'Exeter', 'Glasgow', 'Hull',
   'Ipswich', 'Leeds', 'Leicester', 'Liverpool', 'London',
   'Manchester', 'Middlesbrough', 'Milton Keynes', 'Newcastle', 'Norwich',
   'Nottingham', 'Oxford', 'Plymouth', 'Portsmouth', 'Reading',
-  'Sheffield', 'Southampton', 'Stoke-on-Trent', 'Sunderland', 'Swansea',
-  'Wolverhampton',
+  'Scarborough', 'Sheffield', 'Southampton', 'Stoke-on-Trent', 'Sunderland', 'Swansea',
+  'Wolverhampton', 'York',
 ]
 
 interface SearchBarProps {

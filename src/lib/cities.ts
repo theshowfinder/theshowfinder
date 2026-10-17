@@ -45,6 +45,10 @@ export const CITIES: City[] = [
   { name: 'Wolverhampton',  emoji: '🐺' },
   { name: 'Swansea',        emoji: '🦢' },
   { name: 'Aberdeen',       emoji: '🪨' },
+  { name: 'York',           emoji: '🏰' },
+  { name: 'Blackpool',      emoji: '🎡' },
+  { name: 'Scarborough',    emoji: '🏖️' },
+  { name: 'Bath',           emoji: '♨️' },
 ]
 
 // The /cities/<name> page for a place, or null when it is not one of our cities.

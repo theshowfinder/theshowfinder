@@ -41,6 +41,10 @@ const CITIES = [
   { name: 'Wolverhampton',   emoji: '🐺',  gradient: 'linear-gradient(135deg, #ca8a04, #292524)'  },
   { name: 'Swansea',         emoji: '🦢',  gradient: 'linear-gradient(135deg, #374151, #0f172a)'  },
   { name: 'Aberdeen',        emoji: '🪨',  gradient: 'linear-gradient(135deg, #dc2626, #6b7280)'  },
+  { name: 'York',            emoji: '🏰',  gradient: 'linear-gradient(135deg, #7c2d12, #1e293b)'  },
+  { name: 'Blackpool',       emoji: '🎡',  gradient: 'linear-gradient(135deg, #db2777, #7c3aed)'  },
+  { name: 'Scarborough',     emoji: '🏖️',  gradient: 'linear-gradient(135deg, #0891b2, #1e3a8a)'  },
+  { name: 'Bath',            emoji: '♨️',  gradient: 'linear-gradient(135deg, #a16207, #44403c)'  },
 ]
 
 export default async function CitiesGrid() {

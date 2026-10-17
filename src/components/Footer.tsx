@@ -58,7 +58,7 @@ const cities = [
   'Oxford', 'Cambridge', 'Exeter', 'Plymouth', 'Hull',
   'Middlesbrough', 'Sunderland', 'Bradford', 'Reading', 'Milton Keynes',
   'Bournemouth', 'Ipswich', 'Stoke-on-Trent', 'Wolverhampton', 'Swansea',
-  'Aberdeen',
+  'Aberdeen', 'York', 'Blackpool', 'Scarborough', 'Bath',
 ]
 
 // Site-wide internal links, on every page: they give crawlers a short path into
