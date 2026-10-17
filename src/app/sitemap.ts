@@ -162,6 +162,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/news`,                lastModified: new Date(), changeFrequency: 'daily',   priority: 0.8 },
     { url: `${BASE}/widgets`,             changeFrequency: 'monthly', priority: 0.4 },
     { url: `${BASE}/calendars`,           changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${BASE}/insights`,            lastModified: new Date(), changeFrequency: 'weekly', priority: 0.6 },
   ]
 
   const cityPages: MetadataRoute.Sitemap = CITIES.map(city => ({
