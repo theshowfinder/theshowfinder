@@ -474,13 +474,14 @@ interface NearbyEventsOpts {
   fetchLimit?: number
 }
 
-// Shows in the towns around a hub city (see nearbyAreas.ts), soonest first.
+// Shows in the towns around a hub city (see nearbyAreas.ts), soonest first, out to
+// 90 days (a 45-day window hid a theatre's later dates behind the next few football fixtures).
 // Same live-status rules and per-venue / attraction caps as the other pools, so
 // one venue can't fill the strip. No page of its own exists for these towns:
 // they appear on the hub's city page.
 export async function fetchNearbyEvents(
   supabase: SupabaseClient,
-  { areas, limit, horizonDays = 45, fetchLimit = 120 }: NearbyEventsOpts,
+  { areas, limit, horizonDays = 90, fetchLimit = 150 }: NearbyEventsOpts,
 ): Promise<EventWithVenue[]> {
   const filter = nearbyOrFilter(areas)
   if (!filter) return []
