@@ -99,7 +99,6 @@ describe('provider-specific env-template wrappers', () => {
     ['VIAGOGO_AFFILIATE_TEMPLATE', getViagogoAffiliateLink, 'https://www.viagogo.co.uk/search?q=x'],
     ['EVENTIM_AFFILIATE_TEMPLATE', getEventimAffiliateLink, 'https://www.eventim.co.uk'],
     ['STUBHUB_AFFILIATE_TEMPLATE', getStubHubAffiliateLink, 'https://www.stubhub.co.uk/srp/?q=x'],
-    ['GIGSBERG_AFFILIATE_TEMPLATE', getGigsbergAffiliateLink, 'https://www.gigsberg.com/tickets?q=x'],
     ['VIVIDSEATS_AFFILIATE_TEMPLATE', getVividSeatsAffiliateLink, 'https://www.vividseats.com/search?searchTerm=x'],
     ['EVENTBRITE_AFFILIATE_TEMPLATE', getEventbriteAffiliateLink, 'https://www.eventbrite.co.uk/d/united-kingdom/x/'],
     ['SKIDDLE_AFFILIATE_TEMPLATE', getSkiddleAffiliateLink, 'https://www.skiddle.com'],
@@ -160,5 +159,34 @@ describe('isTicketmasterCommissionEligible', () => {
   test('falls back to onsale_date, and ignores unparseable dates', () => {
     assert.equal(isTicketmasterCommissionEligible({ onsale_date: '2026-10-15T09:00:00Z' }, at('2026-10-15T10:00:00Z')), false)
     assert.equal(isTicketmasterCommissionEligible({ public_onsale_start: 'nonsense' }, at('2026-10-15T10:00:00Z')), true)
+  })
+})
+
+
+describe('getGigsbergAffiliateLink', () => {
+  test('adds the affiliate tag to an untagged Gigsberg link', () => {
+    assert.equal(
+      getGigsbergAffiliateLink('https://gigsberg.com/tickets/tickets/tickets-tickets/show-123456'),
+      'https://gigsberg.com/tickets/tickets/tickets-tickets/show-123456?aff=showfinder',
+    )
+  })
+
+  test('keeps existing query parameters and appends the tag', () => {
+    assert.equal(
+      getGigsbergAffiliateLink('https://www.gigsberg.com/en/concert-tickets/x?lang=en'),
+      'https://www.gigsberg.com/en/concert-tickets/x?lang=en&aff=showfinder',
+    )
+  })
+
+  test('never tags a link twice', () => {
+    const tagged = 'https://www.gigsberg.com/en/comedy-tickets/comedy/adam-rowe-tickets/show-1?aff=showfinder'
+    assert.equal(getGigsbergAffiliateLink(tagged), tagged)
+    assert.equal(getGigsbergAffiliateLink(getGigsbergAffiliateLink('https://gigsberg.com/x')), 'https://gigsberg.com/x?aff=showfinder')
+  })
+
+  test('leaves non-Gigsberg and malformed links alone', () => {
+    assert.equal(getGigsbergAffiliateLink('https://www.viagogo.co.uk/x'), 'https://www.viagogo.co.uk/x')
+    assert.equal(getGigsbergAffiliateLink('https://notgigsberg.com/x'), 'https://notgigsberg.com/x')
+    assert.equal(getGigsbergAffiliateLink('not a url'), 'not a url')
   })
 })

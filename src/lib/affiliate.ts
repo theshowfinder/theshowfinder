@@ -106,8 +106,25 @@ export function getEventimAffiliateLink(destinationUrl: string): string {
 export function getStubHubAffiliateLink(destinationUrl: string): string {
   return wrapWithEnvTemplate(destinationUrl, 'STUBHUB_AFFILIATE_TEMPLATE')
 }
+// Gigsberg tracks affiliates with an `aff` query parameter on its own URLs
+// (the links its affiliate API returns already end in ?aff=showfinder), not a
+// network redirect, so a template wrapper would be wrong. Every Gigsberg button
+// goes through here: a gigsberg.com link without the tag gets it added, one that
+// already carries any `aff` value is left exactly as it is (never tagged twice),
+// and a link to any other site is returned untouched.
+export const GIGSBERG_AFFILIATE_TAG = 'showfinder'
 export function getGigsbergAffiliateLink(destinationUrl: string): string {
-  return wrapWithEnvTemplate(destinationUrl, 'GIGSBERG_AFFILIATE_TEMPLATE')
+  let url: URL
+  try {
+    url = new URL(destinationUrl)
+  } catch {
+    return destinationUrl
+  }
+  const host = url.hostname.toLowerCase()
+  if (host !== 'gigsberg.com' && !host.endsWith('.gigsberg.com')) return destinationUrl
+  if (url.searchParams.has('aff')) return destinationUrl
+  url.searchParams.set('aff', GIGSBERG_AFFILIATE_TAG)
+  return url.toString()
 }
 export function getVividSeatsAffiliateLink(destinationUrl: string): string {
   return wrapWithEnvTemplate(destinationUrl, 'VIVIDSEATS_AFFILIATE_TEMPLATE')

@@ -180,7 +180,7 @@ function buildProviders(event: Pick<EventDetail, 'slug' | 'presale_start' | 'pub
   const mainPrimary = event.tickets_url
     ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: getTicketmasterAffiliateLink(event.tickets_url, `evt-${event.slug}`) }]
     : event.gigsberg_affiliate_url
-      ? [{ name: 'Gigsberg', tagline: event.gigsberg_inventory_status === 'available' ? 'Secondary-market tickets via Gigsberg' : 'Check availability on Gigsberg', bg: '#1a1f6e', href: event.gigsberg_affiliate_url }]
+      ? [{ name: 'Gigsberg', tagline: event.gigsberg_inventory_status === 'available' ? 'Secondary-market tickets via Gigsberg' : 'Check availability on Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(event.gigsberg_affiliate_url) }]
     : []
   // See Tickets is an official booking agent (primary, not resale), and it is
   // the only affiliate partner for West End runs — list it with the primary
@@ -196,7 +196,7 @@ function buildProviders(event: Pick<EventDetail, 'slug' | 'presale_start' | 'pub
     ? [...seeTickets, ...mainPrimary]
     : [...mainPrimary, ...seeTickets]
   const resale = [
-    ...(event.tickets_url && event.gigsberg_affiliate_url ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: event.gigsberg_affiliate_url }] : []),
+    ...(event.tickets_url && event.gigsberg_affiliate_url ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(event.gigsberg_affiliate_url) }] : []),
     ...(!event.tickets_url && !event.gigsberg_affiliate_url && event.gigsberg_url && !isBareProviderHomepage(event.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(event.gigsberg_url) }] : []),
     ...(event.viagogo_url && !isBareProviderHomepage(event.viagogo_url) ? [{ name: 'Viagogo', bg: '#00a650', href: getViagogoAffiliateLink(event.viagogo_url) }] : []),
     ...(event.stubhub_url && !isBareProviderHomepage(event.stubhub_url) ? [{ name: 'StubHub', bg: '#400078', href: getStubHubAffiliateLink(event.stubhub_url) }] : []),
