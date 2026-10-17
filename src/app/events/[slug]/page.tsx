@@ -23,7 +23,7 @@ import {
 } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
-import { jsonLdScript, buildEventSchema, buildBreadcrumbSchema } from '@/lib/jsonld'
+import { jsonLdScript, buildEventSchema, buildBreadcrumbSchema, earliestOnSale } from '@/lib/jsonld'
 import { ticketPurchaseDisabledStatus, LIVE_EVENT_STATUSES, fetchCityEventsAhead } from '@/lib/eventPools'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getEventSeoAlias } from '@/lib/seoAliases'
@@ -404,6 +404,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     priceFrom:     event.price_from,
     priceCurrency: event.currency,
     offerUrl:      primary[0]?.href ?? canonicalUrl,
+    validFrom:     earliestOnSale(event.presale_start, event.public_onsale_start, event.onsale_date),
     performers:    headliners.map(h => h.artist?.name).filter((n): n is string => !!n),
   })
   const breadcrumbSchema = buildBreadcrumbSchema([

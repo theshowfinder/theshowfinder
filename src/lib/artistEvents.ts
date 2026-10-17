@@ -17,6 +17,8 @@ export interface ArtistEventRow {
   venueName: string | null
   venueCity: string | null
   category?: string | null
+  /** Earliest known on-sale moment (presale, public sale or listed on-sale), ISO, or null. */
+  onSaleDate?: string | null
 }
 
 // Shape of one `event_artists` row as returned by PostgREST for
@@ -30,6 +32,9 @@ export interface ArtistEventLink {
         start_date: string
         status: string
         category?: string | null
+        presale_start?: string | null
+        public_onsale_start?: string | null
+        onsale_date?: string | null
         venue: { name: string; city: string } | null
       }
     | null
@@ -54,6 +59,7 @@ export function toArtistEventRows(links: ArtistEventLink[] | null | undefined): 
       venueName: e.venue?.name ?? null,
       venueCity: e.venue?.city ?? null,
       category: e.category ?? null,
+      onSaleDate: [e.presale_start, e.public_onsale_start, e.onsale_date].filter((d): d is string => !!d).sort()[0] ?? null,
     })
   }
   return rows.sort((a, b) => a.startDate.localeCompare(b.startDate))

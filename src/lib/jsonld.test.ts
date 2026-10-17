@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   jsonLdScript,
   buildEventSchema,
+  earliestOnSale,
   buildBreadcrumbSchema,
   buildItemListSchema,
   buildWebsiteSchema,
@@ -36,11 +37,30 @@ describe('buildEventSchema', () => {
     assert.equal(schema.startDate, base.startDate)
   })
 
-  test('omits optional fields that are not provided', () => {
-    const schema = buildEventSchema(base)
-    assert.equal('endDate' in schema, false)
-    assert.equal('description' in schema, false)
-    assert.equal('image' in schema, false)
+  test('omits endDate when not provided', () => {
+    assert.equal('endDate' in buildEventSchema(base), false)
+  })
+
+  test('always carries a description and image, falling back to factual text and the site image', () => {
+    const schema = buildEventSchema({ ...base, venue: { name: 'Etihad Stadium', address: 'x', city: 'Manchester', postcode: 'M11' } })
+    assert.match(schema.description as string, /^Oasis live at Etihad Stadium, Manchester on /)
+    assert.match(schema.description as string, /Compare tickets/)
+    assert.deepEqual(schema.image, ['https://www.theshowfinder.com/og-image.png'])
+  })
+
+  test('a blank description is treated as missing', () => {
+    assert.match(buildEventSchema({ ...base, description: '   ' }).description as string, /^Oasis live in the UK/)
+  })
+
+  test('offers.validFrom is set from a real on-sale date and omitted when unknown', () => {
+    assert.equal(buildEventSchema({ ...base, validFrom: '2026-05-22T09:00:00Z' }).offers.validFrom, '2026-05-22T09:00:00.000Z')
+    assert.equal('validFrom' in buildEventSchema(base).offers, false)
+    assert.equal('validFrom' in buildEventSchema({ ...base, validFrom: 'not a date' }).offers, false)
+  })
+
+  test('earliestOnSale picks the earliest valid date and ignores blanks', () => {
+    assert.equal(earliestOnSale(null, '2026-05-22T09:00:00Z', '2026-05-20T09:00:00Z', 'junk'), '2026-05-20T09:00:00.000Z')
+    assert.equal(earliestOnSale(null, undefined), null)
   })
 
   test('includes optional fields when provided', () => {

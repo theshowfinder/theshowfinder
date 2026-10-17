@@ -11,7 +11,7 @@ import {
 } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
-import { jsonLdScript, buildBreadcrumbSchema } from '@/lib/jsonld'
+import { jsonLdScript, buildBreadcrumbSchema, fallbackEventDescription, earliestOnSale, SITE_IMAGE_URL } from '@/lib/jsonld'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getArtistSeoAlias } from '@/lib/seoAliases'
 import NewsletterInline from '@/components/NewsletterInline'
@@ -50,7 +50,7 @@ const getArtistUpcomingEvents = cache(async (artistId: string): Promise<ArtistEv
   const supabase = createPublicClient()
   const { data } = await supabase
     .from('event_artists')
-    .select('events!inner(id, slug, title, start_date, status, category, venue:venues(name, city))')
+    .select('events!inner(id, slug, title, start_date, status, category, presale_start, public_onsale_start, onsale_date, venue:venues(name, city))')
     .eq('artist_id', artistId)
     .gte('events.start_date', new Date().toISOString())
     .in('events.status', LIVE_EVENT_STATUSES)
@@ -188,11 +188,16 @@ export default async function ArtistPage({ params }: PageProps) {
     // pricing and won't fabricate a number.
     organizer: { '@type': 'Organization', name: d.venue_name },
     performer: { '@type': 'MusicGroup', name: artist.name },
+    // Google's Event guidance wants a description and image on every Event, so
+    // use the artist's own photo and a factual line built from real fields.
+    description: fallbackEventDescription({ name: artist.name, startDate: d.date, venueName: d.venue_name, city: d.city }),
+    image: [artist.image_url ?? SITE_IMAGE_URL],
     offers: {
       '@type':       'Offer',
       url:            artist.tickets_url ? artistTicketUrl : canonicalUrl,
       priceCurrency:  'GBP',
       availability:   'https://schema.org/InStock',
+      ...(earliestOnSale(artist.onsale_date) ? { validFrom: earliestOnSale(artist.onsale_date) } : {}),
     },
   }))
 
@@ -212,11 +217,14 @@ export default async function ArtistPage({ params }: PageProps) {
       address:  { '@type': 'PostalAddress', ...(e.venueCity ? { addressLocality: e.venueCity } : {}), addressCountry: 'GB' },
     },
     performer: { '@type': 'MusicGroup', name: artist.name },
+    description: fallbackEventDescription({ name: e.title, startDate: e.startDate, venueName: e.venueName, city: e.venueCity }),
+    image: [artist.image_url ?? SITE_IMAGE_URL],
     offers: {
       '@type':       'Offer',
       url:            `https://www.theshowfinder.com/events/${e.slug}`,
       priceCurrency:  'GBP',
       availability:   e.status === 'sold_out' ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock',
+      ...(e.onSaleDate ? { validFrom: e.onSaleDate } : {}),
     },
   }))
 

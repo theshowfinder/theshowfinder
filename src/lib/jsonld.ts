@@ -22,6 +22,44 @@ interface EventSchemaInput {
   priceCurrency?: string
   offerUrl?: string | null
   performers?: string[]
+  /** When tickets went (or go) on sale: the ISO start of the earliest public sale we know. Omitted when unknown. */
+  validFrom?: string | null
+}
+
+/** Site-wide share image, used only when an event has no picture of its own. */
+export const SITE_IMAGE_URL = `${BASE_URL}/og-image.png`
+
+/** "Saturday 6 February 2027", UK time. Empty string for an unparseable date. */
+function longUkDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-GB', { timeZone: 'Europe/London', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+/**
+ * A plain, factual description for an event that has none of its own, so the
+ * Event markup always carries one. Only uses facts we hold (title, venue,
+ * city, date); no marketing claims and no prices.
+ */
+export function fallbackEventDescription(input: { name: string; startDate: string; venueName?: string | null; city?: string | null }): string {
+  const when = longUkDate(input.startDate)
+  const where = [input.venueName, input.city].filter((v, i, a): v is string => !!v && a.indexOf(v) === i).join(', ')
+  const parts = [`${input.name}${where ? ` live at ${where}` : ' live in the UK'}${when ? ` on ${when}` : ''}.`]
+  parts.push('Compare tickets from official sellers and resale sites on TheShowFinder.')
+  return parts.join(' ')
+}
+
+/** Normalise a possible date to ISO, or null when missing or invalid. */
+function isoOrNull(v: string | null | undefined): string | null {
+  if (!v) return null
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
+
+/** The earliest known moment tickets became available, from presale / public on-sale / on-sale fields. */
+export function earliestOnSale(...dates: (string | null | undefined)[]): string | null {
+  const valid = dates.map(isoOrNull).filter((v): v is string => v !== null)
+  return valid.length ? valid.sort()[0] : null
 }
 
 const EVENT_STATUS_MAP: Record<string, string> = {
@@ -37,8 +75,10 @@ export function buildEventSchema(input: EventSchemaInput) {
     url:           input.url,
     startDate:     input.startDate,
     ...(input.endDate ? { endDate: input.endDate } : {}),
-    ...(input.description ? { description: input.description } : {}),
-    ...(input.image ? { image: [input.image] } : {}),
+    description:   input.description?.trim()
+      ? input.description.trim()
+      : fallbackEventDescription({ name: input.name, startDate: input.startDate, venueName: input.venue?.name, city: input.venue?.city }),
+    image:         [input.image || SITE_IMAGE_URL],
     eventStatus:   EVENT_STATUS_MAP[input.status] ?? 'https://schema.org/EventScheduled',
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location: input.venue
@@ -95,6 +135,8 @@ export function buildEventSchema(input: EventSchemaInput) {
         ? 'https://schema.org/SoldOut'
         : 'https://schema.org/InStock',
       ...(input.priceFrom != null && input.priceFrom >= 0 ? { price: input.priceFrom } : {}),
+      // validFrom is when tickets go on sale. Only ever a date we hold; never invented.
+      ...(isoOrNull(input.validFrom) ? { validFrom: isoOrNull(input.validFrom) } : {}),
     },
   }
 }
