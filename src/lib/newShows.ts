@@ -1,13 +1,13 @@
 // Pure logic for the "new shows" detector — turns the events that were first
-// added to our database recently into draft news items for the News Inbox:
+// added to our database recently into news items:
 //
 //   • one "New shows added in {city} this week" roundup per city (local)
-//   • one "{artist} adds {n} UK dates" item per artist (national)
+//   • one "{artist} adds {n} UK dates" item per artist touring several cities
 //
 // Everything here is deterministic and built only from our own event rows
-// (which come from the official Ticketmaster feed) — no AI, no scraped text —
-// so the drafts only ever state facts we hold. They land as `pending` rows
-// and a person approves them; nothing auto-publishes.
+// (which come from the official ticket feeds) — no AI, no scraped text — so an
+// item only ever states facts we hold. Items that clear a higher bar are marked
+// `autoPublish`; the rest stay pending for a person to approve.
 //
 // No imports and no '@/' aliases so `node --test` runs it directly.
 
@@ -19,6 +19,7 @@ export interface NewShowRow {
   created_at: string
   venue_name: string | null
   venue_city: string | null
+  venue_capacity: number | null
   artist_id: string | null
   artist_name: string | null
   artist_slug: string | null
@@ -43,9 +44,14 @@ export function isNewsworthyArtistName(name: string | null): boolean {
 }
 
 export const CITY_ROUNDUP_MIN_SHOWS = 4
-export const ARTIST_MIN_DATES = 3
+/** A city roundup is published without review from this many distinct shows. */
+export const CITY_ROUNDUP_AUTO_PUBLISH_MIN = 6
+export const ARTIST_MIN_SHOW_DAYS = 3
+export const ARTIST_MIN_CITIES = 2
 export const MAX_CITY_ROUNDUPS = 12
 export const MAX_ARTIST_ITEMS = 12
+/** At most this many artist items are published without review per run. */
+export const MAX_AUTO_PUBLISH_ARTISTS = 4
 
 export function citySlugOf(cityName: string): string {
   return cityName.toLowerCase().replace(/\s+/g, '-')
@@ -67,6 +73,11 @@ export function shortUkDate(iso: string): string {
   }).format(new Date(iso))
 }
 
+/** Calendar day (YYYY-MM-DD) in UK time. */
+export function ukDay(iso: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date(iso))
+}
+
 function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`
 }
@@ -75,6 +86,28 @@ function joinNatural(items: string[]): string {
   if (items.length <= 1) return items.join('')
   if (items.length === 2) return `${items[0]} and ${items[1]}`
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
+}
+
+function normaliseTitle(t: string): string {
+  return t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+/**
+ * Ticketing feeds list one show several times (presale/venue-premium variants,
+ * early and late slots). Collapse to one row per show: same act (or title) at the
+ * same venue on the same UK day.
+ */
+export function dedupeShows(rows: NewShowRow[]): NewShowRow[] {
+  const seen = new Set<string>()
+  const out: NewShowRow[] = []
+  for (const r of rows) {
+    const who = r.artist_id ?? normaliseTitle(r.title)
+    const key = `${who}|${(r.venue_name ?? '').toLowerCase()}|${ukDay(r.start_date)}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(r)
+  }
+  return out
 }
 
 export interface DraftNewsItem {
@@ -88,6 +121,8 @@ export interface DraftNewsItem {
   priority: 'normal' | 'high'
   artistId: string | null
   artistName: string | null
+  /** True when the item clears the bar to publish without a person approving it. */
+  autoPublish: boolean
   /** Stable key, used to spot an item already drafted this period. */
   dedupeKey: string
 }
@@ -105,26 +140,24 @@ export function buildCityRoundups(
   const byCityLower = new Map(cityNames.map(c => [c.toLowerCase(), c]))
 
   const groups = new Map<string, NewShowRow[]>()
-  const seenEvents = new Set<string>()
-  for (const r of rows) {
-    if (!r.venue_city || seenEvents.has(r.event_id)) continue
+  for (const r of dedupeShows(rows)) {
+    if (!r.venue_city) continue
     const city = byCityLower.get(r.venue_city.trim().toLowerCase())
     if (!city) continue
-    seenEvents.add(r.event_id)
     const list = groups.get(city) ?? []
     list.push(r)
     groups.set(city, list)
   }
 
-  const items: DraftNewsItem[] = []
+  const items: { item: DraftNewsItem; n: number }[] = []
   for (const [city, shows] of groups) {
     if (shows.length < minShows) continue
     const slug = citySlugOf(city)
 
-    // Highlights: distinct headliners from non-sport events, soonest first.
+    // Highlights: distinct headliners from non-sport events, biggest venue first.
     const highlightable = shows
       .filter(s => isNewsworthyArtistName(s.artist_name) && !NON_NEWSWORTHY_CATEGORIES.has(s.category ?? ''))
-      .sort((a, b) => a.start_date.localeCompare(b.start_date))
+      .sort((a, b) => (b.venue_capacity ?? 0) - (a.venue_capacity ?? 0) || a.start_date.localeCompare(b.start_date))
     const seenArtists = new Set<string>()
     const highlights: NewShowRow[] = []
     for (const s of highlightable) {
@@ -134,6 +167,7 @@ export function buildCityRoundups(
       highlights.push(s)
       if (highlights.length === 4) break
     }
+    highlights.sort((a, b) => a.start_date.localeCompare(b.start_date))
 
     const venues = new Set(shows.map(s => s.venue_name).filter(Boolean) as string[])
     const parts = [
@@ -147,25 +181,26 @@ export function buildCityRoundups(
     parts.push('Dates come from the official ticket listings; availability and prices can change.')
 
     items.push({
-      scope: 'city',
-      cityName: city,
-      citySlug: slug,
-      headline: `New shows added in ${city} this week`,
-      summary: parts.join(' '),
-      url: `${SITE_URL}/cities/${slug}?new=${weekKey}`,
-      storyType: 'new_dates',
-      priority: shows.length >= 15 ? 'high' : 'normal',
-      artistId: null,
-      artistName: null,
-      dedupeKey: `city:${slug}:${weekKey}`,
+      n: shows.length,
+      item: {
+        scope: 'city',
+        cityName: city,
+        citySlug: slug,
+        headline: `New shows added in ${city} this week`,
+        summary: parts.join(' '),
+        url: `${SITE_URL}/cities/${slug}?new=${weekKey}`,
+        storyType: 'new_dates',
+        priority: shows.length >= 15 ? 'high' : 'normal',
+        artistId: null,
+        artistName: null,
+        autoPublish: shows.length >= CITY_ROUNDUP_AUTO_PUBLISH_MIN && highlights.length >= 2,
+        dedupeKey: `city:${slug}:${weekKey}`,
+      },
     })
   }
 
-  return items.sort((a, b) => countFor(b, groups) - countFor(a, groups)).slice(0, max)
-}
-
-function countFor(item: DraftNewsItem, groups: Map<string, NewShowRow[]>): number {
-  return item.cityName ? groups.get(item.cityName)?.length ?? 0 : 0
+  items.sort((a, b) => b.n - a.n)
+  return items.slice(0, max).map(x => x.item)
 }
 
 // ── Artist additions ─────────────────────────────────────────────────────────
@@ -174,35 +209,51 @@ export function buildArtistAdditions(
   rows: NewShowRow[],
   weekKey: string,
   now: number,
-  opts: { minDates?: number; max?: number; skipArtistSlugs?: Set<string> } = {},
+  opts: {
+    minShowDays?: number
+    minCities?: number
+    max?: number
+    maxAutoPublish?: number
+    skipArtistSlugs?: Set<string>
+  } = {},
 ): DraftNewsItem[] {
-  const minDates = opts.minDates ?? ARTIST_MIN_DATES
+  const minShowDays = opts.minShowDays ?? ARTIST_MIN_SHOW_DAYS
+  const minCities = opts.minCities ?? ARTIST_MIN_CITIES
   const max = opts.max ?? MAX_ARTIST_ITEMS
+  const maxAuto = opts.maxAutoPublish ?? MAX_AUTO_PUBLISH_ARTISTS
   const skip = opts.skipArtistSlugs ?? new Set<string>()
 
   const groups = new Map<string, NewShowRow[]>()
-  const seenEvents = new Set<string>()
   for (const r of rows) {
     if (!r.artist_id || !r.artist_name || !r.artist_slug) continue
     if (NON_NEWSWORTHY_CATEGORIES.has(r.category ?? '')) continue
     if (!isNewsworthyArtistName(r.artist_name)) continue
-    if (seenEvents.has(r.event_id)) continue
-    seenEvents.add(r.event_id)
     const list = groups.get(r.artist_id) ?? []
     list.push(r)
     groups.set(r.artist_id, list)
   }
 
-  const items: (DraftNewsItem & { n: number })[] = []
-  for (const shows of groups.values()) {
-    if (shows.length < minDates) continue
+  const items: { item: DraftNewsItem; n: number }[] = []
+  for (const all of groups.values()) {
+    // One entry per city per day: listings repeat for presale and premium variants.
+    const seen = new Set<string>()
+    const shows = all.filter(s => {
+      const key = `${(s.venue_city ?? '').toLowerCase()}|${ukDay(s.start_date)}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    const cities = [...new Set(shows.map(s => s.venue_city).filter(Boolean) as string[])]
+    // A run of nights in one city is a local story (it lands in that city's
+    // roundup), not a national announcement.
+    if (shows.length < minShowDays || cities.length < minCities) continue
+
     const first = shows[0]
     const name = first.artist_name as string
     const slug = first.artist_slug as string
     if (skip.has(slug)) continue
 
     const sorted = [...shows].sort((a, b) => a.start_date.localeCompare(b.start_date))
-    const cities = [...new Set(sorted.map(s => s.venue_city).filter(Boolean) as string[])]
     const isBrandNew =
       !!first.artist_created_at &&
       now - new Date(first.artist_created_at).getTime() <= NEW_SHOWS_WINDOW_DAYS * 86_400_000
@@ -221,27 +272,29 @@ export function buildArtistAdditions(
       `Dates come from the official ticket listings; check each event page for the latest availability.`
 
     items.push({
-      scope: 'national',
-      cityName: null,
-      citySlug: null,
-      headline,
-      summary,
-      url: `${SITE_URL}/artists/${slug}?added=${weekKey}`,
-      storyType: isBrandNew ? 'tour_announcement' : 'new_dates',
-      priority: shows.length >= 8 || cities.length >= 5 ? 'high' : 'normal',
-      artistId: first.artist_id,
-      artistName: name,
-      dedupeKey: `artist:${slug}:${weekKey}`,
       n: shows.length,
+      item: {
+        scope: 'national',
+        cityName: null,
+        citySlug: null,
+        headline,
+        summary,
+        url: `${SITE_URL}/artists/${slug}?added=${weekKey}`,
+        storyType: isBrandNew ? 'tour_announcement' : 'new_dates',
+        priority: shows.length >= 8 || cities.length >= 5 ? 'high' : 'normal',
+        artistId: first.artist_id,
+        artistName: name,
+        autoPublish: false,
+        dedupeKey: `artist:${slug}:${weekKey}`,
+      },
     })
   }
 
   items.sort((a, b) => b.n - a.n)
-  return items.slice(0, max).map(item => {
-    const draft: Partial<typeof item> = { ...item }
-    delete draft.n
-    return draft as DraftNewsItem
-  })
+  const top = items.slice(0, max).map(x => x.item)
+  // The biggest few are published without review; the rest wait for approval.
+  top.forEach((item, i) => { item.autoPublish = i < maxAuto })
+  return top
 }
 
 /** Pull the artist slug back out of a draft URL we created (for skip lists). */
