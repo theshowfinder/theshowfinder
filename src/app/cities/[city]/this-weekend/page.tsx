@@ -16,7 +16,7 @@ import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import { buildCityCollectionSchema, cityThisWeekendCanonicalUrl, cityThisWeekendDescription, cityThisWeekendTitle } from '@/lib/citySeo'
 
 // No city page is built at deploy time: each is generated on first request, then
-// cached and refreshed in the background (see `revalidate`). Building all 36 cities
+// cached and refreshed in the background (see `revalidate`). Building all 40 cities
 // during every deploy made a deploy depend on the database being fast: when it
 // stalled, the 60-second page timeouts failed the whole build. Every other dynamic
 // route on the site already works this way.

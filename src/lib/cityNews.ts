@@ -124,7 +124,7 @@ function fetchCityNews(cityName: string): Promise<NewsItem[]> {
 // every story is a concert/gig/tour, and TheShowFinder is specifically
 // about live events -- and the same MAX_NEWS_AGE_MS freshness cutoff still
 // applies. City feeds are untouched (below) -- no single outlet covers all
-// 36 cities' local scenes, so the Google News search + blocklist approach
+// 40 cities' local scenes, so the Google News search + blocklist approach
 // stays there, and it's been working correctly on every city checked so far
 // (e.g. Leicester: fresh, genuinely local, correctly filtered).
 const NATIONAL_FEEDS: { source: string; url: string }[] = [
@@ -139,7 +139,7 @@ const NATIONAL_FEEDS: { source: string; url: string }[] = [
 // single national-feed outlet's own failure row (see fetchNamedFeed below).
 // Exported so the admin Feed Health page (src/app/admin/news/feeds/page.tsx)
 // can recognise and group these rows separately from the 37 primary feeds
-// (36 cities + the aggregate "UK National" row), which each get a routine
+// (40 cities + the aggregate "UK National" row), which each get a routine
 // row every run regardless of outcome — these per-outlet rows are written
 // on failure only, so there's no routine "last successful run" to compare
 // against the way there is for a primary feed.
@@ -354,8 +354,8 @@ export async function syncCityNews(): Promise<CityNewsSyncResult> {
   return { citiesProcessed: feeds.length, totalFetched, totalUpserted, totalDeleted, errors, perCity }
 }
 
-// Refreshes just the homepage's national feed, skipping all 36 per-city
-// feeds — the full syncCityNews() run takes long enough (36 sequential
+// Refreshes just the homepage's national feed, skipping all 40 per-city
+// feeds — the full syncCityNews() run takes long enough (40 sequential
 // fetches + a 300ms pace delay each) that it doesn't fit inside a quick
 // manual re-run when only the national feed's blocklist/query changed.
 // Same fetch → upsert → prune pipeline as every other feed via syncOneFeed.

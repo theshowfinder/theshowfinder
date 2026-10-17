@@ -7,7 +7,7 @@ import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 export const dynamic = 'force-dynamic'
 
 // Backs LocalSpotlight.tsx — returns a handful of upcoming events for one of
-// our 36 supported cities so the homepage can show real local content once
+// our 40 supported cities so the homepage can show real local content once
 // middleware.ts + the tsf_city cookie have identified a visitor's city,
 // without forcing the (ISR-cached) homepage itself to render dynamically.
 export async function GET(request: Request) {

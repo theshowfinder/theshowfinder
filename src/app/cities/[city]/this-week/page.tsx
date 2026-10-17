@@ -6,7 +6,7 @@
 // search intent, it needs its own URL/title/H1, the same pattern the site
 // already uses nationally for /on-sale-this-week. Fully data-driven off the
 // same fetchEventsThisWeek() the main city page uses, so this is safe to
-// ship for all 36 cities at once — no per-city manual content needed here
+// ship for all 40 cities at once — no per-city manual content needed here
 // (unlike src/lib/cityGuides.ts, which does need real per-city research).
 // This page starts at tomorrow's London date, so it must roll over promptly
 // after midnight rather than serving yesterday's window for a full hour.
@@ -24,7 +24,7 @@ import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import { buildCityCollectionSchema, cityThisWeekCanonicalUrl, cityThisWeekDescription, cityThisWeekTitle } from '@/lib/citySeo'
 
 // No city page is built at deploy time: each is generated on first request, then
-// cached and refreshed in the background (see `revalidate`). Building all 36 cities
+// cached and refreshed in the background (see `revalidate`). Building all 40 cities
 // during every deploy made a deploy depend on the database being fast: when it
 // stalled, the 60-second page timeouts failed the whole build. Every other dynamic
 // route on the site already works this way.

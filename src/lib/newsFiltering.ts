@@ -108,7 +108,7 @@ export const ENTERTAINMENT_TERMS: RegExp[] = [
   /\bopera\b/i, /\bballet\b/i, /\bpanto(mime)?\b/i,
 ]
 
-// Several of the 36 UK cities share a name with a US or Canadian town
+// Several of the 40 UK cities share a name with a US or Canadian town
 // (Derby CT/KS, Manchester NH, Cambridge MA, Bristol CT/TN/VA, Plymouth MA,
 // Newport RI, Richmond VA, Oxford MS, Reading PA, Norwich CT, London
 // Ontario, and more) — a plain city-name search picks up their local news

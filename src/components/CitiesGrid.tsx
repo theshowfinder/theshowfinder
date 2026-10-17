@@ -94,7 +94,7 @@ export default async function CitiesGrid() {
   // Ticketmaster-sourced image, same images already trusted and shown
   // elsewhere on the site (event/venue pages). A single query ordered by
   // capacity desc, reduced client-side to the first (= biggest-venue) row
-  // per city, rather than 36 separate per-city queries.
+  // per city, rather than 40 separate per-city queries.
   const { data: venueImageRows } = await supabase
     .from('venues')
     .select('city, image_url, capacity')

@@ -229,7 +229,7 @@ async function HomepageStats() {
   const stats = [
     { value: fmtCount(eventCount ?? 0), label: 'Events listed' },
     { value: fmtCount(venueCount ?? 0), label: 'Venues'        },
-    { value: '36',                       label: 'UK cities'     },
+    { value: '40',                       label: 'UK cities'     },
     { value: '1M+',                      label: 'Tickets found' },
   ]
 
@@ -579,7 +579,7 @@ export default function HomePage() {
 
         <div className="relative w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-0 text-center z-10">
           {/* Location banner — client-only, renders nothing unless Vercel's
-              edge geolocation matched one of our 36 cities (see
+              edge geolocation matched one of our 40 cities (see
               middleware.ts + LocationBanner.tsx) */}
           <div>
             <LocationBanner />

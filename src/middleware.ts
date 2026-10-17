@@ -4,7 +4,7 @@ import { CITIES } from '@/lib/cities'
 
 // Matches Vercel's IP-geolocation header (added automatically by Vercel's
 // edge network on every request in production/preview — absent locally) to
-// one of the 36 UK cities the site actually has a page for, and stashes it
+// one of the 40 UK cities the site actually has a page for, and stashes it
 // in a cookie that the homepage's client-side location banner reads to
 // surface "see what's on in <city>" instead of a generic homepage. Exact
 // case-insensitive name match only, no nearest-city fallback — good enough

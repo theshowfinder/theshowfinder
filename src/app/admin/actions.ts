@@ -445,7 +445,7 @@ function isValidHttpUrl(value: string): boolean {
 }
 
 // city_name values here are strictly whatever the client sent — validate
-// against the real 36-city list before trusting any of it (the <select>
+// against the real 40-city list before trusting any of it (the <select>
 // in NewsCandidateForm already constrains this in the browser, but a
 // server action must never trust the browser alone).
 function isSupportedCityName(name: string): boolean {
@@ -1547,7 +1547,7 @@ export async function regenerateSocialPackImageAction(id: string, formData: Form
 // targets (so a national destination is never mistaken for a city —
 // "keep a national version separate from the city versions");
 // filterSupportedCityTargets is a second, independent check against the
-// real 36-city list, defense in depth beyond the save-time validation
+// real 40-city list, defense in depth beyond the save-time validation
 // every news_candidate_cities row already passed through.
 export async function createCityPostsForCandidateAction(id: string) {
   await checkAuth()

@@ -48,7 +48,7 @@ export function buildWelcomeEmailText(email: string): string {
     'WHAT YOU\'LL GET',
     '- On-sale alerts — know the moment tickets are released',
     '- Weekly digests — the best upcoming shows near you',
-    '- Venue & artist picks — curated events across 36 UK cities',
+    '- Venue & artist picks — curated events across 40 UK cities',
     '',
     'Browse events: https://www.theshowfinder.com',
     '',

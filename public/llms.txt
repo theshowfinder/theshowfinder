@@ -1,6 +1,6 @@
 # TheShowFinder
 
-> TheShowFinder (theshowfinder.com) is a UK live-events discovery and ticket comparison site. It lists concerts, theatre, comedy, sports and family shows across 36 UK cities, and for each event compares ticket prices and links across primary sellers (Ticketmaster, See Tickets, Eventim, AXS, Gigantic) and the resale/secondary market (Viagogo, StubHub, Gigsberg, Vivid Seats), plus other providers (Eventbrite, Skiddle, Seat Unique). Event and pricing data is synced daily from Ticketmaster; a growing set of events also comes directly from local venues and councils that aren't on Ticketmaster.
+> TheShowFinder (theshowfinder.com) is a UK live-events discovery and ticket comparison site. It lists concerts, theatre, comedy, sports and family shows across 40 UK cities, and for each event compares ticket prices and links across primary sellers (Ticketmaster, See Tickets, Eventim, AXS, Gigantic) and the resale/secondary market (Viagogo, StubHub, Gigsberg, Vivid Seats), plus other providers (Eventbrite, Skiddle, Seat Unique). Event and pricing data is synced daily from Ticketmaster; a growing set of events also comes directly from local venues and councils that aren't on Ticketmaster.
 
 ## Key pages
 

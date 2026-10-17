@@ -1,6 +1,6 @@
 // Shared core of the read-only on-sale/presale internal link-health check
 // — used by both scripts/check-on-sale-links.ts (CLI, anon key, full
-// 36-city sweep, run by hand or from CI) and the admin Daily Intelligence
+// 40-city sweep, run by hand or from CI) and the admin Daily Intelligence
 // Dashboard's Quality Checks section (src/app/admin/intelligence/page.tsx,
 // service-role key via createAdminClient). One definition of "broken" for
 // both callers, so a future fix to one can never quietly leave the other

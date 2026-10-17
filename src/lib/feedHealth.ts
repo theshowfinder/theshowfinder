@@ -9,7 +9,7 @@
 // src/lib/councilEvents.ts all write to it, distinguished only by their
 // `city` label (there is no dedicated "source"/"job" column). This module
 // only ever receives rows the caller has already filtered down to the
-// city-news pipeline's own labels (the 36 UK cities + NATIONAL_NAME, plus
+// city-news pipeline's own labels (the 40 UK cities + NATIONAL_NAME, plus
 // any NATIONAL_OUTLET_LOG_PREFIX-prefixed rows for a single national-feed
 // outlet's own failures) — see the page component for that filter.
 

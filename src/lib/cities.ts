@@ -1,4 +1,4 @@
-// Shared 36-city list — used by the city pages and the admin "Local
+// Shared 40-city list — used by the city pages and the admin "Local
 // Businesses" form so both stay in sync (a city name here must match what
 // venues.city / events_with_venue.venue_city contain, matched case-
 // insensitively via .ilike() at the query sites).
