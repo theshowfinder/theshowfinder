@@ -7,6 +7,7 @@ export const revalidate = 300
 // midnight. 5 minutes bounds the worst-case staleness to a small,
 // acceptable window without regenerating on every request.
 
+import { listedEventsCount } from '@/lib/listedEvents'
 import { fetchAllArtists } from '@/lib/allArtists'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -25,8 +26,8 @@ import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import { buildCityCollectionSchema, cityCanonicalUrl, cityPageDescription, cityPageTitle } from '@/lib/citySeo'
 import CityNewsletterForm from '@/components/CityNewsletterForm'
-import { fetchEventsThisWeek, fetchTopEvents, fetchNearbyEvents, fetchRecentlyAddedEvents, fetchCityCategoryCounts, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
-import { resolveCityEventCount, normalizeCityFilterValue } from '@/lib/cityEventCount'
+import { fetchEventsThisWeek, fetchTopEvents, fetchNearbyEvents, fetchRecentlyAddedEvents, fetchCityCategoryCounts, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek } from '@/lib/eventPools'
+import { resolveCityEventCount } from '@/lib/cityEventCount'
 import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
@@ -59,12 +60,7 @@ export async function generateMetadata(
   const canonical = cityCanonicalUrl(cityName)
   const title     = cityPageTitle(cityName)
   // Live count (head query only) so the search snippet reflects what is actually on.
-  const { count: upcoming } = await createPublicClient()
-    .from('events_with_venue')
-    .select('*', { count: 'exact', head: true })
-    .ilike('venue_city', normalizeCityFilterValue(cityName))
-    .in('status', LIVE_EVENT_STATUSES)
-    .gte('start_date', new Date().toISOString())
+  const { count: upcoming } = await listedEventsCount(createPublicClient(), { city: cityName })
   const desc      = cityPageDescription(cityName, upcoming)
   const ogImage   = 'https://www.theshowfinder.com/og-image.png'
   return {
@@ -191,14 +187,10 @@ export default async function CityPage({
     // not a full events fetch (the "All Events" grid this used to feed has
     // been removed: with thousands of events in some cities it was more of a
     // wall to search through than a useful section).
-    supabase
-      .from('events_with_venue')
-      .select('*', { count: 'exact', head: true })
-      .ilike('venue_city', normalizeCityFilterValue(cityName))
-      // Same live-status criteria as the shared event-pool helpers above
-      // (Tonight/This Week/Top Events/On Sale) — see cityEventCount.ts.
-      .in('status', LIVE_EVENT_STATUSES)
-      .gte('start_date', nowISO) as unknown as Promise<{ count: number | null; error: unknown }>,
+    // listedEventsCount (src/lib/listedEvents.ts) is the one canonical count:
+    // de-duplicated listings, live statuses, future only. Same helper feeds
+    // the metadata description, the city cards and the category chips.
+    listedEventsCount(supabase, { city: cityName, fromISO: nowISO }) as Promise<{ count: number | null; error: unknown }>,
 
     // Venues in this city sorted by capacity
     supabase
@@ -286,11 +278,7 @@ export default async function CityPage({
   const cityLandmarkImage = CITY_HERO_IMAGES[cityName] ?? null
   const venueCountResults = await Promise.all(
     candidateVenues.map(v =>
-      supabase
-        .from('events_with_venue')
-        .select('venue_id', { count: 'exact', head: true })
-        .eq('venue_id', v.id)
-        .gte('start_date', nowISO) as unknown as Promise<{ count: number | null }>
+      listedEventsCount(supabase, { venueId: v.id, fromISO: nowISO }) as Promise<{ count: number | null }>
     )
   )
 
@@ -323,6 +311,7 @@ export default async function CityPage({
   const canonical = `https://www.theshowfinder.com/cities/${encodeURIComponent(cityName)}`
   const breadcrumbSchema = buildBreadcrumbSchema([
     { name: 'Home', url: 'https://www.theshowfinder.com' },
+    { name: 'Events', url: 'https://www.theshowfinder.com/events' },
     { name: cityName, url: canonical },
   ])
   const itemListSchema = buildItemListSchema(
@@ -335,7 +324,7 @@ export default async function CityPage({
     cityName,
     url: canonical,
     name: cityPageTitle(cityName),
-    description: cityPageDescription(cityName),
+    description: cityPageDescription(cityName, totalCount),
   })
 
   return (
@@ -385,6 +374,16 @@ export default async function CityPage({
           </>
         )}
         <div className="relative max-w-7xl mx-auto">
+          {/* Visible breadcrumb (matches the BreadcrumbList JSON-LD below). */}
+          <nav aria-label="Breadcrumb" className="text-xs text-white/60 mb-4">
+            <ol className="flex flex-wrap items-center gap-1.5">
+              <li><Link href="/" className="hover:text-white underline-offset-2 hover:underline">Home</Link></li>
+              <li aria-hidden="true">›</li>
+              <li><Link href="/events" className="hover:text-white underline-offset-2 hover:underline">Events</Link></li>
+              <li aria-hidden="true">›</li>
+              <li aria-current="page" className="text-white/90">{cityName}</li>
+            </ol>
+          </nav>
           <p className="text-5xl mb-4 select-none">{cityConfig.emoji}</p>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-2">
             Concerts &amp; Live Events in {cityName}

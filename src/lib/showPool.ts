@@ -68,7 +68,7 @@ async function fetchEventRows(
 
   const count = await withRetry(async () => {
     const r = await windowed(
-      supabase.from('events_with_venue').select('id', { count: 'exact', head: true }),
+      supabase.from('listed_events_with_venue').select('id', { count: 'exact', head: true }),
     ) as { count: number | null; error: DbError }
     if (r.error) throw new Error(`count failed: ${r.error.message || 'request failed'}`)
     return r.count
@@ -79,7 +79,7 @@ async function fetchEventRows(
   return fetchAllPagesParallel<Row>(
     total,
     (from, to) => withRetry(async () => {
-      const r = await windowed(supabase.from('events_with_venue').select(COLUMNS))
+      const r = await windowed(supabase.from('listed_events_with_venue').select(COLUMNS))
         .order('start_date', { ascending: true })
         .order('id', { ascending: true })
         .range(from, to) as Page<Row>

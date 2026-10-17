@@ -38,6 +38,8 @@ import WestEndStrip from '@/components/WestEndStrip'
 import type { EventWithVenue, CityNews } from '@/lib/types/database'
 import { fmtOnSaleLabel, extractArtistName, toSlug } from '@/lib/on-sale'
 import { fetchEventsThisWeek, fetchPresalesOpenNow, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { listedEventsCount } from '@/lib/listedEvents'
+import { CITIES } from '@/lib/cities'
 import { NATIONAL_SLUG } from '@/lib/cityNews'
 import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 import PresaleGrid from '@/components/PresaleGrid'
@@ -220,16 +222,15 @@ async function HomepageStats() {
   const now = new Date().toISOString()
 
   const [{ count: eventCount }, { count: venueCount }] = await Promise.all([
-    supabase.from('events').select('*', { count: 'exact', head: true })
-      .gte('start_date', now)
-      .in('status', ['upcoming', 'on_sale']),
+    // Canonical count: de-duplicated listings, live statuses, future only.
+    listedEventsCount(supabase, { fromISO: now }),
     supabase.from('venues').select('*', { count: 'exact', head: true }),
   ])
 
   const stats = [
     { value: fmtCount(eventCount ?? 0), label: 'Events listed' },
     { value: fmtCount(venueCount ?? 0), label: 'Venues'        },
-    { value: '40',                       label: 'UK cities'     },
+    { value: String(CITIES.length),     label: 'UK cities'     },
     { value: '1M+',                      label: 'Tickets found' },
   ]
 
@@ -271,7 +272,7 @@ async function OnSaleThisWeek() {
       .join(',')
 
     const { data: upcomingTitles } = await supabase
-      .from('events_with_venue')
+      .from('listed_events_with_venue')
       .select('title')
       .gte('start_date', nowISO)
       .or(orFilter)
@@ -614,7 +615,7 @@ export default function HomePage() {
           <div className="mt-6 sm:mt-8 flex flex-wrap justify-center gap-x-5 gap-y-1 sm:gap-6 text-xs sm:text-sm text-white/50">
             <span>✓ Free to use</span>
             <span>✓ Updated daily</span>
-            <span>✓ 50+ UK cities</span>
+            <span>✓ {CITIES.length} UK cities</span>
           </div>
         </div>
       </section>

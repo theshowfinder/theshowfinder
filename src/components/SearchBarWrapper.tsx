@@ -7,7 +7,7 @@ export default async function SearchBarWrapper() {
   const supabase = createPublicClient()
 
   const { data } = await (supabase
-    .from('events_with_venue')
+    .from('listed_events_with_venue')
     .select('venue_city')
     .gte('start_date', new Date().toISOString())
     .not('venue_city', 'is', null)

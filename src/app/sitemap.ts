@@ -28,7 +28,7 @@ const PAGE_SIZE = 1000
 
 type VenueRow       = { id: string; slug: string }
 type ArtistRow      = { id: string; slug: string; name: string | null; is_featured: boolean | null }
-type SlugUpdatedRow = { slug: string; title: string; updated_at: string; venue_id: string | null; start_date: string }
+type SlugUpdatedRow = { id: string; slug: string; title: string; updated_at: string; venue_id: string | null; start_date: string }
 type DbClient       = ReturnType<typeof createPublicClient>
 
 async function fetchAllEvents(supabase: DbClient, nowISO: string): Promise<SlugUpdatedRow[]> {
@@ -45,12 +45,41 @@ async function fetchAllEvents(supabase: DbClient, nowISO: string): Promise<SlugU
       const from = i * PAGE_SIZE
       return supabase
         .from('events')
-        .select('slug, title, updated_at, venue_id, start_date')
+        .select('id, slug, title, updated_at, venue_id, start_date')
         .gte('start_date', nowISO)
+        // Cancelled / postponed shows are not sitemap material.
+        .in('status', LIVE_EVENT_STATUSES)
+        .order('start_date').order('id')
         .range(from, from + PAGE_SIZE - 1) as unknown as Promise<{ data: SlugUpdatedRow[] | null }>
     }),
   )
   return pages.flatMap(p => p.data ?? [])
+}
+
+// Ids of events folded into a canonical event (premium / lounge / VIP packages
+// and repeat source records, event_canonical_map.is_canonical = false). Their
+// pages canonical to the main event page and are noindex, so they are left out
+// of the sitemap. Returns null when the lookup fails: the caller then keeps the
+// full list rather than dropping real events.
+async function fetchDuplicateEventIds(supabase: DbClient): Promise<Set<string> | null> {
+  const ids = new Set<string>()
+  try {
+    for (let from = 0; from < 20 * PAGE_SIZE; from += PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from('event_canonical_map')
+        .select('id')
+        .eq('is_canonical', false)
+        .order('id')
+        .range(from, from + PAGE_SIZE - 1) as unknown as { data: { id: string }[] | null; error: { message: string } | null }
+      if (error) throw new Error(error.message)
+      for (const r of data ?? []) ids.add(r.id)
+      if ((data ?? []).length < PAGE_SIZE) return ids
+    }
+  } catch (err) {
+    console.error('[sitemap] duplicate event lookup failed', err)
+    return null
+  }
+  return ids
 }
 
 async function fetchAllVenues(supabase: DbClient): Promise<VenueRow[]> {
@@ -139,8 +168,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = createPublicClient()
   const now      = new Date().toISOString()
 
-  const [eventRows, venueRows, artistRows, westEndShows, artistCounts] = await Promise.all([
+  const [allEventRows, duplicateIds, venueRows, artistRows, westEndShows, artistCounts] = await Promise.all([
     fetchAllEvents(supabase, now),
+    fetchDuplicateEventIds(supabase),
     fetchAllVenues(supabase),
     fetchAllArtists(supabase),
     fetchWestEndShows(supabase),
@@ -187,6 +217,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }))
 
   // Long runs list one event per performance; only the soonest few are indexable.
+  // Package / duplicate records are excluded: they canonical to the main event.
+  const eventRows = duplicateIds ? allEventRows.filter(e => !duplicateIds.has(e.id)) : allEventRows
   const repeatSlugs = repeatPerformanceSlugs(eventRows)
   const eventPages: MetadataRoute.Sitemap = eventRows.filter(e => !repeatSlugs.has(e.slug)).map(e => ({
     url:             `${BASE}/events/${e.slug}`,

@@ -118,14 +118,14 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
       .limit(200) as unknown as { data: { event_id: string }[] | null }
     const ids = (links ?? []).map(l => l.event_id)
     if (ids.length) {
-      const { data } = await supabase.from('events_with_venue').select('*').in('id', ids) as unknown as { data: EventWithVenue[] | null }
+      const { data } = await supabase.from('listed_events_with_venue').select('*').in('id', ids) as unknown as { data: EventWithVenue[] | null }
       otherEvents.push(...(data ?? []))
     }
   } else {
     // No artist record: same-name events by title (matches how the group formed).
     const like = artistName.replace(/[%_\\]/g, ' ').trim()
     const { data } = await supabase
-      .from('events_with_venue').select('*')
+      .from('listed_events_with_venue').select('*')
       .ilike('title', `${like}%`)
       .gte('start_date', nowISO)
       .in('status', LIVE_EVENT_STATUSES)

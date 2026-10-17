@@ -16,9 +16,9 @@ export async function GET() {
   const nowISO = now.toISOString()
 
   const [general, presale] = await Promise.all([
-    supabase.from('events_with_venue').select(COLS).gt('public_onsale_start', nowISO).lte('public_onsale_start', horizon)
+    supabase.from('listed_events_with_venue').select(COLS).gt('public_onsale_start', nowISO).lte('public_onsale_start', horizon)
       .gte('start_date', nowISO).in('status', LIVE_EVENT_STATUSES).limit(1000) as unknown as Promise<{ data: FeedRow[] | null }>,
-    supabase.from('events_with_venue').select(COLS).gt('presale_start', nowISO).lte('presale_start', horizon)
+    supabase.from('listed_events_with_venue').select(COLS).gt('presale_start', nowISO).lte('presale_start', horizon)
       .gte('start_date', nowISO).in('status', LIVE_EVENT_STATUSES).limit(1000) as unknown as Promise<{ data: FeedRow[] | null }>,
   ])
   const byId = new Map<string, FeedRow>()

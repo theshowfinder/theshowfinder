@@ -26,7 +26,7 @@ export async function buildVenueMetadata(slug: string): Promise<Metadata> {
 
   // What is on here, for a description that tells a searcher something real.
   const { data: next, count } = await supabase
-    .from('events_with_venue')
+    .from('listed_events_with_venue')
     .select('title', { count: 'exact' })
     .eq('venue_id', venue.id)
     .gte('start_date', new Date().toISOString())

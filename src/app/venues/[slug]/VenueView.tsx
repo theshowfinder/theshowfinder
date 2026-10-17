@@ -50,7 +50,7 @@ export default async function VenueView({ slug, page }: { slug: string; page: nu
   // listing per show, doubling the row count) had its later dates vanish
   // from the page entirely with no indication anything was missing.
   const { data: events, count } = await supabase
-    .from('events_with_venue')
+    .from('listed_events_with_venue')
     .select('*', { count: 'exact' })
     .eq('venue_id', venue.id)
     .gte('start_date', now)

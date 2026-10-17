@@ -214,7 +214,7 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
   }
 
   let query = supabase
-    .from('events_with_venue')
+    .from('listed_events_with_venue')
     .select('*', { count: 'exact' })
     .gte('start_date', new Date().toISOString())
     // A cancelled/postponed show is never a genuine browse/search result

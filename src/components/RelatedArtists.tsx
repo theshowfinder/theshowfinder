@@ -31,7 +31,7 @@ export async function ArtistsInCity({ city, excludeArtistIds = [], limit = 6 }: 
   const supabase = createPublicClient()
   const now = new Date()
   const { data: events } = await supabase
-    .from('events_with_venue').select('id')
+    .from('listed_events_with_venue').select('id')
     .eq('venue_city', city)
     .gte('start_date', now.toISOString())
     .lte('start_date', new Date(now.getTime() + 90 * DAY).toISOString())

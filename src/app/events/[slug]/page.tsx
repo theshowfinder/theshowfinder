@@ -43,6 +43,7 @@ import { buildShareText } from '@/lib/shareText'
 import { googleCalendarUrl } from '@/lib/ics'
 import { buildEventFaq, type EventDetails, type VenueDetails } from '@/lib/eventDetails'
 import { toArtistEventRows, type ArtistEventLink, type ArtistEventRow } from '@/lib/artistEvents'
+import { buildSiblingOffers, type SiblingEvent, type SiblingOffer } from '@/lib/eventOffers'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -142,6 +143,52 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
   return event
 })
 
+// ── Canonical grouping ──────────────────────────────────────────────────────
+// Premium / lounge / VIP packages and repeat source records for the same
+// artist + venue + day are grouped under ONE canonical event (migration
+// 055/056, event_canonical_map). A duplicate's URL still resolves, but it
+// points search engines at the canonical event and stays out of the index;
+// the canonical page shows the duplicates' ticket links as extra options.
+// An event the map has not seen yet (imported since the last refresh) is
+// treated as its own canonical event.
+const getCanonicalInfo = cache(async (eventId: string, own: { tickets_url: string | null; see_tickets_affiliate_url: string | null; gigsberg_affiliate_url: string | null }) => {
+  const supabase = createPublicClient()
+  const none = { canonicalSlug: null as string | null, offers: [] as SiblingOffer[] }
+  try {
+    const { data: m } = await supabase
+      .from('event_canonical_map')
+      .select('canonical_id, is_canonical')
+      .eq('id', eventId)
+      .maybeSingle() as unknown as { data: { canonical_id: string; is_canonical: boolean } | null }
+    if (!m) return none
+    if (!m.is_canonical) {
+      const { data: c } = await supabase.from('events').select('slug').eq('id', m.canonical_id).maybeSingle()
+      return { canonicalSlug: (c as { slug: string } | null)?.slug ?? null, offers: [] as SiblingOffer[] }
+    }
+    const { data: members } = await supabase
+      .from('event_canonical_map')
+      .select('id, is_package')
+      .eq('canonical_id', eventId)
+      .neq('id', eventId)
+      .limit(40) as unknown as { data: { id: string; is_package: boolean }[] | null }
+    const ids = (members ?? []).map(r => r.id)
+    if (!ids.length) return none
+    const pkg = new Map((members ?? []).map(r => [r.id, r.is_package]))
+    const { data: rows } = await supabase
+      .from('events')
+      .select('id, slug, title, start_date, source, tickets_url, see_tickets_affiliate_url, gigsberg_affiliate_url')
+      .in('id', ids)
+      .in('status', LIVE_EVENT_STATUSES)
+      .gte('start_date', new Date().toISOString())
+    const siblings: SiblingEvent[] = ((rows ?? []) as unknown as Omit<SiblingEvent, 'is_package'>[])
+      .map(r => ({ ...r, is_package: pkg.get(r.id) ?? false }))
+    return { canonicalSlug: null as string | null, offers: buildSiblingOffers(own, siblings) }
+  } catch (err) {
+    console.error('[event] canonical grouping lookup failed', err)
+    return none
+  }
+})
+
 // ── Related events (internal links) ─────────────────────────────────────────
 
 const getRelatedEvents = cache(async (event: EventDetail, headlinerId: string | null) => {
@@ -150,7 +197,7 @@ const getRelatedEvents = cache(async (event: EventDetail, headlinerId: string | 
   const [venueRes, artistRes] = await Promise.all([
     event.venue
       ? supabase
-          .from('events')
+          .from('listed_events_with_venue')
           .select('id, slug, title, start_date, status')
           .eq('venue_id', event.venue.id)
           .neq('id', event.id)
@@ -261,7 +308,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   // Branded share card (artwork + date + venue) so a pasted link says where and
   // when, not just who. Falls back to the plain artwork inside the route.
   const ogImage   = `https://www.theshowfinder.com/api/share-image/${encodeURIComponent(slug)}`
-  const canonical = `https://www.theshowfinder.com/events/${slug}`
+  let canonical = `https://www.theshowfinder.com/events/${slug}`
+
+  // A package / duplicate record points at its canonical event and is kept out
+  // of search so it never competes with (or thins out) the main listing.
+  const grouping = await getCanonicalInfo(event.id, event)
+  const isDuplicate = !!grouping.canonicalSlug && grouping.canonicalSlug !== slug
+  if (isDuplicate) canonical = `https://www.theshowfinder.com/events/${grouping.canonicalSlug}`
 
   // Long runs list one event per performance. Only the soonest few are indexed;
   // later dates stay available to visitors but out of search (see repeatPerformances.ts).
@@ -282,7 +335,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title,
     description,
     alternates: { canonical },
-    ...(repeat ? { robots: { index: false, follow: true } } : {}),
+    ...(repeat || isDuplicate ? { robots: { index: false, follow: true } } : {}),
     openGraph: {
       title:       `${title} | TheShowFinder`,
       description,
@@ -329,6 +382,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const priceLabel = fmtPrice(event.price_from, event.price_to, event.currency)
   const imageUrl = eventImageUrl(event.image_url, event.category, event.title)
   const { primary, resale } = buildProviders(event)
+  const grouping = await getCanonicalInfo(event.id, event)
   const ownTicketUrl = event.own_ticket_url && !isGigsbergUrl(event.own_ticket_url) ? event.own_ticket_url : null
   const highlightActive = event.gigsberg_highlighted && event.gigsberg_inventory_status === 'available' && (!event.gigsberg_highlight_until || new Date(event.gigsberg_highlight_until) > new Date())
   const headliners = event.artists
@@ -905,6 +959,37 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <p className="text-xs text-slate-400 mt-4 leading-relaxed">
                 Resale tickets may be priced above face value. Always check the seller&apos;s terms.
               </p>
+            </div>
+            )}
+
+            {/* Package / extra-session ticket links merged into this canonical event. */}
+            {!isCancelledOrPostponed && grouping.offers.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">Packages &amp; Other Options</h3>
+              <p className="text-xs text-slate-400 mb-4">Premium, lounge and alternative tickets for this event</p>
+              <div className="grid grid-cols-2 gap-3">
+                {grouping.offers.map(o => {
+                  const href = o.kind === 'see_tickets'
+                    ? getSeeTicketsAffiliateLink(o.url, `evt-${event.slug}`)
+                    : o.kind === 'gigsberg'
+                      ? getGigsbergAffiliateLink(o.url)
+                      : getTicketmasterAffiliateLink(o.url, `evt-${o.fromSlug}`)
+                  const bg = o.kind === 'see_tickets' ? '#E4022D' : o.kind === 'gigsberg' ? '#1a1f6e' : '#026CDF'
+                  return (
+                    <TrackedTicketLink
+                      key={o.key}
+                      href={href}
+                      provider={o.kind === 'see_tickets' ? 'See Tickets' : o.kind === 'gigsberg' ? 'Gigsberg' : 'Ticketmaster'}
+                      section="more_options"
+                      context={event.slug}
+                      className="flex items-center justify-center text-center font-bold text-sm text-white rounded-xl px-2 py-3.5 hover:opacity-90 transition-opacity min-h-[48px]"
+                      style={{ backgroundColor: bg }}
+                    >
+                      {o.label}
+                    </TrackedTicketLink>
+                  )
+                })}
+              </div>
             </div>
             )}
 

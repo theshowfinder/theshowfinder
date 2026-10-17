@@ -5,7 +5,9 @@ import { CITIES } from './cities.ts'
 
 test('getNearbyAreas is case-insensitive and empty for unconfigured cities', () => {
   assert.ok(getNearbyAreas('derby').length > 0)
-  assert.deepEqual(getNearbyAreas('Liverpool'), [])
+  assert.deepEqual(getNearbyAreas('Atlantis'), [])
+  // Every one of the 40 city pages has nearby towns defined.
+  for (const c of CITIES) assert.ok(getNearbyAreas(c.name).length > 0, `${c.name} has no nearby areas`)
 })
 
 test('nearbyOrFilter builds an ilike or-filter for every spelling', () => {

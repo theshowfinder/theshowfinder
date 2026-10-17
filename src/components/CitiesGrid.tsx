@@ -1,8 +1,8 @@
+import { listedEventsCount } from '@/lib/listedEvents'
 import Link from 'next/link'
 import ScrollRail from '@/components/ScrollRail'
 import { createPublicClient } from '@/lib/supabase/public'
-import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
-import { resolveCityEventCount, normalizeCityFilterValue } from '@/lib/cityEventCount'
+import { resolveCityEventCount } from '@/lib/cityEventCount'
 
 const CITIES = [
   { name: 'London',          emoji: '🎡',  gradient: 'linear-gradient(135deg, #E8003D, #8B001F)'  },
@@ -61,17 +61,9 @@ export default async function CitiesGrid() {
   // per city and is accurate regardless of how many total rows exist.
   const countResults = await Promise.all(
     CITIES.map(({ name }) =>
-      supabase
-        .from('events_with_venue')
-        .select('*', { count: 'exact', head: true })
-        .ilike('venue_city', normalizeCityFilterValue(name))
-        // Same live-status criteria as every shared event-pool helper
-        // (Tonight/This Week/Top Events/On Sale) — without this, a city
-        // whose only "upcoming" rows are cancelled/postponed would show
-        // a nonzero count here while every real section of its own page
-        // correctly shows nothing.
-        .in('status', LIVE_EVENT_STATUSES)
-        .gte('start_date', nowISO) as unknown as Promise<{ count: number | null; error: unknown }>
+      // Canonical count (src/lib/listedEvents.ts): identical to the city
+      // page's own hero count, its meta description and its category chips.
+      listedEventsCount(supabase, { city: name, fromISO: nowISO }) as Promise<{ count: number | null; error: unknown }>
     )
   )
 

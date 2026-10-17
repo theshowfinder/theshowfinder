@@ -16,7 +16,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ city: s
   const nowISO = new Date().toISOString()
   const horizon = new Date(Date.now() + 120 * 86_400_000).toISOString()
   const { data } = await createPublicClient()
-    .from('events_with_venue')
+    .from('listed_events_with_venue')
     .select('slug, title, start_date, venue_name, venue_city, public_onsale_start, presale_start, presale_name')
     .ilike('venue_city', city.name)
     .in('status', LIVE_EVENT_STATUSES)

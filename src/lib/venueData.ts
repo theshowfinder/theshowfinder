@@ -14,7 +14,7 @@ import { rankVenues, type DiscoveryVenue, type RankedVenue, type VenueEventRow }
 export async function fetchVenueEventRows(supabase: SupabaseClient, venueIds: string[]): Promise<VenueEventRow[]> {
   if (venueIds.length === 0) return []
   const { data } = await supabase
-    .from('events_with_venue')
+    .from('listed_events_with_venue')
     .select('venue_id, title, start_date, category')
     .in('venue_id', venueIds)
     .in('status', LIVE_EVENT_STATUSES)

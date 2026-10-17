@@ -79,6 +79,14 @@
     {
       "path": "/api/cron/follow-alerts",
       "schedule": "20 6 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-listings",
+      "schedule": "45 4 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-listings",
+      "schedule": "45 14 * * *"
     }
   ]
 }

@@ -14,7 +14,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   if (!venue) return new Response('Not found', { status: 404 })
 
   const { data } = await supabase
-    .from('events_with_venue')
+    .from('listed_events_with_venue')
     .select('slug, title, start_date, venue_name, venue_city, public_onsale_start, presale_start, presale_name')
     .eq('venue_id', venue.id)
     .in('status', LIVE_EVENT_STATUSES)

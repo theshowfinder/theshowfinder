@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const nowISO = new Date().toISOString()
 
   const { data } = await supabase
-    .from('events_with_venue')
+    .from('listed_events_with_venue')
     .select('slug, title, start_date, venue_name, image_url, price_from, currency, category')
     .ilike('venue_city', match.name)
     .gte('start_date', nowISO)

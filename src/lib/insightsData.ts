@@ -4,7 +4,7 @@
 // bad render never replaces a good cached page.
 import { createPublicClient } from '@/lib/supabase/public'
 import { CITIES } from '@/lib/cities'
-import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { LIVE_EVENT_STATUSES, LISTED_EVENTS_VIEW } from '@/lib/listedEvents'
 import { normalizeCityFilterValue } from '@/lib/cityEventCount'
 import {
   categoryLabel,
@@ -23,7 +23,7 @@ export async function loadInsights(now = new Date()): Promise<InsightsSummary> {
   // Fresh builder per call: live status, not yet started.
   const live = () =>
     supabase
-      .from('events_with_venue')
+      .from(LISTED_EVENTS_VIEW)
       .select('*', { count: 'exact', head: true })
       .in('status', LIVE_EVENT_STATUSES)
       .gte('start_date', nowISO)
@@ -39,7 +39,7 @@ export async function loadInsights(now = new Date()): Promise<InsightsSummary> {
         // The current month only counts from now onwards, never past dates.
         const from = i === 0 ? nowISO : r.startISO
         return supabase
-          .from('events_with_venue')
+          .from('listed_events_with_venue')
           .select('*', { count: 'exact', head: true })
           .in('status', LIVE_EVENT_STATUSES)
           .gte('start_date', from)

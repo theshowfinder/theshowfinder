@@ -16,6 +16,7 @@ import { londonDayWindow, londonDaysAheadWindow, londonWeekendDayWindows, type D
 import { isTonightEvent, sortTonightEvents } from './tonight.ts'
 import { mixEvents, trimTonight } from './eventMix.ts'
 import { nearbyOrFilter, type NearbyArea } from './nearbyAreas.ts'
+import { LIVE_EVENT_STATUSES, listedEventsCount } from './listedEvents.ts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -26,7 +27,8 @@ const DAY_MS = 24 * 60 * 60 * 1000
 // to go to, on any city page or the homepage. "Deleted" has no soft-
 // delete column in this schema, so a hard-deleted row is simply absent
 // from every query already — nothing to filter for that case.
-export const LIVE_EVENT_STATUSES = ['upcoming', 'on_sale', 'sold_out']
+// Defined once in listedEvents.ts (the canonical count/listing definition).
+export { LIVE_EVENT_STATUSES }
 
 // Daily Intelligence investigation, 2 Oct 2026: every pool query above
 // already excludes cancelled/postponed via LIVE_EVENT_STATUSES, but
@@ -124,7 +126,7 @@ export async function fetchEventsThisWeek(
 
   const days = await Promise.all(windows.map(async ({ startISO, endISO }) => {
     let query = supabase
-      .from('events_with_venue')
+      .from('listed_events_with_venue')
       .select('*')
       .gte('start_date', startISO)
       .lt('start_date', endISO)
@@ -156,7 +158,7 @@ export async function fetchEventsThisWeekend(
 ): Promise<EventWithVenue[]> {
   const days = await Promise.all(londonWeekendDayWindows(new Date()).map(async ({ startISO, endISO }) => {
     let query = supabase
-      .from('events_with_venue')
+      .from('listed_events_with_venue')
       .select('*')
       .gte('start_date', startISO)
       .lt('start_date', endISO)
@@ -284,7 +286,7 @@ export async function fetchTopEvents(
   const horizon = new Date(now.getTime() + horizonDays * DAY_MS).toISOString()
 
   let query = supabase
-    .from('events_with_venue')
+    .from('listed_events_with_venue')
     .select('*')
     .gte('start_date', weekEnd)
     .lte('start_date', horizon)
@@ -323,7 +325,7 @@ export async function fetchCityEventsAhead(
   const now = new Date()
   const endISO = londonDaysAheadWindow(now, days).endISO
   const { data } = await supabase
-    .from('events_with_venue')
+    .from('listed_events_with_venue')
     .select('*')
     .gte('start_date', now.toISOString())
     .lt('start_date', endISO)
@@ -375,7 +377,7 @@ export async function fetchRecentlyAddedEvents(
   if (!ids.length) return []
 
   const { data } = await supabase
-    .from('events_with_venue')
+    .from('listed_events_with_venue')
     .select('*')
     .in('id', ids)
     .order('is_featured',    { ascending: false })
@@ -411,7 +413,7 @@ export async function fetchPresalesOpenNowEvents(
   const { floorISO, ceilISO } = presaleOpenNowWindow()
 
   let query = supabase
-    .from('events_with_venue')
+    .from('listed_events_with_venue')
     .select('*')
     .gte('presale_start', floorISO)
     .lte('presale_start', ceilISO)
@@ -473,7 +475,7 @@ export async function fetchOnSaleThisWeekEvents(
   const nowISO = new Date().toISOString()
 
   let query = supabase
-    .from('events_with_venue')
+    .from('listed_events_with_venue')
     .select('*')
     .gte('onsale_date', floorISO)
     .lte('onsale_date', ceilISO)
@@ -532,7 +534,7 @@ export async function fetchNearbyEvents(
   const horizon = new Date(now.getTime() + horizonDays * DAY_MS).toISOString()
 
   const { data } = await supabase
-    .from('events_with_venue')
+    .from('listed_events_with_venue')
     .select('*')
     .gte('start_date', now.toISOString())
     .lte('start_date', horizon)
@@ -559,13 +561,7 @@ export async function fetchCityCategoryCounts(
 ): Promise<Record<string, number | null>> {
   const nowISO = new Date().toISOString()
   const results = await Promise.all(BROWSE_CATEGORIES.map(async category => {
-    const res = await supabase
-      .from('events_with_venue')
-      .select('id', { count: 'exact', head: true })
-      .ilike('venue_city', city)
-      .eq('category', category)
-      .in('status', LIVE_EVENT_STATUSES)
-      .gte('start_date', nowISO) as unknown as { count: number | null; error: unknown }
+    const res = await listedEventsCount(supabase, { city, category, fromISO: nowISO })
     return [category, res.error ? null : (res.count ?? 0)] as const
   }))
   return Object.fromEntries(results)

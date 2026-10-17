@@ -59,7 +59,7 @@ export default function WelcomeEmail({ email }: Props) {
                                 </p>
                                 <p style={{ margin: '0 0 10px', fontSize: '15px', color: '#334155' }}>🎤 &nbsp;<strong>On-sale alerts</strong> — know the moment tickets are released</p>
                                 <p style={{ margin: '0 0 10px', fontSize: '15px', color: '#334155' }}>📅 &nbsp;<strong>Weekly digests</strong> — the best upcoming shows near you</p>
-                                <p style={{ margin: '0', fontSize: '15px', color: '#334155' }}>🏟️ &nbsp;<strong>Venue &amp; artist picks</strong> — curated events across 36 UK cities</p>
+                                <p style={{ margin: '0', fontSize: '15px', color: '#334155' }}>🏟️ &nbsp;<strong>Venue &amp; artist picks</strong> — curated events across 40 UK cities</p>
                               </td>
                             </tr>
                           </tbody>

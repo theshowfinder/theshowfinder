@@ -679,7 +679,51 @@ export interface Database {
       }
     }
     Views: {
+      event_canonical_map: {
+        Row: {
+          id: string
+          canonical_id: string
+          is_package: boolean
+          is_canonical: boolean
+          refreshed_at: string
+        }
+      }
       events_with_venue: {
+        Row: {
+          id: string
+          title: string
+          slug: string
+          description: string | null
+          category: EventCategory
+          start_date: string
+          end_date: string | null
+          image_url: string | null
+          price_from: number | null
+          price_to: number | null
+          currency: string
+          tickets_url: string | null
+          status: EventStatus
+          is_featured: boolean
+          onsale_date: string | null
+          public_onsale_start: string | null
+          public_onsale_end: string | null
+          presale_start: string | null
+          presale_end: string | null
+          presale_name: string | null
+          on_sale_this_week: boolean
+          presale_this_week: boolean
+          upcoming_presale: boolean
+          newly_announced: boolean
+          last_synced_at: string | null
+          venue_id: string
+          venue_name: string
+          venue_slug: string | null
+          venue_city: string
+          venue_postcode: string
+          venue_capacity: number | null
+        }
+      }
+      listed_events_with_venue: {
         Row: {
           id: string
           title: string
