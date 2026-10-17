@@ -40,8 +40,13 @@ import { getNearbyAreas, areasWithEvents } from '@/lib/nearbyAreas'
 import CityBrowse from '@/components/CityBrowse'
 import CityTicketSources from '@/components/CityTicketSources'
 
+// No city page is built at deploy time: each is generated on first request, then
+// cached and refreshed in the background (see `revalidate`). Building all 36 cities
+// during every deploy made a deploy depend on the database being fast: when it
+// stalled, the 60-second page timeouts failed the whole build. Every other dynamic
+// route on the site already works this way.
 export async function generateStaticParams() {
-  return CITIES.map(c => ({ city: c.name }))
+  return []
 }
 
 export async function generateMetadata(
