@@ -5,6 +5,7 @@ import { CITIES } from '@/lib/cities'
 import { fetchWestEndShows } from '@/lib/showPool'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { shouldListArtistInSitemap } from '@/lib/artistEvents'
+import { repeatPerformanceSlugs } from '@/lib/repeatPerformances'
 
 // Regenerated at most hourly (the sitemap was dynamic before; once public pages
 // stopped using cookies it became a static file frozen at build time).
@@ -25,9 +26,9 @@ const BASE = 'https://www.theshowfinder.com'
 // setting to fix, it's all done from the query side.
 const PAGE_SIZE = 1000
 
-type SlugRow        = { slug: string }
+type VenueRow       = { id: string; slug: string }
 type ArtistRow      = { id: string; slug: string; name: string | null; is_featured: boolean | null }
-type SlugUpdatedRow = { slug: string; updated_at: string }
+type SlugUpdatedRow = { slug: string; title: string; updated_at: string; venue_id: string | null; start_date: string }
 type DbClient       = ReturnType<typeof createPublicClient>
 
 async function fetchAllEvents(supabase: DbClient, nowISO: string): Promise<SlugUpdatedRow[]> {
@@ -44,7 +45,7 @@ async function fetchAllEvents(supabase: DbClient, nowISO: string): Promise<SlugU
       const from = i * PAGE_SIZE
       return supabase
         .from('events')
-        .select('slug, updated_at')
+        .select('slug, title, updated_at, venue_id, start_date')
         .gte('start_date', nowISO)
         .range(from, from + PAGE_SIZE - 1) as unknown as Promise<{ data: SlugUpdatedRow[] | null }>
     }),
@@ -52,7 +53,7 @@ async function fetchAllEvents(supabase: DbClient, nowISO: string): Promise<SlugU
   return pages.flatMap(p => p.data ?? [])
 }
 
-async function fetchAllVenues(supabase: DbClient): Promise<SlugRow[]> {
+async function fetchAllVenues(supabase: DbClient): Promise<VenueRow[]> {
   const { count } = await supabase
     .from('venues')
     .select('*', { count: 'exact', head: true })
@@ -66,9 +67,9 @@ async function fetchAllVenues(supabase: DbClient): Promise<SlugRow[]> {
       const from = i * PAGE_SIZE
       return supabase
         .from('venues')
-        .select('slug')
+        .select('id, slug')
         .not('slug', 'is', null)
-        .range(from, from + PAGE_SIZE - 1) as unknown as Promise<{ data: SlugRow[] | null }>
+        .range(from, from + PAGE_SIZE - 1) as unknown as Promise<{ data: VenueRow[] | null }>
     }),
   )
   return pages.flatMap(p => p.data ?? [])
@@ -182,7 +183,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority:        0.7,
   }))
 
-  const eventPages: MetadataRoute.Sitemap = eventRows.map(e => ({
+  // Long runs list one event per performance; only the soonest few are indexable.
+  const repeatSlugs = repeatPerformanceSlugs(eventRows)
+  const eventPages: MetadataRoute.Sitemap = eventRows.filter(e => !repeatSlugs.has(e.slug)).map(e => ({
     url:             `${BASE}/events/${e.slug}`,
     lastModified:    new Date(e.updated_at),
     changeFrequency: 'weekly' as const,
@@ -200,7 +203,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // No lastModified on venue/artist URLs: we have no real "last changed" date
   // for them, and stamping every URL with "now" teaches Google to ignore the
   // field for the whole sitemap (including events, where it IS accurate).
-  const venuePages: MetadataRoute.Sitemap = venueRows.map(v => ({
+  // Only venues with something on: a venue with no upcoming events is a thin page
+  // (and is served noindex), so it should not spend crawl budget.
+  const venuesWithEvents = new Set(eventRows.map(e => e.venue_id).filter(Boolean))
+  const venuePages: MetadataRoute.Sitemap = venueRows.filter(v => venuesWithEvents.has(v.id)).map(v => ({
     url:             `${BASE}/venues/${v.slug}`,
     changeFrequency: 'weekly' as const,
     priority:        0.7,

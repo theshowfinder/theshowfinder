@@ -15,6 +15,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
+import { isRepeatPerformance } from '@/lib/repeatPerformances'
 import type { EventCategory, EventStatus } from '@/lib/types/database'
 import {
   getTicketmasterAffiliateLink, getViagogoAffiliateLink, isTicketmasterCommissionEligible,
@@ -262,10 +263,26 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const ogImage   = `https://www.theshowfinder.com/api/share-image/${encodeURIComponent(slug)}`
   const canonical = `https://www.theshowfinder.com/events/${slug}`
 
+  // Long runs list one event per performance. Only the soonest few are indexed;
+  // later dates stay available to visitors but out of search (see repeatPerformances.ts).
+  let repeat = false
+  if (venue?.id) {
+    const { count } = await createPublicClient()
+      .from('events')
+      .select('id', { count: 'exact', head: true })
+      .eq('venue_id', venue.id)
+      .eq('title', event.title)
+      .in('status', LIVE_EVENT_STATUSES)
+      .gte('start_date', new Date().toISOString())
+      .lt('start_date', event.start_date)
+    repeat = isRepeatPerformance(count ?? 0)
+  }
+
   return {
     title,
     description,
     alternates: { canonical },
+    ...(repeat ? { robots: { index: false, follow: true } } : {}),
     openGraph: {
       title:       `${title} | TheShowFinder`,
       description,

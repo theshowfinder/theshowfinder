@@ -11,6 +11,8 @@ import { cityPagePath } from '@/lib/cities'
 import type { EventWithVenue } from '@/lib/types/database'
 import { venuePageDescription } from '@/lib/venueBlurb'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
+import { buildVenueSchema } from '@/lib/venueSeo'
 
 export const PAGE_SIZE = 24
 
@@ -76,8 +78,24 @@ export default async function VenueView({ slug, page }: { slug: string; page: nu
     upcomingEvents.map(e => e.category),
   )
 
+  const venueUrl = `https://www.theshowfinder.com/venues/${venue.slug}`
+  const schemas = [
+    buildVenueSchema(venue),
+    buildBreadcrumbSchema([
+      { name: 'Home', url: 'https://www.theshowfinder.com' },
+      ...(cityHref ? [{ name: venue.city, url: `https://www.theshowfinder.com${cityHref}` }] : []),
+      { name: venue.name, url: venueUrl },
+    ]),
+    ...(upcomingEvents.length
+      ? [buildItemListSchema(upcomingEvents.slice(0, 20).map(e => ({ name: e.title, url: `https://www.theshowfinder.com/events/${e.slug}` })))]
+      : []),
+  ]
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
+      {schemas.map((s, i) => (
+        <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(s) }} />
+      ))}
 
       {/* ── HERO ── */}
       <div className="py-14 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: '#1A1A2E' }}>
