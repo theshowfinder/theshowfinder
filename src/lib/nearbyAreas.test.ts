@@ -1,10 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { getNearbyAreas, nearbyOrFilter, areaForVenueCity, areasWithEvents, NEARBY_AREAS } from './nearbyAreas.ts'
+import { getNearbyAreas, nearbyOrFilter, areaForVenueCity, areasWithEvents, nearbyIntroSentence, NEARBY_AREAS } from './nearbyAreas.ts'
+import { CITIES } from './cities.ts'
 
 test('getNearbyAreas is case-insensitive and empty for unconfigured cities', () => {
   assert.ok(getNearbyAreas('derby').length > 0)
-  assert.deepEqual(getNearbyAreas('Leeds'), [])
+  assert.deepEqual(getNearbyAreas('Liverpool'), [])
 })
 
 test('nearbyOrFilter builds an ilike or-filter for every spelling', () => {
@@ -42,4 +43,23 @@ test('nearbyOrFilter can target another column (venues.city)', () => {
   const f = nearbyOrFilter(getNearbyAreas('Derby'), 'city')
   assert.ok(f.startsWith('city.ilike.'))
   assert.ok(!f.includes('venue_city'))
+})
+
+test('every hub is one of our cities and no nearby town is itself a city page', () => {
+  const cityNames = new Set(CITIES.map(c => c.name.toLowerCase()))
+  for (const [hub, areas] of Object.entries(NEARBY_AREAS)) {
+    assert.ok(cityNames.has(hub.toLowerCase()), `${hub} is not in CITIES`)
+    for (const a of areas) {
+      for (const m of a.match) assert.ok(!cityNames.has(m.toLowerCase()), `${a.name} (${m}) already has its own city page`)
+    }
+  }
+})
+
+test('nearbyIntroSentence names the towns naturally', () => {
+  assert.equal(nearbyIntroSentence([]), '')
+  assert.equal(nearbyIntroSentence([{ name: 'Salford', match: [] }]), 'Shows in nearby Salford are gathered further down this page.')
+  assert.equal(
+    nearbyIntroSentence([{ name: 'A', match: [] }, { name: 'B', match: [] }, { name: 'C', match: [] }]),
+    'Shows in nearby A, B and C are gathered further down this page.',
+  )
 })

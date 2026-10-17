@@ -36,7 +36,7 @@ import { pickNewsForCityPage, CITY_NEWS_MAX_AGE_DAYS } from '@/lib/newsPublishin
 import ScrollRail from '@/components/ScrollRail'
 import CityIntro from '@/components/CityIntro'
 import { CITY_HERO_IMAGES } from '@/lib/cityHeroImages'
-import { getNearbyAreas, areasWithEvents } from '@/lib/nearbyAreas'
+import { getNearbyAreas, areasWithEvents, nearbyIntroSentence } from '@/lib/nearbyAreas'
 import CityBrowse from '@/components/CityBrowse'
 import CityTicketSources from '@/components/CityTicketSources'
 
@@ -231,6 +231,12 @@ export default async function CityPage({
 
   const localBusinesses = localBusinessesResult.data ?? []
   const nearbyTowns = areasWithEvents(nearbyAreas, nearbyEvents)
+  // The written intro gains one factual line naming the nearby towns that have
+  // shows below (Derby's hand-written intro already says this itself).
+  const baseIntro = CITY_GUIDE_INTROS[cityName]
+  const introText = baseIntro && !baseIntro.includes('further down this page') && nearbyTowns.length
+    ? `${baseIntro} ${nearbyIntroSentence(nearbyTowns)}`
+    : baseIntro
   // Only stories from the last CITY_NEWS_MAX_AGE_DAYS days are ever shown. A city
   // with fewer than 3 fresh local stories is topped up with fresh UK-wide ones, so
   // the section is neither stale nor empty (and hides if nothing is fresh at all).
@@ -399,7 +405,7 @@ export default async function CityPage({
           <CityIntro
             cityName={cityName}
             emoji={cityConfig.emoji}
-            intro={CITY_GUIDE_INTROS[cityName]}
+            intro={introText}
             totalCount={totalCount}
             venueCount={cityVenues.length}
             venues={rankedVenues.map(v => ({ name: v.name, slug: v.slug, capacity: v.capacity }))}

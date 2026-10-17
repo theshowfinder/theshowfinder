@@ -18,10 +18,128 @@ export interface NearbyArea {
 export const NEARBY_AREAS: Record<string, NearbyArea[]> = {
   Derby: [
     { name: 'Burton upon Trent', match: ['Burton upon Trent', 'Burton-on-Trent', 'Burton on Trent'] },
-    { name: 'Chesterfield',      match: ['Chesterfield'] },
-    { name: 'Ilkeston',          match: ['Ilkeston'] },
-    { name: 'Long Eaton',        match: ['Long Eaton'] },
-    { name: 'Castle Donington',  match: ['Castle Donington', 'Donington Park'] },
+    { name: 'Chesterfield', match: ['Chesterfield'] },
+    { name: 'Ilkeston', match: ['Ilkeston'] },
+    { name: 'Long Eaton', match: ['Long Eaton'] },
+    { name: 'Castle Donington', match: ['Castle Donington', 'Donington Park'] },
+  ],
+  Manchester: [
+    { name: 'Salford', match: ['Salford'] },
+    { name: 'Stockport', match: ['Stockport'] },
+    { name: 'Warrington', match: ['Warrington'] },
+    { name: 'Wigan', match: ['Wigan'] },
+    { name: 'Bolton', match: ['Bolton'] },
+    { name: 'Oldham', match: ['Oldham'] },
+    { name: 'Bury', match: ['Bury'] },
+    { name: 'Altrincham', match: ['Altrincham'] },
+  ],
+  Leeds: [
+    { name: 'Harrogate', match: ['Harrogate'] },
+    { name: 'Huddersfield', match: ['Huddersfield'] },
+    { name: 'Halifax', match: ['Halifax'] },
+    { name: 'Wakefield', match: ['Wakefield'] },
+  ],
+  Bradford: [
+    { name: 'Saltaire', match: ['Saltaire'] },
+    { name: 'Ilkley', match: ['Ilkley'] },
+    { name: 'Halifax', match: ['Halifax'] },
+    { name: 'Keighley', match: ['Keighley'] },
+  ],
+  Sheffield: [
+    { name: 'Chesterfield', match: ['Chesterfield'] },
+    { name: 'Rotherham', match: ['Rotherham'] },
+    { name: 'Barnsley', match: ['Barnsley'] },
+  ],
+  Newcastle: [
+    { name: 'Gateshead', match: ['Gateshead'] },
+    { name: 'Whitley Bay', match: ['Whitley Bay'] },
+    { name: 'Durham', match: ['Durham'] },
+    { name: 'South Shields', match: ['South Shields'] },
+  ],
+  Middlesbrough: [
+    { name: 'Stockton-on-Tees', match: ['Stockton-on-Tees', 'Stockton on Tees'] },
+    { name: 'Darlington', match: ['Darlington'] },
+    { name: 'Whitby', match: ['Whitby'] },
+    { name: 'Redcar', match: ['Redcar'] },
+  ],
+  Hull: [
+    { name: 'Beverley', match: ['Beverley'] },
+    { name: 'Scunthorpe', match: ['Scunthorpe'] },
+    { name: 'Grimsby', match: ['Grimsby'] },
+  ],
+  Nottingham: [
+    { name: 'Mansfield', match: ['Mansfield'] },
+    { name: 'Newark', match: ['Newark'] },
+  ],
+  Brighton: [
+    { name: 'Eastbourne', match: ['Eastbourne'] },
+    { name: 'Worthing', match: ['Worthing'] },
+    { name: 'Hastings', match: ['Hastings'] },
+    { name: 'Crawley', match: ['Crawley'] },
+    { name: 'Bexhill on Sea', match: ['Bexhill on Sea', 'Bexhill-on-Sea'] },
+    { name: 'Lewes', match: ['Lewes'] },
+  ],
+  Southampton: [
+    { name: 'Winchester', match: ['Winchester'] },
+    { name: 'Eastleigh', match: ['Eastleigh'] },
+    { name: 'Fareham', match: ['Fareham'] },
+  ],
+  Portsmouth: [
+    { name: 'Fareham', match: ['Fareham'] },
+    { name: 'Chichester', match: ['Chichester'] },
+  ],
+  Bournemouth: [
+    { name: 'Poole', match: ['Poole'] },
+    { name: 'Christchurch', match: ['Christchurch'] },
+  ],
+  Bristol: [
+    { name: 'Bath', match: ['Bath'] },
+    { name: 'Weston-super-Mare', match: ['Weston-super-Mare', 'Weston super Mare'] },
+  ],
+  Cardiff: [
+    { name: 'Newport', match: ['Newport'] },
+    { name: 'Barry', match: ['Barry'] },
+    { name: 'Pontypridd', match: ['Pontypridd'] },
+  ],
+  Edinburgh: [
+    { name: 'Dunfermline', match: ['Dunfermline'] },
+    { name: 'Kinross', match: ['Kinross'] },
+    { name: 'Bathgate', match: ['Bathgate'] },
+    { name: 'Livingston', match: ['Livingston'] },
+    { name: 'Musselburgh', match: ['Musselburgh'] },
+  ],
+  Coventry: [
+    { name: 'Nuneaton', match: ['Nuneaton'] },
+    { name: 'Leamington Spa', match: ['Leamington Spa', 'Royal Leamington Spa'] },
+    { name: 'Warwick', match: ['Warwick'] },
+    { name: 'Rugby', match: ['Rugby'] },
+  ],
+  Wolverhampton: [
+    { name: 'Telford', match: ['Telford'] },
+    { name: 'Shrewsbury', match: ['Shrewsbury'] },
+    { name: 'Kidderminster', match: ['Kidderminster'] },
+  ],
+  'Milton Keynes': [
+    { name: 'Northampton', match: ['Northampton'] },
+    { name: 'Aylesbury', match: ['Aylesbury'] },
+    { name: 'Bedford', match: ['Bedford'] },
+    { name: 'Wellingborough', match: ['Wellingborough'] },
+  ],
+  Reading: [
+    { name: 'Basingstoke', match: ['Basingstoke'] },
+    { name: 'Newbury', match: ['Newbury'] },
+  ],
+  Ipswich: [
+    { name: 'Colchester', match: ['Colchester'] },
+  ],
+  'Stoke-on-Trent': [
+    { name: 'Crewe', match: ['Crewe'] },
+    { name: 'Newcastle-under-Lyme', match: ['Newcastle-under-Lyme', 'Newcastle under Lyme'] },
+  ],
+  Exeter: [
+    { name: 'Torquay', match: ['Torquay'] },
+    { name: 'Paignton', match: ['Paignton'] },
+    { name: 'Exmouth', match: ['Exmouth'] },
   ],
 }
 
@@ -56,4 +174,13 @@ export function areasWithEvents(areas: NearbyArea[], events: { venue_city: strin
     if (a) present.add(a.name)
   }
   return areas.filter(a => present.has(a.name))
+}
+
+// One plain sentence for a city's intro naming the nearby towns that have shows
+// on the page, or '' when there are none.
+export function nearbyIntroSentence(towns: NearbyArea[]): string {
+  const names = towns.map(t => t.name)
+  if (!names.length) return ''
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+  return `Shows in nearby ${list} are gathered further down this page.`
 }
