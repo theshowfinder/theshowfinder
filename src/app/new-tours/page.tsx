@@ -89,7 +89,12 @@ function TourGroup({ heading, tours, now }: { heading: string; tours: TourAnnoun
                 {t.artistName}
               </Link>
               <span className="text-xs font-semibold text-slate-500">
-                {t.isBrandNew && <span className="mr-2 rounded-full px-2 py-0.5 text-white" style={{ backgroundColor: '#E8003D' }}>New to the site</span>}
+                <span
+                  className="mr-2 rounded-full px-2 py-0.5 text-white"
+                  style={{ backgroundColor: t.isBrandNew ? '#E8003D' : '#1A1A2E' }}
+                >
+                  {t.isBrandNew ? 'New tour' : 'Dates added'}
+                </span>
                 added {announcedLabel(t.announcedAt, now)}
               </span>
             </div>

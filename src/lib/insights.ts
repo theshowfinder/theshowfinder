@@ -72,7 +72,7 @@ export function insightsHeadline(s: InsightsSummary): string {
   const topCategory = rankCounts(s.categories, 1)[0]
   const parts = [`${quotableCount(s.total)} live events are on sale across the UK`]
   if (topCity) parts.push(`${topCity.label} has the most with ${formatCount(topCity.count)}`)
-  if (topCategory) parts.push(`${topCategory.label.toLowerCase()} makes up ${sharePercent(topCategory.count, s.total)}% of everything listed`)
+  if (topCategory) parts.push(`the biggest category is ${topCategory.label.toLowerCase()}, at ${sharePercent(topCategory.count, s.total)}% of everything listed`)
   return parts.join('; ') + '.'
 }
 

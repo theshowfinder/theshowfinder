@@ -50,7 +50,7 @@ describe('insights helpers', () => {
       categories: [{ label: 'Concerts', count: 10000 }, { label: 'Theatre', count: 7000 }],
       months: [],
     })
-    assert.match(h, /^21,000\+ live events are on sale across the UK; London has the most with 9,000; concerts makes up 46%/)
+    assert.match(h, /^21,000\+ live events are on sale across the UK; London has the most with 9,000; the biggest category is concerts, at 46%/)
     assert.ok(h.endsWith('.'))
   })
 

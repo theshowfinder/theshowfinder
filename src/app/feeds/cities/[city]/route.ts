@@ -2,7 +2,8 @@
 import { createPublicClient } from '@/lib/supabase/public'
 import { CITIES } from '@/lib/cities'
 import { fetchEventsThisWeek } from '@/lib/eventPools'
-import { shortUkDate } from '@/lib/newShows'
+import { shortUkDate, isNewsworthyArtistName } from '@/lib/newShows'
+import { isAttraction } from '@/lib/eventMix'
 import { buildRssFeed, rssResponse } from '@/lib/rss'
 
 export const revalidate = 3600
@@ -15,7 +16,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ city: s
   const city = CITIES.find(c => c.name.toLowerCase() === name.toLowerCase())
   if (!city) return new Response('Not found', { status: 404 })
 
-  const events = await fetchEventsThisWeek(createPublicClient(), { city: city.name, limit: 10 })
+  // Ask for extra, then drop attraction tickets and premium/hospitality listings:
+  // a feed that syndicates to other people's sites must only carry real shows.
+  const pool = await fetchEventsThisWeek(createPublicClient(), { city: city.name, limit: 20 })
+  const events = pool
+    .filter(e => !isAttraction(e) && isNewsworthyArtistName(e.title))
+    .slice(0, 10)
   // One stable publication time per day so a show is posted once, the first day it appears.
   const today = new Date()
   today.setUTCHours(0, 0, 0, 0)
