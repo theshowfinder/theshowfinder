@@ -37,4 +37,8 @@ export const CITY_HERO_IMAGES: Record<string, string> = {
   Wolverhampton: '/city-heroes/wolverhampton.png',
   Swansea: '/city-heroes/swansea.png',
   Aberdeen: '/city-heroes/aberdeen.png',
+  York: '/city-heroes/york.png',
+  Blackpool: '/city-heroes/blackpool.png',
+  Scarborough: '/city-heroes/scarborough.png',
+  Bath: '/city-heroes/bath.png',
 }
