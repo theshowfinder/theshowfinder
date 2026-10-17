@@ -32,7 +32,7 @@ export const SITE_URL = 'https://www.theshowfinder.com'
 
 // Categories whose "new dates" are not worth a news item of their own:
 // football fixtures and the like are scheduled en masse each season.
-const NON_NEWSWORTHY_CATEGORIES = new Set(['sports'])
+export const NON_NEWSWORTHY_CATEGORIES = new Set(['sports'])
 
 // Listings that are not shows people would read a news item about: hospitality
 // and premium-package products, parking, and football/club fixtures that slip
