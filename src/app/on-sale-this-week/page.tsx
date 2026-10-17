@@ -5,6 +5,8 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { createPublicClient } from '@/lib/supabase/public'
 import NewsletterInline from '@/components/NewsletterInline'
+import CalendarSubscribe from '@/components/CalendarSubscribe'
+import { ONSALE_FEED_PATH } from '@/lib/calendarFeeds'
 import SocialLandingBanner from '@/components/SocialLandingBanner'
 import { fmtOnSaleLabel, onSaleThisWeekWindow, type OnSaleGroup } from '@/lib/on-sale'
 import { fetchOnSaleThisWeek } from '@/lib/eventPools'
@@ -65,6 +67,10 @@ export default async function OnSaleThisWeekPage() {
             {' '}–{' '}
             {weekEnd.toLocaleDateString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'long' })}).
           </p>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <CalendarSubscribe path={ONSALE_FEED_PATH} label="Get on-sale reminders in your calendar" />
+            <Link href="/calendars" className="text-sm text-white/60 hover:text-white underline">How it works</Link>
+          </div>
         </div>
       </div>
 

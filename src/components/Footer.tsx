@@ -140,6 +140,7 @@ export default function Footer() {
               <li><Link href="/contact"   className="hover:text-white transition-colors">Contact</Link></li>
               <li><Link href="/advertise" className="hover:text-white transition-colors">Advertise with us</Link></li>
               <li><Link href="/widgets"   className="hover:text-white transition-colors">Free gigs widget</Link></li>
+              <li><Link href="/calendars" className="hover:text-white transition-colors">Gig calendar feeds</Link></li>
             </ul>
           </div>
 

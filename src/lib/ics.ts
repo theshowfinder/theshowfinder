@@ -13,6 +13,8 @@ export interface CalendarEvent {
   location?: string | null
   description?: string | null
   url?: string | null
+  /** Adds a pop-up reminder this many minutes before the start (e.g. tickets on sale). */
+  alarmMinutesBefore?: number
 }
 
 const DEFAULT_HOURS = 3
@@ -63,17 +65,12 @@ export function foldLine(line: string): string {
   return out.join('\r\n ')
 }
 
-export function buildIcs(ev: CalendarEvent, now: Date = new Date()): string {
+function veventLines(ev: CalendarEvent, now: Date): string[] {
   const start = new Date(ev.startISO)
   const hours = ev.durationHours ?? DEFAULT_HOURS
   const end = new Date(start.getTime() + hours * 3600_000)
   const allDay = isAllDay(ev.startISO)
-  const lines = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//TheShowFinder//Events//EN',
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
+  return [
     'BEGIN:VEVENT',
     `UID:${ev.uid}@theshowfinder.com`,
     `DTSTAMP:${icsUtc(now)}`,
@@ -83,7 +80,44 @@ export function buildIcs(ev: CalendarEvent, now: Date = new Date()): string {
     ...(ev.location ? [`LOCATION:${icsEscape(ev.location)}`] : []),
     ...(ev.description ? [`DESCRIPTION:${icsEscape(ev.description)}`] : []),
     ...(ev.url ? [`URL:${ev.url}`] : []),
+    ...(ev.alarmMinutesBefore != null && !allDay
+      ? ['BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsEscape(ev.title)}`, `TRIGGER:-PT${Math.max(0, Math.round(ev.alarmMinutesBefore))}M`, 'END:VALARM']
+      : []),
     'END:VEVENT',
+  ]
+}
+
+export function buildIcs(ev: CalendarEvent, now: Date = new Date()): string {
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//TheShowFinder//Events//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    ...veventLines(ev, now),
+    'END:VCALENDAR',
+  ]
+  return lines.map(foldLine).join('\r\n') + '\r\n'
+}
+
+/** A subscribable calendar (many events). Calendar apps re-fetch it on their own schedule. */
+export function buildIcsFeed(
+  feed: { name: string; description?: string; events: CalendarEvent[] },
+  now: Date = new Date(),
+): string {
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//TheShowFinder//Calendar Feed//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:${icsEscape(feed.name)}`,
+    `NAME:${icsEscape(feed.name)}`,
+    ...(feed.description ? [`X-WR-CALDESC:${icsEscape(feed.description)}`] : []),
+    'X-WR-TIMEZONE:Europe/London',
+    'REFRESH-INTERVAL;VALUE=DURATION:PT6H',
+    'X-PUBLISHED-TTL:PT6H',
+    ...feed.events.flatMap(ev => veventLines(ev, now)),
     'END:VCALENDAR',
   ]
   return lines.map(foldLine).join('\r\n') + '\r\n'

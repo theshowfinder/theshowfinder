@@ -161,6 +161,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // indexing them long-term isn't useful the way a stable page is.
     { url: `${BASE}/news`,                lastModified: new Date(), changeFrequency: 'daily',   priority: 0.8 },
     { url: `${BASE}/widgets`,             changeFrequency: 'monthly', priority: 0.4 },
+    { url: `${BASE}/calendars`,           changeFrequency: 'monthly', priority: 0.5 },
   ]
 
   const cityPages: MetadataRoute.Sitemap = CITIES.map(city => ({

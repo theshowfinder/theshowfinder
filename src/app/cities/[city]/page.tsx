@@ -36,6 +36,8 @@ import { pickNewsForCityPage, CITY_NEWS_MAX_AGE_DAYS } from '@/lib/newsPublishin
 import ScrollRail from '@/components/ScrollRail'
 import CityIntro from '@/components/CityIntro'
 import { CITY_HERO_IMAGES } from '@/lib/cityHeroImages'
+import CalendarSubscribe from '@/components/CalendarSubscribe'
+import { cityFeedPath } from '@/lib/calendarFeeds'
 import { getNearbyAreas, areasWithEvents, nearbyIntroSentence } from '@/lib/nearbyAreas'
 import CityBrowse from '@/components/CityBrowse'
 import CityTicketSources from '@/components/CityTicketSources'
@@ -405,6 +407,7 @@ export default async function CityPage({
             >
               This weekend
             </Link>
+            <CalendarSubscribe path={cityFeedPath(cityName)} label={`${cityName} gigs in your calendar`} />
           </nav>
         </div>
       </div>

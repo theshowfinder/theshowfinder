@@ -17,6 +17,7 @@ import { getArtistSeoAlias } from '@/lib/seoAliases'
 import NewsletterInline from '@/components/NewsletterInline'
 import FollowButton from '@/components/FollowButton'
 import ShareButton from '@/components/ShareButton'
+import CalendarSubscribe from '@/components/CalendarSubscribe'
 import { ArtistsInCity, SimilarArtists } from '@/components/RelatedArtists'
 import { buildArtistShareText } from '@/lib/shareText'
 import type { ArtistSocialLinks } from '@/lib/artistEnrich'
@@ -319,6 +320,7 @@ export default async function ArtistPage({ params }: PageProps) {
                 </span>
               )}
               <FollowButton kind="artist" slug={artist.slug} name={artist.name} source="artist" />
+              <CalendarSubscribe path={`/calendar/artists/${artist.slug}.ics`} label="Add dates to calendar" />
               <ShareButton
                 url={canonicalUrl}
                 title={`${artist.name} tickets`}

@@ -38,7 +38,7 @@ const NON_NEWSWORTHY_CATEGORIES = new Set(['sports'])
 // and premium-package products, parking, and football/club fixtures that slip
 // past the category filter (seen in live data: "Utilita Arena Sheffield –
 // Premium Packages", "Derby County FC").
-const NOT_A_SHOW_NAME = /premium packages?|hospitality|\bparking\b|vip (package|upgrade|experience)|\b(a?fc)\b/i
+const NOT_A_SHOW_NAME = /premium packages?|hospitality|\bparking\b|vip (package|upgrade|experience)|venue premium|\b(a?fc)\b/i
 
 export function isNewsworthyArtistName(name: string | null): boolean {
   return !!name && !NOT_A_SHOW_NAME.test(name)

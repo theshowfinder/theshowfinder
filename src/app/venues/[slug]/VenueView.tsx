@@ -7,6 +7,7 @@ import NewsletterInline from '@/components/NewsletterInline'
 import FollowButton from '@/components/FollowButton'
 import { ArtistsInCity, SimilarArtists } from '@/components/RelatedArtists'
 import ShareButton from '@/components/ShareButton'
+import CalendarSubscribe from '@/components/CalendarSubscribe'
 import { cityPagePath } from '@/lib/cities'
 import type { EventWithVenue } from '@/lib/types/database'
 import { venuePageDescription } from '@/lib/venueBlurb'
@@ -136,6 +137,7 @@ export default async function VenueView({ slug, page }: { slug: string; page: nu
 
           <div className="flex flex-wrap items-start gap-3">
             <FollowButton kind="venue" slug={venue.slug} name={venue.name} source="venue" />
+            <CalendarSubscribe path={`/calendar/venues/${venue.slug}.ics`} label="Add shows to calendar" />
             <ShareButton
               url={`https://www.theshowfinder.com/venues/${venue.slug}`}
               title={venue.name}
