@@ -50,7 +50,8 @@ export default async function InsightsPage() {
     creator: { '@type': 'Organization', name: 'TheShowFinder', url: 'https://www.theshowfinder.com' },
     dateModified: now.toISOString().slice(0, 10),
     temporalCoverage: `${months[0]?.monthStart ?? now.toISOString().slice(0, 10)}/..`,
-    spatialCoverage: { '@type': 'Country', name: 'United Kingdom' },
+    spatialCoverage: { '@type': 'Place', name: 'United Kingdom' },
+    distribution: [{ '@type': 'DataDownload', encodingFormat: 'text/csv', contentUrl: `${PAGE_URL}/data.csv` }],
     keywords: ['UK live events', 'concerts', 'theatre', 'comedy', 'gigs by city', 'ticket on sale'],
   }
 
@@ -134,7 +135,7 @@ export default async function InsightsPage() {
           <p className="text-slate-600 mb-3">
             Free to quote in articles, newsletters and social posts under a{' '}
             <a href="https://creativecommons.org/licenses/by/4.0/" className="font-semibold underline" rel="noopener">CC BY 4.0</a>{' '}
-            licence. Please credit and link:
+            licence (<a href="/insights/data.csv" className="font-semibold underline">download the figures as CSV</a>). Please credit and link:
           </p>
           <p className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-sm text-slate-700 select-all">
             Source: TheShowFinder UK live events index, {asOf} (theshowfinder.com/insights)

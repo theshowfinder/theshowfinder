@@ -10,6 +10,15 @@ import { isNewsworthyArtistName, ukDay } from './newShows.ts'
 const BASE = 'https://www.theshowfinder.com'
 const DAY = 86_400_000
 
+/** "O2 Academy Oxford, Oxford": venue then city, without repeating a city the venue name already contains, and trimmed. */
+export function placeLabel(venue: string | null | undefined, city: string | null | undefined): string {
+  const v = (venue ?? '').trim()
+  const c = (city ?? '').trim()
+  if (!v) return c
+  if (!c || v.toLowerCase().includes(c.toLowerCase())) return v
+  return `${v}, ${c}`
+}
+
 export interface FeedRow {
   slug: string
   title: string
@@ -37,7 +46,7 @@ export function showFeedEvents(rows: FeedRow[], max = 500): CalendarEvent[] {
       uid: `show-${r.slug}`,
       title: r.venue_name ? `${r.title} at ${r.venue_name}` : r.title,
       startISO: r.start_date,
-      location: [r.venue_name, r.venue_city].filter(Boolean).join(', ') || null,
+      location: placeLabel(r.venue_name, r.venue_city) || null,
       description: `Compare tickets: ${BASE}/events/${r.slug}`,
       url: `${BASE}/events/${r.slug}`,
     })
@@ -79,7 +88,7 @@ export function onSaleFeedEvents(rows: FeedRow[], nowMs: number, opts: { horizon
   const out: CalendarEvent[] = []
   for (const g of [...groups.values()].sort((a, b) => a.instant - b.instant)) {
     const slugs = g.rows.map(r => r.slug).sort()
-    const where = [...new Set(g.rows.map(r => [r.venue_name, r.venue_city].filter(Boolean).join(', ')).filter(Boolean))]
+    const where = [...new Set(g.rows.map(r => placeLabel(r.venue_name, r.venue_city)).filter(Boolean))]
     const label = g.kind === 'presale'
       ? `Presale${g.presaleName ? ` (${g.presaleName})` : ''}: ${g.title}`
       : `Tickets on sale: ${g.title}`

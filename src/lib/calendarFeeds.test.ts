@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { showFeedEvents, onSaleFeedEvents, webcalUrl, googleSubscribeUrl, cityFeedPath, type FeedRow } from './calendarFeeds.ts'
+import { showFeedEvents, onSaleFeedEvents, webcalUrl, googleSubscribeUrl, cityFeedPath, placeLabel, type FeedRow } from './calendarFeeds.ts'
 import { buildIcsFeed } from './ics.ts'
 
 const NOW = Date.parse('2026-10-17T10:00:00Z')
@@ -79,4 +79,14 @@ test('on-sale feed skips venue-premium listings and on-sale times at or after th
   ]
   const out = onSaleFeedEvents(rows, NOW)
   assert.deepEqual(out.map(e => e.title), ['Tickets on sale: Real Show'])
+})
+
+test('placeLabel adds the city once, trims, and copes with missing parts', () => {
+  assert.equal(placeLabel('O2 Academy Oxford', 'Oxford'), 'O2 Academy Oxford')
+  assert.equal(placeLabel('The SSE Arena, Belfast', 'Belfast'), 'The SSE Arena, Belfast')
+  assert.equal(placeLabel('York Barbican', 'York'), 'York Barbican')
+  assert.equal(placeLabel('Co-op Live ', ' Manchester'), 'Co-op Live, Manchester')
+  assert.equal(placeLabel('Various Manchester Venues ', 'Manchester'), 'Various Manchester Venues')
+  assert.equal(placeLabel(null, 'Leeds'), 'Leeds')
+  assert.equal(placeLabel('Arena', null), 'Arena')
 })

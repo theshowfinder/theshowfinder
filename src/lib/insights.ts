@@ -97,3 +97,18 @@ export const CATEGORY_LABELS: Record<string, string> = {
 export function categoryLabel(raw: string): string {
   return CATEGORY_LABELS[raw] ?? raw.charAt(0).toUpperCase() + raw.slice(1)
 }
+
+function csvCell(v: string | number): string {
+  const t = String(v)
+  return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t
+}
+
+/** One tidy CSV (type, label, count) a journalist can open in a spreadsheet. */
+export function insightsCsv(s: InsightsSummary): string {
+  const rows: (string | number)[][] = [['type', 'label', 'upcoming_events']]
+  rows.push(['total', 'UK', s.total])
+  for (const c of rankCounts(s.cities)) rows.push(['city', c.label, c.count])
+  for (const c of rankCounts(s.categories)) rows.push(['category', c.label, c.count])
+  for (const m of s.months) rows.push(['month', m.monthStart.slice(0, 7), m.count])
+  return rows.map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n'
+}

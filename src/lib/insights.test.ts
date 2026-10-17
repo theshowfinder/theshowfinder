@@ -2,7 +2,7 @@ import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   rankCounts, sharePercent, formatCount, quotableCount, nextMonthRanges,
-  insightsHeadline, busiestMonth, categoryLabel, ukDateLabel,
+  insightsHeadline, busiestMonth, categoryLabel, ukDateLabel, insightsCsv,
 } from './insights.ts'
 
 describe('insights helpers', () => {
@@ -69,5 +69,18 @@ describe('insights helpers', () => {
   test('categoryLabel maps known values and capitalises unknown ones', () => {
     assert.equal(categoryLabel('sports'), 'Sport')
     assert.equal(categoryLabel('festival'), 'Festival')
+  })
+
+  test('insightsCsv lists total, ranked cities and categories, and months, with quoting', () => {
+    const csv = insightsCsv({
+      total: 10,
+      cities: [{ label: 'Leeds', count: 2 }, { label: 'Stoke, on Trent', count: 5 }, { label: 'York', count: 0 }],
+      categories: [{ label: 'Concerts', count: 7 }],
+      months: [{ label: 'November 2026', monthStart: '2026-11-01', count: 4 }],
+    })
+    assert.equal(
+      csv,
+      'type,label,upcoming_events\r\ntotal,UK,10\r\ncity,"Stoke, on Trent",5\r\ncity,Leeds,2\r\ncategory,Concerts,7\r\nmonth,2026-11,4\r\n',
+    )
   })
 })
