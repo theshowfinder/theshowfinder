@@ -8,7 +8,12 @@ import {
   NEW_SHOWS_WINDOW_DAYS,
   buildCityRoundups,
   buildArtistAdditions,
+  buildCityShowItems,
+  buildCityOnSaleItems,
   artistSlugFromDraftUrl,
+  cityItemKeyFromUrl,
+  CITY_ITEMS_PER_CITY_PER_WEEK,
+  ONSALE_LOOKAHEAD_DAYS,
   isoWeekKey,
 } from './newShows.ts'
 import {
@@ -32,6 +37,10 @@ import {
 // longer qualify are rejected so the inbox does not fill with stale items.
 
 const AUTO_CREATED_BY = 'auto:new-shows'
+/** Safety valve: never create more than this many per-city items in one run. */
+const MAX_CITY_ITEMS_PER_RUN = 60
+const EVENT_SELECT =
+  'id,title,category,start_date,created_at,public_onsale_start,venue:venues(name,city,capacity),event_artists(is_headliner,artist:artists(id,name,slug,created_at))'
 
 interface EventRow {
   id: string
@@ -39,6 +48,7 @@ interface EventRow {
   category: string | null
   start_date: string
   created_at: string
+  public_onsale_start: string | null
   venue: { name: string | null; city: string | null; capacity: number | null } | null
   event_artists: {
     is_headliner: boolean | null
@@ -68,6 +78,7 @@ function flatten(events: EventRow[]): NewShowRow[] {
       venue_name: e.venue?.name ?? null,
       venue_city: e.venue?.city ?? null,
       venue_capacity: e.venue?.capacity ?? null,
+      public_onsale_start: e.public_onsale_start ?? null,
       artist_id: head?.artist?.id ?? null,
       artist_name: head?.artist?.name ?? null,
       artist_slug: head?.artist?.slug ?? null,
@@ -111,9 +122,7 @@ export async function detectNewShows(now = new Date()): Promise<DetectResult> {
 
   const { data, error } = await db
     .from('events')
-    .select(
-      'id,title,category,start_date,created_at,venue:venues(name,city,capacity),event_artists(is_headliner,artist:artists(id,name,slug,created_at))',
-    )
+    .select(EVENT_SELECT)
     .gte('created_at', since)
     .gte('start_date', now.toISOString())
     .in('status', LIVE_EVENT_STATUSES)
@@ -140,9 +149,66 @@ export async function detectNewShows(now = new Date()): Promise<DetectResult> {
     if (s) skip.add(s)
   }
 
+  // Shows whose tickets go on sale in the next week (whenever they were listed).
+  const horizon = new Date(now.getTime() + ONSALE_LOOKAHEAD_DAYS * 86_400_000).toISOString()
+  const { data: onsaleData, error: onsaleError } = await db
+    .from('events')
+    .select(EVENT_SELECT)
+    .gt('public_onsale_start', now.toISOString())
+    .lte('public_onsale_start', horizon)
+    .gte('start_date', now.toISOString())
+    .in('status', LIVE_EVENT_STATUSES)
+    .limit(1000)
+  if (onsaleError) throw new Error(onsaleError.message)
+  const onsaleRows = flatten((onsaleData ?? []) as unknown as EventRow[])
+
+  // Per-city items already created recently: stops the same act being announced
+  // for the same city week after week, and enforces the weekly cap per city.
+  const recentSince = new Date(now.getTime() - 14 * 86_400_000).toISOString()
+  const weekAgo = now.getTime() - 7 * 86_400_000
+  const { data: recentCity } = await db
+    .from('news_candidates')
+    .select('url,created_at')
+    .eq('created_by', AUTO_CREATED_BY)
+    .eq('scope_type', 'city')
+    .like('url', '%&in=%')
+    .gte('created_at', recentSince)
+  const showSkip = new Set<string>()
+  const usedThisWeek = new Map<string, number>()
+  for (const r of (recentCity ?? []) as { url: string; created_at: string }[]) {
+    const key = cityItemKeyFromUrl(r.url)
+    if (!key) continue
+    if (r.url.includes('added=')) showSkip.add(key)
+    if (new Date(r.created_at).getTime() >= weekAgo) {
+      const city = key.split('|')[1]
+      usedThisWeek.set(city, (usedThisWeek.get(city) ?? 0) + 1)
+    }
+  }
+
+  const cityNames = CITIES.map(c => c.name)
+  const candidates = [
+    // Time-sensitive on-sale alerts first, then big new announcements.
+    ...buildCityOnSaleItems(onsaleRows, cityNames, now.getTime()),
+    ...buildCityShowItems(rows, cityNames, weekKey, now.getTime(), { skipKeys: showSkip }),
+  ]
+  const cityItems: DraftNewsItem[] = []
+  const seenUrls = new Set<string>()
+  for (const item of candidates) {
+    if (cityItems.length >= MAX_CITY_ITEMS_PER_RUN) break
+    if (!item.citySlug || seenUrls.has(item.url)) continue
+    const used = usedThisWeek.get(item.citySlug) ?? 0
+    // An item that already exists (re-run) does not count against its own cap.
+    const isNew = !(recentCity as { url: string }[] | null)?.some(r => r.url === item.url)
+    if (isNew && used >= CITY_ITEMS_PER_CITY_PER_WEEK) continue
+    if (isNew) usedThisWeek.set(item.citySlug, used + 1)
+    seenUrls.add(item.url)
+    cityItems.push(item)
+  }
+
   const all: DraftNewsItem[] = [
-    ...buildCityRoundups(rows, CITIES.map(c => c.name), weekKey),
+    ...buildCityRoundups(rows, cityNames, weekKey),
     ...buildArtistAdditions(rows, weekKey, now.getTime(), { skipArtistSlugs: skip }),
+    ...cityItems,
   ]
 
   const result: DetectResult = {

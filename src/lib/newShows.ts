@@ -20,6 +20,7 @@ export interface NewShowRow {
   venue_name: string | null
   venue_city: string | null
   venue_capacity: number | null
+  public_onsale_start: string | null
   artist_id: string | null
   artist_name: string | null
   artist_slug: string | null
@@ -27,7 +28,7 @@ export interface NewShowRow {
 }
 
 export const NEW_SHOWS_WINDOW_DAYS = 7
-export const SITE_URL = 'https://theshowfinder.com'
+export const SITE_URL = 'https://www.theshowfinder.com'
 
 // Categories whose "new dates" are not worth a news item of their own:
 // football fixtures and the like are scheduled en masse each season.
@@ -117,7 +118,7 @@ export interface DraftNewsItem {
   headline: string
   summary: string
   url: string
-  storyType: 'tour_announcement' | 'new_dates'
+  storyType: 'tour_announcement' | 'new_dates' | 'presale'
   priority: 'normal' | 'high'
   artistId: string | null
   artistName: string | null
@@ -295,6 +296,167 @@ export function buildArtistAdditions(
   // The biggest few are published without review; the rest wait for approval.
   top.forEach((item, i) => { item.autoPublish = i < maxAuto })
   return top
+}
+
+// ── Per-city "coming to" and "on sale" items ─────────────────────────────────
+//
+// Beyond the weekly roundup, a city's news also gets individual headlines for the
+// biggest new shows and for tickets about to go on sale there. They link to the
+// artist page (which lists the dates) and carry `in=<city>` so the same act can
+// appear in several cities' news without clashing.
+
+export const CITY_ITEM_MIN_CAPACITY = 800
+export const CITY_ITEMS_PER_CITY_PER_RUN = 2
+/** Most per-city items (coming-to + on-sale) a city can get in any 7 days. */
+export const CITY_ITEMS_PER_CITY_PER_WEEK = 4
+/** A "coming to" item needs an on-sale date this recent (or still ahead). */
+export const RECENT_ANNOUNCEMENT_DAYS = 30
+export const ONSALE_LOOKAHEAD_DAYS = 7
+
+/** A usable on-sale instant: feeds contain placeholders such as 1900-01-01. */
+function validOnsale(iso: string | null): number | null {
+  if (!iso) return null
+  const t = new Date(iso).getTime()
+  return Number.isFinite(t) && t >= Date.UTC(2020, 0, 1) ? t : null
+}
+
+/** 12pm, 10:30am — UK time. */
+export function ukTimeLabel(iso: string): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Europe/London',
+  }).formatToParts(new Date(iso))
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? ''
+  const mins = get('minute')
+  return `${get('hour')}${mins === '00' ? '' : ':' + mins}${get('dayPeriod').toLowerCase()}`
+}
+
+/** `slug|city-slug` of a per-city item URL we created, for skip lists. */
+export function cityItemKeyFromUrl(url: string): string | null {
+  const slug = /\/artists\/([^/?#]+)/.exec(url)?.[1]
+  const city = /[?&]in=([^&#]+)/.exec(url)?.[1]
+  return slug && city ? `${slug}|${city}` : null
+}
+
+interface CityActGroup { city: string; artistName: string; slug: string; artistId: string; shows: NewShowRow[]; capacity: number }
+
+function groupActsByCity(rows: NewShowRow[], cityNames: string[], keep: (r: NewShowRow) => boolean, minCapacity: number): CityActGroup[] {
+  const byCityLower = new Map(cityNames.map(c => [c.toLowerCase(), c]))
+  const groups = new Map<string, CityActGroup>()
+  for (const r of dedupeShows(rows)) {
+    if (!r.artist_id || !r.artist_name || !r.artist_slug || !r.venue_city) continue
+    if (!isNewsworthyArtistName(r.artist_name)) continue
+    if ((r.venue_capacity ?? 0) < minCapacity) continue
+    if (!keep(r)) continue
+    const city = byCityLower.get(r.venue_city.trim().toLowerCase())
+    if (!city) continue
+    const key = `${city}|${r.artist_id}`
+    const g = groups.get(key) ?? { city, artistName: r.artist_name, slug: r.artist_slug, artistId: r.artist_id, shows: [], capacity: 0 }
+    g.shows.push(r)
+    g.capacity = Math.max(g.capacity, r.venue_capacity ?? 0)
+    groups.set(key, g)
+  }
+  return [...groups.values()]
+}
+
+function takePerCity(groups: CityActGroup[], perCity: number, skipKeys: Set<string>): CityActGroup[] {
+  const sorted = [...groups].sort((a, b) => b.capacity - a.capacity || b.shows.length - a.shows.length)
+  const count = new Map<string, number>()
+  const out: CityActGroup[] = []
+  for (const g of sorted) {
+    if (skipKeys.has(`${g.slug}|${citySlugOf(g.city)}`)) continue
+    const c = count.get(g.city) ?? 0
+    if (c >= perCity) continue
+    count.set(g.city, c + 1)
+    out.push(g)
+  }
+  return out
+}
+
+/** "{Artist} coming to {Venue}, {City} on {date}" for the biggest recent announcements. */
+export function buildCityShowItems(
+  rows: NewShowRow[],
+  cityNames: string[],
+  weekKey: string,
+  nowMs: number,
+  opts: { perCity?: number; minCapacity?: number; skipKeys?: Set<string> } = {},
+): DraftNewsItem[] {
+  const recentCutoff = nowMs - RECENT_ANNOUNCEMENT_DAYS * 86_400_000
+  const groups = groupActsByCity(
+    rows,
+    cityNames,
+    r => {
+      if (NON_NEWSWORTHY_CATEGORIES.has(r.category ?? '')) return false
+      const onsale = validOnsale(r.public_onsale_start)
+      // No usable on-sale date means we cannot say it is a recent announcement.
+      return onsale !== null && onsale >= recentCutoff
+    },
+    opts.minCapacity ?? CITY_ITEM_MIN_CAPACITY,
+  )
+  return takePerCity(groups, opts.perCity ?? CITY_ITEMS_PER_CITY_PER_RUN, opts.skipKeys ?? new Set()).map(g => {
+    const shows = [...g.shows].sort((a, b) => a.start_date.localeCompare(b.start_date))
+    const first = shows[0]
+    const venue = first.venue_name ?? g.city
+    const headline = shows.length > 1
+      ? `${g.artistName} coming to ${venue}, ${g.city}: ${shows.length} dates from ${shortUkDate(first.start_date)}`
+      : `${g.artistName} coming to ${venue}, ${g.city} on ${shortUkDate(first.start_date)}`
+    const citySlug = citySlugOf(g.city)
+    return {
+      scope: 'city' as const,
+      cityName: g.city,
+      citySlug,
+      headline,
+      summary: `${headline}. Dates come from the official ticket listings.`,
+      url: `${SITE_URL}/artists/${g.slug}?added=${weekKey}&in=${citySlug}`,
+      storyType: 'new_dates' as const,
+      priority: g.capacity >= 5000 ? 'high' as const : 'normal' as const,
+      artistId: g.artistId,
+      artistName: g.artistName,
+      autoPublish: true,
+      dedupeKey: `show:${g.slug}:${citySlug}:${weekKey}`,
+    }
+  })
+}
+
+/** "{Artist} at {Venue}: tickets on sale {day}, {time}" for on-sales in the next week. */
+export function buildCityOnSaleItems(
+  rows: NewShowRow[],
+  cityNames: string[],
+  nowMs: number,
+  opts: { perCity?: number; minCapacity?: number; skipKeys?: Set<string> } = {},
+): DraftNewsItem[] {
+  const horizon = nowMs + ONSALE_LOOKAHEAD_DAYS * 86_400_000
+  const groups = groupActsByCity(
+    rows,
+    cityNames,
+    r => {
+      const onsale = validOnsale(r.public_onsale_start)
+      return onsale !== null && onsale > nowMs && onsale <= horizon
+    },
+    opts.minCapacity ?? CITY_ITEM_MIN_CAPACITY,
+  )
+  return takePerCity(groups, opts.perCity ?? CITY_ITEMS_PER_CITY_PER_RUN, opts.skipKeys ?? new Set()).map(g => {
+    // Earliest on-sale among this act's shows in the city.
+    const onsaleISO = g.shows
+      .map(s => s.public_onsale_start as string)
+      .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0]
+    const venue = g.shows[0].venue_name ?? g.city
+    const headline = `${g.artistName} at ${venue}: tickets go on sale ${shortUkDate(onsaleISO)}, ${ukTimeLabel(onsaleISO)}`
+    const citySlug = citySlugOf(g.city)
+    return {
+      scope: 'city' as const,
+      cityName: g.city,
+      citySlug,
+      headline,
+      summary: `${headline}. Check the event page for presale details and the latest availability.`,
+      url: `${SITE_URL}/artists/${g.slug}?onsale=${ukDay(onsaleISO)}&in=${citySlug}`,
+      storyType: 'presale' as const,
+      priority: g.capacity >= 5000 ? 'high' as const : 'normal' as const,
+      artistId: g.artistId,
+      artistName: g.artistName,
+      autoPublish: true,
+      dedupeKey: `onsale:${g.slug}:${citySlug}:${ukDay(onsaleISO)}`,
+    }
+  })
 }
 
 /** Pull the artist slug back out of a draft URL we created (for skip lists). */

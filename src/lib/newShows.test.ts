@@ -4,6 +4,10 @@ import {
   type NewShowRow,
   buildCityRoundups,
   buildArtistAdditions,
+  buildCityShowItems,
+  buildCityOnSaleItems,
+  ukTimeLabel,
+  cityItemKeyFromUrl,
   dedupeShows,
   isoWeekKey,
   shortUkDate,
@@ -19,7 +23,7 @@ function row(over: Partial<NewShowRow>): NewShowRow {
   n++
   return {
     event_id: `e${n}`, title: `t${n}`, category: 'concert', start_date: `2026-11-${String(10 + (n % 15)).padStart(2, '0')}T19:30:00Z`,
-    created_at: '2026-10-16T09:00:00Z', venue_name: `Venue ${n}`, venue_city: 'Derby', venue_capacity: 1000,
+    created_at: '2026-10-16T09:00:00Z', venue_name: `Venue ${n}`, venue_city: 'Derby', venue_capacity: 1000, public_onsale_start: null,
     artist_id: `a${n}`, artist_name: `Artist ${n}`, artist_slug: `artist-${n}`, artist_created_at: '2020-01-01T00:00:00Z',
     ...over,
   }
@@ -49,7 +53,7 @@ test('city roundup needs the minimum number of distinct shows and matches cities
   const out = buildCityRoundups(enough, ['Derby'], '2026-W42')
   assert.equal(out.length, 1)
   assert.equal(out[0].headline, 'New shows added in Derby this week')
-  assert.equal(out[0].url, 'https://theshowfinder.com/cities/derby?new=2026-W42')
+  assert.equal(out[0].url, 'https://www.theshowfinder.com/cities/derby?new=2026-W42')
   assert.equal(out[0].scope, 'city')
   assert.match(out[0].summary, /4 new shows have been listed in Derby/)
   assert.equal(out[0].autoPublish, false)
@@ -107,7 +111,7 @@ test('artist additions need 3 show days in 2+ cities; single-city runs are left 
   assert.equal(out[0].headline, 'Band X adds 3 new UK dates')
   assert.equal(out[0].storyType, 'new_dates')
   assert.equal(out[0].scope, 'national')
-  assert.equal(out[0].url, 'https://theshowfinder.com/artists/band-x?added=2026-W42')
+  assert.equal(out[0].url, 'https://www.theshowfinder.com/artists/band-x?added=2026-W42')
   assert.match(out[0].summary, /3 UK cities/)
 })
 
@@ -152,8 +156,8 @@ test('artists already drafted are skipped', () => {
 })
 
 test('artistSlugFromDraftUrl extracts the slug', () => {
-  assert.equal(artistSlugFromDraftUrl('https://theshowfinder.com/artists/band-x?added=2026-W42'), 'band-x')
-  assert.equal(artistSlugFromDraftUrl('https://theshowfinder.com/cities/derby?new=1'), null)
+  assert.equal(artistSlugFromDraftUrl('https://www.theshowfinder.com/artists/band-x?added=2026-W42'), 'band-x')
+  assert.equal(artistSlugFromDraftUrl('https://www.theshowfinder.com/cities/derby?new=1'), null)
 })
 
 test('hospitality packages and club fixtures are not newsworthy artists', () => {
@@ -163,4 +167,60 @@ test('hospitality packages and club fixtures are not newsworthy artists', () => 
   assert.equal(isNewsworthyArtistName(null), false)
   const rows = ['A', 'B', 'C'].map(c => row({ artist_id: 'p', artist_name: 'First Direct Arena - Premium Packages', artist_slug: 'pp', venue_city: c }))
   assert.equal(buildArtistAdditions(rows, 'w', NOW).length, 0)
+})
+
+// ── Per-city items ───────────────────────────────────────────────────────────
+
+const CITIES = ['Derby', 'Manchester']
+const DAY = 86_400_000
+
+test('ukTimeLabel formats UK clock times', () => {
+  assert.equal(ukTimeLabel('2026-10-22T11:00:00Z'), '12pm') // BST
+  assert.equal(ukTimeLabel('2026-12-10T10:30:00Z'), '10:30am') // GMT
+})
+
+test('cityItemKeyFromUrl reads artist slug and city', () => {
+  assert.equal(cityItemKeyFromUrl('https://www.theshowfinder.com/artists/band-x?added=2026-W42&in=derby'), 'band-x|derby')
+  assert.equal(cityItemKeyFromUrl('https://www.theshowfinder.com/artists/band-x?added=2026-W42'), null)
+})
+
+test('coming-to items need a recent on-sale date, enough capacity, and are capped per city', () => {
+  const recent = new Date(NOW - 3 * DAY).toISOString()
+  const good = row({ venue_city: 'Derby', venue_name: 'Arena', venue_capacity: 4000, public_onsale_start: recent, artist_name: 'Band X', artist_slug: 'band-x', start_date: '2027-03-05T19:30:00Z' })
+  const small = row({ venue_city: 'Derby', venue_capacity: 300, public_onsale_start: recent })
+  const noOnsale = row({ venue_city: 'Derby', venue_capacity: 4000, public_onsale_start: null })
+  const junk = row({ venue_city: 'Derby', venue_capacity: 4000, public_onsale_start: '1900-01-01T00:00:00Z' })
+  const old = row({ venue_city: 'Derby', venue_capacity: 4000, public_onsale_start: new Date(NOW - 90 * DAY).toISOString() })
+  const sport = row({ venue_city: 'Derby', venue_capacity: 4000, public_onsale_start: recent, category: 'sports' })
+  const out = buildCityShowItems([good, small, noOnsale, junk, old, sport], CITIES, '2026-W42', NOW)
+  assert.equal(out.length, 1)
+  assert.equal(out[0].headline, 'Band X coming to Arena, Derby on Fri 5 Mar')
+  assert.equal(out[0].url, 'https://www.theshowfinder.com/artists/band-x?added=2026-W42&in=derby')
+  assert.equal(out[0].scope, 'city')
+  assert.equal(out[0].citySlug, 'derby')
+  assert.equal(out[0].autoPublish, true)
+
+  const many = Array.from({ length: 5 }, () => row({ venue_city: 'Derby', venue_capacity: 3000, public_onsale_start: recent }))
+  assert.equal(buildCityShowItems(many, CITIES, '2026-W42', NOW).length, 2)
+})
+
+test('coming-to items skip acts already announced for the city and say "N dates from" for multi-date runs', () => {
+  const recent = new Date(NOW - DAY).toISOString()
+  const base = { venue_city: 'Manchester', venue_name: 'Co-op Live', venue_capacity: 23000, public_onsale_start: recent, artist_id: 'z', artist_name: 'Star Z', artist_slug: 'star-z' }
+  const rows = [row({ ...base, start_date: '2027-05-01T19:00:00Z' }), row({ ...base, start_date: '2027-05-02T19:00:00Z' })]
+  const out = buildCityShowItems(rows, CITIES, '2026-W42', NOW)
+  assert.match(out[0].headline, /Star Z coming to Co-op Live, Manchester: 2 dates from Sat 1 May/)
+  assert.equal(buildCityShowItems(rows, CITIES, '2026-W42', NOW, { skipKeys: new Set(['star-z|manchester']) }).length, 0)
+})
+
+test('on-sale items cover the next 7 days only and name the day and time', () => {
+  const soon = new Date('2026-10-22T11:00:00Z').toISOString()
+  const a = row({ venue_city: 'Derby', venue_name: 'Arena', venue_capacity: 3000, public_onsale_start: soon, artist_name: 'Band Y', artist_slug: 'band-y' })
+  const late = row({ venue_city: 'Derby', venue_capacity: 3000, public_onsale_start: new Date(NOW + 20 * DAY).toISOString() })
+  const past = row({ venue_city: 'Derby', venue_capacity: 3000, public_onsale_start: new Date(NOW - DAY).toISOString() })
+  const out = buildCityOnSaleItems([a, late, past], CITIES, NOW)
+  assert.equal(out.length, 1)
+  assert.equal(out[0].headline, 'Band Y at Arena: tickets go on sale Thu 22 Oct, 12pm')
+  assert.equal(out[0].url, 'https://www.theshowfinder.com/artists/band-y?onsale=2026-10-22&in=derby')
+  assert.equal(out[0].storyType, 'presale')
 })
