@@ -20,12 +20,25 @@ export function cityThisWeekendDescription(cityName: string): string {
   return `What's on in ${cityName} this weekend: gigs, concerts, theatre, comedy and sport from Friday evening to Sunday, with dates and ticket links.`
 }
 
+// Searchers type "{city} concerts" or "concerts in {city}": lead with the city
+// and the word concerts. The layout adds " | TheShowFinder", so keep this short.
 export function cityPageTitle(cityName: string): string {
-  return `Concerts & Live Events in ${cityName}`
+  return `${cityName} Concerts, Shows & Live Events`
 }
 
-export function cityPageDescription(cityName: string): string {
-  return `What's on in ${cityName}: concerts, theatre, comedy, sport and family events, plus tonight's shows, presales and ticket links.`
+/** "120+": a rounded-down count that will not change every day, or null when small. */
+export function roundedShowCount(n: number | null | undefined): string | null {
+  if (!n || n < 10) return null
+  const step = n >= 100 ? 50 : 10
+  return `${Math.floor(n / step) * step}+`
+}
+
+export function cityPageDescription(cityName: string, upcomingCount?: number | null): string {
+  const count = roundedShowCount(upcomingCount)
+  const what = count
+    ? `${count} upcoming concerts, theatre, comedy, sport and family shows`
+    : 'concerts, theatre, comedy, sport and family events'
+  return `What's on in ${cityName}: ${what}, plus tonight's gigs, presales and ticket links.`
 }
 
 export function cityThisWeekTitle(cityName: string): string {

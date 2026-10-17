@@ -56,7 +56,14 @@ export async function generateMetadata(
   const cityName  = decodeURIComponent(city)
   const canonical = cityCanonicalUrl(cityName)
   const title     = cityPageTitle(cityName)
-  const desc      = cityPageDescription(cityName)
+  // Live count (head query only) so the search snippet reflects what is actually on.
+  const { count: upcoming } = await createPublicClient()
+    .from('events_with_venue')
+    .select('*', { count: 'exact', head: true })
+    .ilike('venue_city', normalizeCityFilterValue(cityName))
+    .in('status', LIVE_EVENT_STATUSES)
+    .gte('start_date', new Date().toISOString())
+  const desc      = cityPageDescription(cityName, upcoming)
   const ogImage   = 'https://www.theshowfinder.com/og-image.png'
   return {
     title,

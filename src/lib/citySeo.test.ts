@@ -4,6 +4,8 @@ import {
   buildCityCollectionSchema,
   cityCanonicalUrl,
   cityPageDescription,
+  cityPageTitle,
+  roundedShowCount,
   cityThisWeekCanonicalUrl,
 } from './citySeo.ts'
 
@@ -18,6 +20,22 @@ describe('city SEO helpers', () => {
     assert.match(description, /Derby/)
     assert.match(description, /tonight/)
     assert.match(description, /presales/)
+  })
+
+  test('title leads with the city and "concerts" and stays short', () => {
+    assert.equal(cityPageTitle('Derby'), 'Derby Concerts, Shows & Live Events')
+    assert.ok(cityPageTitle('Wolverhampton').length <= 44)
+    assert.ok(cityPageTitle('Stoke-on-Trent').length <= 44)
+  })
+
+  test('description uses a rounded live count and stays under 160 characters', () => {
+    assert.equal(roundedShowCount(7), null)
+    assert.equal(roundedShowCount(87), '80+')
+    assert.equal(roundedShowCount(244), '200+')
+    const d = cityPageDescription('Wolverhampton', 244)
+    assert.match(d, /200\+ upcoming concerts/)
+    assert.ok(d.length <= 160, String(d.length))
+    assert.doesNotMatch(cityPageDescription('Derby', 3), /\d\+/)
   })
 
   test('builds an honest city collection schema', () => {
