@@ -65,3 +65,44 @@ export function listedEventsCount(
   if (filters.toISO)    q = q.lt('start_date', filters.toISO)
   return q as PromiseLike<ListedCountResult>
 }
+
+// ── Dropping duplicates from lists that read the base `events` table ─────────
+// A few lists read `events` directly (they need columns or ordering the
+// listed view does not carry). They filter out the duplicate / package records
+// with these helpers so they agree with every other listing.
+
+/** Pure: keep rows whose id is not a known duplicate. */
+export function withoutDuplicateIds<T extends { id: string }>(rows: T[], duplicateIds: ReadonlySet<string>): T[] {
+  return duplicateIds.size === 0 ? rows : rows.filter(r => !duplicateIds.has(r.id))
+}
+
+/**
+ * Ids (from `ids`) that event_canonical_map marks as folded into another
+ * canonical event. On any lookup error returns an empty set, so a real event is
+ * never hidden because the map could not be read.
+ */
+export async function fetchDuplicateIds(supabase: SupabaseClient, ids: string[]): Promise<Set<string>> {
+  const dupes = new Set<string>()
+  const unique = [...new Set(ids)]
+  const CHUNK = 100
+  try {
+    for (let i = 0; i < unique.length; i += CHUNK) {
+      const { data, error } = await supabase
+        .from('event_canonical_map')
+        .select('id')
+        .in('id', unique.slice(i, i + CHUNK))
+        .eq('is_canonical', false) as unknown as { data: { id: string }[] | null; error: unknown }
+      if (error) return new Set()
+      for (const r of data ?? []) dupes.add(r.id)
+    }
+  } catch {
+    return new Set()
+  }
+  return dupes
+}
+
+/** Rows minus duplicate / package records (see fetchDuplicateIds). */
+export async function dropDuplicateEvents<T extends { id: string }>(supabase: SupabaseClient, rows: T[]): Promise<T[]> {
+  if (rows.length === 0) return rows
+  return withoutDuplicateIds(rows, await fetchDuplicateIds(supabase, rows.map(r => r.id)))
+}

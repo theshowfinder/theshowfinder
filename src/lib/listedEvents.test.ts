@@ -59,3 +59,26 @@ describe('public pages read listed_events_with_venue, not the raw view', () => {
     assert.deepEqual(offenders, [])
   })
 })
+
+import { withoutDuplicateIds, fetchDuplicateIds, dropDuplicateEvents } from './listedEvents.ts'
+
+describe('dropping duplicates from lists that read the base events table', () => {
+  test('withoutDuplicateIds keeps order and removes only duplicates', () => {
+    const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+    assert.deepEqual(withoutDuplicateIds(rows, new Set(['b'])), [{ id: 'a' }, { id: 'c' }])
+    assert.equal(withoutDuplicateIds(rows, new Set()), rows)
+  })
+  test('fetchDuplicateIds asks for non-canonical ids only and fails open', async () => {
+    const calls: unknown[][] = []
+    const q: Record<string, unknown> = {}
+    q.select = () => q
+    q.in = (...a: unknown[]) => { calls.push(['in', ...a]); return q }
+    q.eq = (...a: unknown[]) => { calls.push(['eq', ...a]); return Promise.resolve({ data: [{ id: 'b' }], error: null }) }
+    const ok = await fetchDuplicateIds({ from: () => q } as never, ['a', 'b'])
+    assert.deepEqual([...ok], ['b'])
+    assert.deepEqual(calls.find(c => c[0] === 'eq'), ['eq', 'is_canonical', false])
+    const bad: Record<string, unknown> = { select: () => bad, in: () => bad, eq: () => Promise.resolve({ data: null, error: { message: 'x' } }) }
+    assert.equal((await fetchDuplicateIds({ from: () => bad } as never, ['a'])).size, 0)
+    assert.deepEqual(await dropDuplicateEvents({ from: () => bad } as never, [{ id: 'a' }]), [{ id: 'a' }])
+  })
+})

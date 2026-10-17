@@ -43,6 +43,7 @@ import { buildShareText } from '@/lib/shareText'
 import { googleCalendarUrl } from '@/lib/ics'
 import { buildEventFaq, type EventDetails, type VenueDetails } from '@/lib/eventDetails'
 import { toArtistEventRows, type ArtistEventLink, type ArtistEventRow } from '@/lib/artistEvents'
+import { dropDuplicateEvents } from '@/lib/listedEvents'
 import { buildSiblingOffers, type SiblingEvent, type SiblingOffer } from '@/lib/eventOffers'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -218,7 +219,7 @@ const getRelatedEvents = cache(async (event: EventDetail, headlinerId: string | 
       : Promise.resolve({ data: [] }),
   ])
   const venueEvents = (venueRes.data ?? []) as { id: string; slug: string; title: string; start_date: string }[]
-  const artistEvents: ArtistEventRow[] = toArtistEventRows(artistRes.data as unknown as ArtistEventLink[]).slice(0, 8)
+  const artistEvents: ArtistEventRow[] = (await dropDuplicateEvents(supabase, toArtistEventRows(artistRes.data as unknown as ArtistEventLink[]))).slice(0, 8)
   return { venueEvents, artistEvents }
 })
 

@@ -1,3 +1,4 @@
+import { dropDuplicateEvents } from '@/lib/listedEvents'
 import { cache } from 'react'
 import { notFound, redirect } from 'next/navigation'
 import { after } from 'next/server'
@@ -55,7 +56,8 @@ const getArtistUpcomingEvents = cache(async (artistId: string): Promise<ArtistEv
     .gte('events.start_date', new Date().toISOString())
     .in('events.status', LIVE_EVENT_STATUSES)
     .limit(200) as unknown as { data: ArtistEventLink[] | null }
-  return toArtistEventRows(data)
+  // Package / duplicate records are not separate tour dates.
+  return dropDuplicateEvents(supabase, toArtistEventRows(data))
 })
 
 const getArtistTourDateCount = cache(async (artistId: string): Promise<number> => {

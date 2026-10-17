@@ -38,7 +38,7 @@ import WestEndStrip from '@/components/WestEndStrip'
 import type { EventWithVenue, CityNews } from '@/lib/types/database'
 import { fmtOnSaleLabel, extractArtistName, toSlug } from '@/lib/on-sale'
 import { fetchEventsThisWeek, fetchPresalesOpenNow, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
-import { listedEventsCount } from '@/lib/listedEvents'
+import { listedEventsCount, dropDuplicateEvents } from '@/lib/listedEvents'
 import { CITIES } from '@/lib/cities'
 import { NATIONAL_SLUG } from '@/lib/cityNews'
 import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
@@ -100,7 +100,8 @@ async function queryFeaturedEvents(supabase: ReturnType<typeof createPublicClien
         venue_capacity: row.venue.capacity,
       }))
 
-    return { data: events, error: null }
+    // Package / duplicate records are not separate featured shows.
+    return { data: await dropDuplicateEvents(supabase, events), error: null }
   } catch (err) {
     return { data: null, error: { message: err instanceof Error ? err.message : 'unknown error' } }
   }
@@ -184,7 +185,7 @@ async function GigsbergHighlights() {
     .order('start_date', { ascending: true })
     .limit(6) as unknown as { data: (Record<string, unknown> & { id: string; venue: { id: string; name: string; slug: string | null; city: string; postcode: string; capacity: number | null } | null })[] | null }
 
-  const events: EventWithVenue[] = (data ?? []).filter(row => row.venue).map(row => ({
+  const events: EventWithVenue[] = await dropDuplicateEvents(supabase, (data ?? []).filter(row => row.venue).map(row => ({
     ...row,
     venue_id: row.venue!.id,
     venue_name: row.venue!.name,
@@ -192,7 +193,7 @@ async function GigsbergHighlights() {
     venue_city: row.venue!.city,
     venue_postcode: row.venue!.postcode,
     venue_capacity: row.venue!.capacity,
-  } as unknown as EventWithVenue))
+  } as unknown as EventWithVenue)))
 
   if (!events.length) return null
   return (
@@ -510,7 +511,7 @@ async function JustAnnounced() {
       })[] | null
     }
 
-  const events: EventWithVenue[] = (result.data ?? [])
+  const events: EventWithVenue[] = await dropDuplicateEvents(supabase, (result.data ?? [])
     .filter(row => row.venue)
     .map(row => ({
       ...row,
@@ -520,7 +521,7 @@ async function JustAnnounced() {
       venue_city:     row.venue!.city,
       venue_postcode: row.venue!.postcode,
       venue_capacity: row.venue!.capacity,
-    } as unknown as EventWithVenue))
+    } as unknown as EventWithVenue)))
 
   if (!events.length) return null
 

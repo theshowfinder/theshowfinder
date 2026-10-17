@@ -16,7 +16,7 @@ import { londonDayWindow, londonDaysAheadWindow, londonWeekendDayWindows, type D
 import { isTonightEvent, sortTonightEvents } from './tonight.ts'
 import { mixEvents, trimTonight } from './eventMix.ts'
 import { nearbyOrFilter, type NearbyArea } from './nearbyAreas.ts'
-import { LIVE_EVENT_STATUSES, listedEventsCount } from './listedEvents.ts'
+import { LIVE_EVENT_STATUSES, listedEventsCount, dropDuplicateEvents } from './listedEvents.ts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -252,7 +252,8 @@ export async function fetchTonightEvents(
       status: e.status, tickets_url: e.tickets_url, own_ticket_url: e.own_ticket_url,
       venue_name: e.venue!.name, venue_slug: e.venue!.slug, venue_city: e.venue!.city,
     }))
-  const filtered = rows.filter(e => isTonightEvent(e, now, window))
+  // Premium / lounge package records are not separate "tonight" entries.
+  const filtered = (await dropDuplicateEvents(supabase, rows)).filter(e => isTonightEvent(e, now, window))
   // Chronological, but timed-entry attractions are collapsed to one entry each
   // (and capped) so 10:00 entry slots don't bury the evening's shows.
   return trimTonight(sortTonightEvents(filtered), { limit })

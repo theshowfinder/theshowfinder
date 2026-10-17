@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createPublicClient } from '@/lib/supabase/public'
 import { buildIndexNowPayload } from '@/lib/indexNow'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { dropDuplicateEvents } from '@/lib/listedEvents'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -20,15 +21,17 @@ export async function GET(request: Request) {
   const supabase = createPublicClient()
   const { data, error } = await supabase
     .from('events')
-    .select('slug')
+    .select('id, slug')
     .gte('created_at', since)
     .in('status', LIVE_EVENT_STATUSES)
     .order('created_at', { ascending: false })
-    .limit(5000) as unknown as { data: { slug: string }[] | null; error: { message: string } | null }
+    .limit(5000) as unknown as { data: { id: string; slug: string }[] | null; error: { message: string } | null }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const hubs = [`${BASE}/`, `${BASE}/events`, `${BASE}/west-end`, `${BASE}/on-sale-this-week`, `${BASE}/news`]
-  const urls = [...hubs, ...(data ?? []).map(e => `${BASE}/events/${e.slug}`)]
+  // Package / duplicate records canonical to the main event: don't submit them.
+  const rows = await dropDuplicateEvents(supabase, (data ?? []) as { id: string; slug: string }[])
+  const urls = [...hubs, ...rows.map(e => `${BASE}/events/${e.slug}`)]
   const payload = buildIndexNowPayload(urls)
 
   const res = await fetch('https://api.indexnow.org/IndexNow', {
