@@ -966,8 +966,8 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             {/* Package / extra-session ticket links merged into this canonical event. */}
             {!isCancelledOrPostponed && grouping.offers.length > 0 && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">Packages &amp; Other Options</h3>
-              <p className="text-xs text-slate-400 mb-4">Premium, lounge and alternative tickets for this event</p>
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">Choose Your Ticket Type</h3>
+              <p className="text-xs text-slate-400 mb-4">Standard tickets are above. Premium, lounge and VIP options for this same event:</p>
               <div className="grid grid-cols-2 gap-3">
                 {grouping.offers.map(o => {
                   const href = o.kind === 'see_tickets'
