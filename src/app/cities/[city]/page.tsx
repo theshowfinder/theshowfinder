@@ -17,7 +17,9 @@ import SearchBarWrapper from '@/components/SearchBarWrapper'
 import { Suspense } from 'react'
 import { fmtOnSaleLabel } from '@/lib/on-sale'
 import { CITIES } from '@/lib/cities'
-import { venueCardBlurb } from '@/lib/venueBlurb'
+import { rankVenues, splitPopular } from '@/lib/venueDiscovery'
+import { fetchVenueEventRows, fetchNearbyRankedVenues } from '@/lib/venueData'
+import VenueCard from '@/components/VenueCard'
 import { citySlug, NATIONAL_SLUG } from '@/lib/cityNews'
 import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
@@ -272,6 +274,16 @@ export default async function CityPage({
   })
   const cityVenues = candidateVenues.filter(v => countByVenue[v.id] > 0)
 
+  // Venue discovery: rank by how much is on (not just room size), label each
+  // venue with what it mostly hosts and its next show, and gather venues in the
+  // surrounding towns (none for cities without a nearby-areas entry).
+  const [venueRows, nearbyVenues] = await Promise.all([
+    fetchVenueEventRows(supabase, cityVenues.map(v => v.id)),
+    nearbyAreas.length > 0 ? fetchNearbyRankedVenues(supabase, nearbyAreas) : Promise.resolve([]),
+  ])
+  const rankedVenues = rankVenues(cityVenues, countByVenue, venueRows)
+  const { popular: popularVenues, more: moreVenues } = splitPopular(rankedVenues)
+
   // Booking.com/Trainline cards (Getting There & Staying, below) are
   // gated on their own affiliate template being configured — showing
   // either as a live, clickable link before the tracking template exists
@@ -385,7 +397,7 @@ export default async function CityPage({
             intro={CITY_GUIDE_INTROS[cityName]}
             totalCount={totalCount}
             venueCount={cityVenues.length}
-            venues={cityVenues.map(v => ({ name: v.name, slug: v.slug, capacity: v.capacity }))}
+            venues={rankedVenues.map(v => ({ name: v.name, slug: v.slug, capacity: v.capacity }))}
           />
         )}
 
@@ -594,30 +606,44 @@ export default async function CityPage({
               </div>
             </div>
             <ScrollRail label={`Venues in ${cityName}`} columns={4}>
-              {cityVenues.map(venue => (
-                <Link
-                  key={venue.id}
-                  href={`/venues/${venue.slug}`}
-                  className="block h-full bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-5"
-                >
-                  <h3 className="font-bold text-slate-900 text-base leading-snug mb-1 hover:text-red-600 transition-colors">
-                    {venue.name}
-                  </h3>
-                  <p className="text-sm text-slate-500 mb-1 truncate">{venue.address}</p>
-                  <p className="text-xs text-slate-400 mb-3 leading-relaxed">
-                    {venueCardBlurb(venue.capacity, countByVenue[venue.id] ?? 0, cityName)}
-                  </p>
-                  <div className="flex items-center justify-between text-xs text-slate-400">
-                    {venue.capacity ? (
-                      <span>🎪 {venue.capacity.toLocaleString('en-GB')} capacity</span>
-                    ) : (
-                      <span />
-                    )}
-                    <span className="font-semibold text-slate-600">
-                      {countByVenue[venue.id] ?? 0} event{(countByVenue[venue.id] ?? 0) !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                </Link>
+              {popularVenues.map(venue => (
+                <VenueCard key={venue.id} venue={venue} />
+              ))}
+            </ScrollRail>
+            {moreVenues.length > 0 && (
+              <div className="mt-6">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2.5">More venues with shows</p>
+                <ul className="flex flex-wrap gap-2">
+                  {moreVenues.map(v => (
+                    <li key={v.id}>
+                      <Link
+                        href={`/venues/${v.slug}`}
+                        className="inline-flex items-center min-h-[36px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:border-slate-400 hover:text-slate-900"
+                      >
+                        {v.name} <span className="ml-1.5 text-slate-400 font-normal">{v.count}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── VENUES AROUND THE CITY (nearby towns; hidden when none) ── */}
+        {nearbyVenues.length > 0 && (
+          <section>
+            <div className="mb-7">
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
+                Nearby
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                Venues around {cityName}
+              </h2>
+            </div>
+            <ScrollRail label={`Venues around ${cityName}`} columns={4}>
+              {nearbyVenues.map(venue => (
+                <VenueCard key={venue.id} venue={venue} town={venue.town} />
               ))}
             </ScrollRail>
           </section>

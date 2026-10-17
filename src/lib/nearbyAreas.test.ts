@@ -37,3 +37,9 @@ test('no town is configured as its own hub city', () => {
     for (const a of areas) assert.ok(!a.match.some(m => m.toLowerCase() === city.toLowerCase()), `${a.name} duplicates ${city}`)
   }
 })
+
+test('nearbyOrFilter can target another column (venues.city)', () => {
+  const f = nearbyOrFilter(getNearbyAreas('Derby'), 'city')
+  assert.ok(f.startsWith('city.ilike.'))
+  assert.ok(!f.includes('venue_city'))
+})

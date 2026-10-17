@@ -34,10 +34,10 @@ export function getNearbyAreas(cityName: string): NearbyArea[] {
 // Characters that would break the filter syntax (commas, brackets, quotes,
 // wildcards) are dropped from the spellings, so a stray character in the config
 // can never alter the query.
-export function nearbyOrFilter(areas: NearbyArea[]): string {
+export function nearbyOrFilter(areas: NearbyArea[], column = 'venue_city'): string {
   const clean = (s: string) => s.replace(/[,()*%"\\]/g, '').trim()
   const spellings = areas.flatMap(a => a.match).map(clean).filter(Boolean)
-  return spellings.map(s => `venue_city.ilike.${s}`).join(',')
+  return spellings.map(s => `${column}.ilike.${s}`).join(',')
 }
 
 // Which configured town a venue city belongs to (null when it matches none).
