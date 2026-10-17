@@ -65,6 +65,10 @@ export default function CalendarsPage() {
               Looking for one artist or venue? Each artist and venue page has its own &ldquo;add to calendar&rdquo; button, and
               you can follow them to get an email when new dates are added.
             </li>
+            <li>
+              Prefer RSS? Every city has a weekly picks feed at <code>/feeds/cities/Manchester.xml</code> (swap in your city), and
+              new UK tours are at <Link href="/new-tours" className="font-semibold" style={{ color: '#E8003D' }}>/new-tours</Link> and <code>/feeds/new-tours.xml</code>.
+            </li>
             <li>Dates and times come from the official ticket listings and can change, so check the event page before you travel or buy.</li>
             <li>
               Run a website? Our free <Link href="/widgets" className="font-semibold" style={{ color: '#E8003D' }}>shows widget</Link> puts

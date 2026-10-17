@@ -70,7 +70,10 @@ export async function generateMetadata(
   return {
     title,
     description: desc,
-    alternates:  { canonical },
+    alternates:  {
+      canonical,
+      types: { 'application/rss+xml': `https://www.theshowfinder.com/feeds/cities/${encodeURIComponent(cityName)}.xml` },
+    },
     openGraph: {
       title,
       description: desc,

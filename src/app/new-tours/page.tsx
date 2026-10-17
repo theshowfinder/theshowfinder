@@ -11,7 +11,10 @@ export const metadata: Metadata = {
   title: 'New UK Tour Announcements: Latest Dates Added',
   description:
     'Every UK tour announced or extended in the last two weeks, newest first: which cities, which venues and the dates, with tickets compared on each show.',
-  alternates: { canonical: `${BASE}/new-tours` },
+  alternates: {
+    canonical: `${BASE}/new-tours`,
+    types: { 'application/rss+xml': `${BASE}/feeds/new-tours.xml` },
+  },
 }
 
 // New dates land through the day; an hour keeps the hub current at CDN cost.
@@ -50,6 +53,8 @@ export default async function NewToursPage() {
             <Link href="/on-sale-this-week" className="font-semibold text-white underline">See what goes on sale this week</Link>
             <span className="text-white/40"> · </span>
             <Link href="/calendars" className="font-semibold text-white underline">Get on-sale reminders in your calendar</Link>
+            <span className="text-white/40"> · </span>
+            <a href="/feeds/new-tours.xml" className="font-semibold text-white underline">RSS feed</a>
           </p>
         </div>
       </div>
