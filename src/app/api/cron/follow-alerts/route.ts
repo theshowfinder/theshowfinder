@@ -4,6 +4,7 @@ import { resend, FROM_EMAIL } from '@/lib/resend'
 import { buildFollowAlerts, LOOKBACK_DAYS, type FollowRow, type NewShow } from '@/lib/follows'
 import { buildFollowAlertEmail } from '@/lib/followEmail'
 import { buildUnsubscribeLink } from '@/lib/newsletterContent'
+import { withJobRun } from '@/lib/jobRuns'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -28,7 +29,7 @@ interface EventDbRow {
 // Daily: for everyone following an artist or venue, email the shows added since
 // we last looked (one email per address). A follower's clock only moves forward
 // once their email went out, so a failed or deferred send is retried next run.
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -136,3 +137,5 @@ export async function GET(request: Request) {
 
   return NextResponse.json({ follows: follows.length, newShows: shows.length, emails: batches.length, sent, failed, deferred: deferred.size })
 }
+
+export const GET = withJobRun('follow-alerts', handleGet)

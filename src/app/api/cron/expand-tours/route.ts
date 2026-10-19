@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncTicketmasterAttractions } from '@/lib/ticketmaster'
+import { withJobRun } from '@/lib/jobRuns'
 
 // Completes the tours behind "On Sale This Week": for every headliner whose
 // event goes on sale (or has a presale) in the window the on-sale pass walks,
@@ -13,7 +14,7 @@ export const dynamic     = 'force-dynamic'
 const MAX_ATTRACTIONS = 120
 const DAY = 86400000
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -72,3 +73,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: false, error: err instanceof Error ? err.message : String(err) }, { status: 500 })
   }
 }
+
+export const GET = withJobRun('expand-tours', handleGet)

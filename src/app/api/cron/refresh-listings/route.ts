@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
+import { withJobRun } from '@/lib/jobRuns'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic'
 //      away instead of waiting out the ISR window.
 // City pages additionally revalidate every 5 minutes on their own and filter
 // to future events at render time, so they can never keep serving past dates.
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -48,3 +49,5 @@ export async function GET(request: Request) {
     ms: Date.now() - started,
   })
 }
+
+export const GET = withJobRun('refresh-listings', handleGet)

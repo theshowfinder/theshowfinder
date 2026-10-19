@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enrichArtist, type EnrichableArtist } from '@/lib/artistEnrichRun'
+import { withJobRun } from '@/lib/jobRuns'
 
 // Fills in artist profile info (genre, official links, a short Wikipedia-sourced
 // bio) in batches, busiest artists first. The artist page also enriches an
@@ -14,7 +15,7 @@ const DEFAULT_PER_RUN = 450
 const CONCURRENCY     = 4
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -71,3 +72,5 @@ export async function GET(request: Request) {
     seconds: Math.round((Date.now() - started) / 1000),
   })
 }
+
+export const GET = withJobRun('enrich-artists', handleGet)

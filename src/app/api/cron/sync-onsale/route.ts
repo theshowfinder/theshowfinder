@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { syncTicketmasterEvents } from '@/lib/ticketmaster'
+import { withJobRun } from '@/lib/jobRuns'
 
 // Allow up to 5 minutes for the on-sale-soon pass (Vercel Pro/Enterprise only; Hobby = 10s)
 export const maxDuration = 300
 export const dynamic     = 'force-dynamic'
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   // Auth: Vercel Cron sends Authorization: Bearer <CRON_SECRET>
   // Fail closed if the secret is missing in any environment.
   const cronSecret = process.env.CRON_SECRET
@@ -33,3 +34,5 @@ export async function GET(request: Request) {
     )
   }
 }
+
+export const GET = withJobRun('sync-onsale', handleGet)

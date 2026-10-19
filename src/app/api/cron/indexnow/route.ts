@@ -3,6 +3,7 @@ import { createPublicClient } from '@/lib/supabase/public'
 import { buildIndexNowPayload } from '@/lib/indexNow'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { dropDuplicateEvents } from '@/lib/listedEvents'
+import { withJobRun } from '@/lib/jobRuns'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -11,7 +12,7 @@ const BASE = 'https://www.theshowfinder.com'
 
 // Daily (after the Ticketmaster sync): tell IndexNow engines (Bing, Yandex, …)
 // about events added in the last ~30 hours plus the hub pages that change daily.
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -41,3 +42,5 @@ export async function GET(request: Request) {
   })
   return NextResponse.json({ submitted: payload.urlList.length, status: res.status })
 }
+
+export const GET = withJobRun('indexnow', handleGet)

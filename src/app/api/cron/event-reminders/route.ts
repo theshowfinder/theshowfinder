@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { resend, FROM_EMAIL } from '@/lib/resend'
 import { dueWindow, groupRemindersByEmail, type DueReminder } from '@/lib/reminders'
 import { buildReminderEmail } from '@/lib/reminderEmail'
+import { withJobRun } from '@/lib/jobRuns'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -23,7 +24,7 @@ interface DueRow {
 
 // Daily: email everyone who asked to be reminded about a show going on sale in
 // the next 24 hours (one email per address), then mark those reminders sent.
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -83,3 +84,5 @@ export async function GET(request: Request) {
 
   return NextResponse.json({ due: rows.length, emails: batches.length, sent, failed })
 }
+
+export const GET = withJobRun('event-reminders', handleGet)

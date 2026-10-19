@@ -14,6 +14,7 @@ import {
 } from '@/lib/weeklyDigest'
 import { CITIES } from '@/lib/cities'
 import WeeklyDigestEmail from '@/emails/WeeklyDigestEmail'
+import { withJobRun } from '@/lib/jobRuns'
 
 export const maxDuration = 120
 export const dynamic = 'force-dynamic'
@@ -31,7 +32,7 @@ export const dynamic = 'force-dynamic'
 // with the "Happening this week" section showing THEIR city's shows and a link
 // to that city's this-weekend page; everyone else gets the national version.
 // Preview mode: add ?city=Manchester to preview a city's version.
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -170,3 +171,5 @@ export async function GET(request: Request) {
     onSale: nationalContent.onSale.length, events: nationalContent.events.length, shows: nationalContent.shows.length,
   } })
 }
+
+export const GET = withJobRun('weekly-digest', handleGet)

@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { syncCityNews } from '@/lib/cityNews'
+import { withJobRun } from '@/lib/jobRuns'
 
 export const maxDuration = 300
 export const dynamic     = 'force-dynamic'
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   // Auth: Vercel Cron sends Authorization: Bearer <CRON_SECRET>
   // Fail closed if the secret is missing in any environment.
   const cronSecret = process.env.CRON_SECRET
@@ -32,3 +33,5 @@ export async function GET(request: Request) {
     )
   }
 }
+
+export const GET = withJobRun('sync-city-news', handleGet)

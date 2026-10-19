@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { ENRICH_UA, fetchWikiSummary } from '@/lib/artistEnrichRun'
 import { parseMusicBrainzArtist, buildMusicBrainzBio, titleCaseGenre } from '@/lib/musicbrainz'
 import type { ArtistSocialLinks } from '@/lib/artistEnrich'
+import { withJobRun } from '@/lib/jobRuns'
 
 // Second enrichment pass using MusicBrainz (open data, no key). Looks an artist
 // up ONLY by the MusicBrainz id Ticketmaster listed for it (captured by
@@ -23,7 +24,7 @@ type Row = {
   wikipedia_url: string | null; social_links: ArtistSocialLinks | null
 }
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -108,3 +109,5 @@ export async function GET(request: Request) {
     seconds: Math.round((Date.now() - started) / 1000),
   })
 }
+
+export const GET = withJobRun('enrich-musicbrainz', handleGet)
