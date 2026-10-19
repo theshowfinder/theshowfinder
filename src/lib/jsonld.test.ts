@@ -44,7 +44,7 @@ describe('buildEventSchema', () => {
   test('always carries a description and image, falling back to factual text and the site image', () => {
     const schema = buildEventSchema({ ...base, venue: { name: 'Etihad Stadium', address: 'x', city: 'Manchester', postcode: 'M11' } })
     assert.match(schema.description as string, /^Oasis live at Etihad Stadium, Manchester on /)
-    assert.match(schema.description as string, /Compare tickets/)
+    assert.match(schema.description as string, /Find tickets/)
     assert.deepEqual(schema.image, ['https://www.theshowfinder.com/og-image.png'])
   })
 

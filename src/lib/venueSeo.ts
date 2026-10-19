@@ -38,7 +38,7 @@ export function venueSeoDescription(input: {
     return `${name} in ${city}: venue details and ticket options. No shows are listed right now. Follow the venue to hear when new dates are added.`.slice(0, limit)
   }
   const shows = `${upcomingCount} upcoming show${upcomingCount === 1 ? '' : 's'}`
-  const tail = ' Compare ticket options in one place.'
+  const tail = ' Find tickets in one place.'
   const unique = [...new Set(input.nextTitles.map(t => t.trim()).filter(Boolean))]
   for (let n = Math.min(3, unique.length); n >= 0; n--) {
     const acts = n > 0 ? `, including ${joinNatural(unique.slice(0, n))}` : ''

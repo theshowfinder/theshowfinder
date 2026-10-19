@@ -32,7 +32,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     title: event.title,
     startISO: event.start_date,
     location,
-    description: 'Compare tickets on TheShowFinder',
+    description: 'Find tickets on TheShowFinder',
     url: `https://www.theshowfinder.com/events/${event.slug}`,
   })
 

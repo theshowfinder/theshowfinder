@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 export const metadata: Metadata = {
   title:       'About TheShowFinder',
-  description: 'TheShowFinder is the UK\'s events discovery and ticket comparison platform. Find concerts, theatre, comedy and live events and compare prices from all major providers.',
+  description: 'TheShowFinder helps you find concerts, theatre, comedy and live events across the UK, with tickets from official sellers.',
   alternates:  { canonical: 'https://www.theshowfinder.com/about' },
 }
 
@@ -19,9 +19,9 @@ export default function AboutPage() {
         <div className="space-y-8 text-slate-600 leading-relaxed">
 
           <p className="text-lg">
-            We are a UK events discovery and ticket comparison platform. We help fans find concerts,
-            theatre, comedy, sports and live events across the UK, and compare ticket prices from all
-            major providers including Ticketmaster, See Tickets, Viagogo, StubHub and more.
+            We are a UK events discovery site. We help fans find concerts, theatre, comedy, sports and
+            live events across the UK, and link them to tickets from official sellers such as
+            Ticketmaster and See Tickets.
           </p>
 
           <p>

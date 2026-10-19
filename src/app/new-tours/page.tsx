@@ -103,7 +103,7 @@ function TourGroup({ heading, tours, now }: { heading: string; tours: TourAnnoun
               {t.biggestVenue ? `, including ${t.biggestVenue}` : ''}.
             </p>
             <Link href={`/artists/${t.artistSlug}`} className="inline-block mt-3 text-sm font-semibold" style={{ color: '#E8003D' }}>
-              See dates and compare tickets
+              See dates and find tickets
             </Link>
           </li>
         ))}

@@ -8,7 +8,7 @@ import NewsletterInline from '@/components/NewsletterInline'
 import CalendarSubscribe from '@/components/CalendarSubscribe'
 import { ONSALE_FEED_PATH } from '@/lib/calendarFeeds'
 import SocialLandingBanner from '@/components/SocialLandingBanner'
-import { fmtOnSaleLabel, onSaleThisWeekWindow, type OnSaleGroup } from '@/lib/on-sale'
+import { saleBadgeText, onSaleThisWeekWindow, type OnSaleGroup } from '@/lib/on-sale'
 import { fetchOnSaleThisWeek } from '@/lib/eventPools'
 
 const OSW_OG_IMAGE = 'https://www.theshowfinder.com/og-image.png'
@@ -118,7 +118,7 @@ export default async function OnSaleThisWeekPage() {
 }
 
 function OnSaleCard({ group }: { group: OnSaleGroup }) {
-  const onSaleLabel = fmtOnSaleLabel(group.onsale_date)
+  const onSaleLabel = saleBadgeText(group.saleType, group.onsale_date)
   const datesCount  = group.events.length
   const isPresale   = group.saleType === 'presale'
 
@@ -162,7 +162,7 @@ function OnSaleCard({ group }: { group: OnSaleGroup }) {
           </p>
         )}
         <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
-          🎟️ {isPresale ? 'Presale opens' : 'On sale'} {onSaleLabel}
+          🎟️ {onSaleLabel}
         </div>
       </div>
     </Link>

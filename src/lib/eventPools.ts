@@ -10,7 +10,7 @@ import type { EventWithVenue, Artist } from './types/database'
 import {
   groupEventsByArtist, type OnSaleGroup,
   onSaleThisWeekWindow, presaleOpenNowWindow,
-  capGroupsBySeries,
+  capGroupsBySeries, dropPastSales,
 } from './on-sale.ts'
 import { londonDayWindow, londonDaysAheadWindow, londonWeekendDayWindows, type DateWindow } from './intelligence.ts'
 import { isTonightEvent, sortTonightEvents } from './tonight.ts'
@@ -505,9 +505,10 @@ export async function fetchOnSaleThisWeek(
   artists: Artist[],
   { city, limit, fetchLimit = 500 }: OnSaleThisWeekOpts,
 ): Promise<OnSaleGroup[]> {
-  const data        = await fetchOnSaleThisWeekEvents(supabase, { city, fetchLimit })
-  const deduped      = dedupeEventsByTitle(data, fetchLimit)
-  const groups        = groupEventsByArtist(deduped, artists)
+  const now           = new Date()
+  const data          = dropPastSales(await fetchOnSaleThisWeekEvents(supabase, { city, fetchLimit }), now)
+  const deduped       = dedupeEventsByTitle(data, fetchLimit)
+  const groups        = groupEventsByArtist(deduped, artists, now)
   const diversified   = capGroupsBySeries(groups)
   return diversified.slice(0, limit)
 }

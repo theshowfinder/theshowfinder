@@ -28,7 +28,7 @@ const ATTRACTION_NAMES = [
   'warner bros. studio tour', 'warner bros studio tour', 'blackpool sandcastle',
   'blackpool tower', 'ramses and the pharaoh', 'face your fears', 'scream park',
   'the view from the shard', 'tower bridge exhibition', 'kidzania', 'drayton manor',
-  'flamingo land', 'the old course',
+  'flamingo land', 'the old course', 'waterpark', 'water park', 'sandcastle waterpark',
 ]
 
 // "Standard Entry", "Fast Track Experience", "Timed Entry", ...

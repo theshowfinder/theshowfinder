@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { displayTitle, londonTimeSuffix, venueLabel } from '@/lib/displayTitle'
 import type { EventWithVenue } from '@/lib/types/database'
 import { ticketPurchaseDisabledStatus } from '@/lib/eventPools'
 import { eventImageUrl } from '@/lib/eventImages'
@@ -26,9 +27,11 @@ const categoryEmoji: Record<string, string> = {
 }
 
 function formatDate(iso: string) {
+  // The time is shown so matinee and evening performances of one show on the same
+  // day are not two identical-looking cards.
   return new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Europe/London',
     weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
-  })
+  }) + londonTimeSuffix(iso)
 }
 
 function formatPrice(from: number | null, to: number | null, currency: string) {
@@ -87,7 +90,7 @@ export default function EventCard({ event }: Props) {
 
         <Link href={`/events/${event.slug}`} className="block">
           <h3 className="font-bold text-slate-900 text-base leading-snug line-clamp-2 hover:opacity-80 transition-opacity">
-            {event.title}
+            {displayTitle(event.title)}
           </h3>
         </Link>
 
@@ -98,10 +101,10 @@ export default function EventCard({ event }: Props) {
               href={`/venues/${event.venue_slug}`}
               className="truncate hover:underline hover:text-slate-700 transition-colors"
             >
-              📍 {event.venue_name}, {event.venue_city}
+              📍 {venueLabel(event.venue_name, event.venue_city)}
             </Link>
           ) : (
-            <span className="truncate">📍 {event.venue_name}, {event.venue_city}</span>
+            <span className="truncate">📍 {venueLabel(event.venue_name, event.venue_city)}</span>
           )}
         </div>
 

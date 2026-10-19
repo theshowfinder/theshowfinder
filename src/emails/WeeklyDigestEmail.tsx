@@ -88,7 +88,7 @@ export default function WeeklyDigestEmail({ content, weekKey, unsubscribeUrl }: 
                               href={digestLink(`/on-sale-this-week/${o.slug}`, weekKey, 'on-sale')}
                               title={o.name}
                               meta={`${o.saleType === 'presale' ? 'Presale' : 'On sale'} ${o.whenLabel} · ${o.dateCount} UK date${o.dateCount === 1 ? '' : 's'}`}
-                              cta="Compare tickets"
+                              cta="Find tickets"
                             />
                           ))}
                         </td>

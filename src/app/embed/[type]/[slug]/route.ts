@@ -45,7 +45,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
       where: null,
       url: utm(`/events/${e.slug}`),
     }))
-    return html(renderEmbedHtml({ heading: `${artist.name}: upcoming UK shows`, rows, moreUrl: utm(`/artists/${artist.slug}`), moreLabel: 'Compare tickets', theme }))
+    return html(renderEmbedHtml({ heading: `${artist.name}: upcoming UK shows`, rows, moreUrl: utm(`/artists/${artist.slug}`), moreLabel: 'Find tickets', theme }))
   }
 
   if (type === 'venue') {

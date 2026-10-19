@@ -23,7 +23,7 @@ describe('formatShareWhen', () => {
 describe('buildShareText', () => {
   const base = { title: 'Nickelback', venueName: 'The O2', city: 'London', startISO: '2026-10-17T18:30:00Z' }
   test('on sale: invites a friend and ends with a colon for the link', () => {
-    assert.equal(buildShareText({ ...base, status: 'on_sale' }), 'Fancy this? Nickelback, The O2, London, Sat 17 Oct, 19:30 BST. Compare tickets:')
+    assert.equal(buildShareText({ ...base, status: 'on_sale' }), 'Fancy this? Nickelback, The O2, London, Sat 17 Oct, 19:30 BST. Find tickets:')
   })
   test('sold out points to resale', () => {
     assert.match(buildShareText({ ...base, status: 'sold_out' }), /Sold out .* resale/)
@@ -33,7 +33,7 @@ describe('buildShareText', () => {
     assert.match(buildShareText({ ...base, status: 'postponed' }), /postponed/)
   })
   test('missing venue and time still reads cleanly', () => {
-    assert.equal(buildShareText({ title: 'Comedy Night' }), 'Fancy this? Comedy Night. Compare tickets:')
+    assert.equal(buildShareText({ title: 'Comedy Night' }), 'Fancy this? Comedy Night. Find tickets:')
   })
 })
 
@@ -52,8 +52,8 @@ describe('share URLs', () => {
 
 describe('buildArtistShareText', () => {
   test('wording follows the number of dates', () => {
-    assert.equal(buildArtistShareText('Nickelback', 5), 'Nickelback has 5 UK dates coming up. Compare tickets:')
-    assert.equal(buildArtistShareText('Nickelback', 1), 'Nickelback is playing the UK soon. Compare tickets:')
+    assert.equal(buildArtistShareText('Nickelback', 5), 'Nickelback has 5 UK dates coming up. Find tickets:')
+    assert.equal(buildArtistShareText('Nickelback', 1), 'Nickelback is playing the UK soon. Find tickets:')
     assert.equal(buildArtistShareText('Nickelback', 0), 'Have a look at Nickelback on TheShowFinder:')
   })
 })

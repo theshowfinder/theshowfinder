@@ -41,7 +41,8 @@ import { formatShareWhen } from '@/lib/shareText'
 import EventCard from '@/components/EventCard'
 import { buildShareText } from '@/lib/shareText'
 import { googleCalendarUrl } from '@/lib/ics'
-import { buildEventFaq, type EventDetails, type VenueDetails } from '@/lib/eventDetails'
+import { displayTitle, londonTimeSuffix, venueLabel } from '@/lib/displayTitle'
+import { buildEventFaq, cleanBoxOffice, type EventDetails, type VenueDetails } from '@/lib/eventDetails'
 import { toArtistEventRows, type ArtistEventLink, type ArtistEventRow } from '@/lib/artistEvents'
 import { dropDuplicateEvents } from '@/lib/listedEvents'
 import { buildSiblingOffers, type SiblingEvent, type SiblingOffer } from '@/lib/eventOffers'
@@ -288,7 +289,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!event) return { title: 'Event Not Found' }
 
   const venue     = event.venue
-  const venueStr  = venue ? `${venue.name}, ${venue.city}` : null
+  const venueStr  = venue ? venueLabel(venue.name, venue.city) : null
   const dateStr   = new Date(event.start_date).toLocaleDateString('en-GB', { timeZone: 'Europe/London',
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
@@ -299,11 +300,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London',
   })
   const title = venueStr
-    ? `${event.title} at ${venueStr} – ${shortDate}`
-    : `${event.title} – ${shortDate}`
+    ? `${displayTitle(event.title)} at ${venueStr} – ${shortDate}`
+    : `${displayTitle(event.title)} – ${shortDate}`
 
   const description = venue
-    ? `Get tickets for ${event.title} at ${venue.name} in ${venue.city} on ${dateStr}. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.`
+    ? `Get tickets for ${event.title} at ${venue.name} in ${venue.city} on ${dateStr}. Find tickets from official sellers.`
     : event.description ?? `${event.title} — find tickets on TheShowFinder`
 
   // Branded share card (artwork + date + venue) so a pasted link says where and
@@ -428,7 +429,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     title: event.title,
     startISO: event.start_date,
     location: calendarLocation,
-    description: 'Compare tickets on TheShowFinder',
+    description: 'Find tickets on TheShowFinder',
     url: `https://www.theshowfinder.com/events/${event.slug}`,
   })
   const faq = buildEventFaq({
@@ -444,7 +445,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     venueDetails: venue?.details ?? null,
     providerNames: [...primary, ...resale].map(p => p.name),
   })
-  const shortWhen = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+  const shortWhen = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) + londonTimeSuffix(iso)
 
   const canonicalUrl = `https://www.theshowfinder.com/events/${event.slug}`
   const eventSchema = buildEventSchema({
@@ -512,12 +513,12 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold leading-tight mb-6 max-w-3xl">
-            {event.title}
+            {displayTitle(event.title)}
           </h1>
 
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 text-white/80 text-sm mb-8">
             <span className="flex items-center gap-2">📅 <span>{fmtDate(event.start_date)}</span></span>
-            {event.venue && <span className="flex items-center gap-2">📍 <span>{event.venue.name}, {event.venue.city}</span></span>}
+            {event.venue && <span className="flex items-center gap-2">📍 <span>{venueLabel(event.venue.name, event.venue.city)}</span></span>}
             {priceLabel && <span className="flex items-center gap-2">💷 <span className="font-bold text-white">{priceLabel}</span></span>}
           </div>
 
@@ -743,7 +744,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               </dl>
             </div>
 
-            {(directionsUrl || venue?.details?.parking || venue?.details?.accessibleSeating || venue?.details?.boxOffice || event.details?.seatmapUrl) && (
+            {(directionsUrl || venue?.details?.parking || venue?.details?.accessibleSeating || cleanBoxOffice(venue?.details?.boxOffice) || event.details?.seatmapUrl) && (
               <div>
                 <h2 className="text-xl font-extrabold text-slate-900 mb-4">Getting there &amp; venue info</h2>
                 <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3 text-sm text-slate-600 leading-relaxed">
@@ -757,7 +758,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                     <p><span className="font-semibold text-slate-800">Accessibility: </span>{[event.details?.accessibility, venue?.details?.accessibleSeating].filter(Boolean).join(' ')}</p>
                   )}
                   {venue?.details?.generalRule && <p><span className="font-semibold text-slate-800">Venue rules: </span>{venue.details.generalRule}</p>}
-                  {venue?.details?.boxOffice && <p><span className="font-semibold text-slate-800">Box office: </span>{venue.details.boxOffice}</p>}
+                  {cleanBoxOffice(venue?.details?.boxOffice) && <p><span className="font-semibold text-slate-800">Box office: </span>{cleanBoxOffice(venue?.details?.boxOffice)}</p>}
                   <div className="flex flex-wrap gap-4 pt-1 font-semibold">
                     {directionsUrl && <a href={directionsUrl} target="_blank" rel="noopener nofollow" style={{ color: '#E8003D' }}>Get directions →</a>}
                     {event.details?.seatmapUrl && <a href={event.details.seatmapUrl} target="_blank" rel="noopener nofollow" style={{ color: '#E8003D' }}>View seating map →</a>}
@@ -941,7 +942,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             {!isCancelledOrPostponed && resale.length > 0 && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">More Ticket Options</h3>
-              <p className="text-xs text-slate-400 mb-4">Compare availability across ticket marketplaces</p>
+              <p className="text-xs text-slate-400 mb-4">Other ticket marketplaces</p>
               <div className="grid grid-cols-2 gap-3">
                 {resale.map(({ name, bg, href }) => (
                   <TrackedTicketLink

@@ -20,7 +20,7 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
   const sp = await searchParams
   const letter = parseLetter(sp.letter)
   const title = letter ? `Artists starting with ${letter} — UK Tour Dates` : 'UK Artists, Tour Dates & Tickets'
-  const description = 'Find any artist playing in the UK: search by name or browse A-Z to see every upcoming tour date and compare ticket prices.'
+  const description = 'Find any artist playing in the UK: search by name or browse A-Z to see every upcoming tour date and find tickets.'
   const canonical = letter ? `https://www.theshowfinder.com/artists?letter=${encodeURIComponent(letter)}` : 'https://www.theshowfinder.com/artists'
   return {
     title,

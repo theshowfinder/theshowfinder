@@ -13,6 +13,8 @@ import {
   capGroupsBySeries,
   hasReliableOnSaleDate,
   ON_SALE_MAX_PER_SERIES,
+  dropPastSales,
+  saleBadgeText,
 } from './on-sale.ts'
 import type { OnSaleGroup } from './on-sale.ts'
 import type { EventWithVenue, Artist } from './types/database'
@@ -339,5 +341,38 @@ describe('mergeTourDates', () => {
       ev('ok',  '2027-03-18'),
     ]
     assert.deepEqual(mergeTourDates(win, other).events.map(e => e.id), ['a', 'ok'])
+  })
+})
+
+describe('past sales drop off the On Sale This Week cards', () => {
+  const now = new Date('2026-10-19T12:00:00Z')
+  const ev = (o: Record<string, unknown>) => fakeEvent({ presale_start: null, public_onsale_start: null, ...o })
+
+  test('dropPastSales keeps upcoming sales and sales that opened within the grace window', () => {
+    const upcoming = ev({ id: 'a', onsale_date: '2026-10-23T09:00:00Z' })
+    const justOpened = ev({ id: 'b', onsale_date: '2026-10-19T09:00:00Z' })
+    const old = ev({ id: 'c', onsale_date: '2026-10-12T09:00:00Z' })
+    const kept = dropPastSales([upcoming, justOpened, old], now).map(e => e.id)
+    assert.deepEqual(kept, ['a', 'b'])
+  })
+
+  test('a long-past presale does not keep a show whose public sale is also past', () => {
+    const e = ev({ id: 'd', presale_start: '2026-10-09T09:00:00Z', public_onsale_start: '2026-10-12T09:00:00Z', onsale_date: '2026-10-12T09:00:00Z' })
+    assert.deepEqual(dropPastSales([e], now), [])
+  })
+
+  test('an old presale with the public sale still ahead is kept and shows the upcoming public sale', () => {
+    const e = ev({ id: 'e', title: 'Band X', presale_start: '2026-10-09T09:00:00Z', public_onsale_start: '2026-10-23T09:00:00Z', onsale_date: '2026-10-23T09:00:00Z' })
+    assert.equal(dropPastSales([e], now).length, 1)
+    const [g] = groupEventsByArtist([e], [], now)
+    assert.equal(g.saleType, 'onsale')
+    assert.equal(g.onsale_date, '2026-10-23T09:00:00Z')
+  })
+
+  test('saleBadgeText says "now" once open and shows the date while ahead', () => {
+    assert.equal(saleBadgeText('onsale', '2026-10-19T09:00:00Z', now), 'On sale now')
+    assert.equal(saleBadgeText('presale', '2026-10-19T09:00:00Z', now), 'Presale open now')
+    assert.match(saleBadgeText('onsale', '2026-10-23T09:00:00Z', now), /^On sale Fri 23 Oct/)
+    assert.match(saleBadgeText('presale', '2026-10-23T09:00:00Z', now), /^Presale opens Fri 23 Oct/)
   })
 })

@@ -20,7 +20,7 @@ export default function WidgetGenerator() {
     const page = `${SITE}/${PAGE_PATH[target.type]}/${slug}`
     return [
       `<iframe src="${src}" width="100%" height="460" style="max-width:420px;border:1px solid #e2e8f0;border-radius:12px" loading="lazy" title="Upcoming shows on TheShowFinder"></iframe>`,
-      `<p><a href="${page}">Compare tickets on TheShowFinder</a></p>`,
+      `<p><a href="${page}">Find tickets on TheShowFinder</a></p>`,
     ].join('\n')
   }, [target, dark])
 

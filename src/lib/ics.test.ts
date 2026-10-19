@@ -7,7 +7,7 @@ const ev = {
   title: 'Nickelback, Live',
   startISO: '2026-10-17T18:30:00Z', // 19:30 BST
   location: 'The O2, Peninsula Square, London',
-  description: 'Compare tickets',
+  description: 'Find tickets',
   url: 'https://www.theshowfinder.com/events/nickelback-o2',
 }
 const now = new Date('2026-10-13T10:00:00Z')

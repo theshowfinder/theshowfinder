@@ -43,7 +43,7 @@ export function buildFallbackDescription(input: FallbackDescriptionInput): strin
   const when = formatEventDate(input.startDate)
   const dateClause = when ? ` on ${when}` : ''
 
-  return `${prefix} at ${where}${dateClause}. Compare ticket prices across Ticketmaster, Viagogo, StubHub and more with TheShowFinder.`
+  return `${prefix} at ${where}${dateClause}. Find tickets from official sellers on TheShowFinder.`
 }
 
 // Strips any HTML Ticketmaster's info/pleaseNote fields occasionally

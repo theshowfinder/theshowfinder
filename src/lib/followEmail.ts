@@ -49,7 +49,7 @@ export function buildFollowAlertEmail(batch: FollowAlertBatch, unsubscribeUrl: s
     textLines.push(it.name.toUpperCase())
     for (const s of it.shows) {
       textLines.push(`- ${s.title}, ${formatShareWhen(s.startISO) ?? ''}${where(s.venueName, s.city) ? `, ${where(s.venueName, s.city)}` : ''}`)
-      textLines.push(`  Compare tickets: ${followShowUrl(s.slug)}`)
+      textLines.push(`  Find tickets: ${followShowUrl(s.slug)}`)
     }
     if (it.more > 0) textLines.push(`  + ${it.more} more: ${followTargetUrl(it.kind, it.slug)}`)
     textLines.push('')
@@ -65,7 +65,7 @@ export function buildFollowAlertEmail(batch: FollowAlertBatch, unsubscribeUrl: s
         <tr><td style="padding:12px 0;border-top:1px solid #e2e8f0">
           <a href="${followShowUrl(s.slug)}" style="font-size:16px;font-weight:800;color:#0f172a;text-decoration:none">${esc(s.title)}</a>
           <div style="font-size:14px;color:#475569;margin-top:2px">${esc(formatShareWhen(s.startISO) ?? '')}${where(s.venueName, s.city) ? ` · ${esc(where(s.venueName, s.city) as string)}` : ''}</div>
-          <a href="${followShowUrl(s.slug)}" style="display:inline-block;margin-top:8px;background:#E8003D;color:#ffffff;text-decoration:none;font-weight:700;font-size:13px;padding:9px 16px;border-radius:8px">Compare tickets</a>
+          <a href="${followShowUrl(s.slug)}" style="display:inline-block;margin-top:8px;background:#E8003D;color:#ffffff;text-decoration:none;font-weight:700;font-size:13px;padding:9px 16px;border-radius:8px">Find tickets</a>
         </td></tr>`).join('')}
       </table>
       ${it.more > 0 ? `<p style="margin:8px 0 0;font-size:14px"><a href="${followTargetUrl(it.kind, it.slug)}" style="color:#E8003D;font-weight:700;text-decoration:none">+ ${it.more} more show${it.more === 1 ? '' : 's'} →</a></p>` : ''}

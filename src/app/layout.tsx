@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     template: '%s | TheShowFinder',
   },
   description:
-    'Discover and compare tickets for concerts, theatre, comedy and live events across the UK. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.',
+    'Discover concerts, theatre, comedy and live events across the UK and find tickets from official sellers.',
   keywords: ['UK events', 'concerts', 'theatre', 'comedy', 'sports', 'tickets', 'live events'],
   metadataBase: new URL(BASE_URL),
   // No site-wide canonical here on purpose: a layout-level canonical is inherited
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   // (guarded by src/lib/canonicalCoverage.test.ts).
   openGraph: {
     title:       'TheShowFinder | Find Concerts & Live Events in the UK',
-    description: 'Discover and compare tickets for concerts, theatre, comedy and live events across the UK. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.',
+    description: 'Discover concerts, theatre, comedy and live events across the UK and find tickets from official sellers.',
     type:        'website',
     locale:      'en_GB',
     url:         BASE_URL,
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
   twitter: {
     card:        'summary_large_image',
     title:       'TheShowFinder | Find Concerts & Live Events in the UK',
-    description: 'Discover and compare tickets for concerts, theatre, comedy and live events across the UK.',
+    description: 'Discover concerts, theatre, comedy and live events across the UK, with tickets from official sellers.',
     images:      [OG_IMAGE],
   },
   icons: {

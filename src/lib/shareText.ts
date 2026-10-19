@@ -38,13 +38,13 @@ export function buildShareText(input: ShareInput): string {
   if (input.status === 'sold_out') return `${base}. Sold out at the box office, but worth checking resale:`
   if (input.status === 'cancelled') return `${base} has been cancelled.`
   if (input.status === 'postponed') return `${base} has been postponed.`
-  return `Fancy this? ${base}. Compare tickets:`
+  return `Fancy this? ${base}. Find tickets:`
 }
 
 // Message for sharing an artist (or venue) page rather than a single show.
 export function buildArtistShareText(name: string, upcomingCount: number): string {
-  if (upcomingCount > 1) return `${name} has ${upcomingCount} UK dates coming up. Compare tickets:`
-  if (upcomingCount === 1) return `${name} is playing the UK soon. Compare tickets:`
+  if (upcomingCount > 1) return `${name} has ${upcomingCount} UK dates coming up. Find tickets:`
+  if (upcomingCount === 1) return `${name} is playing the UK soon. Find tickets:`
   return `Have a look at ${name} on TheShowFinder:`
 }
 

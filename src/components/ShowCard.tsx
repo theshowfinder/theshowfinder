@@ -84,7 +84,7 @@ export default function ShowCard({ show, kind }: Props) {
             className="w-full text-white font-bold py-3 rounded-xl text-center text-sm hover:opacity-90 active:scale-95 transition-all duration-150 min-h-[48px] flex items-center justify-center"
             style={{ backgroundColor: '#E8003D' }}
           >
-            {isWestEnd ? 'Compare Tickets' : 'Get Tickets'}
+            Get Tickets
           </Link>
         )}
 

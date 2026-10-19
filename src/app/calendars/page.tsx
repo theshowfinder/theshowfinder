@@ -40,7 +40,7 @@ export default function CalendarsPage() {
         <section>
           <h2 className="text-xl font-extrabold text-slate-900 mb-2">Shows in your city</h2>
           <p className="text-slate-600 mb-5">
-            Concerts, theatre, comedy and more over the next four months, with a link to compare tickets on each one.
+            Concerts, theatre, comedy and more over the next four months, with a link to find tickets on each one.
           </p>
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {cities.map(c => (

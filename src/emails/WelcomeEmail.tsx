@@ -43,7 +43,7 @@ export default function WelcomeEmail({ email }: Props) {
                           You&apos;re on the list! 🎉
                         </h1>
                         <p style={{ margin: '0 0 20px', fontSize: '16px', lineHeight: '1.6', color: '#475569' }}>
-                          Hi there — welcome to TheShowFinder, the UK&apos;s events discovery platform.
+                          Hi there — welcome to TheShowFinder. We help you find concerts, theatre, comedy, sports and family shows across the UK.
                         </p>
                         <p style={{ margin: '0 0 20px', fontSize: '16px', lineHeight: '1.6', color: '#475569' }}>
                           You&apos;ll now receive alerts when tickets go on sale for top concerts, theatre, comedy, sports, and family shows across the UK — straight to your inbox before they sell out.

@@ -35,7 +35,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ city: s
       title: `${e.title} at ${e.venue_name ?? city.name}, ${shortUkDate(e.start_date)}`,
       link: `${BASE}/events/${e.slug}`,
       guid: `event:${e.id}`,
-      description: `${e.title} at ${e.venue_name ?? city.name} in ${city.name}, ${shortUkDate(e.start_date)}. Compare tickets on TheShowFinder.`,
+      description: `${e.title} at ${e.venue_name ?? city.name} in ${city.name}, ${shortUkDate(e.start_date)}. Find tickets on TheShowFinder.`,
       pubDate: today,
     })),
   })

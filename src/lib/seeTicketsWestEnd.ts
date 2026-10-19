@@ -72,3 +72,16 @@ export function seeTicketsUrlForShow(
   }
   return null
 }
+
+/**
+ * True for a West End show we have hand-checked (the list above). Ticketmaster
+ * tags some of these (The Play That Goes Wrong, Avenue Q, ...) with a Comedy genre,
+ * which would file a West End play under stand-up comedy; callers use this to keep
+ * them under Theatre.
+ */
+export function isKnownWestEndShow(
+  title: string | null | undefined,
+  venueName: string | null | undefined,
+): boolean {
+  return seeTicketsUrlForShow(title, venueName) !== null
+}

@@ -16,7 +16,7 @@ import { createPublicClient } from '@/lib/supabase/public'
 import EventCard from '@/components/EventCard'
 import SearchBarWrapper from '@/components/SearchBarWrapper'
 import { Suspense } from 'react'
-import { fmtOnSaleLabel } from '@/lib/on-sale'
+import { saleBadgeText } from '@/lib/on-sale'
 import { CITIES } from '@/lib/cities'
 import { rankVenues, splitPopular } from '@/lib/venueDiscovery'
 import { fetchVenueEventRows, fetchNearbyRankedVenues } from '@/lib/venueData'
@@ -614,7 +614,7 @@ export default async function CityPage({
                       🗓 {group.events.length} UK date{group.events.length !== 1 ? 's' : ''}
                     </p>
                     <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
-                      🎟️ On sale {fmtOnSaleLabel(group.onsale_date)}
+                      🎟️ {saleBadgeText(group.saleType, group.onsale_date)}
                     </div>
                   </div>
                 </Link>

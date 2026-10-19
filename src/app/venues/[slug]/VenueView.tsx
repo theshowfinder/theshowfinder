@@ -141,7 +141,7 @@ export default async function VenueView({ slug, page }: { slug: string; page: nu
             <ShareButton
               url={`https://www.theshowfinder.com/venues/${venue.slug}`}
               title={venue.name}
-              text={`What's on at ${venue.name}? Compare tickets:`}
+              text={`What's on at ${venue.name}? Find tickets:`}
               itemId={venue.slug}
               contentType="venue"
               variant="dark"

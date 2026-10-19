@@ -89,7 +89,7 @@ export function shouldListArtistInSitemap(input: {
 
 export function artistMetaDescription(name: string, upcoming: ArtistEventRow[]): string {
   if (upcoming.length === 0) {
-    return `Find ${name} UK tour dates and compare ticket prices from all major providers including Ticketmaster, See Tickets and resale sites.`
+    return `Find ${name} UK tour dates and find tickets from official sellers.`
   }
   const first = upcoming[0]
   const when = new Date(first.startDate).toLocaleDateString('en-GB', {
@@ -99,7 +99,7 @@ export function artistMetaDescription(name: string, upcoming: ArtistEventRow[]):
   const count = upcoming.length === 1
     ? `${name} plays ${first.venueName ?? 'the UK'}${where} on ${when}.`
     : `${upcoming.length} upcoming UK dates, next ${when}${where}.`
-  return `${name} UK tour dates and tickets. ${count} Compare prices from Ticketmaster, See Tickets and resale sites.`
+  return `${name} UK tour dates and tickets. ${count} Find tickets from official sellers.`
 }
 
 // ── Profile info that needs no outside source ────────────────────────────────

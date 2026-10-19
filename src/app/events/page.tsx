@@ -26,7 +26,7 @@ interface SearchParams {
   page?: string
 }
 
-const BASE_DESCRIPTION = 'Browse thousands of upcoming concerts, theatre shows, comedy and live events across the UK. Compare ticket prices from all major providers.'
+const BASE_DESCRIPTION = 'Browse thousands of upcoming concerts, theatre shows, comedy and live events across the UK. Find tickets from official sellers.'
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<SearchParams> }): Promise<Metadata> {
   const sp   = await searchParams

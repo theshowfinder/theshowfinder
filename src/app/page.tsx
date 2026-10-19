@@ -6,7 +6,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { createPublicClient } from '@/lib/supabase/public'
 
-const HOME_OG_DESCRIPTION = 'Discover and compare tickets for concerts, theatre, comedy and live events across the UK. Compare prices from Ticketmaster, See Tickets, Viagogo, StubHub and more.'
+const HOME_OG_DESCRIPTION = 'Discover concerts, theatre, comedy and live events across the UK and find tickets from official sellers.'
 const HOME_OG_IMAGE = 'https://www.theshowfinder.com/og-image.png'
 
 export const metadata: Metadata = {
@@ -36,10 +36,11 @@ import LocalHeroCopy from '@/components/LocalHeroCopy'
 import CategoryStrip from '@/components/CategoryStrip'
 import WestEndStrip from '@/components/WestEndStrip'
 import type { EventWithVenue, CityNews } from '@/lib/types/database'
-import { fmtOnSaleLabel, extractArtistName, toSlug } from '@/lib/on-sale'
+import { saleBadgeText, extractArtistName, toSlug } from '@/lib/on-sale'
 import { fetchEventsThisWeek, fetchPresalesOpenNow, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { listedEventsCount, dropDuplicateEvents } from '@/lib/listedEvents'
 import { CITIES } from '@/lib/cities'
+import { pickFeaturedShows } from '@/lib/featuredShows'
 import { NATIONAL_SLUG } from '@/lib/cityNews'
 import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 import PresaleGrid from '@/components/PresaleGrid'
@@ -66,46 +67,39 @@ function HomeSectionSkeleton() {
 
 async function queryFeaturedEvents(supabase: ReturnType<typeof createPublicClient>, now: string): Promise<FeaturedQueryResult> {
   try {
-    // Query the indexed base table and join the small venue projection here.
-    // Sorting the denormalised events_with_venue view by venue_capacity made
-    // this homepage section the slowest query on the page and could hit the
-    // server timeout while the other sections continued to render.
-    const { data, error } = await supabase
-      .from('events')
-      .select(`
-        id, title, slug, description, category, start_date, end_date,
-        image_url, price_from, price_to, currency, tickets_url, status,
-        is_featured, onsale_date, public_onsale_start, public_onsale_end,
-        presale_start, presale_end, presale_name, on_sale_this_week,
-        presale_this_week, upcoming_presale, newly_announced, last_synced_at,
-        venue:venues(id, name, slug, city, postcode, capacity)
-      `)
+    // Candidate pool: shows in the next 60 days at larger venues (the de-duplicated
+    // listed view, filtered to capacity so this stays a cheap, indexed read).
+    // pickFeaturedShows (src/lib/featuredShows.ts) then applies the curation rules:
+    // no attractions, packages or class listings; one card per venue; a category mix.
+    const horizon = new Date(Date.parse(now) + 60 * 24 * 60 * 60 * 1000).toISOString()
+    const base = () => supabase
+      .from('listed_events_with_venue')
+      .select('*')
       .gte('start_date', now)
+      .lte('start_date', horizon)
       .in('status', LIVE_EVENT_STATUSES)
-      .order('is_featured', { ascending: false })
       .order('start_date', { ascending: true })
-      .limit(100) as unknown as FeaturedQueryResult
+      .limit(300)
 
+    const { data, error } = await base().gte('venue_capacity', 1200) as unknown as FeaturedQueryResult
     if (error) return { data: null, error }
+    let picked = pickFeaturedShows(data ?? [], FEATURED_COUNT)
 
-    const events: EventWithVenue[] = (data ?? [])
-      .filter((row: any) => row.venue)
-      .map((row: any) => ({
-        ...row,
-        venue_id: row.venue.id,
-        venue_name: row.venue.name,
-        venue_slug: row.venue.slug,
-        venue_city: row.venue.city,
-        venue_postcode: row.venue.postcode,
-        venue_capacity: row.venue.capacity,
-      }))
-
-    // Package / duplicate records are not separate featured shows.
-    return { data: await dropDuplicateEvents(supabase, events), error: null }
+    // Too few big-venue shows (quiet weeks): top up from any venue, same rules.
+    if (picked.length < FEATURED_COUNT) {
+      const { data: more, error: moreError } = await base().neq('category', 'family') as unknown as FeaturedQueryResult
+      if (moreError) return { data: picked, error: null }
+      const have = new Set(picked.map(e => e.id))
+      const extra = pickFeaturedShows((more ?? []).filter(e => !have.has(e.id)), FEATURED_COUNT - picked.length)
+      picked = [...picked, ...extra].sort((a, b) => a.start_date.localeCompare(b.start_date))
+    }
+    return { data: picked, error: null }
   } catch (err) {
     return { data: null, error: { message: err instanceof Error ? err.message : 'unknown error' } }
   }
 }
+
+const FEATURED_COUNT = 6
 
 async function FeaturedEvents() {
   const supabase = createPublicClient()
@@ -232,11 +226,10 @@ async function HomepageStats() {
     { value: fmtCount(eventCount ?? 0), label: 'Events listed' },
     { value: fmtCount(venueCount ?? 0), label: 'Venues'        },
     { value: String(CITIES.length),     label: 'UK cities'     },
-    { value: '1M+',                      label: 'Tickets found' },
   ]
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+    <div className="grid grid-cols-3 gap-4 sm:gap-8 text-center">
       {stats.map(({ value, label }) => (
         <div key={label}>
           <div className="text-3xl sm:text-4xl font-extrabold mb-1" style={{ color: '#FFD700' }}>{value}</div>
@@ -352,7 +345,7 @@ async function OnSaleThisWeek() {
                       ) : null
                     })()}
                     <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
-                      🎟️ {isPresale ? 'Presale opens' : 'On sale'} {fmtOnSaleLabel(group.onsale_date)}
+                      🎟️ {saleBadgeText(group.saleType, group.onsale_date)}
                     </div>
                   </div>
                 </Link>
@@ -590,7 +583,7 @@ export default function HomePage() {
           {/* Pre-headline */}
           <p className="inline-flex items-center gap-2 font-bold text-xs sm:text-sm uppercase tracking-widest mb-4 sm:mb-6 bg-white/5 px-3 sm:px-4 py-2 rounded-full border border-white/10"
             style={{ color: '#FFD700' }}>
-            🎟️ The UK&apos;s events discovery platform
+            🎟️ Concerts, theatre, comedy, sports &amp; family shows
           </p>
 
           {/* Headline + subtext — swaps to a localized version once a city is
@@ -722,8 +715,8 @@ export default function HomePage() {
       <section className="py-10 sm:py-14" style={{ backgroundColor: '#1A1A2E' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Suspense fallback={
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-              {Array.from({ length: 4 }).map((_, i) => (
+            <div className="grid grid-cols-3 gap-4 sm:gap-8 text-center">
+              {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i}>
                   <div className="h-10 w-24 mx-auto bg-white/10 rounded animate-pulse mb-1" />
                   <div className="h-4 w-20 mx-auto bg-white/10 rounded animate-pulse" />

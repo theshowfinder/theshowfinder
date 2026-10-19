@@ -487,7 +487,7 @@ export default async function ArtistPage({ params }: PageProps) {
                   className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: '#E8003D' }}
                 >
-                  Compare tickets · next show
+                  Get tickets · next show
                   <span className="block text-sm font-semibold text-white/80">
                     {new Date(nextShow.startDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' })}
                     {nextShow.venueCity ? ` · ${nextShow.venueCity}` : ''}

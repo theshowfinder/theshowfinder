@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildFallbackDescription, cleanSourceDescription } from '@/lib/eventDescription'
+import { isKnownWestEndShow } from '@/lib/seeTicketsWestEnd'
 import type { EventCategory } from '@/lib/types/database'
 import { CITIES } from '@/lib/cities'
 import {
@@ -190,7 +191,10 @@ function mapCategory(event: TMEvent, defaultCategory: EventCategory): EventCateg
   const genre   = (cls?.genre?.name ?? '').toLowerCase()
   const subGenre = (cls?.subGenre?.name ?? '').toLowerCase()
 
-  if (genre.includes('comedy') || subGenre.includes('comedy')) return 'comedy'
+  if (genre.includes('comedy') || subGenre.includes('comedy')) {
+    // A West End play tagged Comedy by Ticketmaster is still theatre, not stand-up.
+    return isKnownWestEndShow(event.name, event._embedded?.venues?.[0]?.name) ? 'theatre' : 'comedy'
+  }
   if (seg === 'Music')          return 'concert'
   if (seg === 'Sports')         return 'sports'
   if (seg === 'Family')         return 'family'

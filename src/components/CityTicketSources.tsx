@@ -1,4 +1,4 @@
-// A short, plain explanation of how ticket comparison works on a city's shows,
+// A short, plain explanation of the kinds of ticket seller linked on a city's shows,
 // with a route to the alert sign-up. No provider is promoted here: it describes
 // the two kinds of seller and discloses that links can earn a commission.
 export default function CityTicketSources({ cityName }: { cityName: string }) {
@@ -8,7 +8,7 @@ export default function CityTicketSources({ cityName }: { cityName: string }) {
         Buying tickets
       </p>
       <h2 className="text-2xl font-extrabold text-slate-900 mb-4">
-        How we compare tickets for {cityName} shows
+        Where to buy tickets for {cityName} shows
       </h2>
       <div className="grid gap-6 sm:grid-cols-2 text-sm text-slate-600 leading-relaxed">
         <div>

@@ -50,7 +50,7 @@ export async function generateMetadata(
   const socialTitle = `${title} | TheShowFinder`
   const nextDay = fmtDay(show.nextDate)
   const description =
-    `Compare tickets for ${show.title} at ${show.venueName}, London. ` +
+    `Find tickets for ${show.title} at ${show.venueName}, London. ` +
     `${show.dateCount} upcoming ${show.dateCount === 1 ? 'performance' : 'performances'}, next on ${nextDay}.` +
     (show.priceFrom ? ` Prices from £${show.priceFrom}.` : '')
   const image = eventImageUrl(show.imageUrl, 'theatre', show.title)
@@ -150,7 +150,7 @@ export default async function WestEndShowPage({ params }: { params: Promise<{ sh
                   : 'inline-flex items-center justify-center text-white font-bold px-6 py-3 rounded-xl min-h-[48px] hover:opacity-90'}
                 style={seeTicketsUrl ? undefined : { backgroundColor: '#E8003D' }}
               >
-                Compare tickets for the next performance
+                Get tickets for the next performance
               </Link>
             </div>
           )}
@@ -161,7 +161,7 @@ export default async function WestEndShowPage({ params }: { params: Promise<{ sh
         <section>
           <h2 className="text-2xl font-extrabold text-slate-900 mb-2">All performances</h2>
           <p className="text-slate-600 text-sm mb-6 max-w-2xl">
-            Choose a date to compare ticket prices across providers. Times are London time.
+            Choose a date to find tickets. Times are London time.
           </p>
           {seeTicketsUrl && (
             <p className="text-slate-600 text-sm mb-6 max-w-2xl">

@@ -47,7 +47,7 @@ export function showFeedEvents(rows: FeedRow[], max = 500): CalendarEvent[] {
       title: r.venue_name ? `${r.title} at ${r.venue_name}` : r.title,
       startISO: r.start_date,
       location: placeLabel(r.venue_name, r.venue_city) || null,
-      description: `Compare tickets: ${BASE}/events/${r.slug}`,
+      description: `Find tickets: ${BASE}/events/${r.slug}`,
       url: `${BASE}/events/${r.slug}`,
     })
     if (out.length >= max) break
@@ -100,7 +100,7 @@ export function onSaleFeedEvents(rows: FeedRow[], nowMs: number, opts: { horizon
       durationHours: 0.5,
       alarmMinutesBefore: 15,
       location: multi ? null : (where[0] ?? null),
-      description: `${where.slice(0, 8).join('; ')}${where.length > 8 ? `; and ${where.length - 8} more` : ''}. Compare ticket options: ${BASE}/events/${slugs[0]}`,
+      description: `${where.slice(0, 8).join('; ')}${where.length > 8 ? `; and ${where.length - 8} more` : ''}. Find tickets: ${BASE}/events/${slugs[0]}`,
       url: multi ? `${BASE}/on-sale-this-week` : `${BASE}/events/${slugs[0]}`,
     })
     if (out.length >= (opts.max ?? 300)) break

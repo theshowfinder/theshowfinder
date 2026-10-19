@@ -38,9 +38,20 @@ export function toSlug(name: string): string {
 // card member, etc.) or the general public on-sale. Whichever comes first is
 // the one that actually matters to someone trying to catch tickets early, so
 // this picks the earliest of the two and tags which kind it is.
-function earliestSale(event: EventWithVenue): { date: string; type: SaleType } | null {
+function earliestSale(event: EventWithVenue, now?: Date): { date: string; type: SaleType } | null {
   const publicDate = event.public_onsale_start ?? event.onsale_date ?? null
-  const presaleDate = event.presale_start ?? null
+  let presaleDate = event.presale_start ?? null
+
+  // When a clock is given (the live "On Sale This Week" cards), a presale that has
+  // already started is no longer what a visitor can act on first: show the public
+  // on-sale that is still ahead instead of a presale date from days ago.
+  if (now && presaleDate && publicDate && presaleDate <= now.toISOString() && publicDate > now.toISOString()) {
+    return { date: publicDate, type: 'onsale' }
+  }
+  if (now && presaleDate && presaleDate <= now.toISOString() && publicDate && publicDate <= now.toISOString()) {
+    // Both already open: the earlier presale date is history; report the public sale.
+    presaleDate = null
+  }
 
   if (presaleDate && publicDate) {
     return presaleDate <= publicDate
@@ -52,9 +63,39 @@ function earliestSale(event: EventWithVenue): { date: string; type: SaleType } |
   return null
 }
 
+// How long after its sale opens a show still counts as "just released". Anything
+// older than this has simply gone on sale and drops off the On Sale This Week cards
+// by itself (no manual clean-up, no waiting for Monday).
+export const JUST_RELEASED_GRACE_HOURS = 24
+
+// Keep an event only while one of its sale moments (presale start or public
+// on-sale) is still ahead or opened within the grace window. Events with no sale
+// date at all are left alone (the pool query already requires an on-sale date).
+export function dropPastSales<T extends Pick<EventWithVenue, 'presale_start' | 'public_onsale_start' | 'onsale_date'>>(
+  events: T[],
+  now: Date = new Date(),
+  graceHours: number = JUST_RELEASED_GRACE_HOURS,
+): T[] {
+  const cutoff = new Date(now.getTime() - graceHours * 60 * 60 * 1000).toISOString()
+  return events.filter(e => {
+    const dates = [e.presale_start, e.public_onsale_start ?? e.onsale_date].filter((d): d is string => !!d)
+    if (dates.length === 0) return true
+    return dates.some(d => d >= cutoff)
+  })
+}
+
+// The line under an On Sale This Week card: the date while the sale is ahead,
+// "now" once it has opened (still inside the grace window).
+export function saleBadgeText(saleType: SaleType, isoDate: string, now: Date = new Date()): string {
+  const open = isoDate <= now.toISOString()
+  if (open) return saleType === 'presale' ? 'Presale open now' : 'On sale now'
+  return `${saleType === 'presale' ? 'Presale opens' : 'On sale'} ${fmtOnSaleLabel(isoDate)}`
+}
+
 export function groupEventsByArtist(
   events:  EventWithVenue[],
   artists: Artist[],
+  now?:    Date,
 ): OnSaleGroup[] {
   const artistByName = new Map(artists.map(a => [a.name.toLowerCase(), a]))
   const groupMap     = new Map<string, OnSaleGroup>()
@@ -63,7 +104,7 @@ export function groupEventsByArtist(
     const artistName = extractArtistName(event.title)
     const slug       = toSlug(artistName)
     const dbArtist   = artistByName.get(artistName.toLowerCase()) ?? null
-    const sale       = earliestSale(event)
+    const sale       = earliestSale(event, now)
 
     const existing = groupMap.get(slug)
     if (!existing) {

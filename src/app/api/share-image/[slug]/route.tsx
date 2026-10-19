@@ -78,7 +78,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
           <div style={{ display: 'flex', fontSize: titleSize, lineHeight: 1.05, fontWeight: 800, maxWidth: 1070 }}>{title}</div>
           {when && <div style={{ display: 'flex', fontSize: 42, marginTop: 22, color: '#ffffff' }}>{when}</div>}
           {where && <div style={{ display: 'flex', fontSize: 36, marginTop: 8, color: 'rgba(255,255,255,0.78)' }}>{where}</div>}
-          <div style={{ display: 'flex', fontSize: 28, marginTop: 26, color: '#E8003D' }}>Compare tickets · theshowfinder.com</div>
+          <div style={{ display: 'flex', fontSize: 28, marginTop: 26, color: '#E8003D' }}>Find tickets · theshowfinder.com</div>
         </div>
       </div>
     ),

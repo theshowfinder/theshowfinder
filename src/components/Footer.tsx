@@ -100,7 +100,7 @@ export default function Footer() {
               </span>
             </Link>
             <p className="text-sm leading-relaxed text-white/50 max-w-xs">
-              The UK&apos;s favourite events discovery platform — concerts, theatre, comedy, sports and family shows.
+              Find concerts, theatre, comedy, sports and family shows across the UK, with tickets from official sellers.
             </p>
           </div>
 

@@ -15,10 +15,10 @@ import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/
 
 const BASE = 'https://www.theshowfinder.com'
 const CANONICAL = `${BASE}/west-end`
-const TITLE = 'West End Shows & Tickets – Compare Prices'
+const TITLE = 'West End Shows & Tickets'
 const SOCIAL_TITLE = `${TITLE} | TheShowFinder`
 const DESCRIPTION =
-  "Find West End shows and compare ticket prices across providers. See what's on at every London theatre, with the next date, venue and ticket links for each show."
+  "Find West End shows and tickets from official sellers. See what's on at every London theatre, with the next date, venue and ticket links for each show."
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -85,8 +85,7 @@ export default async function WestEndPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12">
         <p className="text-slate-600 leading-relaxed max-w-3xl">
           London’s West End is home to some of the world’s longest-running musicals, plays and comedies. Pick a
-          show to see every upcoming performance, or head straight to the ticket comparison to check prices
-          across the main providers before you buy. New dates are added daily.
+          show to see every upcoming performance and find tickets from official sellers. New dates are added daily.
         </p>
 
         {shows.length > 0 ? (

@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  cleanTmText, extractEventDetails, extractVenueDetails, detailsKey, buildEventFaq,
+  cleanTmText, cleanBoxOffice, extractEventDetails, extractVenueDetails, detailsKey, buildEventFaq,
 } from './eventDetails.ts'
 
 describe('cleanTmText', () => {
@@ -99,5 +99,25 @@ describe('buildEventFaq', () => {
     const faq = buildEventFaq({ ...base, status: 'cancelled' })
     assert.ok(faq[0].q.includes('still going ahead'))
     assert.ok(!faq.some(f => f.q.startsWith('Where can I buy')))
+  })
+})
+
+describe('cleanBoxOffice', () => {
+  test('removes Ticketmaster booking lines, fax and call-charge text but keeps hours', () => {
+    assert.equal(
+      cleanBoxOffice('Monday - Saturday: 10:00 - 20:00. Ticketmaster UK: 0870 154 40 40 International: 00 44 161 385 3500 Groups Number: 0844 844 2121 or Fax 020 7915 0414 Calls will cost 7 ppm plus your network access charge.'),
+      'Monday - Saturday: 10:00 - 20:00.',
+    )
+  })
+  test('keeps the venue\'s own number', () => {
+    assert.equal(
+      cleanBoxOffice('Monday - Saturday 11:00 - 23:00 Ticketmaster UK 0870 154 40 40, International 00 44 161 385 3500 Underworld (+44) 020 7482 1932'),
+      'Monday - Saturday 11:00 - 23:00 Underworld (+44) 020 7482 1932',
+    )
+  })
+  test('returns undefined when only Ticketmaster numbers were there', () => {
+    assert.equal(cleanBoxOffice('Ticketmaster UK 0870 154 40 40, International 00 44 161 385 3500'), undefined)
+    assert.equal(cleanBoxOffice(''), undefined)
+    assert.equal(cleanBoxOffice(null), undefined)
   })
 })

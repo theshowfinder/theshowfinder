@@ -45,7 +45,7 @@ export function fallbackEventDescription(input: { name: string; startDate: strin
   const when = longUkDate(input.startDate)
   const where = [input.venueName, input.city].filter((v, i, a): v is string => !!v && a.indexOf(v) === i).join(', ')
   const parts = [`${input.name}${where ? ` live at ${where}` : ' live in the UK'}${when ? ` on ${when}` : ''}.`]
-  parts.push('Compare tickets from official sellers and resale sites on TheShowFinder.')
+  parts.push('Find tickets from official sellers on TheShowFinder.')
   return parts.join(' ')
 }
 

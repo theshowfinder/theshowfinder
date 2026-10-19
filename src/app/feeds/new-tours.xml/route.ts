@@ -13,7 +13,7 @@ export async function GET() {
   const xml = buildRssFeed({
     title: 'New UK tour announcements: TheShowFinder',
     link: `${BASE}/new-tours`,
-    description: 'UK tours announced or extended in the last two weeks, newest first, with ticket comparison on every show.',
+    description: 'UK tours announced or extended in the last two weeks, newest first, with a tickets link on every show.',
     selfUrl: `${BASE}/feeds/new-tours.xml`,
     items: tours.slice(0, 30).map(t => ({
       title: `${t.artistName} ${t.isBrandNew ? 'announces' : 'adds'} ${t.showCount} UK dates`,

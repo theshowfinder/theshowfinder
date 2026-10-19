@@ -86,11 +86,34 @@ export function extractEventDetails(event: TMEventExtras): EventDetails | null {
   })
 }
 
+// Ticketmaster's box-office text for many venues still carries Ticketmaster's own
+// old booking line (0870), its international number, group-booking and fax numbers
+// and a premium-rate call-charge notice. None of that is the venue's box office, so
+// it is removed; the opening hours and the venue's own number are kept. Returns
+// undefined when nothing useful is left.
+export function cleanBoxOffice(text: string | null | undefined): string | undefined {
+  if (!text) return undefined
+  let t = text
+  t = t.replace(/(?:\b(?:or|and)\s+)?\bfax\b[^A-Za-z]*(?:[\d\s+()-]+)?/gi, ' ')
+  t = t.replace(/\bTicketmaster(?:\s+UK)?\s*:?\s*0(?:84|87)\d[\d\s]*,?/gi, ' ')
+  t = t.replace(/\bInternational\s*:?\s*(?:\+|00)\s*44[\d\s()+-]*,?/gi, ' ')
+  t = t.replace(/\bGroups?(?:\s+(?:Number|Booking|Bookings|Line))?\s*:?\s*0(?:84|87)\d[\d\s]*/gi, ' ')
+  t = t.replace(/\b0(?:84|87)\d[\d\s]{6,}/g, ' ')
+  t = t.replace(/\bCalls?\s+(?:will\s+)?cost[^.]*\.?/gi, ' ')
+  t = t.replace(/\s{2,}/g, ' ').replace(/\s+([.,;:])/g, '$1').trim()
+  t = t.replace(/[\s,;:&-]+$/, '').trim()
+  if (!/[A-Za-z0-9]{3,}/.test(t) || t.length < 4) return undefined
+  return t
+}
+
 export function extractVenueDetails(venue: TMVenueExtras): VenueDetails | null {
-  const box = [venue.boxOfficeInfo?.openHoursDetail, venue.boxOfficeInfo?.phoneNumberDetail]
-    .map(t => cleanTmText(t, 200))
-    .filter((t): t is string => !!t)
-    .join(' ')
+  const box = cleanBoxOffice(
+    [venue.boxOfficeInfo?.openHoursDetail, venue.boxOfficeInfo?.phoneNumberDetail]
+      .map(t => cleanTmText(t, 200))
+      .filter((t): t is string => !!t)
+      .join(' '),
+  ) ?? ''
+
   return compact<VenueDetails>({
     parking: cleanTmText(venue.parkingDetail, 500) ?? undefined,
     accessibleSeating: cleanTmText(venue.accessibleSeatingDetail, 500) ?? undefined,
@@ -190,7 +213,7 @@ export function buildEventFaq(input: FaqInput): FaqItem[] {
   if (!cancelled && providerNames.length) {
     faq.push({
       q: `Where can I buy tickets for ${title}?`,
-      a: `You can compare prices and availability for ${title} on TheShowFinder across ${joinNames(providerNames)}. Prices change as tickets sell, so check each seller before you buy.`,
+      a: `You can find tickets for ${title} through ${joinNames(providerNames)}, linked from TheShowFinder. Prices change as tickets sell, so check each seller before you buy.`,
     })
   }
 
