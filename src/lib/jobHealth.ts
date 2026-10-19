@@ -5,6 +5,7 @@
 /** The longest a job may go without a successful run before it counts as overdue. */
 export const JOB_EXPECTATIONS: Record<string, { label: string; maxHoursSinceSuccess: number }> = {
   'sync-events':               { label: 'Ticketmaster main sync',        maxHoursSinceSuccess: 30 },
+  'sync-ticketmaster-sweep':   { label: 'Ticketmaster national sweep',    maxHoursSinceSuccess: 16 },
   'sync-onsale':               { label: 'Ticketmaster on-sale / presale', maxHoursSinceSuccess: 16 },
   'expand-tours':              { label: 'Expand tours',                  maxHoursSinceSuccess: 30 },
   'enrich-artists':            { label: 'Enrich artists',                maxHoursSinceSuccess: 30 },

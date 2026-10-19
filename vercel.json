@@ -5,6 +5,10 @@
       "schedule": "0 2 * * *"
     },
     {
+      "path": "/api/cron/sync-ticketmaster-sweep",
+      "schedule": "20 0,1,4,5,12 * * *"
+    },
+    {
       "path": "/api/cron/sync-onsale",
       "schedule": "15 2 * * *"
     },

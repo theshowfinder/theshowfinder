@@ -14,7 +14,7 @@ import {
 
 import { extractEventDetails, extractVenueDetails, detailsKey, type TMEventExtras, type TMVenueExtras } from '@/lib/eventDetails'
 
-type DbClient = ReturnType<typeof createAdminClient>
+export type DbClient = ReturnType<typeof createAdminClient>
 
 // ── Ticketmaster API types ──────────────────────────────────────────────────
 
@@ -58,7 +58,7 @@ interface TMPriceRange {
   max: number
 }
 
-interface TMEvent extends TMEventExtras {
+export interface TMEvent extends TMEventExtras {
   id: string
   name: string
   url?: string
@@ -90,19 +90,19 @@ interface TMResponse {
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
-const TM_BASE       = 'https://app.ticketmaster.com/discovery/v2'
-const RATE_LIMIT_MS = 300   // ms between API calls
+export const TM_BASE       = 'https://app.ticketmaster.com/discovery/v2'
+export const RATE_LIMIT_MS = 300   // ms between API calls
 const EVENT_HORIZON_MONTHS = 24
 const EVENT_BAND_DAYS = 90
 
-interface SegmentQuery {
+export interface SegmentQuery {
   classificationName: string
   dbCategory: EventCategory
 }
 
 // Primary segment fetches (Music, Arts & Theatre, Sports, Family)
 // Comedy is fetched separately as a genre search
-const SEGMENT_QUERIES: SegmentQuery[] = [
+export const SEGMENT_QUERIES: SegmentQuery[] = [
   { classificationName: 'music',          dbCategory: 'concert' },
   { classificationName: 'arts & theatre', dbCategory: 'theatre' },
   { classificationName: 'sports',         dbCategory: 'sports'  },
@@ -186,7 +186,7 @@ function getBestImage(images: TMImage[] | undefined): string | null {
   return images.find(ok)?.url ?? images[0]?.url ?? null
 }
 
-function mapCategory(event: TMEvent, defaultCategory: EventCategory): EventCategory {
+export function mapCategory(event: TMEvent, defaultCategory: EventCategory): EventCategory {
   const cls     = event.classifications?.[0]
   const seg     = cls?.segment?.name ?? ''
   const genre   = (cls?.genre?.name ?? '').toLowerCase()
@@ -226,7 +226,7 @@ function mapStatus(event: TMEvent): 'upcoming' | 'on_sale' | 'sold_out' | 'cance
   return 'upcoming'
 }
 
-function sleep(ms: number) {
+export function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms))
 }
 
@@ -238,9 +238,10 @@ function sleep(ms: number) {
 // to be indistinguishable and made real coverage gaps impossible to diagnose.
 type FetchStatus = 'ok' | 'rate_limited' | 'http_error' | 'api_fault' | 'network_error'
 
-interface FetchResult {
+export interface FetchResult {
   events:      TMEvent[]
   totalPages:  number
+  totalElements?: number  // total matches for the query (used by the national sweep to split windows)
   status:      FetchStatus
   detail?:     string   // present when status !== 'ok'
 }
@@ -291,6 +292,7 @@ async function fetchWithRetry(url: URL, label: string): Promise<FetchResult> {
     return {
       events:     json._embedded?.events ?? [],
       totalPages: json.page?.totalPages  ?? 0,
+      totalElements: json.page?.totalElements ?? 0,
       status:     'ok',
     }
   }
@@ -298,7 +300,7 @@ async function fetchWithRetry(url: URL, label: string): Promise<FetchResult> {
   return { events: [], totalPages: 0, status: 'network_error', detail: 'unreachable' }
 }
 
-async function fetchTMPage(
+export async function fetchTMPage(
   classificationName: string,
   page: number,
   startDateTime: string,
@@ -514,7 +516,9 @@ async function upsertEventArtists(
 
 type UpsertResult = 'inserted' | 'updated' | 'skipped' | 'error'
 
-type ExistingEventSnapshot = {
+export const EXISTING_EVENT_COLUMNS = 'id, title, slug, category, venue_id, start_date, onsale_date, public_onsale_start, public_onsale_end, presale_start, presale_end, presale_name, image_url, description, price_from, price_to, currency, tickets_url, status, ticketmaster_id, doors_time, details'
+
+export type ExistingEventSnapshot = {
   id: string
   title: string
   slug: string
@@ -593,6 +597,7 @@ async function upsertEvent(
   defaultCategory: EventCategory,
   artistCache: Map<string, string>,
   eventCache: Map<string, ExistingEventSnapshot | null>,
+  touchIds?: string[],
 ): Promise<UpsertResult> {
   const startDate = buildStartDate(tmEvent)
   if (!startDate) return 'skipped'
@@ -650,7 +655,7 @@ async function upsertEvent(
   if (existing === undefined) {
     const { data: current } = await db
       .from('events')
-      .select('id, title, slug, category, venue_id, start_date, onsale_date, public_onsale_start, public_onsale_end, presale_start, presale_end, presale_name, image_url, description, price_from, price_to, currency, tickets_url, status, ticketmaster_id, doors_time, details')
+      .select(EXISTING_EVENT_COLUMNS)
       .eq('ticketmaster_id', tmEvent.id)
       .maybeSingle()
     existing = (current as ExistingEventSnapshot | null) ?? null
@@ -685,6 +690,12 @@ async function upsertEvent(
     existing.ticketmaster_id === eventData.ticketmaster_id &&
     (existing.doors_time ? new Date(existing.doors_time).getTime() : null) === (eventData.doors_time ? new Date(eventData.doors_time).getTime() : null) &&
     detailsKey(existing.details) === detailsKey(eventData.details)
+
+  if (unchanged && existing && touchIds) {
+    // Caller batches the freshness update (one query per page instead of one per event).
+    touchIds.push(existing.id)
+    return 'skipped'
+  }
 
   if (unchanged && existing) {
     // Keep the freshness signal current without rewriting the full event row,
@@ -726,13 +737,14 @@ async function upsertEvent(
 // what turns thousands of sequential awaited DB round-trips (the actual cause
 // of the 5-minute Vercel function timeout) into a small number of concurrent
 // batches per page.
-async function processEvent(
+export async function processEvent(
   db: DbClient,
   tmEvent: TMEvent,
   upsertCategory: EventCategory,
   venueCache: Map<string, string>,
   artistCache: Map<string, string>,
   eventCache: Map<string, ExistingEventSnapshot | null>,
+  touchIds?: string[],
 ): Promise<UpsertResult | 'no-venue'> {
   const tmVenue = tmEvent._embedded?.venues?.[0]
   if (!tmVenue) return 'no-venue'
@@ -740,7 +752,7 @@ async function processEvent(
   const venueId = await upsertVenue(db, tmVenue, venueCache)
   if (!venueId) return 'error'
 
-  return upsertEvent(db, tmEvent, venueId, upsertCategory, artistCache, eventCache)
+  return upsertEvent(db, tmEvent, venueId, upsertCategory, artistCache, eventCache, touchIds)
 }
 
 export interface TargetedTicketmasterResult {
@@ -889,7 +901,7 @@ export async function syncTicketmasterAttractions(
   return out
 }
 
-const EVENT_CONCURRENCY = 20  // events processed in parallel per TM API page
+export const EVENT_CONCURRENCY = 20  // events processed in parallel per TM API page
 const SEGMENT_BUDGET_MS = 120_000  // worst-case time for one on-sale (category, band) segment
 
 // ── On-sale-soon fetch ───────────────────────────────────────────────────────
