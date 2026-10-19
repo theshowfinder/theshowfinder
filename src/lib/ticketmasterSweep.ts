@@ -5,6 +5,8 @@
 // for the whole UK by date window, halving any window that holds more than one query can return,
 // so one lap is a few hundred API calls and can run every day. Events Ticketmaster no longer
 // lists are then checked one by one (or in id batches); only a confirmed "not found" removes one.
+import { isAttraction } from './eventMix.ts'
+import { isPackageOrClassTitle } from './eventTitles.ts'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { EventCategory } from '@/lib/types/database'
 import {
@@ -49,6 +51,10 @@ export interface SweepStats {
   /** Dry run only: events Ticketmaster returned that are not in our database yet / already are. */
   wouldInsert: number
   alreadyKnown: number
+  /** Dry run only: how many of the would-insert events look like attraction tickets / packages, and a spread of examples. */
+  newAttractionLike?: number
+  newPackageLike?: number
+  sampleNew?: string[]
 }
 
 export interface SweepResult {
@@ -104,14 +110,28 @@ async function processEvents(
 }
 
 /** Dry run: look the page up in our database and count what a live run would add. Writes nothing. */
-async function countPage(db: DbClient, events: TMEvent[], stats: Pick<SweepStats, 'wouldInsert' | 'alreadyKnown'>): Promise<void> {
+async function countPage(db: DbClient, events: TMEvent[], stats: Pick<SweepStats, 'wouldInsert' | 'alreadyKnown' | 'newAttractionLike' | 'newPackageLike' | 'sampleNew'>): Promise<void> {
   const loose = db as unknown as Loose
   for (let i = 0; i < events.length; i += 100) {
     const ids = events.slice(i, i + 100).map(e => e.id)
     const { data, error } = await loose.from('events').select('ticketmaster_id').in('ticketmaster_id', ids)
     if (error) continue
     const known = new Set(((data ?? []) as Array<{ ticketmaster_id: string }>).map(r => r.ticketmaster_id))
-    for (const id of ids) { if (known.has(id)) stats.alreadyKnown++; else stats.wouldInsert++ }
+    const byId = new Map(events.slice(i, i + 100).map(e => [e.id, e]))
+    for (const id of ids) {
+      if (known.has(id)) { stats.alreadyKnown++; continue }
+      stats.wouldInsert++
+      const ev = byId.get(id)
+      const name = ev?.name ?? ''
+      const venue = ev?._embedded?.venues?.[0]
+      const venueName = venue?.name ?? ''
+      if (isAttraction({ title: name, venue_name: venueName })) stats.newAttractionLike = (stats.newAttractionLike ?? 0) + 1
+      if (isPackageOrClassTitle(name)) stats.newPackageLike = (stats.newPackageLike ?? 0) + 1
+      const sample = (stats.sampleNew ??= [])
+      if (sample.length < 12 || (stats.wouldInsert % 150 === 0 && sample.length < 60)) {
+        sample.push(`${name} | ${venueName} | ${ev?.dates?.start?.localDate ?? ''}`.slice(0, 120))
+      }
+    }
   }
 }
 
