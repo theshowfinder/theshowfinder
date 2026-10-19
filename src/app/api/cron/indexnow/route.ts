@@ -13,7 +13,7 @@ const BASE = 'https://www.theshowfinder.com'
 // about events added in the last ~30 hours plus the hub pages that change daily.
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET
-  if (cronSecret && request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+  if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

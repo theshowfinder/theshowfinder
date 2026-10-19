@@ -15,10 +15,8 @@ const DAY = 86400000
 
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET
-  if (cronSecret) {
-    if (request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const started = Date.now()

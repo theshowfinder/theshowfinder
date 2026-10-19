@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic'
 // to future events at render time, so they can never keep serving past dates.
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET
-  if (cronSecret && request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+  if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

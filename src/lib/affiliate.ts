@@ -61,8 +61,18 @@ export function getSeeTicketsAffiliateLink(destinationUrl: string, subId?: strin
   // The See Tickets product feed supplies its own Awin tracking link
   // (aw_deep_link, already carrying our publisher and merchant IDs). Wrapping
   // that in a second cread.php link nests one tracking link inside another,
-  // which risks lost attribution — so an existing Awin link is returned as is.
-  if (isAwinTrackingLink(destinationUrl)) return destinationUrl
+  // which risks lost attribution. Add the event clickref to the existing link.
+  if (isAwinTrackingLink(destinationUrl)) {
+    const sub = cleanSubId(subId)
+    if (!sub) return destinationUrl
+    try {
+      const url = new URL(destinationUrl)
+      url.searchParams.set('clickref', sub)
+      return url.toString()
+    } catch {
+      return destinationUrl
+    }
+  }
   const encoded = encodeURIComponent(destinationUrl)
   const sub = cleanSubId(subId)
   // clickref is Awin's free-text tracking field (shown against each transaction).

@@ -52,6 +52,21 @@ describe('getSeeTicketsAffiliateLink', () => {
     assert.equal(getSeeTicketsAffiliateLink(feedLink), feedLink)
   })
 
+  test('adds one event clickref to a feed-supplied Awin link without nesting tracking URLs', () => {
+    const feedLink = 'https://www.awin1.com/pclick.php?p=45810948876&a=2896631&m=7816'
+    const tracked = new URL(getSeeTicketsAffiliateLink(feedLink, 'evt-test-show'))
+    assert.equal(tracked.pathname, '/pclick.php')
+    assert.equal(tracked.searchParams.get('p'), '45810948876')
+    assert.equal(tracked.searchParams.get('clickref'), 'evt-test-show')
+    assert.equal(getSeeTicketsAffiliateLink(tracked.toString(), 'evt-test-show'), tracked.toString())
+  })
+
+  test('replaces an old clickref for a different event instead of adding a duplicate', () => {
+    const feedLink = 'https://www.awin1.com/pclick.php?p=1&a=2896631&m=7816&clickref=old'
+    const tracked = new URL(getSeeTicketsAffiliateLink(feedLink, 'evt-new'))
+    assert.deepEqual(tracked.searchParams.getAll('clickref'), ['evt-new'])
+  })
+
   test('returns an existing Awin cread link unchanged too (idempotent)', () => {
     const once = getSeeTicketsAffiliateLink('https://www.seetickets.com/event/123')
     assert.equal(getSeeTicketsAffiliateLink(once), once)
