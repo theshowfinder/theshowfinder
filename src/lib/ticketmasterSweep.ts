@@ -7,6 +7,7 @@
 // lists are then checked one by one (or in id batches); only a confirmed "not found" removes one.
 import { isAttraction } from './eventMix.ts'
 import { isPackageOrClassTitle } from './eventTitles.ts'
+import { MAX_PERFORMANCES_PER_DAY, londonDay, normalizeSlotTitle } from './timeSlotCap.ts'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { EventCategory } from '@/lib/types/database'
 import {
@@ -54,6 +55,8 @@ export interface SweepStats {
   /** Dry run only: how many of the would-insert events look like attraction tickets / packages, and a spread of examples. */
   newAttractionLike?: number
   newPackageLike?: number
+  /** Dry run only: new events a live run would skip because they are extra time slots (same title, venue and day). */
+  wouldSkipTimeSlots?: number
   sampleNew?: string[]
 }
 
@@ -110,7 +113,9 @@ async function processEvents(
 }
 
 /** Dry run: look the page up in our database and count what a live run would add. Writes nothing. */
-async function countPage(db: DbClient, events: TMEvent[], stats: Pick<SweepStats, 'wouldInsert' | 'alreadyKnown' | 'newAttractionLike' | 'newPackageLike' | 'sampleNew'>): Promise<void> {
+const slotCounts = new Map<string, number>()
+
+async function countPage(db: DbClient, events: TMEvent[], stats: Pick<SweepStats, 'wouldInsert' | 'alreadyKnown' | 'newAttractionLike' | 'newPackageLike' | 'sampleNew' | 'wouldSkipTimeSlots'>): Promise<void> {
   const loose = db as unknown as Loose
   for (let i = 0; i < events.length; i += 100) {
     const ids = events.slice(i, i + 100).map(e => e.id)
@@ -120,11 +125,16 @@ async function countPage(db: DbClient, events: TMEvent[], stats: Pick<SweepStats
     const byId = new Map(events.slice(i, i + 100).map(e => [e.id, e]))
     for (const id of ids) {
       if (known.has(id)) { stats.alreadyKnown++; continue }
-      stats.wouldInsert++
       const ev = byId.get(id)
       const name = ev?.name ?? ''
       const venue = ev?._embedded?.venues?.[0]
       const venueName = venue?.name ?? ''
+      const startIso = ev?.dates?.start?.dateTime ?? ev?.dates?.start?.localDate ?? ''
+      const slotKey = `${venue?.id ?? venueName}|${normalizeSlotTitle(name)}|${startIso ? londonDay(startIso) : ''}`
+      const slotCount = (slotCounts.get(slotKey) ?? 0) + 1
+      slotCounts.set(slotKey, slotCount)
+      if (slotCount > MAX_PERFORMANCES_PER_DAY) { stats.wouldSkipTimeSlots = (stats.wouldSkipTimeSlots ?? 0) + 1; continue }
+      stats.wouldInsert++
       if (isAttraction({ title: name, venue_name: venueName })) stats.newAttractionLike = (stats.newAttractionLike ?? 0) + 1
       if (isPackageOrClassTitle(name)) stats.newPackageLike = (stats.newPackageLike ?? 0) + 1
       const sample = (stats.sampleNew ??= [])
@@ -145,6 +155,7 @@ async function recalcFlags(db: DbClient) {
 }
 
 export async function runTicketmasterSweep(opts: { deadlineMs: number }): Promise<SweepResult> {
+  slotCounts.clear()   // dry-run time-slot accounting is per run
   const t0 = Date.now()
   const db = createAdminClient()
   const loose = db as unknown as Loose
@@ -286,7 +297,7 @@ async function fetchEventById(id: string): Promise<FetchById> {
   }
 }
 
-async function fetchEventsByIds(ids: string[]): Promise<{ ok: true; events: TMEvent[] } | { ok: false; rateLimited: boolean }> {
+async function fetchEventsByIds(ids: string[]): Promise<{ ok: true; events: TMEvent[] } | { ok: false; rateLimited: boolean; info?: string }> {
   const url = new URL(`${TM_BASE}/events.json`)
   url.searchParams.set('apikey', process.env.TICKETMASTER_API_KEY!)
   url.searchParams.set('id', ids.join(','))
@@ -294,8 +305,14 @@ async function fetchEventsByIds(ids: string[]): Promise<{ ok: true; events: TMEv
   url.searchParams.set('locale', 'en-us')
   try {
     const res = await fetch(url.toString(), { cache: 'no-store' })
-    if (res.status === 429) return { ok: false, rateLimited: true }
-    if (!res.ok) return { ok: false, rateLimited: false }
+    if (res.status === 429) {
+      const h = res.headers
+      const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 160)
+      const info = ['rate-limit', 'rate-limit-available', 'rate-limit-over', 'rate-limit-reset', 'retry-after']
+        .map(k => `${k}=${h.get(k) ?? '-'}`).join(' ') + ` body=${body}`
+      return { ok: false, rateLimited: true, info }
+    }
+    if (!res.ok) return { ok: false, rateLimited: false, info: `HTTP ${res.status}` }
     const json = await res.json() as { _embedded?: { events?: TMEvent[] }; fault?: unknown; errors?: unknown }
     if (json.fault || json.errors) return { ok: false, rateLimited: false }
     return { ok: true, events: json._embedded?.events ?? [] }
@@ -381,9 +398,14 @@ export async function verifyStaleTicketmasterEvents(opts: { deadlineMs: number; 
   for (let i = 0; i < candidates.length; i += ID_BATCH) {
     if (Date.now() + STOP_MARGIN_MS > opts.deadlineMs) { out.status = 'partial'; out.detail = out.detail ?? 'time budget reached'; return finish() }
     const batch = candidates.slice(i, i + ID_BATCH)
-    const res = await fetchEventsByIds(batch.map(c => c.ticketmaster_id))
+    let res = await fetchEventsByIds(batch.map(c => c.ticketmaster_id))
+    // A 429 straight after the sweep is usually a burst limit: wait and try again before giving up.
+    for (let attempt = 0; attempt < 2 && !res.ok && res.rateLimited; attempt++) {
+      await sleep(2500)
+      res = await fetchEventsByIds(batch.map(c => c.ticketmaster_id))
+    }
     await sleep(RATE_LIMIT_MS)
-    if (!res.ok && res.rateLimited) { out.status = 'rate_limited'; return finish() }
+    if (!res.ok && res.rateLimited) { out.status = 'rate_limited'; out.detail = `Ticketmaster 429 after retries: ${res.info ?? ''}`; return finish() }
 
     let missing: Candidate[]
     if (dry && res.ok) out.sampleBatchLookupWorked = true
