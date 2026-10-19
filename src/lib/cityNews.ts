@@ -148,7 +148,23 @@ export const NATIONAL_OUTLET_LOG_PREFIX = 'National — '
 async function fetchNamedFeed(feed: { source: string; url: string }, db: DbClient): Promise<NewsItem[]> {
   const parser = new Parser<Record<string, unknown>, RawItem>({ timeout: RSS_PER_ITEM_TIMEOUT_MS })
   try {
-    const parsed = await parser.parseURL(feed.url)
+    // rss-parser's own HTTP client does not decompress, and some publishers (The Independent) send
+    // gzip regardless, which surfaced as "Non-whitespace before first tag. Char: \u001f" (the gzip
+    // magic byte). Node's fetch decompresses, so fetch the body ourselves and hand the text over.
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), RSS_PER_ITEM_TIMEOUT_MS)
+    let xml: string
+    try {
+      const res = await fetch(feed.url, {
+        signal: controller.signal,
+        headers: { 'user-agent': 'Mozilla/5.0 (compatible; TheShowFinderBot/1.0; +https://www.theshowfinder.com)', accept: 'application/rss+xml, application/xml, text/xml, */*' },
+      })
+      if (!res.ok) throw new Error(`Status code ${res.status}`)
+      xml = await res.text()
+    } finally {
+      clearTimeout(timer)
+    }
+    const parsed = await parser.parseString(xml)
     return (parsed.items ?? [])
       .map(item => ({
         headline:    (item.title ?? '').trim(),
