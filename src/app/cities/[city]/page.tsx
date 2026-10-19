@@ -42,6 +42,9 @@ import { cityFeedPath } from '@/lib/calendarFeeds'
 import { getNearbyAreas, getNeighbourCities, areasWithEvents, nearbyIntroSentence } from '@/lib/nearbyAreas'
 import CityBrowse from '@/components/CityBrowse'
 import CityTicketSources from '@/components/CityTicketSources'
+import CityMorningEdition from '@/components/CityMorningEdition'
+import { fetchCityEdition } from '@/lib/cityEdition'
+import { buildEdition, editionHeadline, freshnessStamp } from '@/lib/cityBrief'
 
 // No city page is built at deploy time: each is generated on first request, then
 // cached and refreshed in the background (see `revalidate`). Building all 40 cities
@@ -148,6 +151,7 @@ export default async function CityPage({
     nearbyEvents,
     categoryCounts,
     recentlyAdded,
+    editionData,
   ] = await Promise.all([
     // Today only, Europe/London calendar day, soonest first — see
     // src/lib/tonight.ts for the exact rules (cancelled/postponed and
@@ -237,9 +241,13 @@ export default async function CityPage({
 
     // Shows first listed in the last 7 days: the page's own freshness signal
     fetchRecentlyAddedEvents(supabase, { city: cityName, limit: 12 }),
+
+    // Everything the morning edition at the top of the page is built from.
+    fetchCityEdition(supabase, cityName, now),
   ])
 
   const localBusinesses = localBusinessesResult.data ?? []
+
   const nearbyTowns = areasWithEvents(stripAreas, nearbyEvents)
   // The written intro gains one factual line naming the nearby towns that have
   // shows below (Derby's hand-written intro already says this itself).
@@ -253,6 +261,26 @@ export default async function CityPage({
   const newsPick = pickNewsForCityPage(cityNewsResult.data ?? [], nationalNewsResult.data ?? [], now.getTime(), { limit: 8, minLocal: 3 })
   const cityNews = newsPick.items
   const newsIsLocal = newsPick.localCount >= 3
+
+  // Morning edition: image-led tiles, a factual headline and a freshness stamp that only shows when
+  // the city's data really was refreshed recently.
+  const editionTiles = buildEdition({ now, ...editionData })
+  const editionHeadlineText = editionHeadline({
+    cityName,
+    tonight: tonightEvents.length,
+    onSaleToday: new Set(editionData.onSaleToday.map(e => e.title)).size,
+    presaleLive: presaleGroups.length,
+    thisWeek: eventsThisWeek.length,
+    next: editionData.upcoming[0] ? { title: editionData.upcoming[0].title, start_date: editionData.upcoming[0].start_date } : null,
+  })
+  const editionStamp = freshnessStamp(editionData.lastSyncedAt, now)
+  const editionNav = [
+    tonightEvents.length > 0 && { href: '#tonight', label: 'Tonight' },
+    eventsThisWeek.length > 0 && { href: '#this-week', label: 'This week' },
+    presaleGroups.length > 0 && { href: '#presales', label: 'Presales' },
+    onsaleGroups.length > 0 && { href: '#on-sale', label: 'On sale' },
+    cityNews.length > 0 && { href: '#news', label: 'News' },
+  ].filter((x): x is { href: string; label: string } => !!x)
 
   // A query error must not be presented the same way as a genuine
   // zero-event city — see cityEventCount.ts for the intermittent
@@ -418,6 +446,9 @@ export default async function CityPage({
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-14">
 
+        {/* ── MORNING EDITION: image-led, built from today's data ── */}
+        <CityMorningEdition headline={editionHeadlineText} stamp={editionStamp} tiles={editionTiles} nav={editionNav} />
+
         {/* ── CITY GUIDE INTRO (only renders for cities with a written entry) ── */}
         {CITY_GUIDE_INTROS[cityName] && (
           <CityIntro
@@ -438,7 +469,7 @@ export default async function CityPage({
 
         {/* ── TONIGHT (hidden completely when there are no valid events) ── */}
         {tonightEvents.length > 0 && (
-          <section>
+          <section id="tonight" className="scroll-mt-20">
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
                 Happening now
@@ -460,7 +491,7 @@ export default async function CityPage({
 
         {/* ── EVENTS THIS WEEK (ticketed shows + local events, merged) ── */}
         {eventsThisWeek.length > 0 && (
-          <section>
+          <section id="this-week" className="scroll-mt-20">
             <div className="flex items-end justify-between mb-7">
               <div>
                 <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
@@ -530,7 +561,7 @@ export default async function CityPage({
 
         {/* ── LOCAL ENTERTAINMENT NEWS (hidden if no rows yet) ── */}
         {cityNews.length > 0 && (
-          <section>
+          <section id="news" className="scroll-mt-20">
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
                 {newsIsLocal ? 'In the news' : `${cityName} + UK`}
@@ -546,7 +577,7 @@ export default async function CityPage({
 
         {/* ── PRESALES OPEN NOW ── */}
         {presaleGroups.length > 0 && (
-          <section>
+          <section id="presales" className="scroll-mt-20">
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFB800' }}>
                 Buy before everyone else
@@ -562,7 +593,7 @@ export default async function CityPage({
         {/* ── ON SALE THIS WEEK (omit the whole block when empty so the page
              stays focused and does not present a thin empty section to users
              or crawlers) ── */}
-        {onsaleGroups.length > 0 && <section>
+        {onsaleGroups.length > 0 && <section id="on-sale" className="scroll-mt-20">
           <div className="flex items-end justify-between mb-7">
             <div>
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
