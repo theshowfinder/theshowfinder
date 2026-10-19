@@ -4,6 +4,7 @@
 // runs under `node --test`.
 import { isTonightEvent, londonDayWindow } from './tonight.ts'
 import { isPackageOrClassTitle, seriesKey } from './eventTitles.ts'
+import { isAttraction } from './eventMix.ts'
 
 export type EditionKind = 'tonight' | 'onsale_today' | 'presale_live' | 'new' | 'soon' | 'next_up'
 
@@ -70,7 +71,7 @@ const isLive = (e: EditionEvent) => e.status !== 'cancelled' && e.status !== 'po
 
 /**
  * Pick the tiles for the edition. Order is by urgency (tonight, then today's on-sales, live presales,
- * new listings, the rest of the week). One tile per show: package/class listings are dropped and
+ * new listings, the rest of the week). One tile per show: package/class listings and timed-entry attractions (Sea Life, Tussauds, waterparks) are dropped and
  * repeat dates of one series collapse to the earliest.
  */
 export function buildEdition<T extends EditionEvent>(input: EditionInput<T>, limit = 7): EditionTile<T>[] {
@@ -84,7 +85,7 @@ export function buildEdition<T extends EditionEvent>(input: EditionInput<T>, lim
     let added = 0
     for (const event of list) {
       if (tiles.length >= limit || added >= max) return
-      if (seenIds.has(event.id) || !isLive(event) || isPackageOrClassTitle(event.title)) continue
+      if (seenIds.has(event.id) || !isLive(event) || isPackageOrClassTitle(event.title) || isAttraction(event)) continue
       const key = seriesKey(event.title)
       if (seenSeries.has(key)) continue
       seenIds.add(event.id)

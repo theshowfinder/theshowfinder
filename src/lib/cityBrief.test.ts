@@ -31,6 +31,14 @@ describe('cityBrief', () => {
     assert.equal(tiles[0].event.id, a.id)
   })
 
+  test('timed-entry attractions never become tiles', () => {
+    const real = ev('Alison Moyet', '2026-10-20T18:30:00Z')
+    const tussauds = ev('Madame Tussauds Blackpool - Standard Entry', '2026-10-20T09:00:00Z', { venue_name: 'Madame Tussauds Blackpool' })
+    const park = ev('Blackpool Sandcastle Waterpark', '2026-10-20T09:00:00Z', { venue_name: 'Sandcastle Waterpark, Blackpool' })
+    const tiles = buildEdition({ ...empty, today: [tussauds, park, real] })
+    assert.deepEqual(tiles.map(t => t.event.title), ['Alison Moyet'])
+  })
+
   test('an event already finished tonight is not shown as tonight', () => {
     const done = ev('Early', '2026-10-20T10:00:00Z', { end_date: '2026-10-20T07:00:00Z' })
     assert.equal(buildEdition({ ...empty, today: [done] }).length, 0)
