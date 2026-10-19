@@ -297,6 +297,14 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
     redirect(cityRedirect)
   }
 
+  // Typing just a city name ("derby", "Bath") in the search box means "show me that city", so send
+  // it to the city page. Only an exact city name does this; "Derby County" or "Bath Festival" still
+  // search events, and any extra filter keeps the normal results list.
+  const queryAsCity = sp.q && !sp.category && !sp.city ? cityPagePath(sp.q) : null
+  if (queryAsCity) {
+    redirect(queryAsCity)
+  }
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
       {/* Top bar */}

@@ -43,6 +43,8 @@ export default function SearchBar({ cities = FALLBACK_CITIES }: SearchBarProps) 
       <div className="relative w-full sm:w-auto">
         <MapPinIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
         <select
+          name="city"
+          aria-label="City"
           value={city}
           onChange={e => setCity(e.target.value)}
           className="w-full sm:w-auto pl-9 pr-9 py-3.5 text-base rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:border-transparent shadow-sm appearance-none cursor-pointer min-h-[52px]"
