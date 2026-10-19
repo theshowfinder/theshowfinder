@@ -400,6 +400,9 @@ async function NationalNews() {
             </p>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Entertainment News</h2>
           </div>
+          <Link href="/news" className="text-sm font-semibold whitespace-nowrap text-white/60 hover:text-white transition-colors">
+            See all news →
+          </Link>
         </div>
         <NewsCardGrid items={items} context="homepage" scroll />
       </div>
@@ -456,6 +459,9 @@ async function EventsThisWeekNational() {
             </p>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Events This Week</h2>
           </div>
+          <Link href="/events" className="text-sm font-semibold whitespace-nowrap hover:underline" style={{ color: '#E8003D' }}>
+            See all events →
+          </Link>
         </div>
         <ScrollRail label="Events">
           {events.map(event => <EventCard key={event.id} event={event} />)}
@@ -521,11 +527,16 @@ async function JustAnnounced() {
   return (
     <section className="bg-white py-10 sm:py-14 border-t border-slate-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-7">
-          <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
-            Hot off the press
-          </p>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Just Announced</h2>
+        <div className="flex items-end justify-between mb-7">
+          <div>
+            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+              Hot off the press
+            </p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Just Announced</h2>
+          </div>
+          <Link href="/new-tours" className="text-sm font-semibold whitespace-nowrap hover:underline" style={{ color: '#E8003D' }}>
+            See all new tours →
+          </Link>
         </div>
         <ScrollRail label="Just announced" columns={4}>
           {events.map(event => <EventCard key={event.id} event={event} />)}
