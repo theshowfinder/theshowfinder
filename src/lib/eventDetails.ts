@@ -79,7 +79,7 @@ export function extractEventDetails(event: TMEventExtras): EventDetails | null {
   return compact<EventDetails>({
     age: event.ageRestrictions?.legalAgeEnforced ? 'Age restrictions are enforced at this event. Check the ticket terms before you buy.' : undefined,
     ticketLimit: cleanTmText(event.ticketLimit?.info, 200) ?? undefined,
-    accessibility: cleanTmText(event.accessibility?.info, 400) ?? undefined,
+    accessibility: cleanVenueNote(cleanTmText(event.accessibility?.info, 400)),
     support: uniqueSupport.length ? uniqueSupport : undefined,
     promoter: event.promoter?.name?.trim() || undefined,
     seatmapUrl: event.seatmap?.staticUrl?.startsWith('https://') ? event.seatmap.staticUrl : undefined,
@@ -106,6 +106,22 @@ export function cleanBoxOffice(text: string | null | undefined): string | undefi
   return t
 }
 
+// Free-text venue notes (accessibility, parking, general rules) sometimes tell people to
+// ring an 0870/0844/0871 booking line. Those are Ticketmaster-era premium-rate numbers
+// and no longer the venue's line, so any sentence that sends the reader to one is
+// removed; the rest of the note is kept. Returns undefined when nothing is left.
+const PREMIUM_NUMBER = /\b0(?:84|87)\d[\d\s]{6,}/
+export function cleanVenueNote(text: string | null | undefined): string | undefined {
+  if (!text) return undefined
+  const kept = text
+    .split(/(?<=[.!?])\s+/)
+    .filter(sentence => !PREMIUM_NUMBER.test(sentence))
+    .join(' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  return /[A-Za-z0-9]{3,}/.test(kept) ? kept : undefined
+}
+
 export function extractVenueDetails(venue: TMVenueExtras): VenueDetails | null {
   const box = cleanBoxOffice(
     [venue.boxOfficeInfo?.openHoursDetail, venue.boxOfficeInfo?.phoneNumberDetail]
@@ -115,8 +131,8 @@ export function extractVenueDetails(venue: TMVenueExtras): VenueDetails | null {
   ) ?? ''
 
   return compact<VenueDetails>({
-    parking: cleanTmText(venue.parkingDetail, 500) ?? undefined,
-    accessibleSeating: cleanTmText(venue.accessibleSeatingDetail, 500) ?? undefined,
+    parking: cleanVenueNote(cleanTmText(venue.parkingDetail, 500)),
+    accessibleSeating: cleanVenueNote(cleanTmText(venue.accessibleSeatingDetail, 500)),
     generalRule: cleanTmText(venue.generalInfo?.generalRule, 500) ?? undefined,
     childRule: cleanTmText(venue.generalInfo?.childRule, 300) ?? undefined,
     boxOffice: box || undefined,
@@ -203,10 +219,10 @@ export function buildEventFaq(input: FaqInput): FaqItem[] {
     faq.push({ q: `Is there parking at ${venueName ?? 'the venue'}?`, a: venueDetails.parking })
   }
 
-  if (venueDetails?.accessibleSeating || details?.accessibility) {
+  if (cleanVenueNote(venueDetails?.accessibleSeating) || cleanVenueNote(details?.accessibility)) {
     faq.push({
       q: `Is ${venueName ?? 'the venue'} accessible?`,
-      a: [details?.accessibility, venueDetails?.accessibleSeating].filter(Boolean).join(' '),
+      a: [cleanVenueNote(details?.accessibility), cleanVenueNote(venueDetails?.accessibleSeating)].filter(Boolean).join(' '),
     })
   }
 

@@ -36,7 +36,7 @@ import LocalHeroCopy from '@/components/LocalHeroCopy'
 import CategoryStrip from '@/components/CategoryStrip'
 import WestEndStrip from '@/components/WestEndStrip'
 import type { EventWithVenue, CityNews } from '@/lib/types/database'
-import { saleBadgeText, extractArtistName, toSlug } from '@/lib/on-sale'
+import { saleBadgeText, onSaleSlugOf } from '@/lib/on-sale'
 import { fetchEventsThisWeek, fetchPresalesOpenNow, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { listedEventsCount, dropDuplicateEvents } from '@/lib/listedEvents'
 import { CITIES } from '@/lib/cities'
@@ -234,14 +234,14 @@ async function HomepageStats() {
   ]
 
   return (
-    <div className="grid grid-cols-3 gap-4 sm:gap-8 text-center">
+    <dl className="grid grid-cols-3 gap-4 sm:gap-8 text-center">
       {stats.map(({ value, label }) => (
-        <div key={label}>
-          <div className="text-3xl sm:text-4xl font-extrabold mb-1" style={{ color: '#FFD700' }}>{value}</div>
-          <div className="text-white/60 text-sm">{label}</div>
+        <div key={label} className="flex flex-col-reverse">
+          <dt className="text-white/60 text-sm">{label}</dt>
+          <dd className="text-3xl sm:text-4xl font-extrabold mb-1" style={{ color: '#FFD700' }}>{value}</dd>
         </div>
       ))}
-    </div>
+    </dl>
   )
 }
 
@@ -278,7 +278,7 @@ async function OnSaleThisWeek() {
       .limit(2000) as unknown as { data: { title: string }[] | null }
 
     for (const { title } of (upcomingTitles ?? [])) {
-      const slug = toSlug(extractArtistName(title))
+      const slug = onSaleSlugOf(title)
       upcomingCount.set(slug, (upcomingCount.get(slug) ?? 0) + 1)
     }
   }

@@ -1,5 +1,6 @@
 import type { EventWithVenue, Artist } from './types/database'
 import { londonCalendarWeekWindow } from './intelligence.ts'
+import { cleanSeriesName, seriesKey, isPackageOrClassTitle } from './eventTitles.ts'
 
 export type SaleType = 'presale' | 'onsale'
 
@@ -23,6 +24,12 @@ export type OnSaleGroup = {
 // "Harry Styles"                               → "Harry Styles"
 export function extractArtistName(title: string): string {
   return title.split(/\s+\|\s+|\s*:\s+|\s+[-–—]\s+|\s+"[^"]+"/)[0].trim()
+}
+
+// The slug an On Sale card lives under. Variants of one series (sponsor / edition year
+// differences) share it, so they become one card.
+export function onSaleSlugOf(title: string): string {
+  return seriesKey(extractArtistName(title))
 }
 
 export function toSlug(name: string): string {
@@ -92,6 +99,13 @@ export function saleBadgeText(saleType: SaleType, isoDate: string, now: Date = n
   return `${saleType === 'presale' ? 'Presale opens' : 'On sale'} ${fmtOnSaleLabel(isoDate)}`
 }
 
+// VIP / "Venue Premium Tickets" packages and classes ("Fishies Week 7") are products
+// or sessions, not shows going on sale: keep them out of the On Sale cards. The normal
+// ticket row for the same show is untouched, and the ticket type is chosen on its page.
+export function dropPackageListings<T extends { title: string }>(events: T[]): T[] {
+  return events.filter(e => !isPackageOrClassTitle(e.title))
+}
+
 export function groupEventsByArtist(
   events:  EventWithVenue[],
   artists: Artist[],
@@ -101,9 +115,10 @@ export function groupEventsByArtist(
   const groupMap     = new Map<string, OnSaleGroup>()
 
   for (const event of events) {
-    const artistName = extractArtistName(event.title)
-    const slug       = toSlug(artistName)
-    const dbArtist   = artistByName.get(artistName.toLowerCase()) ?? null
+    const rawName    = extractArtistName(event.title)
+    const artistName = cleanSeriesName(rawName)
+    const slug       = seriesKey(artistName)
+    const dbArtist   = artistByName.get(artistName.toLowerCase()) ?? artistByName.get(rawName.toLowerCase()) ?? null
     const sale       = earliestSale(event, now)
 
     const existing = groupMap.get(slug)
@@ -152,7 +167,7 @@ export function groupEventsByArtist(
 export function extractSeriesKey(artistOrTitle: string): string {
   const base = extractArtistName(artistOrTitle)
   const vsMatch = base.match(/^(.*?)\s+(?:v|vs\.?|versus)\s+.+$/i)
-  return toSlug(vsMatch ? vsMatch[1].trim() : base)
+  return seriesKey(vsMatch ? vsMatch[1].trim() : base)
 }
 
 // How many cards from the same series key are allowed into a capped

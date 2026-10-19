@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  cleanTmText, cleanBoxOffice, extractEventDetails, extractVenueDetails, detailsKey, buildEventFaq,
+  cleanTmText, cleanBoxOffice, cleanVenueNote, extractEventDetails, extractVenueDetails, detailsKey, buildEventFaq,
 } from './eventDetails.ts'
 
 describe('cleanTmText', () => {
@@ -119,5 +119,20 @@ describe('cleanBoxOffice', () => {
     assert.equal(cleanBoxOffice('Ticketmaster UK 0870 154 40 40, International 00 44 161 385 3500'), undefined)
     assert.equal(cleanBoxOffice(''), undefined)
     assert.equal(cleanBoxOffice(null), undefined)
+  })
+})
+
+describe('cleanVenueNote', () => {
+  test('removes the sentence that sends people to an 0870 line and keeps the rest', () => {
+    assert.equal(
+      cleanVenueNote('The theatre has step-free access to the stalls. For wheelchair bookings call 0870 895 5505. Guide dogs are welcome.'),
+      'The theatre has step-free access to the stalls. Guide dogs are welcome.',
+    )
+  })
+  test('returns undefined when only the phone line remained', () => {
+    assert.equal(cleanVenueNote('Please call 0870 895 5505 to book.'), undefined)
+  })
+  test('leaves clean notes alone', () => {
+    assert.equal(cleanVenueNote('Level access at the main entrance.'), 'Level access at the main entrance.')
   })
 })

@@ -9,6 +9,7 @@
 
 import { isAttraction } from './eventMix.ts'
 import { normalizeSlotTitle } from './timeSlotCap.ts'
+import { PACKAGE_TITLE, NOT_A_HEADLINE } from './eventTitles.ts'
 
 export interface FeaturedCandidate {
   title: string
@@ -19,13 +20,6 @@ export interface FeaturedCandidate {
   venue_capacity?: number | null
   is_featured?: boolean | null
 }
-
-// Hospitality, upgrades and bundles are products sold against a show, never a show.
-const PACKAGE_TITLE = /\b(vip|premium|hospitality|lounge|packages?|upgrades?|meet\s*(?:&|and)?\s*greets?|ticket\s+experiences?|fast[\s-]?track)\b/i
-
-// Recurring classes, weekly series slots and similar listings that are not a
-// headline night out ("Fishies Week 10", "Toddler Workshop", "Guided Walks ...").
-const NOT_A_HEADLINE = /\b(week\s*\d+|workshops?|classes|class|lessons?|guided\s+walks?|ghost\s+walks?|brunch|afternoon\s+tea|bottomless|open\s+day|fishies)\b/i
 
 export function isFeaturedCandidate(e: Pick<FeaturedCandidate, 'title' | 'venue_name'>): boolean {
   if (isAttraction(e)) return false

@@ -3,8 +3,11 @@
 // stored title (and slug / matching) is left alone; only the displayed text changes.
 const PRODUCTION_SUFFIX = /\s*[([]\s*(?:international|touring|non[\s-]?touring|uk\s*(?:&\s*ireland\s*)?tour(?:\s*\d{4})?|original\s+london\s+cast)\s*[)\]]\s*$/i
 
+// A feed typo that leaves a stray "202" in front of a title ("202 BetMGM Premier League Darts").
+const STRAY_YEAR_PREFIX = /^\s*202\s+(?=[A-Za-z])/
+
 export function displayTitle(title: string): string {
-  const cleaned = title.replace(PRODUCTION_SUFFIX, '').trim()
+  const cleaned = title.replace(PRODUCTION_SUFFIX, '').replace(STRAY_YEAR_PREFIX, '').trim()
   return cleaned || title
 }
 

@@ -76,8 +76,8 @@ export default async function WestEndPage() {
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-2">West End Shows &amp; Tickets</h1>
           <p className="text-white/60 text-sm max-w-2xl">
             {shows.length > 0
-              ? `${shows.length} show${shows.length !== 1 ? 's' : ''} on across ${venues.length} London theatre${venues.length !== 1 ? 's' : ''}, with ticket prices compared across providers.`
-              : 'London’s West End shows, with ticket prices compared across providers.'}
+              ? `${shows.length} show${shows.length !== 1 ? 's' : ''} on across ${venues.length} London theatre${venues.length !== 1 ? 's' : ''}, with tickets from official sellers.`
+              : 'London’s West End shows, with tickets from official sellers.'}
           </p>
         </div>
       </div>

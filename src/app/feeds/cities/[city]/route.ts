@@ -29,7 +29,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ city: s
   const xml = buildRssFeed({
     title: `${city.name} this week: TheShowFinder`,
     link: `${BASE}/cities/${encodeURIComponent(city.name)}/this-week`,
-    description: `The best concerts, theatre, comedy and sport in ${city.name} this week, with tickets compared.`,
+    description: `The best concerts, theatre, comedy and sport in ${city.name} this week, with links to official ticket sellers.`,
     selfUrl: `${BASE}/feeds/cities/${encodeURIComponent(city.name)}.xml`,
     items: events.map(e => ({
       title: `${e.title} at ${e.venue_name ?? city.name}, ${shortUkDate(e.start_date)}`,

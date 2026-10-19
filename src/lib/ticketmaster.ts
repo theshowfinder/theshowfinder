@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildFallbackDescription, cleanSourceDescription } from '@/lib/eventDescription'
 import { isKnownWestEndShow } from '@/lib/seeTicketsWestEnd'
+import { isDartsTitle } from '@/lib/eventTitles'
 import type { EventCategory } from '@/lib/types/database'
 import { CITIES } from '@/lib/cities'
 import {
@@ -190,6 +191,9 @@ function mapCategory(event: TMEvent, defaultCategory: EventCategory): EventCateg
   const seg     = cls?.segment?.name ?? ''
   const genre   = (cls?.genre?.name ?? '').toLowerCase()
   const subGenre = (cls?.subGenre?.name ?? '').toLowerCase()
+
+  // Darts is a sport, whatever genre the feed files it under.
+  if (isDartsTitle(event.name)) return 'sports'
 
   if (genre.includes('comedy') || subGenre.includes('comedy')) {
     // A West End play tagged Comedy by Ticketmaster is still theatre, not stand-up.

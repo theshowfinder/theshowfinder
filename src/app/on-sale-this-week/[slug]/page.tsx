@@ -12,7 +12,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
-import { groupEventsByArtist, fmtOnSaleLabel, mergeEventsById, mergeTourDates, extractArtistName, toSlug } from '@/lib/on-sale'
+import { groupEventsByArtist, fmtOnSaleLabel, mergeEventsById, mergeTourDates, onSaleSlugOf } from '@/lib/on-sale'
 import { fetchOnSaleThisWeekEvents, fetchPresalesOpenNowEvents, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import FollowButton from '@/components/FollowButton'
@@ -130,7 +130,7 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
       .gte('start_date', nowISO)
       .in('status', LIVE_EVENT_STATUSES)
       .limit(200) as unknown as { data: EventWithVenue[] | null }
-    otherEvents.push(...(data ?? []).filter(e => toSlug(extractArtistName(e.title)) === slug))
+    otherEvents.push(...(data ?? []).filter(e => onSaleSlugOf(e.title) === slug))
   }
   const { events, newIds } = mergeTourDates(group.events, otherEvents)
   const newCount = events.filter(e => newIds.has(e.id)).length

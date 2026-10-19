@@ -26,7 +26,7 @@ function Banner() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
       <div className="max-w-2xl">
         <p className="text-sm font-bold text-slate-700 mb-3">
-          👋 Welcome from {name}! Here&apos;s everything going on sale this week, with every ticket seller compared.
+          👋 Welcome from {name}! Here&apos;s everything going on sale this week, with links to the official ticket sellers.
         </p>
         <NewsletterInline
           source={socialSignupSource(platform)}

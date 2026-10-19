@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { SEE_TICKETS_WEST_END, normalizeTitle, seeTicketsUrlForShow } from './seeTicketsWestEnd.ts'
+import { SEE_TICKETS_WEST_END, isSeeTicketsRunPage, normalizeTitle, seeTicketsUrlForShow } from './seeTicketsWestEnd.ts'
 
 describe('normalizeTitle', () => {
   it('strips punctuation and case', () => {
@@ -28,5 +28,13 @@ describe('seeTicketsUrlForShow', () => {
     const keys = SEE_TICKETS_WEST_END.map(l => `${l.title}|${l.venue}`)
     assert.equal(new Set(keys).size, keys.length)
     for (const l of SEE_TICKETS_WEST_END) assert.match(l.url, /^https:\/\/www\.seetickets\.com\/n\/tour\/[^/]+\/\d+$/)
+  })
+})
+
+describe('isSeeTicketsRunPage', () => {
+  it('tells run pages from exact-performance links', () => {
+    assert.equal(isSeeTicketsRunPage('https://www.seetickets.com/n/tour/the-play-that-goes-wrong/1'), true)
+    assert.equal(isSeeTicketsRunPage('https://www.awin1.com/pclick.php?p=40510475738&a=2896631&m=7816'), false)
+    assert.equal(isSeeTicketsRunPage(null), false)
   })
 })

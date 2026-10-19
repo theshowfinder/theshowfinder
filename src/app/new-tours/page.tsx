@@ -10,7 +10,7 @@ const BASE = 'https://www.theshowfinder.com'
 export const metadata: Metadata = {
   title: 'New UK Tour Announcements: Latest Dates Added',
   description:
-    'Every UK tour announced or extended in the last two weeks, newest first: which cities, which venues and the dates, with tickets compared on each show.',
+    'Every UK tour announced or extended in the last two weeks, newest first: which cities, which venues and the dates, with ticket links on each show.',
   alternates: {
     canonical: `${BASE}/new-tours`,
     types: { 'application/rss+xml': `${BASE}/feeds/new-tours.xml` },

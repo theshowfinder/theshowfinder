@@ -9,6 +9,7 @@ import {
   ukDay,
   type NewShowRow,
 } from './newShows.ts'
+import { cleanSeriesName, isDartsTitle, isPackageOrClassTitle, seriesKey } from './eventTitles.ts'
 
 export const HUB_WINDOW_DAYS = 14
 export const HUB_MIN_SHOWS = 3
@@ -47,11 +48,17 @@ export function buildTourAnnouncements(
     if (!r.artist_id || !r.artist_name || !r.artist_slug) continue
     if (NON_NEWSWORTHY_CATEGORIES.has(r.category ?? '')) continue
     if (!isNewsworthyArtistName(r.artist_name)) continue
+    // Packages ("Venue Premium Tickets"), weekly class slots ("Fishies Week 7") and darts
+    // (a sport, whatever genre the feed gave it) are not tour announcements.
+    if (isPackageOrClassTitle(r.title) || isPackageOrClassTitle(r.artist_name)) continue
+    if (isDartsTitle(r.title) || isDartsTitle(r.artist_name)) continue
     if (new Date(r.start_date).getTime() <= now.getTime()) continue
     if (new Date(r.created_at).getTime() < cutoff) continue
-    const list = groups.get(r.artist_id) ?? []
+    // One act can exist as several artist records (sponsor / year variants): key on the series.
+    const key = seriesKey(r.artist_name)
+    const list = groups.get(key) ?? []
     list.push(r)
-    groups.set(r.artist_id, list)
+    groups.set(key, list)
   }
 
   const out: TourAnnouncement[] = []
@@ -72,7 +79,7 @@ export function buildTourAnnouncements(
     const biggest = [...sorted].sort((a, b) => (b.venue_capacity ?? 0) - (a.venue_capacity ?? 0))[0]
     const announcedAt = sorted.reduce((m, s) => (s.created_at > m ? s.created_at : m), sorted[0].created_at)
     out.push({
-      artistName: first.artist_name as string,
+      artistName: cleanSeriesName(first.artist_name as string),
       artistSlug: first.artist_slug as string,
       showCount: sorted.length,
       cities,

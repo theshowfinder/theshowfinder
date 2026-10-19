@@ -85,3 +85,14 @@ export function isKnownWestEndShow(
 ): boolean {
   return seeTicketsUrlForShow(title, venueName) !== null
 }
+
+/**
+ * True for a See Tickets run page (/n/tour/...) rather than a link to one performance.
+ * See Tickets' own run pages choose the date inside a booking widget and have no
+ * per-performance address, so a West End listing can only send people to the run;
+ * the page tells the visitor to pick their date there. Feed-matched links
+ * (affiliate product links) are exact-performance and return false.
+ */
+export function isSeeTicketsRunPage(url: string | null | undefined): boolean {
+  return !!url && /seetickets\.com\/n\/tour\//i.test(url)
+}

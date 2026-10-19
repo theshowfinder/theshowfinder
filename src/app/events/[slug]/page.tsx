@@ -42,9 +42,11 @@ import EventCard from '@/components/EventCard'
 import { buildShareText } from '@/lib/shareText'
 import { googleCalendarUrl } from '@/lib/ics'
 import { displayTitle, londonTimeSuffix, venueLabel } from '@/lib/displayTitle'
-import { buildEventFaq, cleanBoxOffice, type EventDetails, type VenueDetails } from '@/lib/eventDetails'
+import { buildEventFaq, cleanBoxOffice, cleanVenueNote, type EventDetails, type VenueDetails } from '@/lib/eventDetails'
 import { toArtistEventRows, type ArtistEventLink, type ArtistEventRow } from '@/lib/artistEvents'
 import { dropDuplicateEvents } from '@/lib/listedEvents'
+import { isSeeTicketsRunPage } from '@/lib/seeTicketsWestEnd'
+import { isEventPast } from '@/lib/pastEvents'
 import { buildSiblingOffers, type SiblingEvent, type SiblingOffer } from '@/lib/eventOffers'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -236,7 +238,7 @@ function buildProviders(event: Pick<EventDetail, 'slug' | 'presale_start' | 'pub
   // the only affiliate partner for West End runs — list it with the primary
   // sellers so those pages lead with it.
   const seeTickets = event.see_tickets_affiliate_url
-    ? [{ name: 'See Tickets', tagline: 'Official booking agent', bg: '#E4022D', href: getSeeTicketsAffiliateLink(event.see_tickets_affiliate_url, `evt-${event.slug}`) }]
+    ? [{ name: 'See Tickets', tagline: isSeeTicketsRunPage(event.see_tickets_affiliate_url) ? 'Official booking agent · pick your date on their page' : 'Official booking agent', bg: '#E4022D', href: getSeeTicketsAffiliateLink(event.see_tickets_affiliate_url, `evt-${event.slug}`) }]
     : []
   // Ticketmaster pays no commission during presale and the first 24 hours of
   // general on-sale. In that window, when See Tickets (the official booking agent,
@@ -337,7 +339,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title,
     description,
     alternates: { canonical },
-    ...(repeat || isDuplicate ? { robots: { index: false, follow: true } } : {}),
+    ...(repeat || isDuplicate || isEventPast(event.start_date) ? { robots: { index: false, follow: true } } : {}),
     openGraph: {
       title:       `${title} | TheShowFinder`,
       description,
@@ -368,6 +370,58 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
   const event    = await getEvent(slug)
   if (!event) notFound()
+
+  // A show that has already happened: say so plainly and point at what is still on,
+  // instead of selling tickets that no longer exist.
+  if (isEventPast(event.start_date)) {
+    const pastHeadliner = event.artists.filter(a => a.is_headliner && a.artist).sort((a, b) => a.order - b.order)[0]?.artist ?? null
+    const supabase = createPublicClient()
+    const { data: sameShow } = await supabase
+      .from('listed_events_with_venue')
+      .select('id, slug, title, start_date, venue_name, venue_city')
+      .eq('title', event.title)
+      .gte('start_date', new Date().toISOString())
+      .in('status', LIVE_EVENT_STATUSES)
+      .order('start_date', { ascending: true })
+      .limit(6) as unknown as { data: { id: string; slug: string; title: string; start_date: string; venue_name: string | null; venue_city: string | null }[] | null }
+    const { venueEvents: otherAtVenue, artistEvents: otherDates } = await getRelatedEvents(event, pastHeadliner?.id ?? null)
+    const upcoming = (sameShow ?? []).length > 0
+      ? (sameShow ?? []).map(e => ({ id: e.id, slug: e.slug, title: e.title, start_date: e.start_date, where: venueLabel(e.venue_name, e.venue_city) }))
+      : otherDates.slice(0, 6).map(e => ({ id: e.id, slug: e.slug, title: e.title, start_date: e.startDate, where: venueLabel(e.venueName, e.venueCity) }))
+    const more = upcoming.length === 0
+      ? otherAtVenue.slice(0, 6).map(e => ({ id: e.id, slug: e.slug, title: e.title, start_date: e.start_date, where: event.venue ? venueLabel(event.venue.name, event.venue.city) : '' }))
+      : []
+    const list = upcoming.length > 0 ? upcoming : more
+    return (
+      <section className="max-w-3xl mx-auto px-4 sm:px-6 py-14">
+        <p className="inline-block text-xs font-bold uppercase tracking-wider text-white px-3 py-1 rounded-full mb-4" style={{ backgroundColor: '#64748b' }}>This event has passed</p>
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-3">{displayTitle(event.title)}</h1>
+        <p className="text-slate-600 mb-8">
+          {fmtDate(event.start_date)}{event.venue ? ` · ${venueLabel(event.venue.name, event.venue.city)}` : ''}. Tickets for this date are no longer on sale.
+        </p>
+        {list.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-lg font-extrabold text-slate-900 mb-3">{upcoming.length > 0 ? 'Upcoming dates' : 'Also coming up at this venue'}</h2>
+            <ul className="divide-y divide-slate-100 border border-slate-200 rounded-2xl bg-white">
+              {list.map(e => (
+                <li key={e.id}>
+                  <Link href={`/events/${e.slug}`} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 px-4 py-3 hover:bg-slate-50">
+                    <span className="font-semibold text-slate-900">{displayTitle(e.title)}</span>
+                    <span className="text-sm text-slate-500">{fmtDate(e.start_date)}{e.where ? ` · ${e.where}` : ''}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div className="flex flex-wrap gap-3 text-sm font-semibold">
+          {pastHeadliner?.slug && <Link href={`/artists/${pastHeadliner.slug}`} className="underline text-slate-700">All dates for {pastHeadliner.name} →</Link>}
+          {event.venue && cityPagePath(event.venue.city) && <Link href={cityPagePath(event.venue.city) as string} className="underline text-slate-700">More in {event.venue.city} →</Link>}
+          <Link href="/events" className="underline text-slate-700">Browse all events →</Link>
+        </div>
+      </section>
+    )
+  }
 
   // Daily Intelligence investigation, 2 Oct 2026: this used to be
   // `status === 'sold_out' || status === 'cancelled'`, which left a
@@ -522,28 +576,41 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             {priceLabel && <span className="flex items-center gap-2">💷 <span className="font-bold text-white">{priceLabel}</span></span>}
           </div>
 
-          {/* Desktop primary CTA */}
+          {/* Primary CTA — ONE element: a button in the hero on desktop, and the same
+              element pinned to the bottom of the screen on phones (so the page carries a
+              single "Get Tickets" link, not a desktop copy plus a mobile copy). */}
           {!isSoldOut ? (
-            primary[0] ? (
-              <TrackedTicketLink
-                href={primary[0].href}
-                provider={primary[0].name}
-                section="hero_cta"
-                context={event.slug}
-                className="hidden md:inline-flex items-center gap-2 text-white font-extrabold text-lg px-8 py-4 rounded-xl hover:opacity-90 transition-opacity shadow-lg"
-                style={{ backgroundColor: '#E8003D' }}
-              >
-                {primary[0].name === 'Gigsberg' ? 'View tickets on Gigsberg ↗' : 'Get Tickets ↗'}
-              </TrackedTicketLink>
-            ) : (
-              <a
-                href="#tickets"
-                className="hidden md:inline-flex items-center gap-2 text-white font-extrabold text-lg px-8 py-4 rounded-xl hover:opacity-90 transition-opacity shadow-lg"
-                style={{ backgroundColor: '#E8003D' }}
-              >
-                Get Tickets ↗
-              </a>
-            )
+            <div
+              className="fixed bottom-0 inset-x-0 z-50 bg-white border-t-2 px-4 py-3 flex items-center gap-3 shadow-2xl md:static md:inset-auto md:z-auto md:bg-transparent md:border-0 md:p-0 md:shadow-none md:block"
+              style={{ borderColor: '#E8003D' }}
+            >
+              {priceLabel && (
+                <div className="flex-1 min-w-0 md:hidden">
+                  <p className="text-xs text-slate-500 leading-none mb-0.5">Tickets from</p>
+                  <p className="text-base font-extrabold text-slate-900 truncate">{priceLabel}</p>
+                </div>
+              )}
+              {primary[0] ? (
+                <TrackedTicketLink
+                  href={primary[0].href}
+                  provider={primary[0].name}
+                  section="hero_cta"
+                  context={event.slug}
+                  className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm md:inline-flex md:gap-2 md:text-lg md:px-8 md:py-4 md:min-h-0 md:shadow-lg"
+                  style={{ backgroundColor: '#E8003D' }}
+                >
+                  {primary[0].name === 'Gigsberg' ? 'View tickets on Gigsberg ↗' : 'Get Tickets ↗'}
+                </TrackedTicketLink>
+              ) : (
+                <a
+                  href="#tickets"
+                  className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm md:inline-flex md:gap-2 md:text-lg md:px-8 md:py-4 md:min-h-0 md:shadow-lg"
+                  style={{ backgroundColor: '#E8003D' }}
+                >
+                  Get Tickets ↗
+                </a>
+              )}
+            </div>
           ) : event.status === 'cancelled' ? (
             <div className="hidden md:inline-flex items-center bg-slate-700 text-white/60 font-bold text-lg px-8 py-4 rounded-xl cursor-not-allowed">
               Event Cancelled
@@ -600,37 +667,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
         </div>
       </section>
 
-      {/* ── MOBILE STICKY BAR ─────────────────────────────────── */}
-      {!isSoldOut && (
-        <div className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t-2 px-4 py-3 flex items-center gap-3 shadow-2xl" style={{ borderColor: '#E8003D' }}>
-          {priceLabel && (
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-slate-500 leading-none mb-0.5">Tickets from</p>
-              <p className="text-base font-extrabold text-slate-900 truncate">{priceLabel}</p>
-            </div>
-          )}
-          {primary[0] ? (
-            <TrackedTicketLink
-              href={primary[0].href}
-              provider={primary[0].name}
-              section="hero_cta"
-              context={event.slug}
-              className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm"
-              style={{ backgroundColor: '#E8003D' }}
-            >
-              {primary[0].name === 'Gigsberg' ? 'View tickets on Gigsberg ↗' : 'Get Tickets ↗'}
-            </TrackedTicketLink>
-          ) : (
-            <a
-              href="#tickets"
-              className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm"
-              style={{ backgroundColor: '#E8003D' }}
-            >
-              Get Tickets ↗
-            </a>
-          )}
-        </div>
-      )}
+      {/* The mobile bar for live events is the hero CTA above (one element). */}
       {event.status === 'sold_out' && resale.length > 0 && (
         <div className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t-2 px-4 py-3 flex items-center gap-3 shadow-2xl" style={{ borderColor: resale[0].bg }}>
           <div className="flex-1 min-w-0">
@@ -744,7 +781,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               </dl>
             </div>
 
-            {(directionsUrl || venue?.details?.parking || venue?.details?.accessibleSeating || cleanBoxOffice(venue?.details?.boxOffice) || event.details?.seatmapUrl) && (
+            {(directionsUrl || cleanVenueNote(venue?.details?.parking) || cleanVenueNote(venue?.details?.accessibleSeating) || cleanBoxOffice(venue?.details?.boxOffice) || event.details?.seatmapUrl) && (
               <div>
                 <h2 className="text-xl font-extrabold text-slate-900 mb-4">Getting there &amp; venue info</h2>
                 <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3 text-sm text-slate-600 leading-relaxed">
@@ -753,9 +790,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                       <span className="font-semibold text-slate-800">{venue.name}</span>, {venue.address}, {venue.city} {venue.postcode}.
                     </p>
                   )}
-                  {venue?.details?.parking && <p><span className="font-semibold text-slate-800">Parking: </span>{venue.details.parking}</p>}
-                  {(event.details?.accessibility || venue?.details?.accessibleSeating) && (
-                    <p><span className="font-semibold text-slate-800">Accessibility: </span>{[event.details?.accessibility, venue?.details?.accessibleSeating].filter(Boolean).join(' ')}</p>
+                  {cleanVenueNote(venue?.details?.parking) && <p><span className="font-semibold text-slate-800">Parking: </span>{cleanVenueNote(venue?.details?.parking)}</p>}
+                  {(cleanVenueNote(event.details?.accessibility) || cleanVenueNote(venue?.details?.accessibleSeating)) && (
+                    <p><span className="font-semibold text-slate-800">Accessibility: </span>{[cleanVenueNote(event.details?.accessibility), cleanVenueNote(venue?.details?.accessibleSeating)].filter(Boolean).join(' ')}</p>
                   )}
                   {venue?.details?.generalRule && <p><span className="font-semibold text-slate-800">Venue rules: </span>{venue.details.generalRule}</p>}
                   {cleanBoxOffice(venue?.details?.boxOffice) && <p><span className="font-semibold text-slate-800">Box office: </span>{cleanBoxOffice(venue?.details?.boxOffice)}</p>}
