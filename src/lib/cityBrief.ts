@@ -143,3 +143,14 @@ export function freshnessStamp(lastSyncedISO: string | null | undefined, now: Da
   const sameDay = londonDay(lastSyncedISO) === londonDay(now.toISOString())
   return `Updated ${sameDay ? '' : 'yesterday '}${londonTime(lastSyncedISO)}${sameDay ? ' today' : ''}`
 }
+
+/** Oldest refresh among the rows; null if any row has never been refreshed or there are none. */
+export function stalestSync(rows: Array<{ last_synced_at: string | null }>): string | null {
+  if (rows.length === 0) return null
+  let oldest: string | null = null
+  for (const r of rows) {
+    if (!r.last_synced_at) return null
+    if (oldest === null || r.last_synced_at < oldest) oldest = r.last_synced_at
+  }
+  return oldest
+}

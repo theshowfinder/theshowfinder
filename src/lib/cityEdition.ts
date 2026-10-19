@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { EventWithVenue } from './types/database'
 import { londonDayWindow, londonDaysAheadWindow } from './intelligence.ts'
 import { fetchPresalesOpenNowEvents } from './eventPools.ts'
+import { stalestSync } from './cityBrief.ts'
 
 export interface CityEditionData {
   today: EventWithVenue[]
@@ -42,8 +43,9 @@ async function loadCityEdition(supabase: SupabaseClient, city: string, now: Date
     fetchPresalesOpenNowEvents(supabase, { city, fetchLimit: 30 }),
     base().eq('newly_announced', true).gte('start_date', nowISO).order('venue_capacity', { ascending: false, nullsFirst: false }).limit(20) as unknown as Promise<Rows>,
     base().gte('start_date', nowISO).order('start_date', { ascending: true }).limit(12) as unknown as Promise<Rows>,
-    supabase.from('listed_events_with_venue').select('last_synced_at').ilike('venue_city', city)
-      .order('last_synced_at', { ascending: false, nullsFirst: false }).limit(1) as unknown as Promise<{ data: Array<{ last_synced_at: string | null }> | null }>,
+    // The stamp is only as fresh as the STALEST of the city's next 100 shows, so one recently touched event cannot make a stale city look fresh.
+    supabase.from('listed_events_with_venue').select('last_synced_at').ilike('venue_city', city).gte('start_date', nowISO)
+      .order('start_date', { ascending: true }).limit(100) as unknown as Promise<{ data: Array<{ last_synced_at: string | null }> | null }>,
   ])
 
   return {
@@ -53,6 +55,6 @@ async function loadCityEdition(supabase: SupabaseClient, city: string, now: Date
     presaleOpen,
     fresh: fresh.data ?? [],
     upcoming: upcoming.data ?? [],
-    lastSyncedAt: latest.data?.[0]?.last_synced_at ?? null,
+    lastSyncedAt: stalestSync(latest.data ?? []),
   }
 }

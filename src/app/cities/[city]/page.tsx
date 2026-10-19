@@ -376,7 +376,7 @@ export default async function CityPage({
 
         {/* ── HERO ── */}
       <div
-        className="relative py-14 px-4 sm:px-6 lg:px-8 overflow-hidden"
+        className="relative py-6 sm:py-14 px-4 sm:px-6 lg:px-8 overflow-hidden"
         style={{ backgroundColor: '#1A1A2E' }}
       >
         {(cityHeroImage || cityLandmarkImage) && (
@@ -414,19 +414,22 @@ export default async function CityPage({
               <li aria-current="page" className="text-white/90">{cityName}</li>
             </ol>
           </nav>
-          <p className="text-5xl mb-4 select-none">{cityConfig.emoji}</p>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-2">
+          <p className="hidden sm:block text-5xl mb-4 select-none">{cityConfig.emoji}</p>
+          <h1 className="text-2xl sm:text-4xl font-extrabold text-white mb-1 sm:mb-2">
             Concerts &amp; Live Events in {cityName}
           </h1>
-          <p className="text-white/50 text-sm mb-8">
+          <p className="text-white/50 text-sm mb-4 sm:mb-8">
             {totalCount > 0
               ? `${totalCount}+ upcoming show${totalCount !== 1 ? 's' : ''}`
               : 'Browse upcoming shows'}
           </p>
-          <Suspense>
-            <SearchBarWrapper />
-          </Suspense>
-          <nav aria-label={`${cityName} event links`} className="flex flex-wrap gap-3 mt-6">
+          {/* On a phone the page leads with what is on; the site search stays in the header. */}
+          <div className="hidden sm:block">
+            <Suspense>
+              <SearchBarWrapper />
+            </Suspense>
+          </div>
+          <nav aria-label={`${cityName} event links`} className="flex flex-wrap gap-2 sm:gap-3 mt-3 sm:mt-6">
             <Link
               href={`/cities/${encodeURIComponent(cityName)}/this-week`}
               className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
@@ -444,7 +447,7 @@ export default async function CityPage({
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-14">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-12 space-y-10 sm:space-y-14">
 
         {/* ── MORNING EDITION: image-led, built from today's data ── */}
         <CityMorningEdition headline={editionHeadlineText} stamp={editionStamp} tiles={editionTiles} nav={editionNav} />

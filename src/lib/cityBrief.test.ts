@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildEdition, editionHeadline, freshnessStamp, type EditionEvent } from './cityBrief.ts'
+import { buildEdition, editionHeadline, freshnessStamp, stalestSync, type EditionEvent } from './cityBrief.ts'
 
 const now = new Date('2026-10-20T08:00:00Z')   // 09:00 BST on Tue 20 Oct
 let n = 0
@@ -55,5 +55,11 @@ describe('cityBrief', () => {
     assert.equal(freshnessStamp('2026-10-19T22:00:00Z', now), 'Updated yesterday 23:00')
     assert.equal(freshnessStamp('2026-10-10T05:12:00Z', now), null)
     assert.equal(freshnessStamp(null, now), null)
+  })
+
+  test('stalestSync is the oldest refresh and blank if any show was never refreshed', () => {
+    assert.equal(stalestSync([{ last_synced_at: '2026-10-20T05:00:00Z' }, { last_synced_at: '2026-10-19T01:00:00Z' }]), '2026-10-19T01:00:00Z')
+    assert.equal(stalestSync([{ last_synced_at: '2026-10-20T05:00:00Z' }, { last_synced_at: null }]), null)
+    assert.equal(stalestSync([]), null)
   })
 })
