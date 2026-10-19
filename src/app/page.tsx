@@ -193,10 +193,15 @@ async function GigsbergHighlights() {
   return (
     <section className="bg-slate-900 py-10 sm:py-14">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-7">
-          <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFD23F' }}>Tickets currently available</p>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Featured Gigsberg events</h2>
-          <p className="text-white/60 mt-2 text-sm">Live UK events with inventory checked recently.</p>
+        <div className="flex items-end justify-between gap-4 mb-7">
+          <div>
+            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFD23F' }}>Tickets currently available</p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Featured Gigsberg events</h2>
+            <p className="text-white/60 mt-2 text-sm">Live UK events with inventory checked recently.</p>
+          </div>
+          <Link href="/gigsberg" className="text-sm font-semibold whitespace-nowrap text-white/60 hover:text-white transition-colors">
+            See all Gigsberg shows →
+          </Link>
         </div>
         <ScrollRail label="Events">
           {events.map(event => <EventCard key={event.id} event={event} />)}
@@ -459,8 +464,8 @@ async function EventsThisWeekNational() {
             </p>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Events This Week</h2>
           </div>
-          <Link href="/events" className="text-sm font-semibold whitespace-nowrap hover:underline" style={{ color: '#E8003D' }}>
-            See all events →
+          <Link href="/this-week" className="text-sm font-semibold whitespace-nowrap hover:underline" style={{ color: '#E8003D' }}>
+            See everything this week →
           </Link>
         </div>
         <ScrollRail label="Events">

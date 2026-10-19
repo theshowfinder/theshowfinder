@@ -181,6 +181,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: BASE,                          lastModified: new Date(), changeFrequency: 'daily',   priority: 1.0 },
     { url: `${BASE}/events`,              lastModified: new Date(), changeFrequency: 'daily',   priority: 0.9 },
     { url: `${BASE}/on-sale-this-week`,   lastModified: new Date(), changeFrequency: 'daily',   priority: 0.8 },
+    { url: `${BASE}/this-week`,           lastModified: new Date(), changeFrequency: 'daily',   priority: 0.8 },
     { url: `${BASE}/west-end`,            lastModified: new Date(), changeFrequency: 'daily',   priority: 0.9 },
     { url: `${BASE}/artists`,             lastModified: new Date(), changeFrequency: 'daily',   priority: 0.7 },
     { url: `${BASE}/attractions`,         lastModified: new Date(), changeFrequency: 'daily',   priority: 0.6 },
