@@ -66,3 +66,11 @@ test('alerts are sent for new problems and repeated after 3 days, otherwise stay
   assert.equal(shouldSendAlert({ keys: ['a'], emailedAt: hoursAgo(80) }, issues, now), true)
   assert.equal(shouldSendAlert({ keys: ['b'], emailedAt: hoursAgo(1) }, issues, now), true)
 })
+
+test('tm-not-daily is raised only after a full sweep has finished and too many events are older than 48h', () => {
+  const base = { jobs: [], staleness: [], newsErrors: [] }
+  const bad = { future_tm: 1000, stale_48h: 100, lap_completed: true, lap_completed_at: null }
+  assert.ok(collectIssues({ ...base, tmFreshness: bad }).some(i => i.key === 'tm-not-daily'))
+  assert.ok(!collectIssues({ ...base, tmFreshness: { ...bad, lap_completed: false } }).some(i => i.key === 'tm-not-daily'))
+  assert.ok(!collectIssues({ ...base, tmFreshness: { ...bad, stale_48h: 20 } }).some(i => i.key === 'tm-not-daily'))
+})

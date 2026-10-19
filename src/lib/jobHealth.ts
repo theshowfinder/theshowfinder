@@ -123,6 +123,11 @@ export function stalenessSummary(rows: CityStalenessRow[]) {
   return { total, stale30, stale60, share30: total ? stale30 / total : 0, share60: total ? stale60 / total : 0 }
 }
 
+export interface TmFreshness { future_tm: number; stale_48h: number; lap_completed: boolean; lap_completed_at: string | null }
+
+/** Once a full national sweep has finished, more than this share of TM events older than 48h means it is not keeping up. */
+export const TM_STALE_48H_ALERT = 0.03
+
 export interface HealthIssue {
   key: string
   severity: 'high' | 'medium'
@@ -136,8 +141,18 @@ export function collectIssues(input: {
   staleness: CityStalenessRow[]
   newsErrors: NewsErrorRow[]
   db?: { max_connections: number; connections: number } | null
+  tmFreshness?: TmFreshness | null
 }): HealthIssue[] {
   const issues: HealthIssue[] = []
+
+  const f = input.tmFreshness
+  if (f && f.lap_completed && f.future_tm > 0 && f.stale_48h / f.future_tm > TM_STALE_48H_ALERT) {
+    issues.push({
+      key: 'tm-not-daily',
+      severity: 'high',
+      message: `${f.stale_48h.toLocaleString('en-GB')} of ${f.future_tm.toLocaleString('en-GB')} Ticketmaster events (${Math.round((f.stale_48h / f.future_tm) * 100)}%) were not refreshed in the last 48 hours even though a full sweep has finished`,
+    })
+  }
 
   for (const j of input.jobs) {
     if (j.issue === 'failing') issues.push({ key: `job-failing:${j.job}`, severity: 'high', message: `${j.label} failed on its last run: ${(j.lastError ?? '').slice(0, 140)}` })
