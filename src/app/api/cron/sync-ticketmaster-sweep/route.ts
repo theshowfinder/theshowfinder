@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { runTicketmasterSweep, verifyStaleTicketmasterEvents } from '@/lib/ticketmasterSweep'
 import { withJobRun } from '@/lib/jobRuns'
 
@@ -13,6 +14,10 @@ async function handleGet(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  return runSweepOnce()
+}
+
+async function runSweepOnce() {
   const started = Date.now()
   try {
     const sweep = await runTicketmasterSweep({ deadlineMs: started + 200_000 })
@@ -24,6 +29,18 @@ async function handleGet(request: Request) {
     console.error('[sweep] Fatal error:', message)
     return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
+}
+
+// "Run now" from /admin/health: same work as the scheduled run, authorised by the admin cookie, so a
+// change can be tried straight away instead of waiting for the next cron slot. It obeys the stored
+// mode (off/dry/live), so in dry mode it still writes nothing.
+export async function POST() {
+  const store = await cookies()
+  const token = store.get('admin_token')?.value
+  if (!process.env.ADMIN_PASSWORD || token !== process.env.ADMIN_PASSWORD) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  return runSweepOnce()
 }
 
 export const GET = withJobRun('sync-ticketmaster-sweep', handleGet)

@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { loadHealthSnapshot } from '@/lib/healthSnapshot'
 import { stalenessSummary } from '@/lib/jobHealth'
+import { createAdminClient } from '@/lib/supabase/admin'
+import RunSweepButton from './RunSweepButton'
 
 function ago(iso: string | null, now: Date): string {
   if (!iso) return 'never'
@@ -18,6 +20,8 @@ const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : '0%
 export default async function HealthPage() {
   await requireAdmin()
   const snap = await loadHealthSnapshot()
+  const { data: sweepState } = await createAdminClient().from('tm_sweep_state').select('mode, last_stats').eq('id', 1).maybeSingle()
+  const sweepMode = (sweepState as { mode?: string } | null)?.mode ?? 'unknown'
   const { now, jobs, staleness, newsErrors, db, issues } = snap
   const s = stalenessSummary(staleness)
   const monitored = snap.monitoringSince ? ago(snap.monitoringSince.toISOString(), now) : 'not started'
@@ -63,6 +67,12 @@ export default async function HealthPage() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-extrabold text-slate-900 mb-1">Ticketmaster sweep</h2>
+          <p className="text-sm text-slate-500 mb-3">Mode is <b>{sweepMode}</b> (off = does nothing, dry = fetches and counts but writes nothing, live = updates and removes). The scheduled runs do the same thing as this button.</p>
+          <RunSweepButton mode={sweepMode} />
         </section>
 
         <section>
