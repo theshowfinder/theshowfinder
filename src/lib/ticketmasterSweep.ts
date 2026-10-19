@@ -21,6 +21,8 @@ import {
 type Loose = { from: (table: string) => any; rpc: (fn: string) => Promise<{ error: unknown }> }
 
 interface StateRow {
+  mode: 'off' | 'dry' | 'live'
+  max_removals_per_run: number
   segment_index: number
   window_start: string | null
   cycle_started_at: string | null
@@ -44,10 +46,14 @@ export interface SweepStats {
   errors: number
   failedWindows: number
   truncatedWindows: number
+  /** Dry run only: events Ticketmaster returned that are not in our database yet / already are. */
+  wouldInsert: number
+  alreadyKnown: number
 }
 
 export interface SweepResult {
-  status: 'busy' | 'idle' | 'partial' | 'complete' | 'rate_limited'
+  mode?: 'off' | 'dry' | 'live'
+  status: 'busy' | 'idle' | 'disabled' | 'partial' | 'complete' | 'rate_limited'
   detail?: string
   segment: string | null
   cycleStartedAt: string | null
@@ -55,7 +61,7 @@ export interface SweepResult {
   durationMs: number
 }
 
-const emptyStats = (): SweepStats => ({ windows: 0, splits: 0, pages: 0, seen: 0, changed: 0, unchanged: 0, errors: 0, failedWindows: 0, truncatedWindows: 0 })
+const emptyStats = (): SweepStats => ({ windows: 0, splits: 0, pages: 0, seen: 0, changed: 0, unchanged: 0, errors: 0, failedWindows: 0, truncatedWindows: 0, wouldInsert: 0, alreadyKnown: 0 })
 
 async function touchAll(loose: Loose, ids: string[]) {
   const nowIso = new Date().toISOString()
@@ -97,6 +103,18 @@ async function processEvents(
   await touchAll(loose, touchIds)
 }
 
+/** Dry run: look the page up in our database and count what a live run would add. Writes nothing. */
+async function countPage(db: DbClient, events: TMEvent[], stats: Pick<SweepStats, 'wouldInsert' | 'alreadyKnown'>): Promise<void> {
+  const loose = db as unknown as Loose
+  for (let i = 0; i < events.length; i += 100) {
+    const ids = events.slice(i, i + 100).map(e => e.id)
+    const { data, error } = await loose.from('events').select('ticketmaster_id').in('ticketmaster_id', ids)
+    if (error) continue
+    const known = new Set(((data ?? []) as Array<{ ticketmaster_id: string }>).map(r => r.ticketmaster_id))
+    for (const id of ids) { if (known.has(id)) stats.alreadyKnown++; else stats.wouldInsert++ }
+  }
+}
+
 async function recalcFlags(db: DbClient) {
   try {
     const { error } = await (db as unknown as Loose).rpc('calculate_event_flags')
@@ -120,6 +138,13 @@ export async function runTicketmasterSweep(opts: { deadlineMs: number }): Promis
     .eq('id', 1).or(`running_since.is.null,running_since.lt.${staleLock}`).select('*')
   const row = (claim.data?.[0] ?? null) as StateRow | null
   if (!row) return result('busy', { detail: claim.error?.message ?? 'another sweep run holds the lock' })
+
+  const mode = row.mode ?? 'dry'
+  if (mode === 'off') {
+    await loose.from('tm_sweep_state').update({ running_since: null }).eq('id', 1)
+    return result('disabled', { mode, detail: 'sweep switched off in tm_sweep_state.mode' })
+  }
+  const dry = mode === 'dry'
 
   let segIdx = row.segment_index
   let cursorMs = row.window_start ? new Date(row.window_start).getTime() : Date.now()
@@ -186,7 +211,8 @@ export async function runTicketmasterSweep(opts: { deadlineMs: number }): Promis
             if (res.status !== 'ok') { leafFailed = true; break }
             stats.pages++
             stats.seen += res.events.length
-            await processEvents(db, res.events, () => seg.dbCategory, venueCache, artistCache, stats)
+            if (dry) await countPage(db, res.events, stats)
+            else await processEvents(db, res.events, () => seg.dbCategory, venueCache, artistCache, stats)
             if (page + 1 < pages) await sleep(RATE_LIMIT_MS)
           }
           if (leafFailed) stats.failedWindows++
@@ -204,18 +230,19 @@ export async function runTicketmasterSweep(opts: { deadlineMs: number }): Promis
       if (segIdx >= SEGMENT_QUERIES.length) {
         status = 'complete'
         completedAt = new Date().toISOString()
-        completedCycleStartedAt = cycleStarted
+        // A dry run touched nothing, so it must not count as a refreshed lap (health alerts and removals key off this).
+        if (!dry) completedCycleStartedAt = cycleStarted
         cursorMs = new Date(cycleStarted as string).getTime()
         segIdx = 0
         await persist()
       }
     }
   } finally {
-    await persist({ running_since: null, last_stats: { ...stats, status, detail, at: new Date().toISOString() } })
+    await persist({ running_since: null, last_stats: { ...stats, mode, status, detail, at: new Date().toISOString() } })
   }
 
-  if (stats.changed > 0 || status === 'complete') await recalcFlags(db)
-  return result(status, { detail, segment: SEGMENT_QUERIES[Math.min(segIdx, SEGMENT_QUERIES.length - 1)]?.classificationName ?? null, cycleStartedAt: cycleStarted })
+  if (!dry && (stats.changed > 0 || status === 'complete')) await recalcFlags(db)
+  return result(status, { mode, detail, segment: SEGMENT_QUERIES[Math.min(segIdx, SEGMENT_QUERIES.length - 1)]?.classificationName ?? null, cycleStartedAt: cycleStarted })
 }
 
 // ── Verification of events the sweep did not see ────────────────────────────
@@ -258,16 +285,22 @@ async function fetchEventsByIds(ids: string[]): Promise<{ ok: true; events: TMEv
 }
 
 export interface VerifyResult {
+  mode?: 'off' | 'dry' | 'live'
   status: 'skipped' | 'done' | 'partial' | 'rate_limited'
   detail?: string
   candidates: number
   refreshed: number
   removed: number
   errors: number
+  /** Dry run only: of the sampled candidates, how many Ticketmaster still has / confirms gone. */
+  sampleFound?: number
+  sampleGone?: number
+  sampleBatchLookupWorked?: boolean
+  sampleGoneTitles?: string[]
   durationMs: number
 }
 
-interface Candidate { id: string; ticketmaster_id: string; category: EventCategory; details: Record<string, unknown> | null }
+interface Candidate { id: string; ticketmaster_id: string; title?: string; category: EventCategory; details: Record<string, unknown> | null }
 
 export async function verifyStaleTicketmasterEvents(opts: { deadlineMs: number; maxCandidates?: number }): Promise<VerifyResult> {
   const t0 = Date.now()
@@ -276,29 +309,40 @@ export async function verifyStaleTicketmasterEvents(opts: { deadlineMs: number; 
   const out: VerifyResult = { status: 'done', candidates: 0, refreshed: 0, removed: 0, errors: 0, durationMs: 0 }
   const finish = (): VerifyResult => ({ ...out, durationMs: Date.now() - t0 })
 
-  const { data: st } = await loose.from('tm_sweep_state').select('completed_cycle_started_at').eq('id', 1).maybeSingle()
-  const cutoff = (st as { completed_cycle_started_at: string | null } | null)?.completed_cycle_started_at
-  if (!cutoff) { out.status = 'skipped'; out.detail = 'no complete sweep yet'; return finish() }
+  const { data: st } = await loose.from('tm_sweep_state').select('completed_cycle_started_at, mode, max_removals_per_run').eq('id', 1).maybeSingle()
+  const state = st as { completed_cycle_started_at: string | null; mode: 'off' | 'dry' | 'live'; max_removals_per_run: number } | null
+  const mode = state?.mode ?? 'dry'
+  out.mode = mode
+  if (mode === 'off') { out.status = 'skipped'; out.detail = 'switched off'; return finish() }
+  const dry = mode === 'dry'
+  const cutoff = state?.completed_cycle_started_at ?? null
+  if (!dry && !cutoff) { out.status = 'skipped'; out.detail = 'no complete sweep yet'; return finish() }
 
-  const { data: rows, error } = await loose.from('events')
-    .select('id, ticketmaster_id, category, details')
+  // Dry run samples the oldest-untouched events (the likely dead ones) without any gating or writes.
+  let query = loose.from('events')
+    .select('id, ticketmaster_id, title, category, details')
     .not('ticketmaster_id', 'is', null).is('source', null)
     .gte('start_date', new Date().toISOString())
     .in('status', ['upcoming', 'on_sale', 'sold_out', 'postponed'])
-    .or(`last_synced_at.is.null,last_synced_at.lt.${cutoff}`)
+  if (!dry) query = query.or(`last_synced_at.is.null,last_synced_at.lt.${cutoff}`)
+  const { data: rows, error } = await query
     .order('last_synced_at', { ascending: true, nullsFirst: true })
-    .limit(opts.maxCandidates ?? 600)
+    .limit(dry ? 60 : (opts.maxCandidates ?? 600))
   if (error) { out.status = 'partial'; out.detail = `candidate query failed: ${error.message}`; return finish() }
   const candidates = (rows ?? []) as Candidate[]
   out.candidates = candidates.length
   if (!candidates.length) return finish()
 
-  // Control: an event the last sweep did touch must still be found, otherwise an outage could look like mass removal.
-  const { data: ctl } = await loose.from('events').select('ticketmaster_id').not('ticketmaster_id', 'is', null).is('source', null).gte('last_synced_at', cutoff).limit(1)
+  // Control: an event that definitely exists must still be found, otherwise an outage could look like mass removal.
+  const { data: ctl } = await loose.from('events').select('ticketmaster_id').not('ticketmaster_id', 'is', null).is('source', null).gte('last_synced_at', cutoff ?? new Date(Date.now() - 3 * 86_400_000).toISOString()).limit(1)
   const controlId = (ctl as Array<{ ticketmaster_id: string }> | null)?.[0]?.ticketmaster_id
   const control = controlId ? await fetchEventById(controlId) : { kind: 'error' as const, detail: 'no control event' }
-  const markingAllowed = mayMarkGone(control.kind === 'found')
-  if (!markingAllowed) out.detail = 'control check failed; refreshing only, nothing removed'
+  const markingAllowed = !dry && mayMarkGone(control.kind === 'found')
+  if (!dry && !markingAllowed) out.detail = 'control check failed; refreshing only, nothing removed'
+  if (dry) { out.sampleFound = 0; out.sampleGone = 0; out.sampleGoneTitles = [] }
+  const maxRemovals = Math.max(0, state?.max_removals_per_run ?? 100)
+  let checked = 0
+  let goneSeen = 0
 
   const venueCache = new Map<string, string>()
   const artistCache = new Map<string, string>()
@@ -306,6 +350,7 @@ export async function verifyStaleTicketmasterEvents(opts: { deadlineMs: number; 
   const nowIso = new Date().toISOString()
 
   const markGone = async (c: Candidate) => {
+    if (out.removed >= maxRemovals) { out.detail = `removal cap of ${maxRemovals} per run reached; remaining checked next run`; return }
     const { error: upErr } = await loose.from('events').update({
       status: 'cancelled', last_synced_at: nowIso,
       details: { ...(c.details ?? {}), removed_from_ticketmaster_at: nowIso },
@@ -321,15 +366,39 @@ export async function verifyStaleTicketmasterEvents(opts: { deadlineMs: number; 
     if (!res.ok && res.rateLimited) { out.status = 'rate_limited'; return finish() }
 
     let missing: Candidate[]
+    if (dry && res.ok) out.sampleBatchLookupWorked = true
+    if (dry && !res.ok && out.sampleBatchLookupWorked === undefined) out.sampleBatchLookupWorked = false
     if (res.ok) {
       const foundIds = new Set(res.events.map(e => e.id))
+      checked += batch.length
+      if (dry) out.sampleFound = (out.sampleFound ?? 0) + res.events.length
       const stats = { changed: 0, unchanged: 0, errors: 0 }
+      if (dry) {
+        missing = batch.filter(c => !foundIds.has(c.ticketmaster_id))
+        for (const c of missing) {
+          const one = await fetchEventById(c.ticketmaster_id)
+          await sleep(RATE_LIMIT_MS)
+          if (one.kind === 'gone') { out.sampleGone = (out.sampleGone ?? 0) + 1; if ((out.sampleGoneTitles?.length ?? 0) < 8) out.sampleGoneTitles?.push(c.title ?? c.ticketmaster_id) }
+          else if (one.kind === 'found') out.sampleFound = (out.sampleFound ?? 0) + 1
+        }
+        continue
+      }
       await processEvents(db, res.events, ev => byTmId.get(ev.id)?.category ?? 'concert', venueCache, artistCache, stats)
       out.refreshed += stats.changed + stats.unchanged
       out.errors += stats.errors
       missing = batch.filter(c => !foundIds.has(c.ticketmaster_id))
     } else {
       missing = batch   // id-list query unsupported or failed: check each one individually
+      checked += batch.length
+    }
+    if (dry) {
+      for (const c of missing) {
+        const one = await fetchEventById(c.ticketmaster_id)
+        await sleep(RATE_LIMIT_MS)
+        if (one.kind === 'gone') { out.sampleGone = (out.sampleGone ?? 0) + 1; if ((out.sampleGoneTitles?.length ?? 0) < 8) out.sampleGoneTitles?.push(c.title ?? c.ticketmaster_id) }
+        else if (one.kind === 'found') out.sampleFound = (out.sampleFound ?? 0) + 1
+      }
+      continue
     }
 
     for (const c of missing) {
@@ -338,7 +407,14 @@ export async function verifyStaleTicketmasterEvents(opts: { deadlineMs: number; 
       await sleep(RATE_LIMIT_MS)
       if (one.kind === 'rate_limited') { out.status = 'rate_limited'; return finish() }
       if (one.kind === 'error') { out.errors++; continue }
-      if (one.kind === 'gone') { if (markingAllowed) await markGone(c); continue }
+      if (one.kind === 'gone') {
+        goneSeen++
+        // If most of what we look at is "gone", something systemic is wrong (outage, bad ids): remove nothing.
+        const systemic = checked >= 20 && goneSeen / checked > 0.6
+        if (systemic) { out.detail = 'over 60% of checked events reported gone; treated as systemic, nothing removed'; continue }
+        if (markingAllowed) await markGone(c)
+        continue
+      }
       const stats = { changed: 0, unchanged: 0, errors: 0 }
       await processEvents(db, [one.event], () => c.category, venueCache, artistCache, stats)
       if (!one.event._embedded?.venues?.[0]) await touchAll(loose, [c.id])
@@ -346,6 +422,6 @@ export async function verifyStaleTicketmasterEvents(opts: { deadlineMs: number; 
       out.errors += stats.errors
     }
   }
-  if (out.refreshed > 0 || out.removed > 0) await recalcFlags(db)
+  if (!dry && (out.refreshed > 0 || out.removed > 0)) await recalcFlags(db)
   return finish()
 }
