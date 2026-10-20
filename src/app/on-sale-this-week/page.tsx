@@ -8,8 +8,8 @@ import NewsletterInline from '@/components/NewsletterInline'
 import CalendarSubscribe from '@/components/CalendarSubscribe'
 import { ONSALE_FEED_PATH } from '@/lib/calendarFeeds'
 import SocialLandingBanner from '@/components/SocialLandingBanner'
-import { saleBadgeText, onSaleThisWeekWindow, type OnSaleGroup } from '@/lib/on-sale'
-import { fetchOnSaleThisWeek } from '@/lib/eventPools'
+import { saleBadgeText, onSaleThisWeekWindow, groupDateCount, type OnSaleGroup } from '@/lib/on-sale'
+import { fetchOnSaleThisWeek, attachTourDateCounts } from '@/lib/eventPools'
 
 const OSW_OG_IMAGE = 'https://www.theshowfinder.com/og-image.png'
 
@@ -48,7 +48,7 @@ export default async function OnSaleThisWeekPage() {
   // mismatch (see on-sale.ts's onSaleThisWeekWindow for the full history).
   const artistsData = await fetchAllArtists(supabase)
 
-  const groups = await fetchOnSaleThisWeek(supabase, artistsData ?? [], { limit: 500 })
+  const groups = await attachTourDateCounts(supabase, await fetchOnSaleThisWeek(supabase, artistsData ?? [], { limit: 500 }))
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
@@ -119,7 +119,7 @@ export default async function OnSaleThisWeekPage() {
 
 function OnSaleCard({ group }: { group: OnSaleGroup }) {
   const onSaleLabel = saleBadgeText(group.saleType, group.onsale_date)
-  const datesCount  = group.events.length
+  const datesCount  = groupDateCount(group)
   const isPresale   = group.saleType === 'presale'
 
   return (

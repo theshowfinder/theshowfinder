@@ -12,8 +12,8 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
-import { groupEventsByArtist, fmtOnSaleLabel, mergeEventsById, mergeTourDates, onSaleSlugOf } from '@/lib/on-sale'
-import { fetchOnSaleThisWeekEvents, fetchPresalesOpenNowEvents, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { groupEventsByArtist, fmtOnSaleLabel, mergeEventsById, mergeTourDates } from '@/lib/on-sale'
+import { fetchOnSaleThisWeekEvents, fetchPresalesOpenNowEvents, fetchOtherTourDates } from '@/lib/eventPools'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import FollowButton from '@/components/FollowButton'
 import SaveButton from '@/components/SaveButton'
@@ -107,31 +107,8 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
 
   // The pools above only hold dates whose sale starts this week. Pull in the
   // artist's other upcoming dates too, so the page shows the whole tour.
-  const otherEvents: EventWithVenue[] = []
-  if (dbArtist?.id) {
-    const { data: links } = await supabase
-      .from('event_artists')
-      .select('event_id, events!inner(start_date, status)')
-      .eq('artist_id', dbArtist.id)
-      .gte('events.start_date', nowISO)
-      .in('events.status', LIVE_EVENT_STATUSES)
-      .limit(200) as unknown as { data: { event_id: string }[] | null }
-    const ids = (links ?? []).map(l => l.event_id)
-    if (ids.length) {
-      const { data } = await supabase.from('listed_events_with_venue').select('*').in('id', ids) as unknown as { data: EventWithVenue[] | null }
-      otherEvents.push(...(data ?? []))
-    }
-  } else {
-    // No artist record: same-name events by title (matches how the group formed).
-    const like = artistName.replace(/[%_\\]/g, ' ').trim()
-    const { data } = await supabase
-      .from('listed_events_with_venue').select('*')
-      .ilike('title', `${like}%`)
-      .gte('start_date', nowISO)
-      .in('status', LIVE_EVENT_STATUSES)
-      .limit(200) as unknown as { data: EventWithVenue[] | null }
-    otherEvents.push(...(data ?? []).filter(e => onSaleSlugOf(e.title) === slug))
-  }
+  // Same helper the cards use for their "N UK dates", so the tile and this list always agree.
+  const otherEvents: EventWithVenue[] = (await fetchOtherTourDates(supabase, [group], '*')).get(group.slug) ?? []
   const { events, newIds } = mergeTourDates(group.events, otherEvents)
   const newCount = events.filter(e => newIds.has(e.id)).length
   const onSaleLabel = fmtOnSaleLabel(onsale_date)

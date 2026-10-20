@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { OnSaleGroup } from '@/lib/on-sale'
-import { fmtOnSaleLabel } from '@/lib/on-sale'
+import { fmtOnSaleLabel, groupDateCount } from '@/lib/on-sale'
 import ScrollRail from '@/components/ScrollRail'
 
 // Shared "presale open now" card grid — used by both the national homepage
@@ -45,7 +45,7 @@ export default function PresaleGrid({ groups, scroll = false }: { groups: OnSale
                 {group.artistName}
               </h3>
               <p className="text-sm text-slate-500 mb-3">
-                🗓 {group.events.length} UK date{group.events.length !== 1 ? 's' : ''}
+                🗓 {groupDateCount(group)} UK date{groupDateCount(group) !== 1 ? 's' : ''}
               </p>
               <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700">
                 {presaleClose ? `⏳ Presale closes ${fmtOnSaleLabel(presaleClose)}` : '🎟️ Presale open now'}

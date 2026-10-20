@@ -36,8 +36,8 @@ import LocalHeroCopy from '@/components/LocalHeroCopy'
 import CategoryStrip from '@/components/CategoryStrip'
 import WestEndStrip from '@/components/WestEndStrip'
 import type { EventWithVenue, CityNews } from '@/lib/types/database'
-import { saleBadgeText, onSaleSlugOf } from '@/lib/on-sale'
-import { fetchEventsThisWeek, fetchPresalesOpenNow, fetchOnSaleThisWeek, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { saleBadgeText, groupDateCount } from '@/lib/on-sale'
+import { fetchEventsThisWeek, fetchPresalesOpenNow, fetchOnSaleThisWeek, attachTourDateCounts, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { listedEventsCount, dropDuplicateEvents } from '@/lib/listedEvents'
 import { CITIES } from '@/lib/cities'
 import { pickFeaturedShows } from '@/lib/featuredShows'
@@ -255,25 +255,14 @@ async function OnSaleMosaicSection() {
   const supabase = createPublicClient()
   const artistsData = await fetchAllArtists(supabase)
   const allGroups = await fetchOnSaleThisWeek(supabase, artistsData ?? [], { limit: 500 })
-  const picked = pickOnSaleMosaic(allGroups)
-
-  // Total upcoming UK dates per shown artist (not just the ones going on sale), for the "6 UK dates" line.
-  const upcomingCount = new Map<string, number>()
-  if (picked.length > 0) {
-    const orFilter = picked.map(g => `title.ilike.${g.artistName.replace(/[%_\\]/g, '\\$&')}%`).join(',')
-    const { data: titles } = await supabase
-      .from('listed_events_with_venue').select('title').gte('start_date', new Date().toISOString()).or(orFilter).limit(2000) as unknown as { data: { title: string }[] | null }
-    for (const { title } of titles ?? []) {
-      const slug = onSaleSlugOf(title)
-      upcomingCount.set(slug, (upcomingCount.get(slug) ?? 0) + 1)
-    }
-  }
+  // Same whole-tour count the click-through page lists, so a tile's "N UK dates" always matches it.
+  const picked = await attachTourDateCounts(supabase, pickOnSaleMosaic(allGroups))
 
   const dayFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short' })
   const tiles: OnSaleMosaicTile[] = picked.map(g => {
     const events = [...g.events].sort((a, b) => a.start_date.localeCompare(b.start_date))
     const first = events[0]
-    const dates = Math.max(upcomingCount.get(g.slug) ?? 0, events.length)
+    const dates = groupDateCount(g)
     return {
       href: `/on-sale-this-week/${g.slug}`,
       title: g.artistName,
@@ -332,7 +321,7 @@ async function PresalesOpenNow() {
   const supabase = createPublicClient()
 
   const artistsData = await fetchAllArtists(supabase)
-  const groups = await fetchPresalesOpenNow(supabase, artistsData ?? [], { limit: 6 })
+  const groups = await attachTourDateCounts(supabase, await fetchPresalesOpenNow(supabase, artistsData ?? [], { limit: 6 }))
 
   if (!groups.length) return null
 

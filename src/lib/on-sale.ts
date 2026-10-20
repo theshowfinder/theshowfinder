@@ -14,6 +14,13 @@ export type OnSaleGroup = {
   saleType:    SaleType
   events:      EventWithVenue[]
   dbArtist:    Artist | null
+  /** Whole-tour date count, same rule as the click-through page (see attachTourDateCounts). Cards show this. */
+  dateCount?:  number
+}
+
+/** The number a card should show: the whole tour when known, else the dates in the pool. */
+export function groupDateCount(g: Pick<OnSaleGroup, 'events' | 'dateCount'>): number {
+  return g.dateCount ?? g.events.length
 }
 
 // Strip tour/venue suffix from Ticketmaster-style titles:

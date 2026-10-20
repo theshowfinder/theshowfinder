@@ -10,7 +10,7 @@ import type { EventWithVenue, Artist } from './types/database'
 import {
   groupEventsByArtist, type OnSaleGroup,
   onSaleThisWeekWindow, presaleOpenNowWindow,
-  capGroupsBySeries, dropPastSales, dropPackageListings,
+  capGroupsBySeries, dropPastSales, dropPackageListings, mergeTourDates, onSaleSlugOf,
 } from './on-sale.ts'
 import { londonDayWindow, londonDaysAheadWindow, londonWeekendDayWindows, type DateWindow } from './intelligence.ts'
 import { isTonightEvent, sortTonightEvents } from './tonight.ts'
@@ -444,6 +444,90 @@ export async function fetchPresalesOpenNow(
   const ranked = rankOnSaleGroups(groupEventsByArtist(data, artists))
   // A handful of cards: also stop one team/tour filling them (a long list, e.g. the link checker's, is left whole).
   return (limit <= 24 ? capGroupsBySeries(ranked) : ranked).slice(0, limit)
+}
+
+// ── Whole-tour dates for a card ─────────────────────────────────────────
+//
+// A card's group only holds the dates whose sale opens in the window, but its
+// click-through page lists the artist's WHOLE upcoming tour. This is the one place
+// that gathers those other dates (the page uses it for its list, the cards use it
+// for their "N UK dates" line), so the tile can never disagree with the page.
+const chunk = <T,>(arr: T[], n: number): T[][] => {
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n))
+  return out
+}
+
+const TOUR_COUNT_COLUMNS = 'id,title,start_date,venue_id,venue_name,venue_city'
+
+/** The artist's other upcoming dates per group slug (not yet merged with the group's own). */
+export async function fetchOtherTourDates(
+  supabase: SupabaseClient,
+  groups: OnSaleGroup[],
+  columns: string = TOUR_COUNT_COLUMNS,
+): Promise<Map<string, EventWithVenue[]>> {
+  const nowISO = new Date().toISOString()
+  const out = new Map<string, EventWithVenue[]>()
+  const push = (slug: string, e: EventWithVenue) => {
+    const list = out.get(slug) ?? []
+    list.push(e)
+    out.set(slug, list)
+  }
+
+  // Groups with an artist record: dates linked to that artist.
+  const withArtist = groups.filter(g => g.dbArtist?.id)
+  const slugsByArtist = new Map<string, string[]>()
+  for (const g of withArtist) slugsByArtist.set(g.dbArtist!.id, [...(slugsByArtist.get(g.dbArtist!.id) ?? []), g.slug])
+  const eventSlugs = new Map<string, Set<string>>() // event id -> slugs it belongs to
+  await Promise.all(chunk([...slugsByArtist.keys()], 15).map(async ids => {
+    const { data } = await supabase
+      .from('event_artists')
+      .select('artist_id, event_id, events!inner(start_date, status)')
+      .in('artist_id', ids)
+      .gte('events.start_date', nowISO)
+      .in('events.status', LIVE_EVENT_STATUSES)
+      .limit(1000) as unknown as { data: { artist_id: string; event_id: string }[] | null }
+    for (const l of data ?? []) {
+      for (const slug of slugsByArtist.get(l.artist_id) ?? []) {
+        const set = eventSlugs.get(l.event_id) ?? new Set<string>()
+        set.add(slug)
+        eventSlugs.set(l.event_id, set)
+      }
+    }
+  }))
+  await Promise.all(chunk([...eventSlugs.keys()], 100).map(async ids => {
+    const { data } = await supabase.from('listed_events_with_venue').select(columns).in('id', ids) as unknown as { data: EventWithVenue[] | null }
+    for (const e of data ?? []) for (const slug of eventSlugs.get(e.id) ?? []) push(slug, e)
+  }))
+
+  // Groups with no artist record: same-name events by title (how the group formed).
+  const plain = groups.filter(g => !g.dbArtist?.id)
+  await Promise.all(chunk(plain, 15).map(async part => {
+    const orFilter = part.map(g => `title.ilike.${g.artistName.replace(/[%_\\,()]/g, ' ').trim()}%`).join(',')
+    const { data } = await supabase
+      .from('listed_events_with_venue').select(columns)
+      .gte('start_date', nowISO)
+      .in('status', LIVE_EVENT_STATUSES)
+      .or(orFilter)
+      .limit(1000) as unknown as { data: EventWithVenue[] | null }
+    const wanted = new Set(part.map(g => g.slug))
+    for (const e of data ?? []) {
+      const slug = onSaleSlugOf(e.title)
+      if (wanted.has(slug)) push(slug, e)
+    }
+  }))
+  return out
+}
+
+/** Same groups, each with `dateCount` = the number of dates its page lists. Call for the groups actually shown. */
+export async function attachTourDateCounts(supabase: SupabaseClient, groups: OnSaleGroup[]): Promise<OnSaleGroup[]> {
+  if (groups.length === 0) return groups
+  try {
+    const others = await fetchOtherTourDates(supabase, groups)
+    return groups.map(g => ({ ...g, dateCount: mergeTourDates(g.events, others.get(g.slug) ?? []).events.length }))
+  } catch {
+    return groups // card falls back to the dates in its own pool
+  }
 }
 
 interface OnSaleThisWeekOpts {

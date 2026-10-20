@@ -16,7 +16,7 @@ import { createPublicClient } from '@/lib/supabase/public'
 import EventCard from '@/components/EventCard'
 import SearchBarWrapper from '@/components/SearchBarWrapper'
 import { Suspense } from 'react'
-import { saleBadgeText } from '@/lib/on-sale'
+import { saleBadgeText, groupDateCount } from '@/lib/on-sale'
 import { CITIES } from '@/lib/cities'
 import { rankVenues, splitPopular } from '@/lib/venueDiscovery'
 import { fetchVenueEventRows, fetchNearbyRankedVenues } from '@/lib/venueData'
@@ -26,7 +26,7 @@ import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import { buildCityCollectionSchema, cityCanonicalUrl, cityPageDescription, cityPageTitle } from '@/lib/citySeo'
 import CityNewsletterForm from '@/components/CityNewsletterForm'
-import { fetchEventsThisWeek, fetchTopEvents, fetchNearbyEvents, fetchRecentlyAddedEvents, fetchCityCategoryCounts, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek } from '@/lib/eventPools'
+import { fetchEventsThisWeek, fetchTopEvents, fetchNearbyEvents, fetchRecentlyAddedEvents, fetchCityCategoryCounts, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek, attachTourDateCounts } from '@/lib/eventPools'
 import { resolveCityEventCount } from '@/lib/cityEventCount'
 import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import PresaleGrid from '@/components/PresaleGrid'
@@ -176,7 +176,7 @@ export default async function CityPage({
     // below, which tracks the public on-sale date, not the presale window —
     // kept as two separate queries/sections on purpose so an artist in an
     // active presale isn't shown twice.
-    fetchPresalesOpenNow(supabase, artists, { city: cityName, limit: 6 }),
+    fetchPresalesOpenNow(supabase, artists, { city: cityName, limit: 6 }).then(g => attachTourDateCounts(supabase, g)),
 
     // On sale this week — the genuine public on-sale date (onsale_date)
     // falling within the current Monday-Sunday UK week, never the
@@ -187,7 +187,7 @@ export default async function CityPage({
     // page can never drift from those again, and it now also gets the
     // same cancelled/postponed exclusion and per-series diversity cap
     // (capGroupsBySeries, on-sale.ts) those pages already have.
-    fetchOnSaleThisWeek(supabase, artists, { city: cityName, limit: 6 }),
+    fetchOnSaleThisWeek(supabase, artists, { city: cityName, limit: 6 }).then(g => attachTourDateCounts(supabase, g)),
 
     // Total upcoming count for the hero stat line — a head:true count query,
     // not a full events fetch (the "All Events" grid this used to feed has
@@ -642,7 +642,7 @@ export default async function CityPage({
                       {group.artistName}
                     </h3>
                     <p className="text-sm text-slate-500 mb-3">
-                      🗓 {group.events.length} UK date{group.events.length !== 1 ? 's' : ''}
+                      🗓 {groupDateCount(group)} UK date{groupDateCount(group) !== 1 ? 's' : ''}
                     </p>
                     <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
                       🎟️ {saleBadgeText(group.saleType, group.onsale_date)}

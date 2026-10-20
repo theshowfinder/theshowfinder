@@ -10,6 +10,7 @@
 // investigation (2 Oct 2026) fix — see its own comment in eventPools.ts.
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
+import { groupDateCount } from './on-sale.ts'
 import { dedupeEventsByTitle, eventsThisWeekWindow, ticketPurchaseDisabledStatus, LIVE_EVENT_STATUSES } from './eventPools.ts'
 
 function row(title: string, id: string) {
@@ -116,5 +117,13 @@ describe('ticketPurchaseDisabledStatus', () => {
     assert.ok(LIVE_EVENT_STATUSES.includes('sold_out'))
     assert.ok(!LIVE_EVENT_STATUSES.includes('cancelled'))
     assert.ok(!LIVE_EVENT_STATUSES.includes('postponed'))
+  })
+})
+
+describe('groupDateCount', () => {
+  test('shows the whole-tour count when known, else the dates in the pool', () => {
+    const events = [row('A', '1'), row('A', '2'), row('A', '3')]
+    assert.equal(groupDateCount({ events, dateCount: 15 }), 15)
+    assert.equal(groupDateCount({ events }), 3)
   })
 })
