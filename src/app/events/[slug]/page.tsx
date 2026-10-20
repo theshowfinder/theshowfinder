@@ -340,7 +340,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title,
     description,
     alternates: { canonical },
-    ...(repeat || isDuplicate || isEventPast(event.start_date) ? { robots: { index: false, follow: true } } : {}),
+    ...(repeat || isDuplicate || isEventPast(event.start_date) || event.status === 'cancelled' ? { robots: { index: false, follow: true } } : {}),
     openGraph: {
       title:       `${title} | TheShowFinder`,
       description,

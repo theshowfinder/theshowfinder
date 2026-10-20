@@ -7,6 +7,7 @@ import { stalenessSummary } from '@/lib/jobHealth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import RunSweepButton from './RunSweepButton'
 import RunJobButtons from './RunJobButtons'
+import MorningCleanup from './MorningCleanup'
 
 function ago(iso: string | null, now: Date): string {
   if (!iso) return 'never'
@@ -51,6 +52,12 @@ export default async function HealthPage() {
             </ul>
           )}
           <p className="text-xs text-slate-500 mt-3">Job history started {monitored}. Alerts email ALERT_EMAIL (default hello@theshowfinder.com) three times a day, only when something new is wrong or has been open for 3 days.</p>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-extrabold text-slate-900 mb-1">Morning clean-up</h2>
+          <p className="text-sm text-slate-500 mb-3">One button: runs every sweep, then proves the site is clean or tells you exactly what is not.</p>
+          <MorningCleanup />
         </section>
 
         <section>
