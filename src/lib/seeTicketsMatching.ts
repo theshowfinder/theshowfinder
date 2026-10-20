@@ -87,7 +87,7 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
   for (let offset = 0; ; offset += 1000) {
     let query = db.from('see_tickets_catalogue_events').select('id, name, event_date, venue, city, primary_artist, second_artist, url, matched_event_id, match_checked_at, match_status').order('id', { ascending: true })
     query = query.is('gone_at', null)   // rows the feed has stopped listing are never matched
-    if (!fullRescan) query = query.in('match_status', ['pending', 'review', 'no_match'])
+    if (!fullRescan) query = query.in('match_status', ['pending', 'review', 'no_match']).gte('event_date', new Date().toISOString().slice(0, 10))   // a show that has already happened is never matched
     if (options.afterId) query = query.gt('id', options.afterId)
     query = query.range(offset, offset + (limit ? limit : 999))
     const { data, error } = await query as unknown as { data: CatalogueRow[] | null; error: { message: string } | null }
@@ -125,6 +125,7 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
     hasMore,
     nextCursor: rowsToProcess.length ? rowsToProcess[rowsToProcess.length - 1].id : null,
   }
+  const stampIds: string[] = []
   async function processItem(item: CatalogueRow) {
     // Do not discard a candidate merely because the feed's city or venue
     // label differs. Ticket feeds commonly use abbreviations, local venue
@@ -155,6 +156,12 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
     const confident = Boolean(best && strongTitle && best.detail.sameDate && locationEvidence && (!second || best.detail.value - second.detail.value >= 0.05))
     const review = Boolean(best && !confident && best.detail.sameDate && locationEvidence && best.detail.value >= 0.35)
     const status = confident ? 'auto_matched' : review ? 'review' : 'no_match'
+    // Same answer as last time: do not rewrite the row (about 10k rows were being rewritten every night, which
+    // no longer fits in the function time limit). Their "checked" time is refreshed in one bulk write at the end.
+    if (!confident && item.match_status === status && !item.matched_event_id) {
+      stampIds.push(item.id)
+      return { errors: 0, autoMatched: 0, review: review ? 1 : 0, noMatch: review ? 0 : 1, skipped: 0 }
+    }
     const { error } = await db.from('see_tickets_catalogue_events').update({ matched_event_id: confident ? best.event.id : null, match_status: status, match_confidence: best ? Number(best.detail.value.toFixed(3)) : null, match_reason: best ? `${best.event.title} (${Math.round(best.detail.value * 100)}% match)` : 'No close Showfinder event found', match_checked_at: new Date().toISOString() }).eq('id', item.id)
     if (error) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0, skipped: 0 }
     if (confident) {
@@ -182,6 +189,12 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
       result.noMatch += outcome.noMatch
       result.skippedUnchanged = (result.skippedUnchanged ?? 0) + outcome.skipped
     }
+  }
+  // One write per 150 unchanged rows instead of one per row.
+  const stampedAt = new Date().toISOString()
+  for (let i = 0; i < stampIds.length; i += 150) {
+    const { error } = await db.from('see_tickets_catalogue_events').update({ match_checked_at: stampedAt }).in('id', stampIds.slice(i, i + 150))
+    if (error) result.errors += 1
   }
   return result
 }
