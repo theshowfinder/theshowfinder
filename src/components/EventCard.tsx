@@ -43,9 +43,16 @@ function formatPrice(from: number | null, to: number | null, currency: string) {
 
 interface Props {
   event: EventWithVenue
+  /** Set when this tile stands for a whole run or tour: the card shows the next date plus "N dates". */
+  run?: { dateCount: number; lastDate: string; venueCount: number }
 }
 
-export default function EventCard({ event }: Props) {
+function shortDay(iso: string) {
+  return new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+export default function EventCard({ event, run }: Props) {
+  const isRun = !!run && run.dateCount > 1
   const cat       = categoryConfig[event.category] ?? categoryConfig.concert
   const status    = statusConfig[event.status]     ?? statusConfig.upcoming
   const eventHref = `/events/${event.slug}`
@@ -95,8 +102,11 @@ export default function EventCard({ event }: Props) {
         </Link>
 
         <div className="flex flex-col gap-1 text-sm text-slate-500">
-          <span>📅 {formatDate(event.start_date)}</span>
-          {event.venue_slug ? (
+          <span>📅 {isRun ? `Next: ${formatDate(event.start_date)}` : formatDate(event.start_date)}</span>
+          {isRun && <span className="font-semibold text-slate-700">🎟️ {run!.dateCount} dates · to {shortDay(run!.lastDate)}</span>}
+          {isRun && run!.venueCount > 1 ? (
+            <span className="truncate">📍 {run!.venueCount} venues, from {venueLabel(event.venue_name, event.venue_city)}</span>
+          ) : event.venue_slug ? (
             <Link
               href={`/venues/${event.venue_slug}`}
               className="truncate hover:underline hover:text-slate-700 transition-colors"
@@ -116,19 +126,17 @@ export default function EventCard({ event }: Props) {
           </div>
         )}
 
-        {isSoldOut ? (
+        {isSoldOut && event.status !== 'sold_out' ? (
           <div className="w-full bg-slate-200 text-slate-500 font-bold py-3 rounded-xl text-center text-sm cursor-not-allowed">
-            {event.status === 'cancelled'  ? 'Cancelled'
-              : event.status === 'postponed' ? 'Postponed'
-              : 'Sold Out'}
+            {event.status === 'cancelled' ? 'Cancelled' : 'Postponed'}
           </div>
         ) : (
           <Link
             href={eventHref}
             className="w-full text-white font-bold py-3 rounded-xl text-center text-sm hover:opacity-90 active:scale-95 transition-all duration-150 min-h-[48px] flex items-center justify-center"
-            style={{ backgroundColor: '#E8003D' }}
+            style={{ backgroundColor: event.status === 'sold_out' ? '#1a1f6e' : '#E8003D' }}
           >
-            Get Tickets
+            {event.status === 'sold_out' ? 'Sold out · see resale tickets' : isRun ? 'See dates & tickets' : 'Get Tickets'}
           </Link>
         )}
       </div>

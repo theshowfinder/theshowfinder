@@ -184,7 +184,6 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
   const requestedPage = Number(searchParams.page ?? 1)
   const page     = Number.isFinite(requestedPage) ? Math.max(1, Math.floor(requestedPage)) : 1
   const from     = (page - 1) * PAGE_SIZE
-  const to       = from + PAGE_SIZE - 1
 
   let artistEventIds: string[] = []
   if (searchParams.q) {
@@ -213,18 +212,10 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
     }
   }
 
-  let query = supabase
-    .from('listed_events_with_venue')
-    .select('*', { count: 'exact' })
-    .gte('start_date', new Date().toISOString())
-    // A cancelled/postponed show is never a genuine browse/search result
-    // — see eventPools.ts's LIVE_EVENT_STATUSES comment.
-    .in('status', LIVE_EVENT_STATUSES)
-    .order('start_date', { ascending: true })
-    .range(from, to)
-
-  if (searchParams.category) query = query.eq('category', searchParams.category)
-  if (searchParams.city)     query = query.eq('venue_city', searchParams.city)
+  // One tile per SHOW, not per performance: a run at a venue ("The Traitors", 40 dates) or a tour is a
+  // single tile that says how many dates it has. The grouping is done in the database
+  // (browse_event_runs) so the page count and the order are right across the whole list.
+  let searchIds: string[] | null = null
   if (searchParams.q) {
     // Ticketmaster titles often include punctuation (for example "Mr. Polska")
     // while visitors search without it ("Mr Polska"). The slug is generated
@@ -235,10 +226,43 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
     const filters = [`title.ilike.%${term}%`]
     if (slugTerm) filters.push(`slug.ilike.%${slugTerm}%`)
     if (artistEventIds.length) filters.push(`id.in.(${artistEventIds.join(',')})`)
-    query = query.or(filters.join(','))
+    const { data: matches } = await supabase
+      .from('listed_events_with_venue')
+      .select('id')
+      .gte('start_date', new Date().toISOString())
+      .in('status', LIVE_EVENT_STATUSES)
+      .or(filters.join(','))
+      .limit(5000) as unknown as { data: { id: string }[] | null }
+    searchIds = (matches ?? []).map(m => m.id)
   }
 
-  const { data: events, count } = await query
+  type RunRow = { event_id: string; run_size: number; date_count: number; last_date: string; venue_count: number; total_groups: number }
+  let runs: RunRow[] = []
+  if (!searchIds || searchIds.length) {
+    const { data } = await (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: RunRow[] | null }> })
+      .rpc('browse_event_runs', {
+        p_category: searchParams.category ?? null,
+        p_city: searchParams.city ?? null,
+        p_ids: searchIds,
+        p_limit: PAGE_SIZE,
+        p_offset: from,
+      })
+    runs = data ?? []
+  }
+  const count = runs.length ? Number(runs[0].total_groups) : 0
+
+  let events: Array<EventWithVenue & { run?: { dateCount: number; lastDate: string; venueCount: number } }> = []
+  if (runs.length) {
+    const { data: reps } = await supabase
+      .from('listed_events_with_venue')
+      .select('*')
+      .in('id', runs.map(r => r.event_id)) as unknown as { data: EventWithVenue[] | null }
+    const byId = new Map((reps ?? []).map(e => [e.id, e]))
+    events = runs.flatMap(r => {
+      const ev = byId.get(r.event_id)
+      return ev ? [{ ...ev, run: { dateCount: Number(r.date_count), lastDate: r.last_date, venueCount: Number(r.venue_count) } }] : []
+    })
+  }
 
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE)
 
@@ -272,12 +296,12 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
   return (
     <div>
       <p className="text-sm text-slate-500 mb-6">
-        {count} event{count !== 1 ? 's' : ''} found
+        {count} show{count !== 1 ? 's' : ''} found
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {(events as EventWithVenue[]).map(event => (
-          <EventCard key={event.id} event={event} />
+        {events.map(({ run, ...event }) => (
+          <EventCard key={event.id} event={event} run={run} />
         ))}
       </div>
 
