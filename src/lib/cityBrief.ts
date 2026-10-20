@@ -1,12 +1,11 @@
-// Pure logic for a city's "morning edition": the image-led block at the top of a city page that
-// says what is on tonight, what goes on sale today, which presales are live and what is new. It
-// is built only from our own event data, so it is as fresh as the sync. No '@/' imports so it
-// runs under `node --test`.
-import { isTonightEvent, londonDayWindow } from './tonight.ts'
+// Pure logic for a city's headline edition: the image-led block at the top of a city page. It leads
+// with what is on sale this week (the freshest, most actionable thing), then live presales, then the
+// city's top events. It is deliberately NOT a "what's happening this week" list. Built only from our
+// own event data, so it is as fresh as the sync. No '@/' imports so it runs under `node --test`.
 import { isPackageOrClassTitle, seriesKey } from './eventTitles.ts'
 import { isAttraction } from './eventMix.ts'
 
-export type EditionKind = 'tonight' | 'onsale_today' | 'presale_live' | 'new' | 'soon' | 'next_up'
+export type EditionKind = 'onsale_today' | 'onsale_week' | 'presale_live' | 'top'
 
 export interface EditionEvent {
   id: string
@@ -18,6 +17,7 @@ export interface EditionEvent {
   image_url: string | null
   category: string
   venue_name: string | null
+  venue_capacity?: number | null
   venue_slug?: string | null
   presale_end?: string | null
   presale_name?: string | null
@@ -33,21 +33,17 @@ export interface EditionTile<T extends EditionEvent = EditionEvent> {
 
 export interface EditionInput<T extends EditionEvent = EditionEvent> {
   now: Date
-  today: T[]          // starts today (London day)
-  soon: T[]           // starts in the following week
   onSaleToday: T[]    // public on-sale date is today
+  onSaleWeek: T[]     // public on-sale date falls in the current on-sale week
   presaleOpen: T[]    // presale window open now
-  fresh: T[]          // newly listed
-  upcoming: T[]       // next shows overall, used when the week is quiet
+  top: T[]            // the city's biggest upcoming shows, most prominent first
 }
 
 const LABELS: Record<EditionKind, string> = {
-  tonight: 'Tonight',
   onsale_today: 'On sale today',
+  onsale_week: 'On sale this week',
   presale_live: 'Presale live',
-  new: 'New listing',
-  soon: 'This week',
-  next_up: 'Coming up',
+  top: 'Top event',
 }
 
 const DAY_FMT = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short' })
@@ -61,24 +57,23 @@ export function londonDay(iso: string): string {
   return DAY_FMT.format(new Date(iso))
 }
 
-function whenLabel(kind: EditionKind, event: EditionEvent): string {
-  const time = londonTime(event.start_date)
-  if (kind === 'tonight') return `Tonight · ${time}`
-  return `${londonDay(event.start_date)} · ${time}`
+function whenLabel(event: EditionEvent): string {
+  return `${londonDay(event.start_date)} · ${londonTime(event.start_date)}`
 }
 
 const isLive = (e: EditionEvent) => e.status !== 'cancelled' && e.status !== 'postponed'
 
 /**
- * Pick the tiles for the edition. Order is by urgency (tonight, then today's on-sales, live presales,
- * new listings, the rest of the week). One tile per show: package/class listings and timed-entry attractions (Sea Life, Tussauds, waterparks) are dropped and
- * repeat dates of one series collapse to the earliest.
+ * Pick the tiles. Order: shows going on sale today, then this week's on-sales, then live presales, then
+ * the city's top events fill the rest. Within each group the biggest show comes first, so the large lead
+ * tile is the most prominent thing on sale. One tile per show: package/class listings and timed-entry
+ * attractions (Sea Life, Tussauds, waterparks) are dropped, repeat dates of one series collapse to one,
+ * and no venue supplies more than two top-event tiles.
  */
 export function buildEdition<T extends EditionEvent>(input: EditionInput<T>, limit = 7): EditionTile<T>[] {
-  const { now } = input
-  const window = londonDayWindow(now)
   const seenIds = new Set<string>()
   const seenSeries = new Set<string>()
+  const topPerVenue = new Map<string, number>()
   const tiles: EditionTile<T>[] = []
 
   const take = (list: T[], kind: EditionKind, max: number) => {
@@ -88,33 +83,32 @@ export function buildEdition<T extends EditionEvent>(input: EditionInput<T>, lim
       if (seenIds.has(event.id) || !isLive(event) || isPackageOrClassTitle(event.title) || isAttraction(event)) continue
       const key = seriesKey(event.title)
       if (seenSeries.has(key)) continue
+      if (kind === 'top') {
+        const venue = event.venue_name ?? ''
+        if ((topPerVenue.get(venue) ?? 0) >= 2) continue
+        topPerVenue.set(venue, (topPerVenue.get(venue) ?? 0) + 1)
+      }
       seenIds.add(event.id)
       seenSeries.add(key)
-      tiles.push({ event, kind, label: LABELS[kind], when: whenLabel(kind, event) })
+      tiles.push({ event, kind, label: LABELS[kind], when: whenLabel(event) })
       added++
     }
   }
 
-  const byStart = <E extends EditionEvent>(list: E[]) => [...list].sort((a, b) => a.start_date.localeCompare(b.start_date))
-  const tonight = byStart(input.today).filter(e => isTonightEvent({ start_date: e.start_date, end_date: e.end_date ?? null, status: e.status }, now.getTime(), window))
+  const byProminence = <E extends EditionEvent>(list: E[]) =>
+    [...list].sort((a, b) => (b.venue_capacity ?? 0) - (a.venue_capacity ?? 0) || a.start_date.localeCompare(b.start_date))
 
-  take(tonight, 'tonight', 3)
-  take(byStart(input.onSaleToday), 'onsale_today', 2)
-  take(byStart(input.presaleOpen), 'presale_live', 2)
-  take(byStart(input.fresh), 'new', 2)
-  take(byStart(input.soon), 'soon', limit)
-  // A quiet week still gets a page worth opening: show what is next.
-  if (tiles.length < 4) take(byStart(input.upcoming), 'next_up', 4 - tiles.length + 2)
+  take(byProminence(input.onSaleToday), 'onsale_today', 2)
+  take(byProminence(input.onSaleWeek), 'onsale_week', 4 - tiles.length)
+  take(byProminence(input.presaleOpen), 'presale_live', 1)
+  take(input.top, 'top', limit)
   return tiles
 }
 
 export interface HeadlineInput {
   cityName: string
-  tonight: number
-  onSaleToday: number
+  onSaleThisWeek: number
   presaleLive: number
-  thisWeek: number
-  next: { title: string; start_date: string } | null
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
@@ -122,13 +116,9 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 /** One factual line for the top of the page, built only from counts we hold. */
 export function editionHeadline(h: HeadlineInput): string {
   const parts: string[] = []
-  if (h.tonight > 0) parts.push(`${plural(h.tonight, 'show', 'shows')} tonight`)
-  if (h.onSaleToday > 0) parts.push(`${plural(h.onSaleToday, 'show', 'shows')} on sale today`)
+  if (h.onSaleThisWeek > 0) parts.push(`${plural(h.onSaleThisWeek, 'show', 'shows')} on sale this week`)
   if (h.presaleLive > 0) parts.push(`${plural(h.presaleLive, 'presale', 'presales')} open`)
-  if (parts.length === 0 && h.thisWeek > 0) parts.push(`${plural(h.thisWeek, 'show', 'shows')} in the next 7 days`)
-  if (parts.length > 0) return `${h.cityName} today: ${parts.join(', ')}`
-  if (h.next) return `Quiet week in ${h.cityName}. Next up: ${h.next.title}, ${londonDay(h.next.start_date)}`
-  return `What's on in ${h.cityName}`
+  return parts.length > 0 ? `${h.cityName}: top events, ${parts.join(', ')}` : `Top events in ${h.cityName}`
 }
 
 export const FRESH_WINDOW_MS = 36 * 3_600_000

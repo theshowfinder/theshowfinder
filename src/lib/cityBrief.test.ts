@@ -7,18 +7,32 @@ let n = 0
 const ev = (title: string, start: string, extra: Partial<EditionEvent> = {}): EditionEvent => ({
   id: `e${++n}`, title, slug: `s${n}`, start_date: start, status: 'on_sale', image_url: 'x.jpg', category: 'concert', venue_name: 'Bath Forum', ...extra,
 })
-const empty = { now, today: [], soon: [], onSaleToday: [], presaleOpen: [], fresh: [], upcoming: [] }
+const empty = { now, onSaleToday: [], onSaleWeek: [], presaleOpen: [], top: [] }
 
 describe('cityBrief', () => {
-  test('tonight comes first, then today on-sales, presales, new, week', () => {
-    const tonight = ev('Band A', '2026-10-20T18:30:00Z')
-    const onsale = ev('Band B', '2026-12-01T19:00:00Z')
+  test('on sale first (biggest venue leads), then presale, then top events', () => {
+    const small = ev('Band B', '2026-12-01T19:00:00Z', { venue_capacity: 300 })
+    const big = ev('Jimmy Carr', '2026-10-29T18:00:00Z', { venue_capacity: 3000 })
+    const today = ev('Band T', '2026-12-05T19:00:00Z', { venue_capacity: 100 })
     const presale = ev('Band C', '2026-12-02T19:00:00Z')
-    const fresh = ev('Band D', '2026-12-03T19:00:00Z')
-    const soon = ev('Band E', '2026-10-22T19:00:00Z')
-    const tiles = buildEdition({ ...empty, today: [tonight], onSaleToday: [onsale], presaleOpen: [presale], fresh: [fresh], soon: [soon] })
-    assert.deepEqual(tiles.map(t => t.kind), ['tonight', 'onsale_today', 'presale_live', 'new', 'soon'])
-    assert.equal(tiles[0].when, 'Tonight · 19:30')
+    const top = [ev('Arena Act', '2026-11-20T19:00:00Z', { venue_name: 'Arena' })]
+    const tiles = buildEdition({ ...empty, onSaleToday: [today], onSaleWeek: [small, big], presaleOpen: [presale], top })
+    assert.deepEqual(tiles.map(t => t.kind), ['onsale_today', 'onsale_week', 'onsale_week', 'presale_live', 'top'])
+    assert.equal(tiles[1].event.title, 'Jimmy Carr')
+    assert.equal(tiles[1].label, 'On sale this week')
+  })
+
+  test('events merely happening this week are not a category: only on-sale and top shows appear', () => {
+    const tiles = buildEdition({ ...empty, top: [ev('Big Show', '2026-10-22T19:00:00Z')] })
+    assert.deepEqual(tiles.map(t => t.kind), ['top'])
+    assert.equal(tiles[0].label, 'Top event')
+  })
+
+  test('a show on sale is not repeated as a top event', () => {
+    const jc = ev('Jimmy Carr', '2026-10-29T18:00:00Z')
+    const jcTop = { ...jc }
+    const tiles = buildEdition({ ...empty, onSaleWeek: [jc], top: [jcTop, ev('Other', '2026-11-01T19:00:00Z')] })
+    assert.equal(tiles.filter(t => t.event.title === 'Jimmy Carr').length, 1)
   })
 
   test('one tile per show, packages and cancelled shows dropped', () => {
@@ -26,7 +40,7 @@ describe('cityBrief', () => {
     const again = ev('Band A', '2026-10-23T19:00:00Z')
     const pkg = ev('Band A - VIP Premium Package', '2026-10-22T19:00:00Z')
     const cancelled = ev('Band Z', '2026-10-22T19:00:00Z', { status: 'cancelled' })
-    const tiles = buildEdition({ ...empty, soon: [a, again, pkg, cancelled] })
+    const tiles = buildEdition({ ...empty, onSaleWeek: [a, again, pkg, cancelled] })
     assert.equal(tiles.length, 1)
     assert.equal(tiles[0].event.id, a.id)
   })
@@ -35,27 +49,27 @@ describe('cityBrief', () => {
     const real = ev('Alison Moyet', '2026-10-20T18:30:00Z')
     const tussauds = ev('Madame Tussauds Blackpool - Standard Entry', '2026-10-20T09:00:00Z', { venue_name: 'Madame Tussauds Blackpool' })
     const park = ev('Blackpool Sandcastle Waterpark', '2026-10-20T09:00:00Z', { venue_name: 'Sandcastle Waterpark, Blackpool' })
-    const tiles = buildEdition({ ...empty, today: [tussauds, park, real] })
+    const tiles = buildEdition({ ...empty, top: [tussauds, park, real] })
     assert.deepEqual(tiles.map(t => t.event.title), ['Alison Moyet'])
   })
 
-  test('an event already finished tonight is not shown as tonight', () => {
-    const done = ev('Early', '2026-10-20T10:00:00Z', { end_date: '2026-10-20T07:00:00Z' })
-    assert.equal(buildEdition({ ...empty, today: [done] }).length, 0)
+  test('no venue supplies more than two top-event tiles', () => {
+    const top = ['A', 'B', 'C', 'D'].map(t => ev(`Act ${t}`, '2026-11-10T19:00:00Z', { venue_name: 'Arena' }))
+    assert.equal(buildEdition({ ...empty, top }).length, 2)
   })
 
-  test('a quiet week falls back to what is coming up', () => {
-    const next = [ev('Far A', '2026-11-05T19:00:00Z'), ev('Far B', '2026-11-06T19:00:00Z')]
-    const tiles = buildEdition({ ...empty, upcoming: next })
-    assert.ok(tiles.length >= 2)
-    assert.ok(tiles.every(t => t.kind === 'next_up'))
+  test('on-sale shows are capped at four so top events always get room', () => {
+    const onSaleWeek = ['A', 'B', 'C', 'D', 'E', 'F'].map(t => ev(`On ${t}`, '2026-12-10T19:00:00Z', { venue_name: `V${t}` }))
+    const top = ['X', 'Y', 'Z'].map(t => ev(`Top ${t}`, '2026-11-10T19:00:00Z', { venue_name: `W${t}` }))
+    const tiles = buildEdition({ ...empty, onSaleWeek, top })
+    assert.equal(tiles.filter(t => t.kind === 'onsale_week').length, 4)
+    assert.equal(tiles.filter(t => t.kind === 'top').length, 3)
   })
 
   test('headline uses real counts and degrades honestly', () => {
-    assert.equal(editionHeadline({ cityName: 'Bath', tonight: 2, onSaleToday: 1, presaleLive: 0, thisWeek: 4, next: null }), 'Bath today: 2 shows tonight, 1 show on sale today')
-    assert.equal(editionHeadline({ cityName: 'Bath', tonight: 0, onSaleToday: 0, presaleLive: 0, thisWeek: 4, next: null }), 'Bath today: 4 shows in the next 7 days')
-    assert.match(editionHeadline({ cityName: 'Bath', tonight: 0, onSaleToday: 0, presaleLive: 0, thisWeek: 0, next: { title: 'Band Q', start_date: '2026-10-31T19:00:00Z' } }), /^Quiet week in Bath\. Next up: Band Q/)
-    assert.equal(editionHeadline({ cityName: 'Bath', tonight: 0, onSaleToday: 0, presaleLive: 0, thisWeek: 0, next: null }), "What's on in Bath")
+    assert.equal(editionHeadline({ cityName: 'Derby', onSaleThisWeek: 3, presaleLive: 0 }), 'Derby: top events, 3 shows on sale this week')
+    assert.equal(editionHeadline({ cityName: 'Derby', onSaleThisWeek: 1, presaleLive: 2 }), 'Derby: top events, 1 show on sale this week, 2 presales open')
+    assert.equal(editionHeadline({ cityName: 'Derby', onSaleThisWeek: 0, presaleLive: 0 }), 'Top events in Derby')
   })
 
   test('freshness stamp only appears when the data really is fresh', () => {

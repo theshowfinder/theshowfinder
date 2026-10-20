@@ -5,12 +5,10 @@ import type { EditionKind, EditionTile } from '@/lib/cityBrief'
 import type { EventWithVenue } from '@/lib/types/database'
 
 const CHIP: Record<EditionKind, string> = {
-  tonight: 'bg-[#E8003D] text-white',
   onsale_today: 'bg-emerald-500 text-white',
+  onsale_week: 'bg-emerald-500 text-white',
   presale_live: 'bg-[#FFB800] text-slate-900',
-  new: 'bg-violet-600 text-white',
-  soon: 'bg-white/90 text-slate-900',
-  next_up: 'bg-white/90 text-slate-900',
+  top: 'bg-white/90 text-slate-900',
 }
 
 export interface EditionNavLink { href: string; label: string }

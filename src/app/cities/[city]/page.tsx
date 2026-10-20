@@ -44,7 +44,6 @@ import CityBrowse from '@/components/CityBrowse'
 import CityTicketSources from '@/components/CityTicketSources'
 import CityMorningEdition from '@/components/CityMorningEdition'
 import { fetchCityEdition } from '@/lib/cityEdition'
-import { isAttraction } from '@/lib/eventMix'
 import { buildEdition, editionHeadline, freshnessStamp } from '@/lib/cityBrief'
 
 // No city page is built at deploy time: each is generated on first request, then
@@ -268,11 +267,8 @@ export default async function CityPage({
   const editionTiles = buildEdition({ now, ...editionData })
   const editionHeadlineText = editionHeadline({
     cityName,
-    tonight: tonightEvents.filter(e => !isAttraction({ title: e.title, venue_name: e.venue_name ?? null })).length,
-    onSaleToday: new Set(editionData.onSaleToday.map(e => e.title)).size,
+    onSaleThisWeek: onsaleGroups.length,
     presaleLive: presaleGroups.length,
-    thisWeek: eventsThisWeek.length,
-    next: editionData.upcoming[0] ? { title: editionData.upcoming[0].title, start_date: editionData.upcoming[0].start_date } : null,
   })
   const editionStamp = freshnessStamp(editionData.lastSyncedAt, now)
   const editionNav = [
