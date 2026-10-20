@@ -7,7 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
 import { rankCandidates, type Candidate } from '@/lib/unmatchedCandidates'
 import type { CatalogueRow, ShowfinderEvent } from '@/lib/gigsbergMatchScoring'
-import { hideAction, linkAction, unhideAction } from './actions'
+import { createEventAction, hideAction, linkAction, unhideAction } from './actions'
 
 const PAGE = 25
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -41,7 +41,7 @@ function toCatalogueRow(platform: Platform, r: Record<string, any>): CatalogueRo
   }
 }
 
-export default async function UnmatchedPage({ searchParams }: { searchParams: Promise<{ platform?: string; view?: string; filter?: string; q?: string; page?: string }> }) {
+export default async function UnmatchedPage({ searchParams }: { searchParams: Promise<{ platform?: string; view?: string; filter?: string; q?: string; page?: string; msg?: string; ok?: string; status?: string }> }) {
   await requireAdmin()
   const sp = await searchParams
   const platform: Platform = sp.platform === 'see_tickets' ? 'see_tickets' : 'gigsberg'
@@ -83,7 +83,11 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
     items.sort((a, b) => (a.event!.start_date).localeCompare(b.event!.start_date))
   } else {
     let query = db.from(meta.table).select(meta.cols, { count: 'exact' }).is('gone_at', null).gte('event_date', today).is('matched_event_id', null)
-    query = view === 'hidden' ? query.eq('match_status', 'rejected') : query.or('match_status.is.null,match_status.neq.rejected')
+    const status = sp.status === 'hidden' ? 'hidden' : ['waiting', 'no_match', 'review'].includes(sp.status ?? '') ? sp.status : ''
+    if (view === 'hidden' || status === 'hidden') query = query.eq('match_status', 'rejected')
+    else if (status === 'waiting') query = query.or('match_status.is.null,match_status.eq.pending')
+    else if (status) query = query.eq('match_status', status as string)
+    else query = query.or('match_status.is.null,match_status.neq.rejected')
     if (q) query = query.ilike('name', `%${q}%`)
     const { data, count } = await query.order('event_date', { ascending: true }).range(from, from + PAGE - 1)
     total = count ?? 0
@@ -96,10 +100,11 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
       items.push({ key: String(r.id), catalogue: r, event: null, candidates, catalogueCandidates: [] })
     }
   }
+  const isHidden = view === 'hidden' || sp.status === 'hidden'
   const shown = sp.filter === 'candidates' ? items.filter(i => i.candidates.length) : sp.filter === 'none' ? items.filter(i => !i.candidates.length) : items
   const pages = Math.max(1, Math.ceil(total / PAGE))
   const href = (over: Record<string, string | number>) => {
-    const p = new URLSearchParams({ platform, view, ...(sp.filter ? { filter: sp.filter } : {}), ...(q ? { q } : {}), ...Object.fromEntries(Object.entries(over).map(([k, v]) => [k, String(v)])) })
+    const p = new URLSearchParams({ platform, view, ...(sp.filter ? { filter: sp.filter } : {}), ...(sp.status ? { status: sp.status } : {}), ...(q ? { q } : {}), ...Object.fromEntries(Object.entries(over).map(([k, v]) => [k, String(v)])) })
     return `/admin/unmatched?${p.toString()}`
   }
   const tab = (on: boolean) => `text-sm font-semibold px-3 py-1.5 rounded-full border ${on ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-300'}`
@@ -108,18 +113,26 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
         <h1 className="text-xl font-extrabold text-slate-900">Unmatched: shows on {meta.label} that no site event is linked to</h1>
-        <Link href="/admin/health" className="text-sm text-slate-500 hover:text-slate-700">← Site health</Link>
+        <Link href="/admin/feeds" className="text-sm text-slate-500 hover:text-slate-700">← Feeds &amp; matching</Link>
       </header>
       <main className="max-w-6xl mx-auto px-4 py-6">
+        {sp.msg && <div className={`mb-3 rounded-xl border px-4 py-3 text-sm font-semibold ${sp.ok === '1' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>{sp.msg}</div>}
         <div className="flex flex-wrap gap-2 mb-3">
           <Link href={`/admin/unmatched?platform=gigsberg&view=${view}`} className={tab(platform === 'gigsberg')}>Gigsberg ({unlinkedGb.toLocaleString('en-GB')})</Link>
           <Link href={`/admin/unmatched?platform=see_tickets&view=${view}`} className={tab(platform === 'see_tickets')}>See Tickets ({unlinkedSt.toLocaleString('en-GB')})</Link>
         </div>
         <div className="flex flex-wrap gap-2 mb-4">
-          <Link href={href({ view: 'soldout', filter: '', page: 1 })} className={tab(view === 'soldout')}>Sold-out site events with no {meta.label} button ({soldOutCount.toLocaleString('en-GB')})</Link>
-          <Link href={href({ view: 'unlinked', filter: '', page: 1 })} className={tab(view === 'unlinked')}>Unlinked {meta.label} shows</Link>
-          <Link href={href({ view: 'hidden', filter: '', page: 1 })} className={tab(view === 'hidden')}>Hidden</Link>
+          <Link href={href({ view: 'soldout', filter: '', status: '', page: 1 })} className={tab(view === 'soldout')}>Sold-out site events with no {meta.label} button ({soldOutCount.toLocaleString('en-GB')})</Link>
+          <Link href={href({ view: 'unlinked', filter: '', status: '', page: 1 })} className={tab(view === 'unlinked')}>Unlinked {meta.label} shows</Link>
+          <Link href={href({ view: 'hidden', filter: '', status: '', page: 1 })} className={tab(view === 'hidden')}>Hidden</Link>
         </div>
+        {view === 'unlinked' && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {([['', 'All unlinked'], ['review', 'Need a human look'], ['no_match', 'Checked: no match'], ['waiting', 'Waiting for the matcher']] as const).map(([k, label]) => (
+              <Link key={k} href={href({ status: k, page: 1 })} className={tab((sp.status ?? '') === k)}>{label}</Link>
+            ))}
+          </div>
+        )}
         <p className="text-sm text-slate-600 mb-3">
           {view === 'soldout'
             ? `Events that are sold out at Ticketmaster and have no ${meta.label} button. Linking a ${meta.label} show here puts the button on that event, and sold-out events lead with it.`
@@ -173,13 +186,16 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
                 <div className="flex items-center gap-3 text-sm">
                   <a href={item.catalogue!.url} target="_blank" rel="noreferrer" className="text-blue-600 font-semibold">Open on {meta.label} →</a>
                   <Link href={platform === 'gigsberg' ? `/admin/gigsberg/link?catalogue_id=${item.catalogue!.id}&return_to=${encodeURIComponent('/admin/gigsberg/matches')}` : `/admin/see-tickets/link?catalogue_id=${item.catalogue!.id}`} className="text-slate-600 font-semibold underline">Search all events</Link>
-                  {view === 'hidden'
+                  {!isHidden && (
+                    <form action={createEventAction}><input type="hidden" name="platform" value={platform} /><input type="hidden" name="catalogue_id" value={String(item.catalogue!.id)} /><input type="hidden" name="return_to" value={href({})} /><button className="rounded-lg bg-blue-700 text-white font-bold text-sm px-3 py-1" title="Builds a new event page from this feed listing">Create event page</button></form>
+                  )}
+                  {isHidden
                     ? <form action={unhideAction}><input type="hidden" name="platform" value={platform} /><input type="hidden" name="catalogue_id" value={String(item.catalogue!.id)} /><button className="text-slate-600 font-semibold border border-slate-300 rounded-lg px-3 py-1">Restore</button></form>
                     : <form action={hideAction}><input type="hidden" name="platform" value={platform} /><input type="hidden" name="catalogue_id" value={String(item.catalogue!.id)} /><button className="text-slate-600 font-semibold border border-slate-300 rounded-lg px-3 py-1">Hide: not on our site</button></form>}
                 </div>
               </div>
               <div className="mt-3 border-t border-slate-100 pt-3 space-y-2">
-                {item.candidates.length === 0 && <p className="text-sm text-slate-500">No site event on that day looks like this one. Either it is not on the site yet (the feed import adds it), or use Search all events.</p>}
+                {item.candidates.length === 0 && <p className="text-sm text-slate-500">No site event on that day looks like this one. It is probably not on the site yet: press Create event page to add it, or use Search all events if you think it is there under another name.</p>}
                 {item.candidates.map(c => {
                   const ev = c.event as ShowfinderEvent & EvRow
                   const has = ev[meta.urlCol]

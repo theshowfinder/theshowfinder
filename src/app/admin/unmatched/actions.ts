@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createEventFromCatalogue } from '@/lib/feedEventImport'
 
 async function checkAuth() {
   const store = await cookies()
@@ -77,4 +78,17 @@ export async function unhideAction(formData: FormData) {
   } as never).eq('id', id as never)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/unmatched')
+}
+
+/** "This show is not on the site": build its event page from the feed (venue + city from the feed, ticket check for Gigsberg). */
+export async function createEventAction(formData: FormData) {
+  await checkAuth()
+  const { platform, id } = parse(formData)
+  const back = String(formData.get('return_to') ?? '/admin/unmatched')
+  const base = back.startsWith('/admin/unmatched') ? back : '/admin/unmatched'
+  const res = await createEventFromCatalogue(platform, id)
+  revalidatePath('/admin/unmatched')
+  revalidatePath('/admin/feeds')
+  const sep = base.includes('?') ? '&' : '?'
+  redirect(`${base}${sep}msg=${encodeURIComponent(res.ok ? `Created the event page${res.slug ? `: /events/${res.slug}` : ''}` : `Not created: ${res.error}`)}&ok=${res.ok ? 1 : 0}`)
 }

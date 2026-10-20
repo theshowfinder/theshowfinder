@@ -3,6 +3,8 @@
 //   off  = does nothing
 //   dry  = finds and counts what it would import, writes nothing
 //   live = creates the events (capped per run), each linked to its catalogue row
+// Only shows the matcher has already given a "no match" verdict are candidates: matching comes first, a page is
+// created only once we know the show cannot be matched to anything we hold.
 // Every candidate passes the duplicate / package / future / venue rules in feedImportRules.ts first. A Gigsberg
 // show is also re-checked against Gigsberg's live inventory right before it is published, so no page is ever
 // created with a dead ticket route.
@@ -126,7 +128,7 @@ async function fetchCandidates<T>(db: Loose, table: string, columns: string, fro
   const out: T[] = []
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await db.from(table).select(columns)
-      .is('gone_at', null).is('matched_event_id', null).in('match_status', ['no_match', 'pending'])
+      .is('gone_at', null).is('matched_event_id', null).eq('match_status', 'no_match')
       .gt('event_date', from).lte('event_date', to)
       .order('event_date', { ascending: true }).order('id', { ascending: true }).range(offset, offset + 999) as { data: T[] | null; error: { message: string } | null }
     if (error) throw new Error(`Could not read ${table}: ${error.message}`)
@@ -204,4 +206,31 @@ export async function importFeedEvents(opts: { deadlineMs: number }): Promise<Fe
   result.durationMs = Date.now() - started
   await db.from('feed_import_state').update({ last_stats: { at: new Date().toISOString(), ...result } }).eq('id', 1)
   return result
+}
+
+/** Manual "create the event page" for one unmatched catalogue row (used by the Unmatched worklist). */
+export async function createEventFromCatalogue(platform: 'gigsberg' | 'see_tickets', id: string): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
+  const db = createAdminClient() as Loose
+  const table = platform === 'gigsberg' ? 'gigsberg_catalogue_events' : 'see_tickets_catalogue_events'
+  const { data: row } = await db.from(table).select('*').eq('id', id).maybeSingle() as { data: (GigsbergRow & SeeTicketsRow & { gone_at: string | null; matched_event_id: string | null }) | null }
+  if (!row) return { ok: false, error: 'That listing no longer exists.' }
+  if (row.matched_event_id) return { ok: false, error: 'That listing is already linked to a site event.' }
+  if (row.gone_at) return { ok: false, error: 'That listing has been removed from the feed.' }
+  if (!row.venue?.trim() || !row.city?.trim()) return { ok: false, error: 'The feed gives no venue or city for this show, so a page cannot be built. Hide it or link it by hand.' }
+  if (!row.event_date || row.event_date < londonDate(new Date().toISOString())) return { ok: false, error: 'That show is in the past.' }
+  try {
+    let eventId: string
+    if (platform === 'gigsberg') {
+      const inv = await searchGigsbergAffiliateListings({ event_id: Number(row.id), currency_code: 'GBP' })
+      await db.from(table).update({ inventory_status: inv.total > 0 ? 'available' : 'no_inventory', inventory_checked_at: new Date().toISOString() }).eq('id', row.id)
+      if (!(inv.total > 0)) return { ok: false, error: 'Gigsberg has no tickets for this show right now, so a page would have a dead button. Not created.' }
+      eventId = await createGigsbergEvent(db, row)
+    } else {
+      eventId = await createSeeTicketsEvent(db, row)
+    }
+    const { data: ev } = await db.from('events').select('slug').eq('id', eventId).maybeSingle() as { data: { slug: string } | null }
+    return { ok: true, slug: ev?.slug ?? '' }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
 }

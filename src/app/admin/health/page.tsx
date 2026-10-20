@@ -44,7 +44,7 @@ export default async function HealthPage() {
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
         <h1 className="text-xl font-extrabold text-slate-900">Site health</h1>
-        <Link href="/admin" className="text-sm text-slate-500 hover:text-slate-700">← Admin</Link>
+        <div className="flex gap-4 text-sm"><Link href="/admin/feeds" className="font-bold text-blue-700">Feeds &amp; matching →</Link><Link href="/admin" className="text-slate-500 hover:text-slate-700">← Admin</Link></div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
