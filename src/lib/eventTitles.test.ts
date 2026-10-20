@@ -27,6 +27,11 @@ test('years that are part of a name are kept', () => {
   assert.equal(seriesKey('Taylor Swift'), 'taylor-swift')
 })
 
+test('sponsor spelled two ways is one series', () => {
+  assert.equal(seriesKey('American Express Presents BST Hyde Park'), seriesKey('Amex Presents BST Hyde Park'))
+  assert.ok(isPackageOrClassTitle('Amex Presents BST Hyde Park - Bon Jovi - Ultimate Bar Packages'))
+})
+
 test('package and class listings are recognised', () => {
   assert.ok(isPackageOrClassTitle('Venue Premium Tickets'))
   assert.ok(isPackageOrClassTitle('Fishies Week 7'))

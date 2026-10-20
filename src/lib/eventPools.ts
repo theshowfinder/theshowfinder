@@ -434,7 +434,8 @@ export async function fetchPresalesOpenNow(
   artists: Artist[],
   { city, limit, fetchLimit = 250 }: PresalesOpenNowOpts,
 ): Promise<OnSaleGroup[]> {
-  const data = await fetchPresalesOpenNowEvents(supabase, { city, fetchLimit })
+  // VIP / bar / hospitality packages are products against a show, not shows: never a presale card.
+  const data = dropPackageListings(await fetchPresalesOpenNowEvents(supabase, { city, fetchLimit }))
   // Biggest shows first (venue size), then the earliest presale, so the few cards shown are the high-profile
   // presales rather than whichever small-room show happens to close soonest.
   const ranked = rankOnSaleGroups(groupEventsByArtist(data, artists))

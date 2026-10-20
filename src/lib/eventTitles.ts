@@ -36,11 +36,16 @@ function slugify(s: string): string {
 
 // Sponsors that appear and disappear from the same series' name between listings.
 const SPONSOR = /\bbetmgm\b/gi
+// The same sponsor written two ways across listings ("American Express Presents BST Hyde Park"
+// / "Amex Presents BST Hyde Park") must land on one card.
+const SPONSOR_ALIASES: [RegExp, string][] = [[/\bamerican\s+express\b/gi, 'amex']]
 
 /** Stable key so variants of one series ("BETMGM Premier League Darts", "2027 BetMGM …",
  *  "Premier League Darts 2027") land on one card. */
 export function seriesKey(name: string): string {
-  const base = cleanSeriesName(name).replace(SPONSOR, ' ').replace(/\s+/g, ' ').trim()
+  let base = cleanSeriesName(name).replace(SPONSOR, ' ')
+  for (const [re, to] of SPONSOR_ALIASES) base = base.replace(re, to)
+  base = base.replace(/\s+/g, ' ').trim()
   return slugify(base || name)
 }
 
