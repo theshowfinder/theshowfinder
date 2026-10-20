@@ -112,8 +112,8 @@ export const SEGMENT_QUERIES: SegmentQuery[] = [
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function slugify(str: string): string {
-  return str
+function slugify(str: string | null | undefined): string {
+  return (str ?? '')
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/[\s_]+/g, '-')

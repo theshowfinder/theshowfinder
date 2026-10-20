@@ -102,7 +102,16 @@ async function processEvents(
   const touchIds: string[] = []
   for (let i = 0; i < events.length; i += EVENT_CONCURRENCY) {
     const chunk = events.slice(i, i + EVENT_CONCURRENCY)
-    const outcomes = await Promise.all(chunk.map(ev => processEvent(db, ev, categoryFor(ev), venueCache, artistCache, eventCache, touchIds)))
+    // One malformed Ticketmaster event (e.g. a missing name) must never abort the whole run:
+    // it is counted as an error and logged, and the rest of the page is still saved.
+    const outcomes = await Promise.all(chunk.map(async ev => {
+      try {
+        return await processEvent(db, ev, categoryFor(ev), venueCache, artistCache, eventCache, touchIds)
+      } catch (e) {
+        console.error('[sweep] event failed', ev?.id, e instanceof Error ? e.message : String(e))
+        return 'error' as const
+      }
+    }))
     for (const o of outcomes) {
       if (o === 'inserted' || o === 'updated') stats.changed++
       else if (o === 'error') stats.errors++
