@@ -228,14 +228,17 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
     const filters = [`title.ilike.%${term}%`]
     if (slugTerm) filters.push(`slug.ilike.%${slugTerm}%`)
     if (artistEventIds.length) filters.push(`id.in.(${artistEventIds.join(',')})`)
-    const { data: matches } = await supabase
+    const findMatches = () => supabase
       .from('listed_events_with_venue')
       .select('id')
       .gte('start_date', new Date().toISOString())
       .in('status', LIVE_EVENT_STATUSES)
       .or(filters.join(','))
-      .limit(5000) as unknown as { data: { id: string }[] | null }
-    searchIds = (matches ?? []).map(m => m.id)
+      .limit(5000) as unknown as PromiseLike<{ data: { id: string }[] | null; error: { message: string } | null }>
+    let found = await findMatches()
+    if (found.error) { await new Promise(r => setTimeout(r, 400)); found = await findMatches() }
+    if (found.error) throw new Error(`Could not search events: ${found.error.message}`)
+    searchIds = (found.data ?? []).map(m => m.id)
   }
 
   // The visitor's own city: an explicit ?city= filter wins, otherwise the location cookie set by middleware.
@@ -246,7 +249,7 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
   type TileRow = { event_id: string; date_count: number; last_date: string; city_count: number; home_dates: number; in_home_city: boolean; other_cities: string[]; other_city_count: number; total_groups: number }
   let tiles: TileRow[] = []
   if (!searchIds || searchIds.length) {
-    const { data } = await (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: TileRow[] | null }> })
+    const callTiles = () => (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: TileRow[] | null; error: { message: string } | null }> })
       .rpc('browse_show_tiles', {
         p_category: searchParams.category ?? null,
         p_city: searchParams.city ?? null,
@@ -255,7 +258,12 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
         p_limit: PAGE_SIZE,
         p_offset: from,
       })
-    tiles = data ?? []
+    // A database hiccup (for example the 3-second limit on public queries while a heavy import runs) must never
+    // look like "No events found": retry once, and if it still fails show the error page instead of an empty list.
+    let res = await callTiles()
+    if (res.error) { await new Promise(r => setTimeout(r, 400)); res = await callTiles() }
+    if (res.error) throw new Error(`Could not load the event list: ${res.error.message}`)
+    tiles = res.data ?? []
   }
   const count = tiles.length ? Number(tiles[0].total_groups) : 0
 
