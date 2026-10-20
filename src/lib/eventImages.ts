@@ -16,17 +16,58 @@ const COMEDY_TERMS = /\b(comedy|comedian|stand[- ]?up|comic|laughs?|funny|humour
 const THEATRE_TERMS = /\b(theatre|theater|musical|opera|ballet|play|drama|pantomime|west end)\b/i
 const FAMILY_TERMS = /\b(family|kids?|children|disney|cbeebies|paw patrol|circus|magic|dinosaur|ice skating show)\b/i
 
-// Our own pictures for clubs whose fixtures are a big part of a city's listings. Original artwork (a floodlit
-// matchday scene in the club's colours with the club and ground names on the boards, no crest or logo),
-// used for the club's matches and its artist page instead of a stock/feed image. Add a club by adding a line.
-const TEAM_IMAGES: Array<{ test: RegExp; path: string }> = [
-  { test: /^derby county\b/i, path: '/event-fallbacks/teams/derby-county.jpg' },
+// Our own pictures for football clubs: passionate supporters in the club's colours holding scarves with the
+// club's name (original artwork, no crests or logos). Used for the club's home fixtures ("Burnley FC vs Stoke
+// City") and its artist page instead of a stock/feed image. Add a club with one line plus its image in
+// public/event-fallbacks/teams/. `name` is a regex fragment for the club's name as it appears in titles.
+const TEAMS: Array<{ name: string; image: string }> = [
+  { name: 'derby county', image: 'derby-county' },
+  { name: 'burnley', image: 'burnley' },
+  { name: 'portsmouth', image: 'portsmouth' },
+  { name: 'wigan athletic', image: 'wigan-athletic' },
+  { name: 'blackburn rovers', image: 'blackburn-rovers' },
+  { name: 'bradford city', image: 'bradford-city' },
+  { name: 'chesterfield', image: 'chesterfield' },
+  { name: 'blackpool', image: 'blackpool' },
+  { name: 'luton town', image: 'luton-town' },
+  { name: 'motherwell', image: 'motherwell' },
+  { name: 'crystal palace', image: 'crystal-palace' },
+  { name: 'barnsley', image: 'barnsley' },
+  { name: 'notts county', image: 'notts-county' },
+  { name: 'qpr|queens park rangers', image: 'queens-park-rangers' },
+  { name: 'lincoln city', image: 'lincoln-city' },
+  { name: 'bristol rovers', image: 'bristol-rovers' },
+  { name: 'bromley', image: 'bromley' },
+  { name: 'celtic', image: 'celtic' },
+  { name: 'birmingham city', image: 'birmingham-city' },
+  { name: 'west ham( united)?', image: 'west-ham-united' },
+  { name: 'tottenham( hotspur)?', image: 'tottenham-hotspur' },
+  { name: 'everton', image: 'everton' },
+  { name: 'nottingham forest', image: 'nottingham-forest' },
 ]
 
-/** Path of our own image for a club ("Derby County vs Stoke City", "Derby County FC"), or null. */
+// "Derby County", "Derby County FC", "Burnley FC Women" (the club, optionally FC/AFC and a women's side).
+const CLUB_SUFFIX = '(?:\\s+(?:fc|afc))?(?:\\s+(?:women|ladies|lionesses))?'
+const TEAM_PATTERNS = TEAMS.map(t => ({
+  // a home fixture: the title starts with the club and then "vs"/"v"
+  fixture: new RegExp(`^(?:${t.name})${CLUB_SUFFIX}\\s+(?:vs\\.?|v)\\s`, 'i'),
+  // the club's own artist page
+  club: new RegExp(`^(?:${t.name})${CLUB_SUFFIX}$`, 'i'),
+  path: `/event-fallbacks/teams/${t.image}.jpg`,
+}))
+
+/** Our picture for a club's home fixture title ("Derby County vs Stoke City"), or null. */
+export function teamFixtureImage(title: string | null | undefined): string | null {
+  if (!title) return null
+  const t = title.trim()
+  return TEAM_PATTERNS.find(p => p.fixture.test(t))?.path ?? null
+}
+
+/** Our picture for a club's artist page ("Derby County FC"), or null. */
 export function teamImageFor(name: string | null | undefined): string | null {
   if (!name) return null
-  return TEAM_IMAGES.find(t => t.test.test(name.trim()))?.path ?? null
+  const n = name.trim()
+  return TEAM_PATTERNS.find(p => p.club.test(n))?.path ?? null
 }
 
 /** An artist's picture, with our own image winning for clubs we have artwork for. */
@@ -47,8 +88,8 @@ export function fallbackEventImage(category: EventCategory, title = ''): string 
 }
 
 export function eventImageUrl(imageUrl: string | null | undefined, category: EventCategory, title = ''): string {
-  const team = teamImageFor(title)
-  if (team && inferEventCategory(title, category) === 'sports') return team
+  const team = teamFixtureImage(title)
+  if (team) return team
   if (imageUrl && imageUrl !== GENERIC_IMAGE && !imageUrl.endsWith('/og-image.png')) return imageUrl
   return fallbackEventImage(category, title)
 }

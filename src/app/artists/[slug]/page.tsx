@@ -25,7 +25,7 @@ import type { ArtistSocialLinks } from '@/lib/artistEnrich'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enrichArtist } from '@/lib/artistEnrichRun'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
-import { fallbackEventImage, artistPhotoUrl } from '@/lib/eventImages'
+import { fallbackEventImage, artistPhotoUrl, teamImageFor } from '@/lib/eventImages'
 import {
   toArtistEventRows, shouldIndexArtistPage, artistMetaDescription, buildArtistSummary, fallbackGenreLabel, dominantArtistCategory,
   type ArtistEventLink, type ArtistEventRow,
@@ -311,7 +311,8 @@ export default async function ArtistPage({ params }: PageProps) {
             src={artistPhoto}
             alt={artist.name}
             className="w-full h-full object-cover object-top"
-            style={{ filter: 'brightness(0.55)' }}
+            // Club artwork is a crowd scene: keep the faces and scarf in the wide, short hero rather than the top edge.
+            style={{ filter: 'brightness(0.55)', ...(teamImageFor(artist.name) ? { objectPosition: '50% 38%' } : {}) }}
           />
         ) : (
           // No artist photo: show the picture for the kind of show (sport, comedy, theatre...) rather than a blank gradient.
