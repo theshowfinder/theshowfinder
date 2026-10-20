@@ -43,6 +43,8 @@ import { buildShareText } from '@/lib/shareText'
 import { googleCalendarUrl } from '@/lib/ics'
 import { displayTitle, londonTimeSuffix, venueLabel } from '@/lib/displayTitle'
 import { buildEventFaq, cleanBoxOffice, cleanVenueNote, type EventDetails, type VenueDetails } from '@/lib/eventDetails'
+import ShowDatesList from '@/components/ShowDatesList'
+import type { ShowDate } from '@/lib/showDates'
 import { toArtistEventRows, type ArtistEventLink, type ArtistEventRow } from '@/lib/artistEvents'
 import { dropDuplicateEvents } from '@/lib/listedEvents'
 import { isSeeTicketsRunPage } from '@/lib/seeTicketsWestEnd'
@@ -461,6 +463,17 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     event.details?.ticketLimit ? { label: 'Ticket limit', value: event.details.ticketLimit } : null,
   ].filter((f): f is { label: string; value: string } => !!f)
   const { venueEvents, artistEvents } = await getRelatedEvents(event, headliners[0]?.artist?.id ?? null)
+  // Every upcoming date of this same show (a tour across towns, or a long run), grouped by city in the browser.
+  const SHOW_DATES_LIMIT = 150
+  let showDates: ShowDate[] = []
+  try {
+    const { data } = await (createPublicClient() as unknown as { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: ShowDate[] | null }> })
+      .rpc('show_dates', { p_event_id: event.id, p_limit: SHOW_DATES_LIMIT })
+    showDates = data ?? []
+  } catch (err) {
+    console.error('[event] show_dates lookup failed', err)
+  }
+  const showAllDates = showDates.length > 1
   const cityEvents = venue?.city
     ? await fetchCityEventsAhead(createPublicClient(), {
         city: venue.city,
@@ -822,7 +835,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               </div>
             )}
 
-            {artistEvents.length > 0 && (
+            {showAllDates && <ShowDatesList dates={showDates} currentId={event.id} truncated={showDates.length >= SHOW_DATES_LIMIT} />}
+
+            {!showAllDates && artistEvents.length > 0 && (
               <div>
                 <div className="flex items-baseline justify-between gap-4 mb-4">
                   <h2 className="text-xl font-extrabold text-slate-900">

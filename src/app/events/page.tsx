@@ -1,7 +1,9 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import { createPublicClient } from '@/lib/supabase/public'
-import EventCard from '@/components/EventCard'
+import EventCard, { type RunInfo } from '@/components/EventCard'
+import { teaser } from '@/lib/showDates'
 import ArtistOnSaleCard from '@/components/ArtistOnSaleCard'
 import ArtistResultCard from '@/components/ArtistResultCard'
 import Link from 'next/link'
@@ -236,31 +238,51 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
     searchIds = (matches ?? []).map(m => m.id)
   }
 
-  type RunRow = { event_id: string; run_size: number; date_count: number; last_date: string; venue_count: number; total_groups: number }
-  let runs: RunRow[] = []
+  // The visitor's own city: an explicit ?city= filter wins, otherwise the location cookie set by middleware.
+  // (This page is already per-request dynamic, so reading the cookie here costs nothing extra.)
+  const cookieCity = (await cookies()).get('tsf_city')?.value ?? null
+  const homeCity = searchParams.city ?? cookieCity
+
+  type TileRow = { event_id: string; date_count: number; last_date: string; city_count: number; home_dates: number; in_home_city: boolean; other_cities: string[]; other_city_count: number; total_groups: number }
+  let tiles: TileRow[] = []
   if (!searchIds || searchIds.length) {
-    const { data } = await (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: RunRow[] | null }> })
-      .rpc('browse_event_runs', {
+    const { data } = await (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: TileRow[] | null }> })
+      .rpc('browse_show_tiles', {
         p_category: searchParams.category ?? null,
         p_city: searchParams.city ?? null,
         p_ids: searchIds,
+        p_home_city: cookieCity,
         p_limit: PAGE_SIZE,
         p_offset: from,
       })
-    runs = data ?? []
+    tiles = data ?? []
   }
-  const count = runs.length ? Number(runs[0].total_groups) : 0
+  const count = tiles.length ? Number(tiles[0].total_groups) : 0
 
-  let events: Array<EventWithVenue & { run?: { dateCount: number; lastDate: string; venueCount: number } }> = []
-  if (runs.length) {
+  let events: Array<EventWithVenue & { run?: RunInfo }> = []
+  if (tiles.length) {
     const { data: reps } = await supabase
       .from('listed_events_with_venue')
       .select('*')
-      .in('id', runs.map(r => r.event_id)) as unknown as { data: EventWithVenue[] | null }
+      .in('id', tiles.map(t => t.event_id)) as unknown as { data: EventWithVenue[] | null }
     const byId = new Map((reps ?? []).map(e => [e.id, e]))
-    events = runs.flatMap(r => {
-      const ev = byId.get(r.event_id)
-      return ev ? [{ ...ev, run: { dateCount: Number(r.date_count), lastDate: r.last_date, venueCount: Number(r.venue_count) } }] : []
+    events = tiles.flatMap(t => {
+      const ev = byId.get(t.event_id)
+      if (!ev) return []
+      const shownIsHome = t.in_home_city
+      const tz = teaser(t.other_cities ?? [], Number(t.other_city_count), ev.venue_city, shownIsHome)
+      return [{
+        ...ev,
+        run: {
+          dateCount: Number(t.date_count),
+          lastDate: t.last_date,
+          cityCount: Number(t.city_count),
+          homeCity: shownIsHome ? (homeCity ?? null) : null,
+          homeDates: Number(t.home_dates),
+          alsoIn: tz.listed,
+          alsoMore: tz.more,
+        },
+      }]
     })
   }
 

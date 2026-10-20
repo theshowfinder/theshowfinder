@@ -41,10 +41,22 @@ function formatPrice(from: number | null, to: number | null, currency: string) {
   return `From ${sym}${from}`
 }
 
+/** Set when a tile stands for a whole run or tour. */
+export interface RunInfo {
+  dateCount: number
+  lastDate: string
+  cityCount: number
+  /** The visitor's city when this tile's date is theirs, else null. */
+  homeCity: string | null
+  homeDates: number
+  /** Next few other cities (never the one shown), and how many more beyond those. */
+  alsoIn: string[]
+  alsoMore: number
+}
+
 interface Props {
   event: EventWithVenue
-  /** Set when this tile stands for a whole run or tour: the card shows the next date plus "N dates". */
-  run?: { dateCount: number; lastDate: string; venueCount: number }
+  run?: RunInfo
 }
 
 function shortDay(iso: string) {
@@ -102,11 +114,8 @@ export default function EventCard({ event, run }: Props) {
         </Link>
 
         <div className="flex flex-col gap-1 text-sm text-slate-500">
-          <span>📅 {isRun ? `Next: ${formatDate(event.start_date)}` : formatDate(event.start_date)}</span>
-          {isRun && <span className="font-semibold text-slate-700">🎟️ {run!.dateCount} dates · to {shortDay(run!.lastDate)}</span>}
-          {isRun && run!.venueCount > 1 ? (
-            <span className="truncate">📍 {run!.venueCount} venues, from {venueLabel(event.venue_name, event.venue_city)}</span>
-          ) : event.venue_slug ? (
+          <span>📅 {isRun && !run!.homeCity ? 'Next: ' : ''}{formatDate(event.start_date)}</span>
+          {event.venue_slug ? (
             <Link
               href={`/venues/${event.venue_slug}`}
               className="truncate hover:underline hover:text-slate-700 transition-colors"
@@ -115,6 +124,17 @@ export default function EventCard({ event, run }: Props) {
             </Link>
           ) : (
             <span className="truncate">📍 {venueLabel(event.venue_name, event.venue_city)}</span>
+          )}
+          {isRun && run!.homeCity && run!.homeDates > 1 && (
+            <span className="font-semibold text-slate-700">+ {run!.homeDates - 1} more date{run!.homeDates - 1 === 1 ? '' : 's'} in {run!.homeCity}</span>
+          )}
+          {isRun && (
+            <span className="font-semibold text-slate-700">
+              🎟️ {run!.dateCount} dates{run!.cityCount > 1 ? ` · ${run!.cityCount} cities` : ` · to ${shortDay(run!.lastDate)}`}
+            </span>
+          )}
+          {isRun && run!.alsoIn.length > 0 && (
+            <span className="truncate text-xs">Also: {run!.alsoIn.join(', ')}{run!.alsoMore > 0 ? ` +${run!.alsoMore}` : ''}</span>
           )}
         </div>
 
