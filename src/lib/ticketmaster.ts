@@ -514,6 +514,17 @@ async function upsertEventArtists(
 
 // ── Event upsert ─────────────────────────────────────────────────────────────
 
+// Postgres returns timestamptz as "2026-11-20T20:00:00+00:00" while Ticketmaster sends
+// "2026-11-20T20:00:00Z". As strings those never match, which made every event look changed
+// and forced the slow full-write path on every sync. Compare the instants instead.
+function sameInstant(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (a == null || b == null) return a == null && b == null
+  const ta = new Date(a).getTime()
+  const tb = new Date(b).getTime()
+  if (Number.isNaN(ta) || Number.isNaN(tb)) return a === b
+  return ta === tb
+}
+
 type UpsertResult = 'inserted' | 'updated' | 'skipped' | 'error'
 
 export const EXISTING_EVENT_COLUMNS = 'id, title, slug, category, venue_id, start_date, onsale_date, public_onsale_start, public_onsale_end, presale_start, presale_end, presale_name, image_url, description, price_from, price_to, currency, tickets_url, status, ticketmaster_id, doors_time, details'
@@ -673,12 +684,12 @@ async function upsertEvent(
     existing.slug === eventData.slug &&
     existing.category === eventData.category &&
     existing.venue_id === eventData.venue_id &&
-    existing.start_date === eventData.start_date &&
-    existing.onsale_date === eventData.onsale_date &&
-    existing.public_onsale_start === eventData.public_onsale_start &&
-    existing.public_onsale_end === eventData.public_onsale_end &&
-    existing.presale_start === eventData.presale_start &&
-    existing.presale_end === eventData.presale_end &&
+    sameInstant(existing.start_date, eventData.start_date) &&
+    sameInstant(existing.onsale_date, eventData.onsale_date) &&
+    sameInstant(existing.public_onsale_start, eventData.public_onsale_start) &&
+    sameInstant(existing.public_onsale_end, eventData.public_onsale_end) &&
+    sameInstant(existing.presale_start, eventData.presale_start) &&
+    sameInstant(existing.presale_end, eventData.presale_end) &&
     existing.presale_name === eventData.presale_name &&
     existing.image_url === eventData.image_url &&
     existing.description === eventData.description &&
@@ -688,7 +699,7 @@ async function upsertEvent(
     existing.tickets_url === eventData.tickets_url &&
     existing.status === eventData.status &&
     existing.ticketmaster_id === eventData.ticketmaster_id &&
-    (existing.doors_time ? new Date(existing.doors_time).getTime() : null) === (eventData.doors_time ? new Date(eventData.doors_time).getTime() : null) &&
+    sameInstant(existing.doors_time, eventData.doors_time) &&
     detailsKey(existing.details) === detailsKey(eventData.details)
 
   if (unchanged && existing && touchIds) {
