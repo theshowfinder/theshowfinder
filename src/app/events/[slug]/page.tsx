@@ -27,7 +27,7 @@ import { jsonLdScript, buildEventSchema, buildBreadcrumbSchema, earliestOnSale }
 import { ticketPurchaseDisabledStatus, LIVE_EVENT_STATUSES, fetchCityEventsAhead } from '@/lib/eventPools'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getEventSeoAlias } from '@/lib/seoAliases'
-import { eventImageUrl } from '@/lib/eventImages'
+import { eventImageUrl, artistPhotoUrl } from '@/lib/eventImages'
 import { cityPagePath } from '@/lib/cities'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { pickSeeTicketsPrice, type CatalogueRowPrice } from '@/lib/seeTicketsPrice'
@@ -715,9 +715,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                         className="group flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm hover:border-slate-400 hover:shadow-md transition"
                       >
                         <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-extrabold text-white overflow-hidden" style={{ backgroundColor: '#E8003D' }}>
-                          {artist.image_url ? (
+                          {artistPhotoUrl(artist.name, artist.image_url) ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={artist.image_url} alt="" className="h-full w-full object-cover object-top" />
+                            <img src={artistPhotoUrl(artist.name, artist.image_url) ?? ''} alt="" className="h-full w-full object-cover object-top" />
                           ) : artist.name[0]}
                         </div>
                         <div>

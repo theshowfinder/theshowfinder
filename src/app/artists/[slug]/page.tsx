@@ -25,7 +25,7 @@ import type { ArtistSocialLinks } from '@/lib/artistEnrich'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enrichArtist } from '@/lib/artistEnrichRun'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
-import { fallbackEventImage } from '@/lib/eventImages'
+import { fallbackEventImage, artistPhotoUrl } from '@/lib/eventImages'
 import {
   toArtistEventRows, shouldIndexArtistPage, artistMetaDescription, buildArtistSummary, fallbackGenreLabel, dominantArtistCategory,
   type ArtistEventLink, type ArtistEventRow,
@@ -90,7 +90,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // Artists with nothing upcoming have an empty page — keep it out of the index
   // until there is something on it.
   const indexable = shouldIndexArtistPage({ upcomingEvents: upcomingEvents.length, tourDates: tourDateCount })
-  const ogImage     = artist.image_url ?? 'https://www.theshowfinder.com/og-image.png'
+  const photo       = artistPhotoUrl(artist.name, artist.image_url)
+  const ogImage     = photo ? new URL(photo, 'https://www.theshowfinder.com').toString() : 'https://www.theshowfinder.com/og-image.png'
   const canonical   = `https://www.theshowfinder.com/artists/${slug}`
 
   return {
@@ -155,6 +156,7 @@ export default async function ArtistPage({ params }: PageProps) {
   const now = new Date().toISOString()
   const upcoming = dates.filter(d => d.date >= now)
   // Real upcoming shows from the events table (see getArtistUpcomingEvents).
+  const artistPhoto = artistPhotoUrl(artist.name, artist.image_url)
   const eventRows = await getArtistUpcomingEvents(artist.id)
   const nextShow = eventRows[0] ?? null
   const dateCount = dates.length > 0 ? upcoming.length : eventRows.length
@@ -194,7 +196,7 @@ export default async function ArtistPage({ params }: PageProps) {
     // Google's Event guidance wants a description and image on every Event, so
     // use the artist's own photo and a factual line built from real fields.
     description: fallbackEventDescription({ name: artist.name, startDate: d.date, venueName: d.venue_name, city: d.city }),
-    image: [artist.image_url ?? SITE_IMAGE_URL],
+    image: [artistPhoto ? new URL(artistPhoto, SITE_IMAGE_URL).toString() : SITE_IMAGE_URL],
     offers: {
       '@type':       'Offer',
       url:            artist.tickets_url ? artistTicketUrl : canonicalUrl,
@@ -221,7 +223,7 @@ export default async function ArtistPage({ params }: PageProps) {
     },
     performer: { '@type': 'MusicGroup', name: artist.name },
     description: fallbackEventDescription({ name: e.title, startDate: e.startDate, venueName: e.venueName, city: e.venueCity }),
-    image: [artist.image_url ?? SITE_IMAGE_URL],
+    image: [artistPhoto ? new URL(artistPhoto, SITE_IMAGE_URL).toString() : SITE_IMAGE_URL],
     offers: {
       '@type':       'Offer',
       url:            `https://www.theshowfinder.com/events/${e.slug}`,
@@ -271,7 +273,7 @@ export default async function ArtistPage({ params }: PageProps) {
     '@type': 'MusicGroup',
     name: artist.name,
     url: canonicalUrl,
-    ...(artist.image_url ? { image: artist.image_url } : {}),
+    ...(artistPhoto ? { image: new URL(artistPhoto, SITE_IMAGE_URL).toString() } : {}),
     ...(genreLabel ? { genre: genreLabel } : {}),
     ...(aboutText ? { description: aboutText } : {}),
     ...(profileLinks.length || extras.wikipedia_url
@@ -303,10 +305,10 @@ export default async function ArtistPage({ params }: PageProps) {
       />
       {/* Hero */}
       <div className="relative h-[50vh] min-h-[380px] overflow-hidden bg-slate-900">
-        {artist.image_url ? (
+        {artistPhoto ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={artist.image_url}
+            src={artistPhoto}
             alt={artist.name}
             className="w-full h-full object-cover object-top"
             style={{ filter: 'brightness(0.55)' }}
