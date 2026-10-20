@@ -30,7 +30,14 @@ export function groupDateCount(g: Pick<OnSaleGroup, 'events' | 'dateCount'>): nu
 // "Theory of a Deadman "The Barricade Tour""   → "Theory of a Deadman"
 // "Harry Styles"                               → "Harry Styles"
 export function extractArtistName(title: string): string {
-  return title.split(/\s+\|\s+|\s*:\s+|\s+[-–—]\s+|\s+"[^"]+"/)[0].trim()
+  // Feeds also write the tour part with a tight hyphen ("Jimmy Carr- Killing Jokes",
+  // "Lighthouse Family-CELEBRATING THE ICONIC ALBUM") and add "plus special guests".
+  // Split those too, so one artist is one tile; real hyphenated names (Blink-182,
+  // Jay-Z, Wu-Tang Clan) have neither a space after the hyphen nor a run of capitals after it.
+  return title
+    .replace(/\s+plus\s+(?:special\s+)?(?:guests?|support)\b.*$/i, '')
+    .split(/\s+\|\s+|\s*:\s+|\s+[-–—]\s+|(?<=\w)-\s+|(?<=[a-z])-(?=[A-Z]{3,})|\s+"[^"]+"/)[0]
+    .trim()
 }
 
 // The slug an On Sale card lives under. Variants of one series (sponsor / edition year

@@ -38,6 +38,19 @@ function fakeEvent(overrides: Record<string, unknown>): EventWithVenue {
   } as unknown as EventWithVenue
 }
 
+describe('extractArtistName: one artist, one tile', () => {
+  test('tight hyphen and "plus special guests" variants fold into the artist name', () => {
+    assert.equal(extractArtistName('Jimmy Carr- Killing Jokes'), 'Jimmy Carr')
+    assert.equal(extractArtistName('Lighthouse Family-CELEBRATING OCEAN DRIVE AND ALL THEIR GREATEST HITS'), 'Lighthouse Family')
+    assert.equal(extractArtistName('Kevin Bloody Wilson-FAIR DINKUM FUNNY'), 'Kevin Bloody Wilson')
+    assert.equal(extractArtistName('KEVIN BLOODY WILSON PLUS SPECIAL GUESTS'), 'KEVIN BLOODY WILSON')
+    assert.equal(extractArtistName('Lighthouse Family plus support'), 'Lighthouse Family')
+  })
+  test('hyphenated names are left alone', () => {
+    for (const n of ['Blink-182', 'Jay-Z', 'Wu-Tang Clan', 'AC-DC', 'Sum 41', 'Hall & Oates']) assert.equal(extractArtistName(n), n)
+  })
+})
+
 describe('extractArtistName', () => {
   test('strips a " | Tour Name" suffix', () => {
     assert.equal(extractArtistName('Taylor Swift | The Eras Tour'), 'Taylor Swift')
