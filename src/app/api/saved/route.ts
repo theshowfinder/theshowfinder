@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server'
 import { createPublicClient } from '@/lib/supabase/public'
 import { isValidSlug } from '@/lib/savedShows'
+import { reissuedEventIds } from '@/lib/onsaleReissued'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,6 +35,9 @@ export async function GET(request: Request) {
     .gte('start_date', since) as unknown as { data: SavedEventRow[] | null; error: { message: string } | null }
 
   if (error) return NextResponse.json({ error: 'Could not load saved shows' }, { status: 500 })
-  const events = (data ?? []).sort((a, b) => a.start_date.localeCompare(b.start_date))
+  const rows = data ?? []
+  // A re-released or wrong Ticketmaster on-sale date is not shown as "goes on sale" (the client only offers a reminder when there is one).
+  const reissued = await reissuedEventIds(createPublicClient(), rows.map(r => r.id))
+  const events = rows.map(r => (reissued.has(r.id) ? { ...r, onsale_date: null } : r)).sort((a, b) => a.start_date.localeCompare(b.start_date))
   return NextResponse.json({ events }, { headers: { 'Cache-Control': 'no-store' } })
 }

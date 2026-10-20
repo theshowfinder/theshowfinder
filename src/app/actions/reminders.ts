@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { normalizeEmail, isValidEmail } from '@/lib/subscribers'
 import { isValidSlug } from '@/lib/savedShows'
+import { reissuedEventIds } from '@/lib/onsaleReissued'
 import { canRemind, MAX_REMINDER_SLUGS, MAX_REMINDERS_PER_EMAIL } from '@/lib/reminders'
 import { subscribeNewsletter } from './newsletter'
 
@@ -46,7 +47,8 @@ export async function requestOnSaleReminders(
     if (error) throw error
 
     const events = (data ?? []) as unknown as EventRow[]
-    const eligible = events.filter(e => canRemind(e.onsale_date, e.status))
+    const reissued = await reissuedEventIds(db, events.map(e => e.id))
+    const eligible = events.filter(e => !reissued.has(e.id) && canRemind(e.onsale_date, e.status))
     const skipped = wanted.length - eligible.length
     if (eligible.length === 0) {
       return { error: 'Tickets for this show are already on sale or no on-sale date has been announced yet.', skipped }

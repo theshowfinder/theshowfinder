@@ -4,6 +4,7 @@ import { resend, FROM_EMAIL } from '@/lib/resend'
 import { dueWindow, groupRemindersByEmail, type DueReminder } from '@/lib/reminders'
 import { buildReminderEmail } from '@/lib/reminderEmail'
 import { withJobRun } from '@/lib/jobRuns'
+import { reissuedEventIds } from '@/lib/onsaleReissued'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -14,6 +15,7 @@ interface DueRow {
   id: string
   email: string
   events: {
+    id: string
     slug: string
     title: string
     onsale_date: string
@@ -34,7 +36,7 @@ async function handleGet(request: Request) {
   const db = createAdminClient()
   const { data, error } = await db
     .from('event_reminders')
-    .select('id, email, events!inner(slug, title, onsale_date, status, venue:venues(name, city))')
+    .select('id, email, events!inner(id, slug, title, onsale_date, status, venue:venues(name, city))')
     .is('sent_at', null)
     .gte('events.onsale_date', fromISO)
     .lt('events.onsale_date', toISO)
@@ -46,7 +48,10 @@ async function handleGet(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const rows: DueReminder[] = ((data ?? []) as unknown as DueRow[]).map(r => ({
+  // Skip shows whose Ticketmaster on-sale date is a re-release or wrong: it is not a first sale, so "tickets go on sale soon" would be false.
+  const dueRows = (data ?? []) as unknown as DueRow[]
+  const reissued = await reissuedEventIds(db, dueRows.map(r => r.events.id))
+  const rows: DueReminder[] = dueRows.filter(r => !reissued.has(r.events.id)).map(r => ({
     id: r.id,
     email: r.email,
     title: r.events.title,

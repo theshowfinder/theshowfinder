@@ -113,24 +113,22 @@ export function saleBadgeText(saleType: SaleType, isoDate: string, now: Date = n
   return `${saleType === 'presale' ? 'Presale opens' : 'On sale'} ${fmtOnSaleLabel(isoDate)}`
 }
 
-// A show whose presale ended months before the public on-sale date is not
-// newly going on sale: its tickets were already sold (Paul Smith 'Happy',
-// Derby: presale 25-27 Feb, then Ticketmaster lists 23 Oct as a "public
-// on-sale" for a late release of held seats). Normal presales end hours or
-// days before the public sale, so a gap of more than 14 days means the date
-// is a re-release, and calling it "On sale this week" would be wrong.
+// Ticketmaster's "public on-sale" date is sometimes not a first sale. A show whose presale ended months
+// before the public date is a late release of held seats (Paul Smith 'Happy', Derby: presale 25-27 Feb,
+// then a public date of 23 Oct), and a public date after the show itself is plain wrong. Telling visitors
+// "on sale this week" / "tickets go on sale 23 Oct" for those is false. Normal presales end hours or days
+// before the public sale, so a gap of more than 14 days means the date is a re-release. The database
+// function onsale_reissued_ids() applies these rules plus a sibling-listing check (src/lib/onsaleReissued.ts);
+// this is the part that needs no extra lookup.
 export const RE_RELEASE_GAP_DAYS = 14
 
-type SaleDates = { onsale_date?: string | null; public_onsale_start?: string | null; presale_start?: string | null; presale_end?: string | null }
+type SaleDates = { presale_start?: string | null; onsale_date?: string | null; public_onsale_start?: string | null; presale_end?: string | null; start_date?: string | null }
 
 export function isReRelease(e: SaleDates): boolean {
   const publicStart = e.public_onsale_start ?? e.onsale_date
   if (!publicStart) return false
-  const gapMs = (a: string, b: string) => Date.parse(a) - Date.parse(b)
-  const limit = RE_RELEASE_GAP_DAYS * 86_400_000
-  if (e.presale_end) return gapMs(publicStart, e.presale_end) > limit
-  // No presale end recorded: fall back to the presale start with a longer allowance (a presale can run for weeks).
-  if (e.presale_start) return gapMs(publicStart, e.presale_start) > 60 * 86_400_000
+  if (e.start_date && Date.parse(publicStart) > Date.parse(e.start_date)) return true
+  if (e.presale_end) return Date.parse(publicStart) - Date.parse(e.presale_end) > RE_RELEASE_GAP_DAYS * 86_400_000
   return false
 }
 

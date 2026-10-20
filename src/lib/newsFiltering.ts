@@ -166,7 +166,41 @@ export function isUsEduHost(url: string): boolean {
   }
 }
 
+// Stories that are about something other than UK live events, however a search happened to reach them.
+// Derby is the usual victim: a plain "Derby concert" search returns "Umamusume: Pretty Derby" (a Japanese
+// game) and its US visa saga, and the national desks also run American stories (NFL halftime shows, the
+// Super Bowl). The blocklists above are whack-a-mole; these three checks are the structural part.
+export const NON_UK_TOPIC_BLOCKLIST: RegExp[] = [
+  /\banime\b/i, /\bmanga\b/i, /\bumamusume\b/i, /\buma musume\b/i, /\bpretty derby\b/i, /\bcygames\b/i,
+  /\bvideo games?\b/i, /\bgaming\b/i, /\besports?\b/i,
+  /\bnfl\b/i, /\bnba\b/i, /\bmlb\b/i, /\bnhl\b/i, /\bsuper bowl\b/i, /\bthanksgiving\b/i, /\bhalftime\b/i,
+  /\bimmigration\b/i, /\btrump\b/i,
+]
+// Publishers that cover games/anime, never UK live events.
+export const NON_UK_SOURCE_BLOCKLIST: RegExp[] = [
+  /anime news network/i, /anime trending/i, /gosugamers/i, /rock paper shotgun/i, /shacknews/i,
+  /crunchyroll/i, /\bpolygon\b/i, /\bkotaku\b/i, /gamespot/i, /pc gamer/i, /\bign\b/i,
+]
+// An American marker (the abbreviation US/U.S./USA in capitals, or a big US city) with no sign of Britain
+// anywhere in the headline. "North America, UK & EU tour" has UK, so it stays; "US visa rules" does not.
+const US_MARKER = /(?:^|[\s(])(?:US|U\.S\.|USA|U\.S\.A\.)(?=[\s,.:;)'’\u2019-]|$)|\bAmerica(?:n)?\b|\bLos Angeles\b|\bNew York\b|\bLas Vegas\b|\bNashville\b/
+const UK_MARKER = /\b(?:UK|U\.K\.|Britain|British|England|English|Scotland|Scottish|Wales|Welsh|Northern Ireland|London|Wembley|Glasgow|Manchester|Birmingham|Liverpool|Leeds|Cardiff|Edinburgh|Bristol|Sheffield|Newcastle|Derby)\b/
+
+/** True when a headline/source is plainly not UK live-events news. Pure; used at sync time and again at display time. */
+export function isNonUkNews(item: { headline: string; source?: string | null }): boolean {
+  if (NON_UK_TOPIC_BLOCKLIST.some(re => re.test(item.headline))) return true
+  if (item.source && NON_UK_SOURCE_BLOCKLIST.some(re => re.test(item.source as string))) return true
+  if (US_MARKER.test(item.headline) && !UK_MARKER.test(item.headline.replace(/\bPretty Derby\b/gi, ''))) return true
+  return false
+}
+
+/** Display-time guard: drops auto-collected rows that would no longer pass the sync filter (editorial rows are always kept). */
+export function dropNonUkNews<T extends { headline: string; source?: string | null; is_editorial?: boolean | null }>(rows: T[]): T[] {
+  return rows.filter(r => r.is_editorial || !isNonUkNews(r))
+}
+
 export function isFalsePositive(item: { headline: string; source: string | null; url: string }): boolean {
+  if (isNonUkNews(item)) return true
   const text = `${item.headline} ${item.source ?? ''}`
   if (HEADLINE_BLOCKLIST.some(re => re.test(text))) return true
   if (NORTH_AMERICA_BLOCKLIST.some(re => re.test(text))) return true

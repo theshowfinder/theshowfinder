@@ -16,6 +16,7 @@ import { createPublicClient } from '@/lib/supabase/public'
 import EventCard from '@/components/EventCard'
 import SearchBarWrapper from '@/components/SearchBarWrapper'
 import { Suspense } from 'react'
+import { dropNonUkNews } from '@/lib/newsFiltering'
 import { saleBadgeText, groupDateCount } from '@/lib/on-sale'
 import { CITIES } from '@/lib/cities'
 import { rankVenues, splitPopular } from '@/lib/venueDiscovery'
@@ -258,7 +259,7 @@ export default async function CityPage({
   // Only stories from the last CITY_NEWS_MAX_AGE_DAYS days are ever shown. A city
   // with fewer than 3 fresh local stories is topped up with fresh UK-wide ones, so
   // the section is neither stale nor empty (and hides if nothing is fresh at all).
-  const newsPick = pickNewsForCityPage(cityNewsResult.data ?? [], nationalNewsResult.data ?? [], now.getTime(), { limit: 8, minLocal: 3 })
+  const newsPick = pickNewsForCityPage(dropNonUkNews(cityNewsResult.data ?? []), dropNonUkNews(nationalNewsResult.data ?? []), now.getTime(), { limit: 8, minLocal: 3 })
   const cityNews = newsPick.items
   const newsIsLocal = newsPick.localCount >= 3
 

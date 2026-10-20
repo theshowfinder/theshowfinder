@@ -432,9 +432,13 @@ describe('isReRelease: a late ticket release is not a new on-sale', async () => 
     assert.equal(isReRelease({ onsale_date: '2026-10-23T09:00:00Z' }), false)
   })
 
-  test('presale start only: a long allowance, so a normal multi-week presale is kept', () => {
-    assert.equal(isReRelease({ presale_start: '2026-10-01T10:00:00Z', onsale_date: '2026-10-23T09:00:00Z' }), false)
-    assert.equal(isReRelease({ presale_start: '2026-02-25T10:00:00Z', onsale_date: '2026-10-23T09:00:00Z' }), true)
+  test('a public date after the show itself is wrong, whatever the presale says', () => {
+    assert.equal(isReRelease({ onsale_date: '2027-10-23T09:00:00Z', start_date: '2027-05-08T18:00:00Z' }), true)
+    assert.equal(isReRelease({ onsale_date: '2026-10-23T09:00:00Z', start_date: '2027-05-08T18:00:00Z' }), false)
+  })
+
+  test('a long members presale with no recorded end is not treated as a re-release', () => {
+    assert.equal(isReRelease({ onsale_date: '2026-10-23T09:00:00Z' }), false)
   })
 
   test('dropReReleases keeps the genuine ones', () => {

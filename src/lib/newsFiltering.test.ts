@@ -209,3 +209,38 @@ describe('mergeNationalFeedResults (multi-outlet national feed path)', () => {
     assert.equal(result[0].url, 'https://a.com/0')
   })
 })
+
+describe('isNonUkNews: US, gaming and anime stories never reach a UK city page', async () => {
+  const { isNonUkNews, dropNonUkNews, isFalsePositive } = await import('./newsFiltering.ts')
+  const derbyJunk = [
+    ["The latest game event to fall afoul of US visa rules is a live concert for horse girl", 'Rock Paper Shotgun'],
+    ["Cygames cancels Umamusume Pretty Derby concerts in Los Angeles over U.S. entry visa issues", 'GosuGamers'],
+    ["Umamusume: Pretty Derby's first US concert in doubt thanks to Trump immigration policy", 'Shacknews'],
+    ["U2 return to NFL stage for Thanksgiving Eve halftime show on Netflix", 'The Independent'],
+    ["Jay-Z to headline 2027 Super Bowl halftime show: report", 'The Independent'],
+  ] as const
+
+  test('the real Derby and national junk is all dropped', () => {
+    for (const [headline, source] of derbyJunk) {
+      assert.equal(isNonUkNews({ headline, source }), true, headline)
+      assert.equal(isFalsePositive({ headline, source, url: 'https://example.com/x' }), true, headline)
+    }
+  })
+
+  test('genuine UK stories survive, including ones that mention America alongside the UK', () => {
+    for (const headline of [
+      "Derby Concert Band opens ticket sales for upcoming festive and spring performances",
+      "Sam Fender teases huge 2027 UK and Ireland stadium tour including Wembley",
+      "FLO Announces 2027 'Therapy at the Club' North America, UK & EU Tour",
+      "Toto announce UK tour to celebrate band's 50th anniversary",
+    ]) assert.equal(isNonUkNews({ headline, source: 'The Independent' }), false, headline)
+  })
+
+  test('dropNonUkNews keeps editorial rows whatever they say', () => {
+    const rows = [
+      { headline: 'Cygames cancels Pretty Derby concerts', source: 'GosuGamers', is_editorial: false },
+      { headline: 'Our own piece mentioning the NFL', source: 'TheShowFinder', is_editorial: true },
+    ]
+    assert.equal(dropNonUkNews(rows).length, 1)
+  })
+})

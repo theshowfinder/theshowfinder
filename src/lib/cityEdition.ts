@@ -6,6 +6,7 @@ import { londonDayWindow } from './intelligence.ts'
 import { fetchPresalesOpenNowEvents, fetchOnSaleThisWeekEvents, LIVE_EVENT_STATUSES } from './eventPools.ts'
 import { stalestSync } from './cityBrief.ts'
 import { dropReReleases } from './on-sale.ts'
+import { dropReissued } from './onsaleReissued.ts'
 
 export interface CityEditionData {
   onSaleToday: EventWithVenue[]
@@ -50,7 +51,7 @@ async function loadCityEdition(supabase: SupabaseClient, city: string, now: Date
   ])
 
   return {
-    onSaleToday: dropReReleases(onSaleToday.data ?? []),
+    onSaleToday: await dropReissued(supabase, dropReReleases(onSaleToday.data ?? [])),
     onSaleWeek,
     presaleOpen,
     top: top.data ?? [],

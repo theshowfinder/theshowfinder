@@ -16,6 +16,7 @@ import { londonDayWindow, londonDaysAheadWindow, londonWeekendDayWindows, type D
 import { isTonightEvent, sortTonightEvents } from './tonight.ts'
 import { mixEvents, trimTonight } from './eventMix.ts'
 import { rankOnSaleGroups } from './onSaleMosaic.ts'
+import { dropReissued } from './onsaleReissued.ts'
 import { nearbyOrFilter, areaForVenueCity, type NearbyArea } from './nearbyAreas.ts'
 import { LIVE_EVENT_STATUSES, listedEventsCount, dropDuplicateEvents } from './listedEvents.ts'
 
@@ -581,7 +582,7 @@ export async function fetchOnSaleThisWeekEvents(
   if (city) query = query.ilike('venue_city', city)
 
   const { data } = await query as unknown as { data: EventWithVenue[] | null }
-  return dropReReleases(dropPackageListings(data ?? []))
+  return dropReissued(supabase, dropReReleases(dropPackageListings(data ?? [])))
 }
 
 // Grouped, deduped version of the above — one card per artist/promoter

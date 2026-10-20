@@ -47,6 +47,7 @@ import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
 import ScrollRail from '@/components/ScrollRail'
 import OnSaleMosaic, { type OnSaleMosaicTile } from '@/components/OnSaleMosaic'
+import { dropNonUkNews } from '@/lib/newsFiltering'
 import { pickOnSaleMosaic } from '@/lib/onSaleMosaic'
 import { londonDayWithYear } from '@/lib/cityBrief'
 import { eventImageUrl, artistPhotoUrl } from '@/lib/eventImages'
@@ -295,7 +296,7 @@ async function NationalNews() {
 
   // See rankCityNewsForDisplay (newsPublishing.ts) / the equivalent comment
   // on the city page — same ranking contract, same reason.
-  const items = rankCityNewsForDisplay(data ?? [], 6)
+  const items = rankCityNewsForDisplay(dropNonUkNews(data ?? []), 6)
   if (!items.length) return null
 
   return (

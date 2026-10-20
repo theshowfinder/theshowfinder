@@ -38,6 +38,7 @@ import { ArtistsInCity, SimilarArtists } from '@/components/RelatedArtists'
 import SaveButton from '@/components/SaveButton'
 import EventReminder from '@/components/EventReminder'
 import { canRemind } from '@/lib/reminders'
+import { reissuedEventIds } from '@/lib/onsaleReissued'
 import { formatShareWhen } from '@/lib/shareText'
 import EventCard from '@/components/EventCard'
 import { buildShareText } from '@/lib/shareText'
@@ -495,7 +496,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     : []
   const cityHasPage = venue?.city ? cityPagePath(venue.city) : null
   const canShare = event.status !== 'cancelled' && event.status !== 'postponed'
-  const remindable = canRemind(event.onsale_date, event.status)
+  // Ticketmaster sometimes lists a later "public on-sale" for a show that has long been on sale (held seats re-released); not a first sale, so no "goes on sale" banner or reminder.
+  const saleDateUnreliable = (await reissuedEventIds(createPublicClient(), [event.id])).has(event.id)
+  const remindable = !saleDateUnreliable && canRemind(event.onsale_date, event.status)
   const onSaleWhen = remindable ? formatShareWhen(event.onsale_date) : null
   const shareText = buildShareText({
     title: event.title,
@@ -541,7 +544,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     priceFrom:     event.price_from,
     priceCurrency: event.currency,
     offerUrl:      primary[0]?.href ?? canonicalUrl,
-    validFrom:     earliestOnSale(event.presale_start, event.public_onsale_start, event.onsale_date),
+    validFrom:     saleDateUnreliable ? earliestOnSale(event.presale_start) : earliestOnSale(event.presale_start, event.public_onsale_start, event.onsale_date),
     performers:    headliners.map(h => h.artist?.name).filter((n): n is string => !!n),
   })
   const breadcrumbSchema = buildBreadcrumbSchema([
