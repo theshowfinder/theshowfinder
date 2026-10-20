@@ -304,6 +304,11 @@ export async function verifyStaleGigsbergEvents(opts: { deadlineMs: number; maxC
     if (c.matched_event_id && c.url) {
       await loose.from('events').update({ gigsberg_affiliate_url: null, gigsberg_inventory_status: null }).eq('id', c.matched_event_id).eq('gigsberg_affiliate_url', c.url)
     }
+    // A page created from this Gigsberg listing (source 'gigsberg') has nothing left to sell once it is gone: take it off the site.
+    // Events from other sources that merely carried the link stay live.
+    if (c.matched_event_id) {
+      await loose.from('events').update({ status: 'cancelled' }).eq('id', c.matched_event_id).eq('source', 'gigsberg').neq('status', 'cancelled')
+    }
   }
 
   const CONCURRENCY = 4

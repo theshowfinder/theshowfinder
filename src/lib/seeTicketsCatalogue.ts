@@ -196,6 +196,10 @@ async function sweepFeedRows(
     if (row.matched_event_id && row.url) {
       await loose.from('events').update({ see_tickets_affiliate_url: null }).eq('id', row.matched_event_id).eq('see_tickets_affiliate_url', row.url)
     }
+    // A page created from this See Tickets listing (source 'see_tickets') has nothing left to sell once it is gone.
+    if (row.matched_event_id) {
+      await loose.from('events').update({ status: 'cancelled' }).eq('id', row.matched_event_id).eq('source', 'see_tickets').neq('status', 'cancelled')
+    }
   }
   if (candidates.length > cap) report.detail = `removal cap of ${cap} per run reached; ${candidates.length - cap} left for the next run`
 }

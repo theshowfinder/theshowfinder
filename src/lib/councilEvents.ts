@@ -89,6 +89,20 @@ async function fetchText(url: string): Promise<string | null> {
   }
 }
 
+/** Like fetchText but keeps the HTTP status, so a real 404/410 can be told apart from a timeout or a 5xx. */
+async function fetchWithStatus(url: string): Promise<{ status: number | null; html: string | null }> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html' }, signal: controller.signal })
+    return { status: res.status, html: res.ok ? await res.text() : null }
+  } catch {
+    return { status: null, html: null }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 // ── Listing pages: collect detail-page URLs ─────────────────────────────────
 
 function extractDetailPaths(html: string): string[] {
@@ -104,23 +118,25 @@ function extractTotalResults(html: string): number | null {
   return m ? parseInt(m[1], 10) : null
 }
 
-async function collectDetailUrls(source: CouncilSource): Promise<string[]> {
+async function collectDetailUrls(source: CouncilSource): Promise<{ urls: string[]; complete: boolean }> {
   const listingUrl = `${source.baseUrl}${source.listingPath}`
   const first = await fetchText(listingUrl)
-  if (!first) return []
+  if (!first) return { urls: [], complete: false }
 
   const paths = new Set(extractDetailPaths(first))
   const total = extractTotalResults(first)
   const pageCount = total ? Math.min(Math.ceil(total / 12), MAX_LISTING_PAGES) : 1
 
+  // The listing only counts as complete if every page loaded and the page count was not cut off by the safety cap.
+  let complete = Boolean(total) && Math.ceil((total ?? 0) / 12) <= MAX_LISTING_PAGES
   for (let page = 2; page <= pageCount; page++) {
     await sleep(REQUEST_DELAY_MS)
     const html = await fetchText(`${listingUrl}?ccm_paging_p=${page}`)
-    if (!html) continue
+    if (!html) { complete = false; continue }
     for (const p of extractDetailPaths(html)) paths.add(p)
   }
 
-  return [...paths].map(p => `${source.baseUrl}${p}`)
+  return { urls: [...paths].map(p => `${source.baseUrl}${p}`), complete: complete && paths.size > 0 }
 }
 
 // ── Detail pages: schema.org Event JSON-LD ──────────────────────────────────
@@ -278,6 +294,7 @@ async function upsertScrapedEvent(db: DbClient, ev: ScrapedEvent, source: Counci
       is_featured:     false,
       source:          source.key.startsWith('derby') ? 'derby_council' : source.key,
       source_url:      ev.sourceUrl,
+      last_synced_at:  new Date().toISOString(),
     },
     { onConflict: 'source_url' },
   )
@@ -317,6 +334,7 @@ async function logRun(
 
 export async function syncCouncilEvents(): Promise<{
   sources: { key: string; label: string; found: number; inserted: number; skipped: number; errors: number }[]
+  verify?: CouncilVerifyResult
 }> {
   const db = createAdminClient()
   const results: { key: string; label: string; found: number; inserted: number; skipped: number; errors: number }[] = []
@@ -327,13 +345,19 @@ export async function syncCouncilEvents(): Promise<{
   // write two rows. Keyed on title + calendar date; first source to see an
   // event wins and its source_url becomes the upsert key going forward.
   const seen = new Map<string, true>()
+  // Every detail URL the listings showed this run (whether or not it parsed), and whether every listing was read in full.
+  const listedUrls = new Set<string>()
+  let allListingsComplete = true
+  let totalFound = 0
 
   for (const source of COUNCIL_SOURCES) {
     const startedAt = new Date().toISOString()
     let found = 0, inserted = 0, skipped = 0, errors = 0
 
     try {
-      const detailUrls = await collectDetailUrls(source)
+      const { urls: detailUrls, complete } = await collectDetailUrls(source)
+      if (!complete) allListingsComplete = false
+      for (const u of detailUrls) listedUrls.add(u)
 
       for (let i = 0; i < detailUrls.length; i += DETAIL_CONCURRENCY) {
         const batch = detailUrls.slice(i, i + DETAIL_CONCURRENCY)
@@ -371,8 +395,92 @@ export async function syncCouncilEvents(): Promise<{
       errors++
     }
 
+    totalFound += found
     results.push({ key: source.key, label: source.label, found, inserted, skipped, errors })
   }
 
-  return { sources: results }
+  let verify: CouncilVerifyResult | undefined
+  try {
+    verify = await verifyDroppedCouncilEvents(db, { listedUrls, allListingsComplete, totalFound })
+  } catch (err) {
+    console.error('[council] dead-event check failed (non-fatal):', err instanceof Error ? err.message : err)
+  }
+  return { sources: results, verify }
+}
+
+export interface CouncilVerifyResult {
+  mode: 'off' | 'dry' | 'live'
+  status: 'skipped' | 'done'
+  detail?: string
+  candidates: number
+  stillLive: number
+  gone: number            // confirmed gone (live: cancelled; dry: would be cancelled)
+  cancelledByCouncil: number
+  unclear: number         // page loads but has no Event markup, or the check failed: left alone
+  goneTitles: string[]
+}
+
+/**
+ * Council events that were not on this run's listings are checked on their own page.
+ * Only an HTTP 404/410 on the event's page removes one (status -> cancelled, reversible: if the council
+ * lists it again the next sync restores its status). Skipped entirely unless every listing was read in full.
+ */
+async function verifyDroppedCouncilEvents(
+  db: DbClient,
+  ctx: { listedUrls: Set<string>; allListingsComplete: boolean; totalFound: number },
+): Promise<CouncilVerifyResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const loose = db as unknown as { from: (t: string) => any }
+  const { data: st } = await loose.from('council_sync_state').select('mode, max_removals_per_run').eq('id', 1).maybeSingle()
+  const mode = ((st as { mode?: 'off' | 'dry' | 'live' } | null)?.mode) ?? 'dry'
+  const cap = Math.max(0, (st as { max_removals_per_run?: number } | null)?.max_removals_per_run ?? 20)
+  const out: CouncilVerifyResult = { mode, status: 'done', candidates: 0, stillLive: 0, gone: 0, cancelledByCouncil: 0, unclear: 0, goneTitles: [] }
+  const save = async () => { await loose.from('council_sync_state').update({ last_stats: { ...out, at: new Date().toISOString() } }).eq('id', 1) }
+
+  if (mode === 'off') { out.status = 'skipped'; out.detail = 'switched off'; return out }
+  if (!ctx.allListingsComplete || ctx.totalFound === 0) {
+    out.status = 'skipped'
+    out.detail = 'a council listing could not be read in full this run; nothing checked or removed'
+    await save()
+    return out
+  }
+
+  const { data: rows } = await loose.from('events')
+    .select('id, title, source_url')
+    .like('source', '%_council')
+    .not('source_url', 'is', null)
+    .gte('start_date', new Date().toISOString())
+    .in('status', ['upcoming', 'on_sale', 'sold_out', 'postponed'])
+  const candidates = ((rows ?? []) as Array<{ id: string; title: string; source_url: string }>).filter(r => !ctx.listedUrls.has(r.source_url))
+  out.candidates = candidates.length
+
+  let checked = 0
+  for (const row of candidates) {
+    const { status, html } = await fetchWithStatus(row.source_url)
+    checked++
+    await sleep(REQUEST_DELAY_MS)
+    if (status === 404 || status === 410) {
+      // Systemic breaker: most of what we check being "gone" means the site changed shape, not that events vanished.
+      if (checked >= 10 && out.gone / checked > 0.6) { out.detail = 'most dropped events returned 404; assuming the site changed, nothing removed'; break }
+      out.gone++
+      if (out.goneTitles.length < 15) out.goneTitles.push(row.title.slice(0, 80))
+      if (mode === 'live' && out.gone <= cap) {
+        await loose.from('events').update({ status: 'cancelled', last_synced_at: new Date().toISOString() }).eq('id', row.id)
+      }
+      continue
+    }
+    if (!html) { out.unclear++; continue }
+    const ev = extractEventJsonLd(html)
+    if (!ev) { out.unclear++; continue }
+    if (mapEventStatus(ev.eventStatus) === 'cancelled') {
+      out.cancelledByCouncil++
+      if (mode === 'live') await loose.from('events').update({ status: 'cancelled', last_synced_at: new Date().toISOString() }).eq('id', row.id)
+    } else {
+      out.stillLive++
+      if (mode === 'live') await loose.from('events').update({ last_synced_at: new Date().toISOString() }).eq('id', row.id)
+    }
+  }
+  if (mode === 'live' && out.gone > cap) out.detail = `removal cap of ${cap} per run reached; ${out.gone - cap} left for the next run`
+  await save()
+  return out
 }

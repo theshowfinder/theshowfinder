@@ -13,6 +13,7 @@ const RUNNABLE = new Set([
   'sync-see-tickets',
   'match-gigsberg',
   'sync-onsale',
+  'sync-council-events',
 ])
 
 export async function POST(request: Request) {

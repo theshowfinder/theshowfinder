@@ -27,6 +27,9 @@ export default async function HealthPage() {
   const gigsbergMode = (gigState as { mode?: string } | null)?.mode ?? 'unknown'
   const { data: stState } = await createAdminClient().from('see_tickets_sweep_state' as never).select('mode, last_stats').eq('id', 1).maybeSingle()
   const seeTicketsMode = (stState as { mode?: string } | null)?.mode ?? 'unknown'
+  const { data: councilState } = await createAdminClient().from('council_sync_state' as never).select('mode, last_stats').eq('id', 1).maybeSingle()
+  const councilMode = (councilState as { mode?: string } | null)?.mode ?? 'unknown'
+  const councilLast = (councilState as { last_stats?: Record<string, unknown> } | null)?.last_stats ?? null
   const seeTicketsLast = (stState as { last_stats?: Record<string, unknown> } | null)?.last_stats ?? null
   const { now, jobs, staleness, newsErrors, db, issues } = snap
   const s = stalenessSummary(staleness)
@@ -91,6 +94,12 @@ export default async function HealthPage() {
           <h2 className="text-lg font-extrabold text-slate-900 mb-1">See Tickets feed sweep</h2>
           <p className="text-sm text-slate-500 mb-3">The feed is downloaded whole each night. Mode is <b>{seeTicketsMode}</b>: off = import only; dry = import as normal and report what live would do; live = also marks every row the feed still lists as seen, and flags rows missing for about two nights in a row (capped per run, and skipped if the feed looks incomplete). Use “Run See Tickets feed” above to test it.</p>
           {seeTicketsLast && <pre className="text-xs bg-slate-900 text-slate-100 rounded-xl p-4 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(seeTicketsLast, null, 2)}</pre>}
+        </section>
+
+        <section>
+          <h2 className="text-lg font-extrabold text-slate-900 mb-1">Council events (Derby)</h2>
+          <p className="text-sm text-slate-500 mb-3">Every council event the sync sees is now stamped as refreshed. Events the council site stops listing are checked on their own page; only a 404/410 or a “cancelled” marker counts. Mode is <b>{councilMode}</b>: dry reports what it would cancel, live cancels it (capped per run, and skipped if any listing could not be read in full). Use “Run Council events” above to test it.</p>
+          {councilLast && <pre className="text-xs bg-slate-900 text-slate-100 rounded-xl p-4 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(councilLast, null, 2)}</pre>}
         </section>
 
         <section>
