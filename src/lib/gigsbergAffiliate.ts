@@ -60,26 +60,49 @@ function apiKey(): string {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 8000)
-
-  const response = await fetch(`${GIGSBERG_AFFILIATE_BASE}${path}`, {
-    ...init,
-    signal: init.signal ?? controller.signal,
-    headers: {
-      Accept: 'application/json',
-      'x-api-key': apiKey(),
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init.headers,
-    },
-    cache: 'no-store',
-  }).finally(() => clearTimeout(timeout))
-
-  if (!response.ok) {
-    throw new Error(`Gigsberg affiliate API failed: HTTP ${response.status}`)
+  // Read-only calls are retried: a single slow or briefly failing Gigsberg response (an 8s abort at
+  // 02:45 UTC) used to fail the whole catalogue sync for the day. Calls with a body are never retried.
+  const attempts = init.body ? 1 : 3
+  let lastError: unknown
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), init.body ? 8000 : 15000)
+    try {
+      const response = await fetch(`${GIGSBERG_AFFILIATE_BASE}${path}`, {
+        ...init,
+        signal: init.signal ?? controller.signal,
+        headers: {
+          Accept: 'application/json',
+          'x-api-key': apiKey(),
+          ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+          ...init.headers,
+        },
+        cache: 'no-store',
+      })
+      if (!response.ok) {
+        const err = new Error(`Gigsberg affiliate API failed: HTTP ${response.status}`)
+        // Retry only transient server-side failures and rate limits.
+        if (attempt < attempts && (response.status >= 500 || response.status === 429)) {
+          lastError = err
+          await new Promise(r => setTimeout(r, 1500 * attempt))
+          continue
+        }
+        throw err
+      }
+      return await (response.json() as Promise<T>)
+    } catch (err) {
+      lastError = err
+      const transient = err instanceof Error && (err.name === 'AbortError' || /aborted|fetch failed|ECONNRESET|ETIMEDOUT/i.test(err.message))
+      if (attempt < attempts && transient) {
+        await new Promise(r => setTimeout(r, 1500 * attempt))
+        continue
+      }
+      throw err
+    } finally {
+      clearTimeout(timeout)
+    }
   }
-
-  return response.json() as Promise<T>
+  throw lastError instanceof Error ? lastError : new Error('Gigsberg affiliate API failed')
 }
 
 function query(params: Record<string, string | number | undefined>): string {

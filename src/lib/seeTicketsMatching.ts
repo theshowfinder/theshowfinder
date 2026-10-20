@@ -11,6 +11,7 @@ type CatalogueRow = {
   url: string
   matched_event_id: string | null
   match_checked_at: string | null
+  match_status: string | null
 }
 
 type ShowfinderEvent = {
@@ -18,11 +19,13 @@ type ShowfinderEvent = {
   title: string
   start_date: string
   see_tickets_affiliate_url: string | null
+  created_at: string
   venue: { name: string; city: string } | null
 }
 
 export type SeeTicketsMatchResult = {
   checked: number
+  skippedUnchanged?: number
   autoMatched: number
   review: number
   noMatch: number
@@ -77,12 +80,12 @@ function score(item: CatalogueRow, event: ShowfinderEvent) {
   return { value, titleMatch, titleOverlap, sameDate, sameCity, venueExact, venueOverlap }
 }
 
-export async function matchSeeTicketsCatalogue(fullRescan = false, options: { limit?: number; afterId?: string } = {}): Promise<SeeTicketsMatchResult> {
+export async function matchSeeTicketsCatalogue(fullRescan = false, options: { limit?: number; afterId?: string; skipUnchanged?: boolean } = {}): Promise<SeeTicketsMatchResult> {
   const db = createAdminClient()
   const catalogue: CatalogueRow[] = []
   const limit = options.limit && options.limit > 0 ? Math.min(options.limit, 500) : null
   for (let offset = 0; ; offset += 1000) {
-    let query = db.from('see_tickets_catalogue_events').select('id, name, event_date, venue, city, primary_artist, second_artist, url, matched_event_id, match_checked_at').order('id', { ascending: true })
+    let query = db.from('see_tickets_catalogue_events').select('id, name, event_date, venue, city, primary_artist, second_artist, url, matched_event_id, match_checked_at, match_status').order('id', { ascending: true })
     if (!fullRescan) query = query.in('match_status', ['pending', 'review', 'no_match'])
     if (options.afterId) query = query.gt('id', options.afterId)
     query = query.range(offset, offset + (limit ? limit : 999))
@@ -94,12 +97,18 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
     if (limit) break
   }
   const events: ShowfinderEvent[] = []
-  for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await db.from('events').select('id, title, start_date, see_tickets_affiliate_url, venue:venues(name, city)').gte('start_date', new Date().toISOString()).order('id', { ascending: true }).range(offset, offset + 999) as unknown as { data: ShowfinderEvent[] | null; error: { message: string } | null }
+  // Keyset pagination: OFFSET paging over ~30k events with a venue join got slower on every page
+  // and ran into the database statement timeout once the Ticketmaster sweep added thousands of events.
+  let lastEventId: string | null = null
+  for (;;) {
+    let q = db.from('events').select('id, title, start_date, created_at, see_tickets_affiliate_url, venue:venues(name, city)').gte('start_date', new Date().toISOString()).order('id', { ascending: true }).limit(1000)
+    if (lastEventId) q = q.gt('id', lastEventId)
+    const { data, error } = await q as unknown as { data: ShowfinderEvent[] | null; error: { message: string } | null }
     if (error) throw new Error(error.message)
     const rows = data ?? []
     events.push(...rows)
     if (rows.length < 1000) break
+    lastEventId = rows[rows.length - 1].id
   }
   const eventsByDate = new Map<string, ShowfinderEvent[]>()
   for (const event of events ?? []) {
@@ -111,7 +120,7 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
   const hasMore = Boolean(limit && catalogue.length > limit)
   const rowsToProcess = limit ? catalogue.slice(0, limit) : catalogue
   const result: SeeTicketsMatchResult = {
-    checked: 0, autoMatched: 0, review: 0, noMatch: 0, errors: 0,
+    checked: 0, skippedUnchanged: 0, autoMatched: 0, review: 0, noMatch: 0, errors: 0,
     hasMore,
     nextCursor: rowsToProcess.length ? rowsToProcess[rowsToProcess.length - 1].id : null,
   }
@@ -121,6 +130,15 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
     // brands, or a nearby city. Score every event on the same date first;
     // city and venue still remain confidence checks before auto-linking.
     const candidates = eventsByDate.get(dateOnly(item.event_date)) ?? []
+    // Nightly cron only: a 'no_match' row that was checked recently stays 'no_match' unless a new
+    // Showfinder event has appeared on its date since. ~10k rows were being re-scored and rewritten
+    // every night, which no longer fits in the function time limit.
+    if (options.skipUnchanged && item.match_status === 'no_match' && item.match_checked_at) {
+      const checkedAt = new Date(item.match_checked_at).getTime()
+      const fresh = Date.now() - checkedAt < 7 * 86_400_000
+      const newOnDate = candidates.some(event => new Date(event.created_at).getTime() > checkedAt)
+      if (fresh && !newOnDate) return { errors: 0, autoMatched: 0, review: 0, noMatch: 0, skipped: 1 }
+    }
     // Keep a wider candidate set for the second pass. Feeds often add words
     // such as "tickets", "live", "tour" or a sponsor name to the title, so
     // a useful artist overlap can be below the first-pass threshold. Date,
@@ -137,14 +155,14 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
     const review = Boolean(best && !confident && best.detail.sameDate && locationEvidence && best.detail.value >= 0.35)
     const status = confident ? 'auto_matched' : review ? 'review' : 'no_match'
     const { error } = await db.from('see_tickets_catalogue_events').update({ matched_event_id: confident ? best.event.id : null, match_status: status, match_confidence: best ? Number(best.detail.value.toFixed(3)) : null, match_reason: best ? `${best.event.title} (${Math.round(best.detail.value * 100)}% match)` : 'No close Showfinder event found', match_checked_at: new Date().toISOString() }).eq('id', item.id)
-    if (error) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0 }
+    if (error) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0, skipped: 0 }
     if (confident) {
       const { error: linkError } = await db.from('events').update({ see_tickets_affiliate_url: item.url }).eq('id', best.event.id).is('see_tickets_affiliate_url', null)
-      if (linkError) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0 }
-      return { errors: 0, autoMatched: 1, review: 0, noMatch: 0 }
+      if (linkError) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0, skipped: 0 }
+      return { errors: 0, autoMatched: 1, review: 0, noMatch: 0, skipped: 0 }
     } else {
       if (item.matched_event_id) await db.from('events').update({ see_tickets_affiliate_url: null }).eq('id', item.matched_event_id).eq('see_tickets_affiliate_url', item.url)
-      return { errors: 0, autoMatched: 0, review: review ? 1 : 0, noMatch: review ? 0 : 1 }
+      return { errors: 0, autoMatched: 0, review: review ? 1 : 0, noMatch: review ? 0 : 1, skipped: 0 }
     }
   }
 
@@ -161,6 +179,7 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
       result.autoMatched += outcome.autoMatched
       result.review += outcome.review
       result.noMatch += outcome.noMatch
+      result.skippedUnchanged = (result.skippedUnchanged ?? 0) + outcome.skipped
     }
   }
   return result
