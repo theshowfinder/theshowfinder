@@ -155,6 +155,16 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
     nextCursor: rowsToProcess.length ? rowsToProcess[rowsToProcess.length - 1].id : null,
   }
   const stampIds: string[] = []
+  // One write per 150 unchanged rows instead of one per row. Flushed after every batch (not once at the end) so that
+  // stopping at the time limit leaves almost nothing to write and the function never overruns.
+  async function flushStamps() {
+    if (!stampIds.length) return
+    const ids = stampIds.splice(0, stampIds.length)
+    const stampedAt = new Date().toISOString()
+    const writes: Array<PromiseLike<{ error: unknown }>> = []
+    for (let i = 0; i < ids.length; i += 150) writes.push(db.from('see_tickets_catalogue_events').update({ match_checked_at: stampedAt }).in('id', ids.slice(i, i + 150)))
+    for (const r of await Promise.all(writes)) if (r.error) result.errors += 1
+  }
   async function processItem(item: CatalogueRow) {
     // Do not discard a candidate merely because the feed's city or venue
     // label differs. Ticket feeds commonly use abbreviations, local venue
@@ -219,12 +229,8 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
       result.noMatch += outcome.noMatch
       result.skippedUnchanged = (result.skippedUnchanged ?? 0) + outcome.skipped
     }
+    await flushStamps()
   }
-  // One write per 150 unchanged rows instead of one per row.
-  const stampedAt = new Date().toISOString()
-  for (let i = 0; i < stampIds.length; i += 150) {
-    const { error } = await db.from('see_tickets_catalogue_events').update({ match_checked_at: stampedAt }).in('id', stampIds.slice(i, i + 150))
-    if (error) result.errors += 1
-  }
+  await flushStamps()
   return result
 }
