@@ -197,8 +197,8 @@ export interface MatchDecision {
 // are sometimes placeholders (sports, festivals), so it is never a hard filter.
 function timeBonus(gap: number | null) {
   if (gap === null) return 0
-  if (gap <= 25) return 0.06
-  if (gap <= 75) return 0.03
+  if (gap <= 25) return 0.1
+  if (gap <= 75) return 0.04
   return 0
 }
 
@@ -223,6 +223,8 @@ export function siblingFitsBetter(item: CatalogueRow, event: ShowfinderEvent, si
 }
 
 export function decideMatch(item: CatalogueRow, candidates: ShowfinderEvent[], siblings: CatalogueRow[] = []): MatchDecision {
+  // Score plus the showtime bonus: lets "3:30pm" beat "7:30pm" for a 3:30pm listing.
+  const adjusted = (candidate: { detail: ReturnType<typeof score> }) => candidate.detail.value + timeBonus(candidate.detail.timeGap)
   const ranked = candidates
     .map(event => ({ event, detail: score(item, event) }))
     // A linked artist row alone is not enough to identify the event. It can
@@ -232,13 +234,13 @@ export function decideMatch(item: CatalogueRow, candidates: ShowfinderEvent[], s
     // a genuinely similar title. This keeps unrelated same-day London
     // events out of the review queue.
     .filter(candidate => candidate.detail.titlePerformerExact || candidate.detail.performerOverlap >= 0.6)
-    .sort((a, b) => (b.detail.value + timeBonus(b.detail.timeGap)) - (a.detail.value + timeBonus(a.detail.timeGap)))
+    .sort((a, b) => adjusted(b) - adjusted(a))
   const best = ranked[0]
   const second = ranked[1]
   const directIdentityMatch = Boolean(best && best.detail.titlePerformerExact && best.detail.sameDate && best.detail.sameCity && (best.detail.sameVenue || best.detail.venueOverlap >= 0.5))
   const confident = Boolean(best && (
     directIdentityMatch
-    || (best.detail.titlePerformerExact && best.detail.sameDate && best.detail.sameCity && best.detail.value >= 0.78 && (!second || best.detail.value - second.detail.value >= 0.08))
+    || (best.detail.titlePerformerExact && best.detail.sameDate && best.detail.sameCity && best.detail.value >= 0.78 && (!second || adjusted(best) - adjusted(second) >= 0.08))
     || (best.detail.performerOverlap >= 0.6 && best.detail.sameDate && best.detail.value >= 0.78 && (!second || best.detail.value - second.detail.value >= 0.12))
   ))
   const review = Boolean(best && !confident && best.detail.value >= 0.45)

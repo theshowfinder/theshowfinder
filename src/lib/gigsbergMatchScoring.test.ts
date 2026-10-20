@@ -195,4 +195,19 @@ describe('showtimes — two performances in a day', () => {
     assert.equal(d.status, 'auto_matched')
     assert.equal(d.timeGap, 210)
   })
+
+  test('venue named differently on each site ("The Alexandra" vs "New Alexandra Theatre"): the showtime still picks the right event', () => {
+    const m = { ...matinee, venue: { name: 'The Alexandra', city: 'Birmingham' } }
+    const e = { ...evening, venue: { name: 'The Alexandra', city: 'Birmingham' } }
+    const gb = (id: number, time: string) => ({ ...row(id, time), venue: 'New Alexandra Theatre', city: 'Birmingham' })
+    assert.equal(decideMatch(gb(1, '15:30:00'), [e, m]).event?.id, 'ev-matinee')
+    assert.equal(decideMatch(gb(2, '19:30:00'), [m, e]).event?.id, 'ev-evening')
+  })
+
+  test('two events at the same time stay ambiguous (review), never a coin-flip link', () => {
+    const a = { ...evening, venue: { name: 'The Alexandra', city: 'Birmingham' } }
+    const twin = { ...a, id: 'ev-twin' }
+    const gb = { ...row(2, '19:30:00'), venue: 'New Alexandra Theatre', city: 'Birmingham' }
+    assert.equal(decideMatch(gb, [a, twin]).status, 'review')
+  })
 })
