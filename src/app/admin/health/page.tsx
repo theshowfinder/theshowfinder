@@ -107,7 +107,7 @@ export default async function HealthPage() {
           <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-wider text-slate-500 border-b border-slate-100">
-                <tr><th className="p-3">City</th><th className="p-3">Events</th><th className="p-3">14d+ stale</th><th className="p-3">30d+ stale</th><th className="p-3">60d+ stale</th></tr>
+                <tr><th className="p-3">City</th><th className="p-3">Ticketmaster events</th><th className="p-3">14d+ stale</th><th className="p-3">30d+ stale</th><th className="p-3">60d+ stale</th></tr>
               </thead>
               <tbody>
                 {staleness.slice(0, 40).map(c => (
