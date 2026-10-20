@@ -32,17 +32,35 @@ export type SeeTicketsMatchResult = {
   errors: number
   nextCursor?: string | null
   hasMore?: boolean
+  /** Stopped at the time limit with rows left: run it again, nothing is lost (checked rows are not re-scored). */
+  incomplete?: boolean
 }
 
+// Every catalogue row is scored against every event on its date, so the same event strings were
+// re-normalised thousands of times per run. Memoising gives identical results for a fraction of the CPU.
+const normalizeCache = new Map<string, string>()
 function normalize(value: string | null | undefined) {
-  return (value ?? '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
+  const input = value ?? ''
+  const hit = normalizeCache.get(input)
+  if (hit !== undefined) return hit
+  const out = input.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
+  if (normalizeCache.size > 200_000) normalizeCache.clear()
+  normalizeCache.set(input, out)
+  return out
 }
 
+const venueCache = new Map<string, string>()
 function comparableVenue(value: string | null | undefined) {
-  return normalize(value)
+  const input = value ?? ''
+  const hit = venueCache.get(input)
+  if (hit !== undefined) return hit
+  const out = normalize(input)
     .replace(/\b(the|o2|ao|live|venue|music|entertainment|centre|center|arena|hall|theatre|theater)\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+  if (venueCache.size > 100_000) venueCache.clear()
+  venueCache.set(input, out)
+  return out
 }
 
 function dateOnly(value: string | null) {
@@ -52,9 +70,20 @@ function dateOnly(value: string | null) {
   return Number.isNaN(date.getTime()) ? value.slice(0, 10) : new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
 }
 
+const tokenCache = new Map<string, Set<string>>()
+function tokens(value: string | null | undefined) {
+  const input = value ?? ''
+  const hit = tokenCache.get(input)
+  if (hit) return hit
+  const set = new Set(normalize(input).split(' ').filter(token => token.length > 2))
+  if (tokenCache.size > 200_000) tokenCache.clear()
+  tokenCache.set(input, set)
+  return set
+}
+
 function overlap(left: string | null, right: string | null) {
-  const a = new Set(normalize(left).split(' ').filter(token => token.length > 2))
-  const b = new Set(normalize(right).split(' ').filter(token => token.length > 2))
+  const a = tokens(left)
+  const b = tokens(right)
   if (!a.size || !b.size) return 0
   let shared = 0
   for (const token of a) if (b.has(token)) shared++
@@ -80,7 +109,7 @@ function score(item: CatalogueRow, event: ShowfinderEvent) {
   return { value, titleMatch, titleOverlap, sameDate, sameCity, venueExact, venueOverlap }
 }
 
-export async function matchSeeTicketsCatalogue(fullRescan = false, options: { limit?: number; afterId?: string; skipUnchanged?: boolean } = {}): Promise<SeeTicketsMatchResult> {
+export async function matchSeeTicketsCatalogue(fullRescan = false, options: { limit?: number; afterId?: string; skipUnchanged?: boolean; deadlineMs?: number } = {}): Promise<SeeTicketsMatchResult> {
   const db = createAdminClient()
   const catalogue: CatalogueRow[] = []
   const limit = options.limit && options.limit > 0 ? Math.min(options.limit, 500) : null
@@ -180,6 +209,7 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
   // still completing a full catalogue in one request.
   const batchSize = 50
   for (let offset = 0; offset < rowsToProcess.length; offset += batchSize) {
+    if (options.deadlineMs && Date.now() > options.deadlineMs) { result.incomplete = true; result.hasMore = true; break }
     const batch = await Promise.all(rowsToProcess.slice(offset, offset + batchSize).map(processItem))
     result.checked += batch.length
     for (const outcome of batch) {

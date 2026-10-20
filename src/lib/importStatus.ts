@@ -201,7 +201,7 @@ export function describeRun(job: string, body: unknown): string {
       case 'match-see-tickets':
       case 'match-gigsberg': {
         const m = isRec(body.matching) ? body.matching : body
-        return `${fmt(num(m.checked))} checked, ${fmt(num(m.autoMatched))} newly linked, ${fmt(num(m.review))} to review, ${fmt(num(m.noMatch))} no match${num(m.errors) ? `, ${fmt(num(m.errors))} errors` : ''}`
+        return `${fmt(num(m.checked))} checked, ${fmt(num(m.autoMatched))} newly linked, ${fmt(num(m.review))} to review, ${fmt(num(m.noMatch))} no match${num(m.errors) ? `, ${fmt(num(m.errors))} errors` : ''}${m.incomplete ? ' (stopped at the time limit: run again to finish the rest)' : ''}`
       }
       case 'sync-gigsberg-sweep': {
         const sweep = isRec(body.sweep) ? body.sweep : {}

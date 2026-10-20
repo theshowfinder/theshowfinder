@@ -5,7 +5,6 @@ import { useState } from 'react'
 const JOBS: Array<{ job: string; label: string }> = [
   { job: 'refresh-listings', label: 'Refresh listings' },
   { job: 'match-see-tickets', label: 'See Tickets matching' },
-  { job: 'sync-gigsberg-catalogue', label: 'Gigsberg catalogue' },
   { job: 'sync-see-tickets', label: 'See Tickets feed' },
   { job: 'match-gigsberg', label: 'Gigsberg matching' },
   { job: 'sync-onsale', label: 'Ticketmaster on-sale' },

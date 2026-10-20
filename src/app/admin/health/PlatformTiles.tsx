@@ -24,8 +24,11 @@ export default function PlatformTiles({ tiles }: { tiles: PlatformTile[] }) {
     setBusy(true)
     setResult('Importing… this can take a few minutes.')
     try {
-      const res = await fetch('/api/cron/import-feed-events', { method: 'POST' })
-      const json = await res.json().catch(() => null)
+      // Through run-job so the run is recorded in the job history (dry runs included).
+      const wrapper = await fetch('/api/admin/run-job', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ job: 'import-feed-events' }) })
+      const outer = await wrapper.json().catch(() => null)
+      const res = { ok: wrapper.ok && (outer?.httpStatus ?? 500) < 400, status: outer?.httpStatus ?? wrapper.status }
+      const json = outer?.body ?? null
       if (!res.ok || json?.success === false) setResult(`Failed (HTTP ${res.status}): ${json?.error ?? 'no detail'}`)
       else {
         const line = (name: string, s: { eligible: number; wouldImport: number; imported: number; errors: number; skipped: Record<string, number> }) =>

@@ -132,7 +132,11 @@ export default function MorningCleanup() {
 
     for (const { job, label } of JOBS) {
       if (stop.current) break
-      const body = await runJobStep(job, label) as { mode?: string; gigsberg?: { imported?: number }; see_tickets?: { imported?: number } } | null
+      let body = await runJobStep(job, label) as { mode?: string; matching?: { incomplete?: boolean }; gigsberg?: { imported?: number }; see_tickets?: { imported?: number } } | null
+      // Matching stops at the time limit on a big backlog; carry on until it has covered every row.
+      for (let again = 2; again <= 8 && !stop.current && (job === 'match-see-tickets' || job === 'match-gigsberg') && body?.matching?.incomplete; again++) {
+        body = await runJobStep(job, label, ` (part ${again})`) as typeof body
+      }
       if (job === 'import-feed-events' && body?.mode === 'live' && ((body.gigsberg?.imported ?? 0) + (body.see_tickets?.imported ?? 0)) > 0) {
         // new events exist now: link them straight away
         await runJobStep('match-gigsberg', 'Gigsberg matching', ' (re-run after import)')
