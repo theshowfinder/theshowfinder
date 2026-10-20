@@ -12,6 +12,7 @@ import {
   sameDayWindow,
 } from '@/lib/timeSlotCap'
 
+import { mapTicketmasterStatus } from '@/lib/ticketmasterStatus'
 import { extractEventDetails, extractVenueDetails, detailsKey, type TMEventExtras, type TMVenueExtras } from '@/lib/eventDetails'
 
 export type DbClient = ReturnType<typeof createAdminClient>
@@ -217,13 +218,8 @@ function buildStartDate(event: TMEvent): string | null {
   return null
 }
 
-function mapStatus(event: TMEvent): 'upcoming' | 'on_sale' | 'sold_out' | 'cancelled' | 'postponed' {
-  const code = (event.dates?.status?.code ?? '').toLowerCase()
-  if (code === 'cancelled')  return 'cancelled'
-  if (code === 'postponed')  return 'postponed'
-  if (code === 'offsale')    return 'upcoming'
-  if (event.priceRanges?.length) return 'on_sale'
-  return 'upcoming'
+function mapStatus(event: TMEvent): ReturnType<typeof mapTicketmasterStatus> {
+  return mapTicketmasterStatus(event.dates?.status?.code, !!event.priceRanges?.length, event.sales?.public?.startDateTime)
 }
 
 export function sleep(ms: number) {

@@ -58,7 +58,11 @@ export default function PlatformTiles({ tiles }: { tiles: PlatformTile[] }) {
                 <h3 className="font-extrabold text-slate-900 text-lg leading-tight">{t.label}</h3>
                 <p className="text-xs text-slate-500">{t.blurb}</p>
               </div>
-              <Link href={`/admin/platforms/${t.key}`} className="text-xs font-bold text-blue-700 underline whitespace-nowrap">See all →</Link>
+              <div className="flex flex-col items-end gap-1">
+                <Link href={`/admin/platforms/${t.key}`} className="text-xs font-bold text-blue-700 underline whitespace-nowrap">See all →</Link>
+                {(t.key === 'gigsberg' || t.key === 'see_tickets') && <Link href={`/admin/unmatched?platform=${t.key}`} className="text-xs font-bold text-amber-800 underline whitespace-nowrap">Match the unmatched →</Link>}
+                {t.key === 'ticketmaster' && <Link href="/admin/unmatched?platform=gigsberg&view=soldout" className="text-xs font-bold text-amber-800 underline whitespace-nowrap">Sold-out shows needing a Gigsberg button →</Link>}
+              </div>
             </div>
             <ul className="mt-3 divide-y divide-slate-100 text-sm">
               {t.metrics.map(m => (

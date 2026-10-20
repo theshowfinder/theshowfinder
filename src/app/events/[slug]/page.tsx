@@ -439,6 +439,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const priceLabel = fmtPrice(event.price_from, event.price_to, event.currency)
   const imageUrl = eventImageUrl(event.image_url, event.category, event.title)
   const { primary, resale } = buildProviders(event)
+  // Sold out at Ticketmaster but Gigsberg has it: that is where we send people (and earn).
+  const soldOutGigsberg = event.status === 'sold_out' ? resale.find(r => r.name === 'Gigsberg') ?? null : null
+  const moreOptions = soldOutGigsberg ? resale.filter(r => r.name !== 'Gigsberg') : resale
   const grouping = await getCanonicalInfo(event.id, event)
   const ownTicketUrl = event.own_ticket_url && !isGigsbergUrl(event.own_ticket_url) ? event.own_ticket_url : null
   const highlightActive = event.gigsberg_highlighted && event.gigsberg_inventory_status === 'available' && (!event.gigsberg_highlight_until || new Date(event.gigsberg_highlight_until) > new Date())
@@ -629,7 +632,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               className="hidden md:inline-flex items-center gap-2 text-white font-extrabold text-lg px-8 py-4 rounded-xl hover:opacity-90 transition-opacity shadow-lg"
               style={{ backgroundColor: resale[0].bg }}
             >
-              Find Resale Tickets ↗
+              {resale[0].name === 'Gigsberg' ? 'Find tickets on Gigsberg ↗' : 'Find Resale Tickets ↗'}
             </TrackedTicketLink>
           ) : (
             <div className="hidden md:inline-flex items-center bg-slate-700 text-white/60 font-bold text-lg px-8 py-4 rounded-xl cursor-not-allowed">
@@ -673,7 +676,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
         <div className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t-2 px-4 py-3 flex items-center gap-3 shadow-2xl" style={{ borderColor: resale[0].bg }}>
           <div className="flex-1 min-w-0">
             <p className="text-xs text-slate-500 leading-none mb-0.5">Sold out</p>
-            <p className="text-base font-extrabold text-slate-900 truncate">Check resale</p>
+            <p className="text-base font-extrabold text-slate-900 truncate">{resale[0].name === 'Gigsberg' ? 'Tickets on Gigsberg' : 'Check resale'}</p>
           </div>
           <TrackedTicketLink
             href={resale[0].href}
@@ -683,7 +686,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm"
             style={{ backgroundColor: resale[0].bg }}
           >
-            Find Resale ↗
+            {resale[0].name === 'Gigsberg' ? 'Find tickets ↗' : 'Find Resale ↗'}
           </TrackedTicketLink>
         </div>
       )}
@@ -938,7 +941,29 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             )}
 
             {/* Primary tickets */}
-            {isSoldOut ? (
+            {soldOutGigsberg ? (
+              <div className="bg-white border-2 rounded-2xl p-5 shadow-sm" style={{ borderColor: '#1a1f6e' }}>
+                <p className="text-xs font-extrabold uppercase tracking-widest text-red-600 mb-1">Sold out at Ticketmaster</p>
+                <p className="font-extrabold text-slate-900 text-lg leading-snug mb-4">
+                  {event.gigsberg_inventory_status === 'available' ? 'Tickets are still available on Gigsberg' : 'Check ticket availability on Gigsberg'}
+                </p>
+                <TrackedTicketLink
+                  href={soldOutGigsberg.href}
+                  provider="Gigsberg"
+                  section="primary"
+                  context={event.slug}
+                  className="flex items-center justify-between text-white rounded-xl px-5 py-4 hover:opacity-90 transition-opacity min-h-[60px]"
+                  style={{ backgroundColor: soldOutGigsberg.bg }}
+                >
+                  <div>
+                    <p className="font-extrabold text-base leading-none">Gigsberg</p>
+                    <p className="text-xs mt-0.5 opacity-70">Resale marketplace</p>
+                  </div>
+                  <span className="text-xl ml-3">→</span>
+                </TrackedTicketLink>
+                <p className="text-xs text-slate-400 mt-3 leading-relaxed">Resale tickets may be priced above face value. Always check the seller&apos;s terms.</p>
+              </div>
+            ) : isSoldOut ? (
               <div className="bg-slate-100 border border-slate-200 rounded-2xl p-6 text-center">
                 <p className="text-4xl mb-3">😔</p>
                 <p className="font-bold text-slate-700 text-lg">
@@ -977,12 +1002,12 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             {/* Additional ticket marketplaces — Ticketmaster stays primary
                 whenever it exists; Gigsberg and other providers appear below
                 as clearly separated alternatives. */}
-            {!isCancelledOrPostponed && resale.length > 0 && (
+            {!isCancelledOrPostponed && moreOptions.length > 0 && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">More Ticket Options</h3>
               <p className="text-xs text-slate-400 mb-4">Other ticket marketplaces</p>
               <div className="grid grid-cols-2 gap-3">
-                {resale.map(({ name, bg, href }) => (
+                {moreOptions.map(({ name, bg, href }) => (
                   <TrackedTicketLink
                     key={name}
                     href={href}
