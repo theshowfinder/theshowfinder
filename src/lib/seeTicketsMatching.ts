@@ -86,6 +86,7 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
   const limit = options.limit && options.limit > 0 ? Math.min(options.limit, 500) : null
   for (let offset = 0; ; offset += 1000) {
     let query = db.from('see_tickets_catalogue_events').select('id, name, event_date, venue, city, primary_artist, second_artist, url, matched_event_id, match_checked_at, match_status').order('id', { ascending: true })
+    query = query.is('gone_at', null)   // rows the feed has stopped listing are never matched
     if (!fullRescan) query = query.in('match_status', ['pending', 'review', 'no_match'])
     if (options.afterId) query = query.gt('id', options.afterId)
     query = query.range(offset, offset + (limit ? limit : 999))

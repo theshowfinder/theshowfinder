@@ -133,7 +133,8 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
       const { data: rows } = await createAdminClient()
         .from('see_tickets_catalogue_events')
         .select('min_price, max_price')
-        .eq('matched_event_id', event.id) as unknown as { data: CatalogueRowPrice[] | null }
+        .eq('matched_event_id', event.id)
+        .is('gone_at', null) as unknown as { data: CatalogueRowPrice[] | null }
       const price = pickSeeTicketsPrice(rows)
       if (price) {
         event.price_from = price.from

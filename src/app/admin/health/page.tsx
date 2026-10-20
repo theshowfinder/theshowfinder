@@ -25,6 +25,9 @@ export default async function HealthPage() {
   const sweepMode = (sweepState as { mode?: string } | null)?.mode ?? 'unknown'
   const { data: gigState } = await createAdminClient().from('gigsberg_sweep_state' as never).select('mode').eq('id', 1).maybeSingle()
   const gigsbergMode = (gigState as { mode?: string } | null)?.mode ?? 'unknown'
+  const { data: stState } = await createAdminClient().from('see_tickets_sweep_state' as never).select('mode, last_stats').eq('id', 1).maybeSingle()
+  const seeTicketsMode = (stState as { mode?: string } | null)?.mode ?? 'unknown'
+  const seeTicketsLast = (stState as { last_stats?: Record<string, unknown> } | null)?.last_stats ?? null
   const { now, jobs, staleness, newsErrors, db, issues } = snap
   const s = stalenessSummary(staleness)
   const monitored = snap.monitoringSince ? ago(snap.monitoringSince.toISOString(), now) : 'not started'
@@ -82,6 +85,12 @@ export default async function HealthPage() {
           <h2 className="text-lg font-extrabold text-slate-900 mb-1">Gigsberg sweep</h2>
           <p className="text-sm text-slate-500 mb-3">Walks every UK city on Gigsberg in one run, stamps each catalogue row it sees, then checks anything it did not see and flags only events Gigsberg confirms are gone. Mode is <b>{gigsbergMode}</b> (off / dry / live, same meaning as above). The button starts a fresh lap even if one just finished.</p>
           <RunSweepButton mode={gigsbergMode} endpoint="/api/cron/sync-gigsberg-sweep" name="Gigsberg" forceNewLap />
+        </section>
+
+        <section>
+          <h2 className="text-lg font-extrabold text-slate-900 mb-1">See Tickets feed sweep</h2>
+          <p className="text-sm text-slate-500 mb-3">The feed is downloaded whole each night. Mode is <b>{seeTicketsMode}</b>: off = import only; dry = import as normal and report what live would do; live = also marks every row the feed still lists as seen, and flags rows missing for about two nights in a row (capped per run, and skipped if the feed looks incomplete). Use “Run See Tickets feed” above to test it.</p>
+          {seeTicketsLast && <pre className="text-xs bg-slate-900 text-slate-100 rounded-xl p-4 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(seeTicketsLast, null, 2)}</pre>}
         </section>
 
         <section>
