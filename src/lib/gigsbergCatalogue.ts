@@ -14,11 +14,11 @@ const UK_COUNTRIES = new Set([
   'northern ireland',
 ])
 
-function todayIso() {
+export function todayIso() {
   return new Date().toISOString().slice(0, 10)
 }
 
-function horizonIso() {
+export function horizonIso() {
   const date = new Date()
   date.setMonth(date.getMonth() + 24)
   return date.toISOString().slice(0, 10)
@@ -36,7 +36,7 @@ export interface GigsbergCatalogueSyncResult {
   durationMs: number
 }
 
-function toCatalogueRow(event: GigsbergAffiliateEvent) {
+export function toCatalogueRow(event: GigsbergAffiliateEvent) {
   return {
     id: event.id,
     name: event.name,
@@ -57,12 +57,12 @@ function toCatalogueRow(event: GigsbergAffiliateEvent) {
 
 type CatalogueWriteRow = ReturnType<typeof toCatalogueRow>
 
-type ExistingCatalogueRow = Pick<CatalogueWriteRow,
+export type ExistingCatalogueRow = Pick<CatalogueWriteRow,
   'id' | 'name' | 'event_date' | 'event_time' | 'venue' | 'city' | 'country' |
   'performer1' | 'performer2' | 'tour' | 'url' | 'min_price' | 'raw'
 >
 
-function catalogueRowChanged(next: CatalogueWriteRow, existing: ExistingCatalogueRow) {
+export function catalogueRowChanged(next: CatalogueWriteRow, existing: ExistingCatalogueRow) {
   return next.name !== existing.name
     || next.event_date !== existing.event_date
     || next.event_time !== existing.event_time
@@ -77,11 +77,11 @@ function catalogueRowChanged(next: CatalogueWriteRow, existing: ExistingCatalogu
     || JSON.stringify(next.raw) !== JSON.stringify(existing.raw)
 }
 
-function isUKEvent(event: GigsbergAffiliateEvent) {
+export function isUKEvent(event: GigsbergAffiliateEvent) {
   return UK_COUNTRIES.has((event.country ?? '').trim().toLowerCase())
 }
 
-async function fetchCityEvents(city: string, from: string, to: string): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
+export async function fetchCityEvents(city: string, from: string, to: string): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
   const events: GigsbergAffiliateEvent[] = []
   let page = 1
 

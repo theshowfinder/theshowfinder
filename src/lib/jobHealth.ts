@@ -12,6 +12,7 @@ export const JOB_EXPECTATIONS: Record<string, { label: string; maxHoursSinceSucc
   'enrich-musicbrainz':        { label: 'MusicBrainz enrichment',        maxHoursSinceSuccess: 30 },
   'sync-gigsberg':             { label: 'Gigsberg sync',                 maxHoursSinceSuccess: 30 },
   'sync-gigsberg-catalogue':   { label: 'Gigsberg catalogue',            maxHoursSinceSuccess: 30 },
+  'sync-gigsberg-sweep':       { label: 'Gigsberg national sweep',       maxHoursSinceSuccess: 16 },
   'match-gigsberg':            { label: 'Gigsberg matching',             maxHoursSinceSuccess: 30 },
   'check-gigsberg-inventory':  { label: 'Gigsberg inventory check',      maxHoursSinceSuccess: 14 },
   'sync-see-tickets':          { label: 'See Tickets feed',              maxHoursSinceSuccess: 30 },

@@ -39,7 +39,7 @@ async function loadCatalogue(db: Db, fullRescan: boolean): Promise<CatalogueRow[
   // PostgREST caps every request at 1000 rows whatever .limit() says, so each
   // query is paged with range() and a stable order — the old .limit(50000)
   // silently saw only the first 1000 rows.
-  const base = () => db.from('gigsberg_catalogue_events').select(CATALOGUE_COLUMNS)
+  const base = () => db.from('gigsberg_catalogue_events').select(CATALOGUE_COLUMNS).is('gone_at', null)
   const pageOf = (apply: (query: ReturnType<typeof base>) => ReturnType<typeof base>) =>
     fetchAllPages<CatalogueRow>((from, to) =>
       apply(base()).order('id', { ascending: true }).range(from, to) as unknown as PromiseLike<PageResult<CatalogueRow>>,

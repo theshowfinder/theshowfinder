@@ -40,6 +40,7 @@ export async function checkGigsbergInventoryBatch(
     .select('id, matched_event_id')
     .in('match_status', [...MATCHED_STATUSES])
     .not('matched_event_id', 'is', null)
+    .is('gone_at', null)
     .gte('event_date', today)
     .order('inventory_checked_at', { ascending: true, nullsFirst: true })
     .order('event_date', { ascending: true })

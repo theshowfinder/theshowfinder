@@ -37,6 +37,10 @@
       "schedule": "45 2 * * *"
     },
     {
+      "path": "/api/cron/sync-gigsberg-sweep",
+      "schedule": "50 1,13 * * *"
+    },
+    {
       "path": "/api/cron/sync-see-tickets",
       "schedule": "45 3 * * *"
     },
