@@ -6,6 +6,7 @@ import { loadHealthSnapshot } from '@/lib/healthSnapshot'
 import { stalenessSummary } from '@/lib/jobHealth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import RunSweepButton from './RunSweepButton'
+import RunJobButtons from './RunJobButtons'
 
 function ago(iso: string | null, now: Date): string {
   if (!iso) return 'never'
@@ -73,6 +74,12 @@ export default async function HealthPage() {
           <h2 className="text-lg font-extrabold text-slate-900 mb-1">Ticketmaster sweep</h2>
           <p className="text-sm text-slate-500 mb-3">Mode is <b>{sweepMode}</b> (off = does nothing, dry = fetches and counts but writes nothing, live = updates and removes). The scheduled runs do the same thing as this button.</p>
           <RunSweepButton mode={sweepMode} />
+        </section>
+
+        <section>
+          <h2 className="text-lg font-extrabold text-slate-900 mb-1">Run a job now</h2>
+          <p className="text-sm text-slate-500 mb-3">Runs the real scheduled job straight away (it appears in the job table above like any other run), so a fix can be tested without waiting for its cron slot.</p>
+          <RunJobButtons />
         </section>
 
         <section>
