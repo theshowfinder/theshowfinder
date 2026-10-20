@@ -158,9 +158,58 @@ export function groupEventsByArtist(
     }
   }
 
-  return [...groupMap.values()].sort((a, b) =>
+  return mergeSameActGroups([...groupMap.values()]).sort((a, b) =>
     a.onsale_date.localeCompare(b.onsale_date)
   )
+}
+
+// ── Same act, differently named listings ──────────────────────────────────
+//
+// Some feeds name one run's dates differently with no delimiter ("The Wiggles",
+// "The Wiggles' Sparkle! BIG SHOW", "Pete Tong" / "Pete Tong Classical"), which makes a
+// second tile. The title alone can't say whether that is the same act or a different
+// one, so we also require the dates to agree: the name must START with the other
+// group's name as whole words, AND they go on sale at the same moment (same presale +
+// public start), AND some dates fall within 10 days of each other (one continuous
+// run). Short single-word names are never merged this way ("Kane" / "Kane Brown"), nor
+// are tribute / "music of" / "vs" listings.
+const SAME_ACT_MAX_GAP_DAYS = 10
+const NOT_THE_SAME_ACT = /\b(tribute|tributes|the\s+(?:music|songs|story)\s+of|vs?\.?|versus|presents)\b/i
+
+function saleMoment(e: EventWithVenue): string {
+  return `${e.presale_start ?? ''}|${e.public_onsale_start ?? e.onsale_date ?? ''}`
+}
+
+function datesWithinGap(a: EventWithVenue[], b: EventWithVenue[]): boolean {
+  const gap = SAME_ACT_MAX_GAP_DAYS * 24 * 60 * 60 * 1000
+  return a.some(x => b.some(y => Math.abs(new Date(x.start_date).getTime() - new Date(y.start_date).getTime()) <= gap))
+}
+
+export function isSameActRun(base: OnSaleGroup, other: OnSaleGroup): boolean {
+  const a = base.artistName.toLowerCase().trim()
+  const b = other.artistName.toLowerCase().trim()
+  if (a === b || b.length <= a.length || !b.startsWith(a)) return false
+  if (!/[^a-z0-9]/.test(b[a.length])) return false                  // whole-word prefix only
+  if (a.split(/\s+/).length < 2 && a.length < 8) return false         // too ambiguous on its own
+  if (NOT_THE_SAME_ACT.test(b.slice(a.length))) return false
+  const moments = new Set(base.events.map(saleMoment))
+  if (!other.events.some(e => moments.has(saleMoment(e)))) return false
+  return datesWithinGap(base.events, other.events)
+}
+
+export function mergeSameActGroups(groups: OnSaleGroup[]): OnSaleGroup[] {
+  // Shortest names first, so "Pete Tong Classical" folds into "Pete Tong".
+  const sorted = [...groups].sort((x, y) => x.artistName.length - y.artistName.length)
+  const kept: OnSaleGroup[] = []
+  for (const g of sorted) {
+    const base = kept.find(k => isSameActRun(k, g))
+    if (!base) { kept.push({ ...g, events: [...g.events] }); continue }
+    base.events.push(...g.events)
+    if (g.onsale_date < base.onsale_date) { base.onsale_date = g.onsale_date; base.saleType = g.saleType }
+    if (!base.image_url) base.image_url = g.image_url
+    if (!base.dbArtist) base.dbArtist = g.dbArtist
+  }
+  return kept
 }
 
 // ── Series diversity (Manchester-pilot requirement: don't let one team/

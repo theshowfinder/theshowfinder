@@ -389,3 +389,30 @@ describe('past sales drop off the On Sale This Week cards', () => {
     assert.match(saleBadgeText('presale', '2026-10-23T09:00:00Z', now), /^Presale opens Fri 23 Oct/)
   })
 })
+
+describe('same act, differently named listings are one tile only when the dates agree', () => {
+  const sale = { presale_start: '2026-10-20T09:00:00Z', public_onsale_start: '2026-10-23T09:00:00Z', onsale_date: '2026-10-23T09:00:00Z' }
+  const ev = (id: string, title: string, start: string, extra: Record<string, unknown> = {}) =>
+    fakeEvent({ id, title, start_date: start, ...sale, ...extra })
+  const names = (events: EventWithVenue[]) => groupEventsByArtist(events, []).map(g => g.artistName).sort()
+
+  test('The Wiggles and "The Wiggles\' Sparkle! BIG SHOW" (same sale, one run)', () => {
+    const groups = groupEventsByArtist([
+      ev('1', 'The Wiggles', '2027-04-02T10:00:00Z'),
+      ev('2', "The Wiggles' Sparkle! BIG SHOW", '2027-04-07T10:00:00Z'),
+    ], [])
+    assert.equal(groups.length, 1)
+    assert.equal(groups[0].events.length, 2)
+  })
+
+  test('Pete Tong Classical joins Pete Tong', () => {
+    assert.deepEqual(names([ev('1', 'Pete Tong', '2027-08-27T18:00:00Z'), ev('2', 'Pete Tong Classical', '2027-08-29T18:00:00Z')]), ['Pete Tong'])
+  })
+
+  test('different sale moment, far-apart dates, tributes and short single names stay apart', () => {
+    assert.equal(names([ev('1', 'Pete Tong', '2027-08-27T18:00:00Z'), ev('2', 'Pete Tong Classical', '2027-08-29T18:00:00Z', { public_onsale_start: '2026-10-24T09:00:00Z' })]).length, 2)
+    assert.equal(names([ev('1', 'Pete Tong', '2027-06-18T18:00:00Z'), ev('2', 'Pete Tong Classical', '2027-08-29T18:00:00Z')]).length, 2)
+    assert.equal(names([ev('1', 'Take That', '2027-04-02T18:00:00Z'), ev('2', 'Take That Tribute Night', '2027-04-03T18:00:00Z')]).length, 2)
+    assert.equal(names([ev('1', 'Kane', '2027-04-02T18:00:00Z'), ev('2', 'Kane Brown', '2027-04-03T18:00:00Z')]).length, 2)
+  })
+})
