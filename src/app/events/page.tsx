@@ -244,15 +244,17 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
   // The visitor's own city: an explicit ?city= filter wins, otherwise the location cookie set by middleware.
   // (This page is already per-request dynamic, so reading the cookie here costs nothing extra.)
   const cookieCity = (await cookies()).get('tsf_city')?.value ?? null
-  const homeCity = searchParams.city ?? cookieCity
+  const homeCity = searchParams.city?.trim() || cookieCity
 
   type TileRow = { event_id: string; date_count: number; last_date: string; city_count: number; home_dates: number; in_home_city: boolean; other_cities: string[]; other_city_count: number; total_groups: number }
   let tiles: TileRow[] = []
   if (!searchIds || searchIds.length) {
     const callTiles = () => (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: TileRow[] | null; error: { message: string } | null }> })
       .rpc('browse_show_tiles', {
-        p_category: searchParams.category ?? null,
-        p_city: searchParams.city ?? null,
+        // The search box submits "city=" (empty) when All UK is chosen. An empty string is not "no filter" to the
+        // database, so it must become null or the list comes back empty.
+        p_category: searchParams.category?.trim() || null,
+        p_city: searchParams.city?.trim() || null,
         p_ids: searchIds,
         p_home_city: cookieCity,
         p_limit: PAGE_SIZE,
