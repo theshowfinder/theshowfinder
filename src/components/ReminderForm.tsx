@@ -1,6 +1,7 @@
 'use client'
 
-// "Email me before tickets go on sale". Used on event pages (one show) and the
+// "Email me before tickets go on sale". Signing up also joins the weekly email (stated beside the button).
+// Stacked layout always: it sits in a narrow sidebar on event pages, where a side-by-side row overflowed. Used on event pages (one show) and the
 // saved-shows page (all saved shows that have not gone on sale yet).
 
 import { useState, type FormEvent } from 'react'
@@ -20,7 +21,6 @@ interface ReminderFormProps {
 
 export default function ReminderForm({ slugs, source, heading, blurb, buttonLabel = 'Remind me', onDone }: ReminderFormProps) {
   const [email, setEmail] = useState('')
-  const [newsletter, setNewsletter] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [doneCount, setDoneCount] = useState<number | null>(null)
@@ -30,7 +30,7 @@ export default function ReminderForm({ slugs, source, heading, blurb, buttonLabe
     if (loading || !email.trim()) return
     setLoading(true)
     setError(null)
-    const res = await requestOnSaleReminders(email, slugs, { source, alsoNewsletter: newsletter })
+    const res = await requestOnSaleReminders(email, slugs, { source, alsoNewsletter: true })
     setLoading(false)
     if (res.error) {
       setError(res.error)
@@ -47,14 +47,14 @@ export default function ReminderForm({ slugs, source, heading, blurb, buttonLabe
         <div>
           <p className="font-extrabold text-slate-900">You&rsquo;re all set</p>
           <p className="text-sm text-slate-600 mt-1">
-            We&rsquo;ll email you before {doneCount === 1 ? 'tickets go' : 'these shows go'} on sale. It&rsquo;s a one-off email for each show.
+            We&rsquo;ll email you before {doneCount === 1 ? 'tickets go' : 'these shows go'} on sale, and you&rsquo;ll get our weekly email with presale alerts and gig tips. Unsubscribe any time.
           </p>
         </div>
       ) : (
         <form onSubmit={onSubmit}>
           <h3 className="font-extrabold text-slate-900">{heading}</h3>
           {blurb && <p className="text-sm text-slate-600 mt-1">{blurb}</p>}
-          <div className="mt-3 flex flex-col sm:flex-row gap-2">
+          <div className="mt-3 flex flex-col gap-2">
             <input
               type="email"
               required
@@ -64,24 +64,20 @@ export default function ReminderForm({ slugs, source, heading, blurb, buttonLabe
               onChange={e => setEmail(e.target.value)}
               placeholder="you@example.com"
               aria-label="Your email address"
-              className="flex-1 min-h-[48px] px-4 rounded-xl border border-slate-300 text-base"
+              className="w-full min-w-0 min-h-[48px] px-4 rounded-xl border border-slate-300 text-base"
             />
             <button
               type="submit"
               disabled={loading}
-              className="min-h-[48px] px-6 rounded-xl text-white font-bold disabled:opacity-60"
+              className="w-full min-h-[48px] px-6 rounded-xl text-white font-bold disabled:opacity-60"
               style={{ backgroundColor: '#E8003D' }}
             >
               {loading ? 'Saving…' : buttonLabel}
             </button>
           </div>
-          <label className="mt-3 flex items-start gap-2 text-xs text-slate-500">
-            <input type="checkbox" checked={newsletter} onChange={e => setNewsletter(e.target.checked)} className="mt-0.5" />
-            <span>Also send me TheShowFinder&rsquo;s weekly gig tips and presale alerts.</span>
-          </label>
           {error && <p role="alert" className="text-sm text-red-600 mt-2">{error}</p>}
           <p className="text-xs text-slate-400 mt-3">
-            One email per show, no spam. See our <Link href="/privacy-policy" className="underline">privacy policy</Link>.
+            Signing up gets you an email before this goes on sale, plus our weekly email of presale alerts and gig tips. No spam, unsubscribe any time. See our <Link href="/privacy-policy" className="underline">privacy policy</Link>.
           </p>
         </form>
       )}
