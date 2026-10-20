@@ -55,12 +55,15 @@ export function ticketPurchaseDisabledStatus(status: string): boolean {
 // Drops repeat rows of the same real-world show (multiple Ticketmaster SKUs
 // — "Standard Entry" / "Venue Premium" / etc. — share a title) and caps the
 // result. Pool is expected to already be sorted the way callers want it.
+// "Same show" = same title AT THE SAME VENUE ON THE SAME DATE. Title alone collapsed a
+// 16-date tour (every night titled just "Lighthouse Family") into one date.
 export function dedupeEventsByTitle(pool: EventWithVenue[], limit: number): EventWithVenue[] {
   const seen = new Set<string>()
   const picked: EventWithVenue[] = []
   for (const ev of pool) {
-    if (seen.has(ev.title)) continue
-    seen.add(ev.title)
+    const key = `${ev.title}|${ev.venue_id ?? ''}|${ev.start_date ?? ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
     picked.push(ev)
     if (picked.length >= limit) break
   }

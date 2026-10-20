@@ -33,6 +33,18 @@ describe('dedupeEventsByTitle', () => {
     assert.deepEqual(dedupeEventsByTitle([], 10), [])
   })
 
+  test('a tour with one title keeps every venue/date; SKUs of the same night collapse', () => {
+    const night = (id: string, venue: string, date: string) =>
+      ({ id, title: 'Lighthouse Family', venue_id: venue, start_date: date }) as unknown as Parameters<typeof dedupeEventsByTitle>[0][number]
+    const pool = [
+      night('1', 'belfast', '2027-03-03T19:00:00Z'),
+      night('2', 'york', '2027-03-08T19:00:00Z'),
+      night('3', 'york', '2027-03-08T19:00:00Z'), // second ticket type, same night
+      night('4', 'bath', '2027-03-09T19:00:00Z'),
+    ]
+    assert.deepEqual(dedupeEventsByTitle(pool, 10).map(r => r.id), ['1', '2', '4'])
+  })
+
   test('distinct titles are never collapsed', () => {
     const pool = [row('Coldplay', '1'), row('Coldplay Tribute', '2')]
     const result = dedupeEventsByTitle(pool, 10)
