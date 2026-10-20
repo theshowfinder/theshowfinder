@@ -67,11 +67,20 @@ function comparableVenue(value: string | null | undefined) {
   return out
 }
 
+// One shared formatter + a memo: building a new Intl.DateTimeFormat for every comparison was the single biggest
+// cost of a matching run (millions of calls), and the run timed out because of it.
+const LONDON_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' })
+const dayCache = new Map<string, string>()
 function dateOnly(value: string | null) {
   if (!value) return ''
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  const hit = dayCache.get(value)
+  if (hit !== undefined) return hit
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value.slice(0, 10) : new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+  const out = Number.isNaN(date.getTime()) ? value.slice(0, 10) : LONDON_DAY.format(date)
+  if (dayCache.size > 100_000) dayCache.clear()
+  dayCache.set(value, out)
+  return out
 }
 
 const tokenCache = new Map<string, Set<string>>()
@@ -92,6 +101,17 @@ function overlap(left: string | null, right: string | null) {
   let shared = 0
   for (const token of a) if (b.has(token)) shared++
   return shared / Math.max(a.size, b.size)
+}
+
+/** The cheap test every candidate must pass (same rule the ranking applies below): used to skip full scoring of the rest. */
+function hasTitleEvidence(names: string[], event: ShowfinderEvent): boolean {
+  const title = normalize(event.title)
+  for (const name of names) {
+    const candidate = normalize(name)
+    if (candidate && title && (title === candidate || title.includes(candidate) || candidate.includes(title))) return true
+  }
+  for (const name of names) if (overlap(name, event.title) >= 0.35) return true
+  return false
 }
 
 function score(item: CatalogueRow, event: ShowfinderEvent) {
@@ -148,8 +168,11 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
   }
   const tEvents = Date.now()
   const eventsByDate = new Map<string, ShowfinderEvent[]>()
+  const newestCreated = new Map<string, number>()   // newest event creation time per date, for the "anything new on this date?" test
   for (const event of events ?? []) {
     const key = dateOnly(event.start_date)
+    const made = new Date(event.created_at).getTime()
+    if (made > (newestCreated.get(key) ?? 0)) newestCreated.set(key, made)
     const bucket = eventsByDate.get(key) ?? []
     bucket.push(event)
     eventsByDate.set(key, bucket)
@@ -186,14 +209,16 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
     if (options.skipUnchanged && item.match_status === 'no_match' && item.match_checked_at) {
       const checkedAt = new Date(item.match_checked_at).getTime()
       const fresh = Date.now() - checkedAt < 7 * 86_400_000
-      const newOnDate = candidates.some(event => new Date(event.created_at).getTime() > checkedAt)
+      const newOnDate = (newestCreated.get(dateOnly(item.event_date)) ?? 0) > checkedAt
       if (fresh && !newOnDate) return { errors: 0, autoMatched: 0, review: 0, noMatch: 0, skipped: 1 }
     }
     // Keep a wider candidate set for the second pass. Feeds often add words
     // such as "tickets", "live", "tour" or a sponsor name to the title, so
     // a useful artist overlap can be below the first-pass threshold. Date,
     // city and venue evidence still decide whether anything is linked.
+    const names = [item.primary_artist, item.second_artist, item.name].filter(Boolean) as string[]
     const ranked = candidates
+      .filter(event => hasTitleEvidence(names, event))
       .map(event => ({ event, detail: score(item, event) }))
       .filter(candidate => candidate.detail.titleMatch || candidate.detail.titleOverlap >= 0.35)
       .sort((a, b) => b.detail.value - a.detail.value)
