@@ -8,7 +8,7 @@
 // event itself flags it as gone. Same modes and safeguards as the Ticketmaster sweep.
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
-import { getGigsbergAffiliateEvent } from '@/lib/gigsbergAffiliate'
+import { getGigsbergAffiliateEvent, searchGigsbergAffiliateEvents, type GigsbergAffiliateEvent } from '@/lib/gigsbergAffiliate'
 import {
   catalogueRowChanged, fetchCityEvents, horizonIso, isUKEvent, todayIso, toCatalogueRow,
   type ExistingCatalogueRow,
@@ -31,7 +31,9 @@ interface StateRow {
 
 const LOCK_STALE_MS = 6 * 60_000
 const STOP_MARGIN_MS = 30_000         // never start a city group with less than this left
-const CITY_GROUP = 4                  // cities fetched in parallel
+const CITY_GROUP = 6                  // cities fetched in parallel
+const PAGE_CONCURRENCY = 3            // extra pages of one big city (London) fetched in parallel
+const PAGE_SIZE = 100
 const IDLE_AFTER_COMPLETE_MS = 3 * 3_600_000
 const UPSERT_BATCH = 100
 const TOUCH_BATCH = 200
@@ -47,6 +49,7 @@ export interface GigsbergSweepStats {
   reappeared: number
   failedCities: number
   errors: number
+  apiMs?: number               // total time spent waiting on Gigsberg's event search
   sampleNew?: string[]
 }
 
@@ -71,6 +74,29 @@ async function loadExisting(loose: Loose, ids: number[]): Promise<Map<number, Ex
     for (const row of (data ?? []) as ExistingRow[]) map.set(row.id, row)
   }
   return map
+}
+
+/** One city's events. After page 1 reports the total, the remaining pages are fetched a few at a time. */
+async function fetchCityFast(city: string, from: string, to: string, stats: GigsbergSweepStats): Promise<{ events: GigsbergAffiliateEvent[]; pages: number }> {
+  const timed = async <T>(fn: () => Promise<T>): Promise<T> => {
+    const t = Date.now()
+    try { return await fn() } finally { stats.apiMs = (stats.apiMs ?? 0) + (Date.now() - t) }
+  }
+  const first = await timed(() => searchGigsbergAffiliateEvents({ city, date_from: from, date_to: to, page: 1, per_page: PAGE_SIZE }))
+  const events = [...(first.items ?? [])]
+  const total = Number(first.total)
+  if (!Number.isFinite(total) || events.length < PAGE_SIZE || !first.nextPage) {
+    // Unknown total or a single page: fall back to the sequential walker for anything beyond page 1.
+    if (events.length >= PAGE_SIZE && first.nextPage) return fetchCityEvents(city, from, to)
+    return { events, pages: 1 }
+  }
+  const lastPage = Math.ceil(total / PAGE_SIZE)
+  for (let page = 2; page <= lastPage; page += PAGE_CONCURRENCY) {
+    const batch = Array.from({ length: Math.min(PAGE_CONCURRENCY, lastPage - page + 1) }, (_, i) => page + i)
+    const results = await Promise.all(batch.map(n => timed(() => searchGigsbergAffiliateEvents({ city, date_from: from, date_to: to, page: n, per_page: PAGE_SIZE }))))
+    for (const r of results) events.push(...(r.items ?? []))
+  }
+  return { events, pages: lastPage }
 }
 
 /** Record one group of fetched events. Dry mode only counts; live mode upserts changed rows and stamps the rest as seen. */
@@ -161,7 +187,7 @@ export async function runGigsbergSweep(opts: { deadlineMs: number; force?: boole
       while (cityIdx < CITIES.length) {
         if (Date.now() + STOP_MARGIN_MS > opts.deadlineMs) { detail = 'time budget reached; resumes next run'; break }
         const group = CITIES.slice(cityIdx, cityIdx + CITY_GROUP)
-        const settled = await Promise.allSettled(group.map(c => fetchCityEvents(c.name, from, to)))
+        const settled = await Promise.allSettled(group.map(c => fetchCityFast(c.name, from, to, stats)))
         const unique = new Map<number, ReturnType<typeof toCatalogueRow>>()
         settled.forEach((r, i) => {
           if (r.status === 'rejected') {

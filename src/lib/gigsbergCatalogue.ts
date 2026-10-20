@@ -62,10 +62,30 @@ export type ExistingCatalogueRow = Pick<CatalogueWriteRow,
   'performer1' | 'performer2' | 'tour' | 'url' | 'min_price' | 'raw'
 >
 
+// jsonb stores object keys in its own order, so the same payload read back never stringifies identically
+// to the API's; Postgres also hands numerics back as strings ("46.36") and times as "19:30:00".
+// Comparing those raw made every catalogue row look changed on every sync. Compare canonical forms.
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, v) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+      : v)
+}
+
+function sameTime(a: string | null, b: string | null) {
+  const norm = (t: string | null) => (t ? (t.length === 5 ? `${t}:00` : t) : null)
+  return norm(a) === norm(b)
+}
+
+function samePrice(a: number | string | null, b: number | string | null) {
+  if (a == null || b == null) return a == null && b == null
+  return Number(a) === Number(b)
+}
+
 export function catalogueRowChanged(next: CatalogueWriteRow, existing: ExistingCatalogueRow) {
   return next.name !== existing.name
     || next.event_date !== existing.event_date
-    || next.event_time !== existing.event_time
+    || !sameTime(next.event_time, existing.event_time)
     || next.venue !== existing.venue
     || next.city !== existing.city
     || next.country !== existing.country
@@ -73,8 +93,8 @@ export function catalogueRowChanged(next: CatalogueWriteRow, existing: ExistingC
     || next.performer2 !== existing.performer2
     || next.tour !== existing.tour
     || next.url !== existing.url
-    || next.min_price !== existing.min_price
-    || JSON.stringify(next.raw) !== JSON.stringify(existing.raw)
+    || !samePrice(next.min_price, existing.min_price)
+    || canonical(next.raw) !== canonical(existing.raw)
 }
 
 export function isUKEvent(event: GigsbergAffiliateEvent) {
