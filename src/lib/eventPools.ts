@@ -15,6 +15,7 @@ import {
 import { londonDayWindow, londonDaysAheadWindow, londonWeekendDayWindows, type DateWindow } from './intelligence.ts'
 import { isTonightEvent, sortTonightEvents } from './tonight.ts'
 import { mixEvents, trimTonight } from './eventMix.ts'
+import { rankOnSaleGroups } from './onSaleMosaic.ts'
 import { nearbyOrFilter, areaForVenueCity, type NearbyArea } from './nearbyAreas.ts'
 import { LIVE_EVENT_STATUSES, listedEventsCount, dropDuplicateEvents } from './listedEvents.ts'
 
@@ -431,10 +432,14 @@ export async function fetchPresalesOpenNowEvents(
 export async function fetchPresalesOpenNow(
   supabase: SupabaseClient,
   artists: Artist[],
-  { city, limit, fetchLimit = 60 }: PresalesOpenNowOpts,
+  { city, limit, fetchLimit = 250 }: PresalesOpenNowOpts,
 ): Promise<OnSaleGroup[]> {
   const data = await fetchPresalesOpenNowEvents(supabase, { city, fetchLimit })
-  return groupEventsByArtist(data, artists).slice(0, limit)
+  // Biggest shows first (venue size), then the earliest presale, so the few cards shown are the high-profile
+  // presales rather than whichever small-room show happens to close soonest.
+  const ranked = rankOnSaleGroups(groupEventsByArtist(data, artists))
+  // A handful of cards: also stop one team/tour filling them (a long list, e.g. the link checker's, is left whole).
+  return (limit <= 24 ? capGroupsBySeries(ranked) : ranked).slice(0, limit)
 }
 
 interface OnSaleThisWeekOpts {
