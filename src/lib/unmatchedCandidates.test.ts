@@ -32,4 +32,14 @@ describe('rankCandidates', () => {
     const many = Array.from({ length: 9 }, (_, i) => ev(`e${i}`, `Bon Jovi ${i}`))
     assert.equal(rankCandidates(row(), many, 3).length, 3)
   })
+
+  test('two shows a day: the event at the listing\'s own time ranks first and is marked as the same showtime', () => {
+    const matinee = ev('m', 'Russell Howard', { start_date: '2026-07-10T14:30:00Z' }) // 15:30 BST
+    const evening = ev('e', 'Russell Howard', { start_date: '2026-07-10T18:30:00Z' }) // 19:30 BST
+    const l = row({ name: 'Russell Howard', performer1: 'Russell Howard', event_time: '15:30:00' })
+    const ranked = rankCandidates(l, [evening, matinee])
+    assert.equal(ranked[0].event.id, 'm')
+    assert.ok(ranked[0].why.includes('same showtime'))
+    assert.ok(ranked[1].why.some(w => w.startsWith('different time')))
+  })
 })

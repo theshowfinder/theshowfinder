@@ -15,6 +15,9 @@ export type CatalogueRow = {
   performer2: string | null
   url: string
   matched_event_id: string | null
+  // Gigsberg's London-local start time ("19:30:00"). Optional: other callers
+  // (See Tickets, the manual link screens) have no showtime.
+  event_time?: string | null
 }
 
 export type ShowfinderEvent = {
@@ -50,6 +53,53 @@ export function dateOnly(value: string) {
     day: '2-digit',
   }).format(date)
 }
+
+// ---- Show times -------------------------------------------------------------
+// Comedians, pantomimes and tribute acts often play twice in a day (3:30pm and
+// 7:30pm). Date, city and venue are identical for both, so the showtime is the
+// only thing that says which Gigsberg listing belongs to which site event.
+const LONDON_TIME = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+const londonMinutesCache = new Map<string, number | null>()
+
+/** Minutes after midnight, London time, for a UTC timestamp. Null when unknown (invalid, or exactly midnight = "time not announced"). */
+export function londonMinutes(value: string): number | null {
+  const cached = londonMinutesCache.get(value)
+  if (cached !== undefined) return cached
+  const date = new Date(value)
+  let result: number | null = null
+  if (!Number.isNaN(date.getTime())) {
+    const parts = LONDON_TIME.formatToParts(date)
+    const hour = Number(parts.find(part => part.type === 'hour')?.value)
+    const minute = Number(parts.find(part => part.type === 'minute')?.value)
+    const minutes = hour * 60 + minute
+    result = Number.isFinite(minutes) && minutes !== 0 ? minutes : null
+  }
+  londonMinutesCache.set(value, result)
+  return result
+}
+
+/** Minutes after midnight for a "HH:MM[:SS]" local time. Null when missing or 00:00. */
+export function clockMinutes(value: string | null | undefined): number | null {
+  const match = /^(\d{1,2}):(\d{2})/.exec(value ?? '')
+  if (!match) return null
+  const minutes = Number(match[1]) * 60 + Number(match[2])
+  return minutes === 0 ? null : minutes
+}
+
+export function formatClock(minutes: number) {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+}
+
+/** How many minutes apart the listing and the event start, or null when either has no usable time. */
+export function showTimeGap(catalogue: Pick<CatalogueRow, 'event_time'>, event: Pick<ShowfinderEvent, 'start_date'>): number | null {
+  const listed = clockMinutes(catalogue.event_time)
+  const actual = londonMinutes(event.start_date)
+  if (listed === null || actual === null) return null
+  return Math.abs(listed - actual)
+}
+
+// Beyond this the listing and the event are probably different performances.
+export const SAME_SHOW_TIME_MINUTES = 45
 
 export function tokenOverlap(left: string, right: string) {
   const a = new Set(normalize(left).split(' ').filter(token => token.length > 2))
@@ -103,7 +153,8 @@ export function score(catalogue: CatalogueRow, event: ShowfinderEvent) {
   if (sameDate) value += 0.25
   if (sameCity) value += 0.1
   value += sameVenue ? 0.1 : venueOverlap * 0.1
-  return { value, sameDate, sameCity, sameVenue, venueOverlap, performerOverlap, performerExact, titlePerformerExact, linkedArtistExact }
+  const timeGap = showTimeGap(catalogue, event)
+  return { value, sameDate, sameCity, sameVenue, venueOverlap, performerOverlap, performerExact, titlePerformerExact, linkedArtistExact, timeGap }
 }
 
 // Group events by UK calendar date so each catalogue row is only scored
@@ -138,9 +189,40 @@ export interface MatchDecision {
   event: ShowfinderEvent | null
   confidence: number | null
   reason: string
+  // Minutes between the listing's showtime and the chosen (or best) event, when both are known.
+  timeGap: number | null
 }
 
-export function decideMatch(item: CatalogueRow, candidates: ShowfinderEvent[]): MatchDecision {
+// Showtime only ever breaks ties between otherwise equal events: Gigsberg times
+// are sometimes placeholders (sports, festivals), so it is never a hard filter.
+function timeBonus(gap: number | null) {
+  if (gap === null) return 0
+  if (gap <= 25) return 0.06
+  if (gap <= 75) return 0.03
+  return 0
+}
+
+/**
+ * True when another listing for the same act, day and venue starts much closer
+ * to this event than this listing does — i.e. this listing is the *other*
+ * performance of the day and the event is already spoken for.
+ */
+export function siblingFitsBetter(item: CatalogueRow, event: ShowfinderEvent, siblings: CatalogueRow[]): CatalogueRow | null {
+  const gap = showTimeGap(item, event)
+  if (gap === null || gap <= SAME_SHOW_TIME_MINUTES) return null
+  for (const sibling of siblings) {
+    if (sibling.id === item.id) continue
+    if (dateOnly(sibling.event_date) !== dateOnly(item.event_date)) continue
+    const venueClose = normalize(sibling.venue) === normalize(item.venue) || tokenOverlap(sibling.venue ?? '', item.venue ?? '') >= 0.5
+    if (!venueClose) continue
+    if (tokenOverlap(sibling.name, item.name) < 0.5 && normalize(sibling.performer1) !== normalize(item.performer1)) continue
+    const siblingGap = showTimeGap(sibling, event)
+    if (siblingGap !== null && siblingGap + 30 < gap) return sibling
+  }
+  return null
+}
+
+export function decideMatch(item: CatalogueRow, candidates: ShowfinderEvent[], siblings: CatalogueRow[] = []): MatchDecision {
   const ranked = candidates
     .map(event => ({ event, detail: score(item, event) }))
     // A linked artist row alone is not enough to identify the event. It can
@@ -150,7 +232,7 @@ export function decideMatch(item: CatalogueRow, candidates: ShowfinderEvent[]): 
     // a genuinely similar title. This keeps unrelated same-day London
     // events out of the review queue.
     .filter(candidate => candidate.detail.titlePerformerExact || candidate.detail.performerOverlap >= 0.6)
-    .sort((a, b) => b.detail.value - a.detail.value)
+    .sort((a, b) => (b.detail.value + timeBonus(b.detail.timeGap)) - (a.detail.value + timeBonus(a.detail.timeGap)))
   const best = ranked[0]
   const second = ranked[1]
   const directIdentityMatch = Boolean(best && best.detail.titlePerformerExact && best.detail.sameDate && best.detail.sameCity && (best.detail.sameVenue || best.detail.venueOverlap >= 0.5))
@@ -160,13 +242,32 @@ export function decideMatch(item: CatalogueRow, candidates: ShowfinderEvent[]): 
     || (best.detail.performerOverlap >= 0.6 && best.detail.sameDate && best.detail.value >= 0.78 && (!second || best.detail.value - second.detail.value >= 0.12))
   ))
   const review = Boolean(best && !confident && best.detail.value >= 0.45)
+  const base = best
+    ? `${best.event.title} (${Math.round(best.detail.value * 100)}% match${best.detail.titlePerformerExact ? ', title confirmed' : best.detail.linkedArtistExact ? ', linked artist only' : ''})`
+    : 'No close Showfinder event found'
+  const timeNote = !best ? '' : best.detail.timeGap !== null ? ` [time checked: ${best.detail.timeGap <= SAME_SHOW_TIME_MINUTES ? 'same showtime' : `${best.detail.timeGap} min apart`}]` : ' [time checked]'
+
+  // A listing at a different time from the event, with a sibling listing that
+  // fits that event better, is the other performance of the day: do not let it
+  // take the event's link.
+  if (confident && best) {
+    const closer = siblingFitsBetter(item, best.event, siblings)
+    if (closer) {
+      return {
+        status: 'review',
+        event: null,
+        confidence: Number(best.detail.value.toFixed(3)),
+        reason: `${base} — but the ${formatClock(clockMinutes(closer.event_time) ?? 0)} listing fits this event's time better, so this ${formatClock(clockMinutes(item.event_time) ?? 0)} show needs its own event [time checked]`,
+        timeGap: best.detail.timeGap,
+      }
+    }
+  }
   const status: MatchStatus = confident ? 'auto_matched' : review ? 'review' : 'no_match'
   return {
     status,
     event: confident && best ? best.event : null,
     confidence: best ? Number(best.detail.value.toFixed(3)) : null,
-    reason: best
-      ? `${best.event.title} (${Math.round(best.detail.value * 100)}% match${best.detail.titlePerformerExact ? ', title confirmed' : best.detail.linkedArtistExact ? ', linked artist only' : ''})`
-      : 'No close Showfinder event found',
+    reason: base + timeNote,
+    timeGap: best ? best.detail.timeGap : null,
   }
 }

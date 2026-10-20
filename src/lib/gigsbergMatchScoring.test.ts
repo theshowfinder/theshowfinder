@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  normalize, dateOnly, tokenOverlap, bucketEventsByDate, decideMatch, hasTitleEvidence,
+  normalize, dateOnly, tokenOverlap, bucketEventsByDate, decideMatch, hasTitleEvidence, londonMinutes, clockMinutes, showTimeGap,
   type CatalogueRow, type ShowfinderEvent,
 } from './gigsbergMatchScoring.ts'
 
@@ -146,5 +146,53 @@ describe('hasTitleEvidence — decides which events need their linked artists lo
 
   test('true for a genuinely overlapping title that is not an exact containment', () => {
     assert.equal(hasTitleEvidence(listing({ performer1: 'Robbie Williams Live', name: 'Robbie Williams Live' }), event({ title: 'Robbie Williams Tour' })), true)
+  })
+})
+
+describe('showtimes — two performances in a day', () => {
+  // 3:30pm and 7:30pm before 25 Oct are BST, so the site stores 14:30Z and 18:30Z.
+  const matinee = event({ id: 'ev-matinee', title: 'Russell Howard', start_date: '2026-10-24T14:30:00Z', venue: { name: 'Palladium', city: 'London' } })
+  const evening = event({ id: 'ev-evening', title: 'Russell Howard', start_date: '2026-10-24T18:30:00Z', venue: { name: 'Palladium', city: 'London' } })
+  const row = (id: number, time: string) => listing({
+    id, name: 'Russell Howard', performer1: 'Russell Howard', event_date: '2026-10-24', event_time: time,
+    venue: 'Palladium', city: 'London', url: `https://gigsberg.example/e/${id}`,
+  })
+
+  test('londonMinutes reads the UK clock, in BST and GMT', () => {
+    assert.equal(londonMinutes('2026-10-24T14:30:00Z'), 15 * 60 + 30)
+    assert.equal(londonMinutes('2026-10-25T15:30:00Z'), 15 * 60 + 30) // clocks went back on 25 Oct
+    assert.equal(londonMinutes('2027-01-20T18:30:00Z'), 18 * 60 + 30)
+    assert.equal(londonMinutes('2026-10-23T23:00:00Z'), null) // midnight in London (BST) = time not announced
+  })
+
+  test('clockMinutes / showTimeGap ignore missing and 00:00 times', () => {
+    assert.equal(clockMinutes('19:30:00'), 19 * 60 + 30)
+    assert.equal(clockMinutes('00:00:00'), null)
+    assert.equal(clockMinutes(null), null)
+    assert.equal(showTimeGap({ event_time: '15:30:00' }, matinee), 0)
+    assert.equal(showTimeGap({ event_time: null }, matinee), null)
+  })
+
+  test('each listing picks the event at its own time, whichever order the events arrive in', () => {
+    for (const events of [[matinee, evening], [evening, matinee]]) {
+      assert.equal(decideMatch(row(1, '15:30:00'), events).event?.id, 'ev-matinee')
+      assert.equal(decideMatch(row(2, '19:30:00'), events).event?.id, 'ev-evening')
+    }
+  })
+
+  test('with only the evening event, the matinee listing does not take its link when the evening listing fits it', () => {
+    const siblings = [row(1, '15:30:00'), row(2, '19:30:00')]
+    const evening7 = decideMatch(row(2, '19:30:00'), [evening], siblings)
+    assert.equal(evening7.status, 'auto_matched')
+    const matinee3 = decideMatch(row(1, '15:30:00'), [evening], siblings)
+    assert.equal(matinee3.status, 'review')
+    assert.equal(matinee3.event, null)
+    assert.match(matinee3.reason, /needs its own event/)
+  })
+
+  test('a lone listing with an odd (placeholder) time still matches its only event', () => {
+    const d = decideMatch(row(1, '19:00:00'), [matinee])
+    assert.equal(d.status, 'auto_matched')
+    assert.equal(d.timeGap, 210)
   })
 })

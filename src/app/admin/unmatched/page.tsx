@@ -6,7 +6,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
 import { rankCandidates, type Candidate } from '@/lib/unmatchedCandidates'
-import type { CatalogueRow, ShowfinderEvent } from '@/lib/gigsbergMatchScoring'
+import { londonMinutes, formatClock, clockMinutes, type CatalogueRow, type ShowfinderEvent } from '@/lib/gigsbergMatchScoring'
 import { createEventAction, hideAction, linkAction, unhideAction } from './actions'
 
 const PAGE = 25
@@ -14,11 +14,13 @@ type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 type Platform = 'gigsberg' | 'see_tickets'
 
 const PLATFORM: Record<Platform, { label: string; table: string; cols: string; colour: string; urlCol: 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' }> = {
-  gigsberg: { label: 'Gigsberg', table: 'gigsberg_catalogue_events', cols: 'id, name, event_date, venue, city, url, performer1, performer2, match_status, match_reason, inventory_status', colour: '#1a1f6e', urlCol: 'gigsberg_affiliate_url' },
+  gigsberg: { label: 'Gigsberg', table: 'gigsberg_catalogue_events', cols: 'id, name, event_date, event_time, venue, city, url, performer1, performer2, match_status, match_reason, inventory_status', colour: '#1a1f6e', urlCol: 'gigsberg_affiliate_url' },
   see_tickets: { label: 'See Tickets', table: 'see_tickets_catalogue_events', cols: 'id, name, event_date, venue, city, url, primary_artist, second_artist, match_status, match_reason', colour: '#E4022D', urlCol: 'see_tickets_affiliate_url' },
 }
 
 const day = (d: string) => new Date(d).toLocaleDateString('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+const clock = (minutes: number | null) => (minutes === null ? '' : ` · ${formatClock(minutes)}`)
+const cleanReason = (reason: string | null) => (reason ?? '').replace(/\s*\[time checked[^\]]*\]/g, '')
 const dayShift = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString()
 
 type EvRow = { id: string; title: string; slug: string; start_date: string; status: string; venue_name: string | null; venue_city: string | null; gigsberg_affiliate_url: string | null; see_tickets_affiliate_url: string | null }
@@ -34,7 +36,7 @@ async function eventsOnDay(db: Loose, date: string): Promise<Array<ShowfinderEve
 
 function toCatalogueRow(platform: Platform, r: Record<string, any>): CatalogueRow { // eslint-disable-line @typescript-eslint/no-explicit-any
   return {
-    id: r.id, name: r.name, event_date: r.event_date, venue: r.venue, city: r.city,
+    id: r.id, name: r.name, event_date: r.event_date, event_time: r.event_time ?? null, venue: r.venue, city: r.city,
     performer1: platform === 'gigsberg' ? r.performer1 : r.primary_artist,
     performer2: platform === 'gigsberg' ? r.performer2 : r.second_artist,
     url: r.url, matched_event_id: null,
@@ -159,7 +161,7 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-bold text-slate-900">{item.event.title} <span className="text-xs font-bold bg-red-100 text-red-700 rounded px-1.5 py-0.5 ml-1">SOLD OUT</span></p>
-                  <p className="text-sm text-slate-500">{day(item.event.start_date)} · {item.event.venue_name}, {item.event.venue_city}</p>
+                  <p className="text-sm text-slate-500">{day(item.event.start_date)}{clock(londonMinutes(item.event.start_date))} · {item.event.venue_name}, {item.event.venue_city}</p>
                 </div>
                 <Link href={`/events/${item.event.slug}`} target="_blank" className="text-sm text-blue-600 font-semibold">Open site page →</Link>
               </div>
@@ -167,7 +169,7 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
                 {item.catalogueCandidates.length === 0 && <p className="text-sm text-slate-500">No {meta.label} show found on that day at a similar venue. It may genuinely not be listed there.</p>}
                 {item.catalogueCandidates.map(c => (
                   <div key={String(c.id)} className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-sm"><span className="font-semibold text-slate-800">{c.name}</span><span className="text-slate-500"> · {c.venue}, {c.city}</span></div>
+                    <div className="text-sm"><span className="font-semibold text-slate-800">{c.name}</span><span className="text-slate-500">{clock(clockMinutes(c.event_time))} · {c.venue}, {c.city}</span></div>
                     <div className="flex items-center gap-3">
                       <a href={c.url} target="_blank" rel="noreferrer" className="text-sm text-blue-600 font-semibold">Open on {meta.label} →</a>
                       <form action={linkAction}><input type="hidden" name="platform" value={platform} /><input type="hidden" name="catalogue_id" value={String(c.id)} /><input type="hidden" name="event_id" value={item.event!.id} /><button className="rounded-lg bg-green-700 text-white font-bold text-sm px-4 py-1.5">Link</button></form>
@@ -181,11 +183,11 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-bold text-slate-900">{item.catalogue!.name}</p>
-                  <p className="text-sm text-slate-500">{day(item.catalogue!.event_date + 'T12:00:00Z')} · {item.catalogue!.venue || 'venue unknown'}, {item.catalogue!.city || 'city unknown'}{item.catalogue!.match_reason ? ` · ${item.catalogue!.match_reason}` : ''}</p>
+                  <p className="text-sm text-slate-500">{day(item.catalogue!.event_date + 'T12:00:00Z')}{clock(clockMinutes(item.catalogue!.event_time))} · {item.catalogue!.venue || 'venue unknown'}, {item.catalogue!.city || 'city unknown'}{cleanReason(item.catalogue!.match_reason) ? ` · ${cleanReason(item.catalogue!.match_reason)}` : ''}</p>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                   <a href={item.catalogue!.url} target="_blank" rel="noreferrer" className="text-blue-600 font-semibold">Open on {meta.label} →</a>
-                  <Link href={platform === 'gigsberg' ? `/admin/gigsberg/link?catalogue_id=${item.catalogue!.id}&return_to=${encodeURIComponent('/admin/gigsberg/matches')}` : `/admin/see-tickets/link?catalogue_id=${item.catalogue!.id}`} className="text-slate-600 font-semibold underline">Search all events</Link>
+                  <Link href={platform === 'gigsberg' ? `/admin/gigsberg/link?catalogue_id=${item.catalogue!.id}&return_to=${encodeURIComponent(href({}))}` : `/admin/see-tickets/link?catalogue_id=${item.catalogue!.id}&return_to=${encodeURIComponent(href({}))}`} className="text-slate-600 font-semibold underline">Search all events</Link>
                   {!isHidden && (
                     <form action={createEventAction}><input type="hidden" name="platform" value={platform} /><input type="hidden" name="catalogue_id" value={String(item.catalogue!.id)} /><input type="hidden" name="return_to" value={href({})} /><button className="rounded-lg bg-blue-700 text-white font-bold text-sm px-3 py-1" title="Builds a new event page from this feed listing">Create event page</button></form>
                   )}
@@ -203,7 +205,7 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
                     <div key={ev.id} className="flex flex-wrap items-center justify-between gap-3">
                       <div className="text-sm">
                         <span className="font-semibold text-slate-800">{ev.title}</span>
-                        <span className="text-slate-500"> · {ev.venue_name}, {ev.venue_city}</span>
+                        <span className="text-slate-500">{clock(londonMinutes(ev.start_date))} · {ev.venue_name}, {ev.venue_city}</span>
                         <span className="text-xs text-slate-400"> · {c.why.join(', ')}</span>
                         {has && <span className="text-xs font-bold bg-amber-100 text-amber-800 rounded px-1.5 py-0.5 ml-2">already has a {meta.label} button (Link replaces it)</span>}
                       </div>

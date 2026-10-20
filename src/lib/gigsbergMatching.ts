@@ -5,6 +5,7 @@ import {
   dateOnly,
   decideMatch,
   hasTitleEvidence,
+  SAME_SHOW_TIME_MINUTES,
   type CatalogueRow,
   type ShowfinderEvent,
 } from '@/lib/gigsbergMatchScoring'
@@ -22,7 +23,7 @@ export interface GigsbergMatchResult {
 }
 
 const MATCH_RETRY_AFTER_MS = 24 * 60 * 60 * 1000
-const CATALOGUE_COLUMNS = 'id, name, event_date, venue, city, performer1, performer2, url, matched_event_id, match_checked_at'
+const CATALOGUE_COLUMNS = 'id, name, event_date, event_time, venue, city, performer1, performer2, url, matched_event_id, match_checked_at'
 // Supabase writes are network-bound; small concurrent batches finish a full
 // catalogue quickly without overwhelming the database.
 const WRITE_BATCH_SIZE = 50
@@ -118,6 +119,16 @@ export async function matchGigsbergCatalogue(
   const started = Date.now()
   const deadline = started + (options.budgetMs ?? DEFAULT_BUDGET_MS)
   const db = createAdminClient()
+  // Self-heal: send back for re-matching any earlier automatic link whose
+  // showtime is far from the event's while another listing exists for that
+  // venue and day (the old matcher ignored showtimes). Loop-proof: re-decided
+  // rows carry a "[time checked" marker the function skips.
+  try {
+    const { data: reset } = await db.rpc('gigsberg_reset_time_mismatches')
+    if (typeof reset === 'number' && reset > 0) console.log(`[gigsberg-match] sent ${reset} time-mismatched links back for re-matching`)
+  } catch (error) {
+    console.warn('[gigsberg-match] time-mismatch reset skipped:', error)
+  }
   const [catalogue, events] = await Promise.all([loadCatalogue(db, fullRescan), loadUpcomingEvents(db)])
   const eventsByDate = bucketEventsByDate(events)
   const loadMs = Date.now() - started
@@ -126,8 +137,26 @@ export async function matchGigsbergCatalogue(
   const result: GigsbergMatchResult = { checked: 0, autoMatched: 0, review: 0, noMatch: 0, errors: 0 }
   const artistsLoaded = new Set<string>()
 
+  // Other listings for the same venue and day, loaded only when a match looks
+  // like the other performance of a two-shows-a-day act (rare), so the common
+  // path costs nothing extra.
+  async function loadSiblings(item: CatalogueRow): Promise<CatalogueRow[]> {
+    if (!item.venue) return []
+    const { data } = await db
+      .from('gigsberg_catalogue_events')
+      .select(CATALOGUE_COLUMNS)
+      .eq('event_date', item.event_date)
+      .eq('venue', item.venue)
+      .is('gone_at', null)
+      .limit(50) as unknown as PageResult<CatalogueRow>
+    return data ?? []
+  }
+
   async function processItem(item: CatalogueRow, candidates: ShowfinderEvent[]) {
-    const decision = decideMatch(item, candidates)
+    let decision = decideMatch(item, candidates)
+    if (decision.status === 'auto_matched' && decision.timeGap !== null && decision.timeGap > SAME_SHOW_TIME_MINUTES) {
+      decision = decideMatch(item, candidates, await loadSiblings(item))
+    }
 
     const { error } = await db.from('gigsberg_catalogue_events').update({
       matched_event_id: decision.event?.id ?? null,

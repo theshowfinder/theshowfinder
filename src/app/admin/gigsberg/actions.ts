@@ -123,7 +123,7 @@ export async function approveExistingGigsbergMatchAction(formData: FormData) {
   revalidatePath('/admin/gigsberg/matches')
   revalidatePath('/events', 'layout')
   const returnTo = String(formData.get('return_to') ?? '')
-  if (returnTo.startsWith('/admin/gigsberg/')) {
+  if (returnTo.startsWith('/admin/')) {
     redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}approved=existing`)
   }
   redirect('/admin/gigsberg/matches?approved=existing')
@@ -149,7 +149,7 @@ export async function checkGigsbergInventoryAction(formData: FormData) {
   revalidatePath('/admin/gigsberg/coverage')
   const returnTo = String(formData.get('return_to') ?? '')
   const anchor = String(formData.get('return_anchor') ?? '').replace(/[^a-zA-Z0-9_-]/g, '')
-  if (returnTo.startsWith('/admin/gigsberg/')) {
+  if (returnTo.startsWith('/admin/')) {
     const [path, hash] = returnTo.split('#', 2)
     redirect(`${path}${path.includes('?') ? '&' : '?'}inventory=${inventoryStatus}#${anchor || hash || ''}`)
   }
@@ -169,7 +169,7 @@ export async function rejectGigsbergMatchAction(formData: FormData) {
   if (error) throw new Error(error.message)
   revalidatePath('/admin/gigsberg/matches')
   const returnTo = String(formData.get('return_to') ?? '')
-  if (returnTo.startsWith('/admin/gigsberg/')) {
+  if (returnTo.startsWith('/admin/')) {
     redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}approved=rejected`)
   }
   redirect('/admin/gigsberg/matches?approved=rejected')
@@ -209,7 +209,7 @@ export async function linkGigsbergToExistingEventAction(formData: FormData) {
   revalidatePath('/admin/gigsberg/coverage')
   revalidatePath('/events', 'layout')
   const returnTo = String(formData.get('return_to') ?? '')
-  if (returnTo.startsWith('/admin/gigsberg/')) redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}linked=1`)
+  if (returnTo.startsWith('/admin/')) redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}linked=1`)
   redirect(`/admin/gigsberg/coverage?city=${encodeURIComponent(row.city ?? '')}&linked=1`)
 }
 
@@ -367,6 +367,6 @@ export async function createGigsbergEventAction(formData: FormData) {
   revalidatePath('/events', 'layout')
   revalidatePath('/cities', 'layout')
   const returnTo = String(formData.get('return_to') ?? '')
-  if (returnTo.startsWith('/admin/gigsberg/')) redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}created=1`)
+  if (returnTo.startsWith('/admin/')) redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}created=1`)
   redirect(`/admin/gigsberg/coverage?city=${encodeURIComponent(row.city)}&created=1&event=${encodeURIComponent(eventSlug)}`)
 }

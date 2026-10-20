@@ -4,11 +4,15 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { linkGigsbergToExistingEventAction } from '../actions'
+import { clockMinutes, formatClock, londonMinutes } from '@/lib/gigsbergMatchScoring'
+
+const at = (minutes: number | null) => (minutes === null ? '' : ` · ${formatClock(minutes)}`)
 
 type CatalogueRow = {
   id: number
   name: string
   event_date: string
+  event_time: string | null
   venue: string | null
   city: string | null
 }
@@ -29,7 +33,7 @@ export default async function LinkGigsbergEventPage({ searchParams }: { searchPa
 
   const { data: catalogue } = await db
     .from('gigsberg_catalogue_events')
-    .select('id, name, event_date, venue, city')
+    .select('id, name, event_date, event_time, venue, city')
     .eq('id', catalogueId)
     .maybeSingle() as unknown as { data: CatalogueRow | null }
 
@@ -56,9 +60,10 @@ export default async function LinkGigsbergEventPage({ searchParams }: { searchPa
         <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-6">
           <p className="text-sm text-slate-500">Gigsberg event</p>
           <h2 className="text-2xl font-extrabold text-slate-900 mt-1">{catalogue.name}</h2>
-          <p className="text-slate-600 mt-2">{new Date(catalogue.event_date).toLocaleDateString('en-GB')} · {catalogue.venue ?? 'Venue unknown'}, {catalogue.city ?? 'City unknown'}</p>
+          <p className="text-slate-600 mt-2">{new Date(catalogue.event_date).toLocaleDateString('en-GB')}{at(clockMinutes(catalogue.event_time))} · {catalogue.venue ?? 'Venue unknown'}, {catalogue.city ?? 'City unknown'}</p>
           <form className="flex gap-3 mt-6">
             <input type="hidden" name="catalogue_id" value={catalogue.id} />
+            {params.return_to && <input type="hidden" name="return_to" value={params.return_to} />}
             <input name="q" defaultValue={query} className="flex-1 rounded-lg border border-slate-300 px-4 py-2" placeholder="Search Showfinder event title" />
             <button className="rounded-lg bg-blue-700 text-white font-bold px-5 py-2">Search</button>
           </form>
@@ -68,7 +73,7 @@ export default async function LinkGigsbergEventPage({ searchParams }: { searchPa
           <div className="px-6 py-4 border-b border-slate-100"><h2 className="font-extrabold text-slate-900">Existing events matching “{query}”</h2></div>
           {!events?.length ? <p className="p-6 text-slate-500">No matching future event was found. Try a shorter artist name or search term.</p> : <div className="divide-y divide-slate-100">
             {events.map(event => <div key={event.id} className="p-6 flex items-center justify-between gap-5">
-              <div><p className="font-bold text-slate-900">{event.title}</p><p className="text-sm text-slate-500 mt-1">{new Date(event.start_date).toLocaleDateString('en-GB')} · {event.venue?.name ?? 'Venue unknown'}, {event.venue?.city ?? 'City unknown'}</p><Link href={`/events/${event.slug}`} target="_blank" className="text-blue-600 text-sm font-semibold hover:underline">Open event page →</Link></div>
+              <div><p className="font-bold text-slate-900">{event.title}</p><p className="text-sm text-slate-500 mt-1">{new Date(event.start_date).toLocaleDateString('en-GB')}{at(londonMinutes(event.start_date))} · {event.venue?.name ?? 'Venue unknown'}, {event.venue?.city ?? 'City unknown'}</p><Link href={`/events/${event.slug}`} target="_blank" className="text-blue-600 text-sm font-semibold hover:underline">Open event page →</Link></div>
               <form action={linkGigsbergToExistingEventAction}><input type="hidden" name="catalogue_id" value={catalogue.id} /><input type="hidden" name="event_id" value={event.id} />{params.return_to && <input type="hidden" name="return_to" value={params.return_to} />}<button className="rounded-lg bg-green-700 text-white font-bold px-4 py-2 whitespace-nowrap">Link this event</button></form>
             </div>)}
           </div>}
