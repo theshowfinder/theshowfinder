@@ -671,6 +671,9 @@ async function upsertEvent(
     existing = (current as ExistingEventSnapshot | null) ?? null
     eventCache.set(tmEvent.id, existing)
   }
+  // A show keeps the address it was first given. Ticketmaster renames shows (title changes), and rebuilding the slug
+  // from the new title broke every link already shared or indexed for it.
+  if (existing?.slug) eventData.slug = existing.slug
 
   // Brand-new event: skip extra time slots of the same title at the same venue
   // on the same day (timed-entry attractions list dozens per day).

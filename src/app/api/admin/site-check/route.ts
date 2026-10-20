@@ -22,9 +22,9 @@ export async function GET() {
 
 interface Problem { url: string; status: number | string; note?: string }
 
-async function checkOne(url: string): Promise<Problem | null> {
+async function checkOnce(url: string): Promise<Problem | null> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 20_000)
+  const timer = setTimeout(() => controller.abort(), 30_000)
   try {
     const res = await fetch(url, { redirect: 'manual', cache: 'no-store', signal: controller.signal, headers: { 'user-agent': 'TheShowFinderSiteCheck/1.0' } })
     if (res.status !== 200) return { url, status: res.status, note: res.status >= 300 && res.status < 400 ? `redirects to ${res.headers.get('location') ?? '?'}` : undefined }
@@ -40,6 +40,14 @@ async function checkOne(url: string): Promise<Problem | null> {
   } finally {
     clearTimeout(timer)
   }
+}
+
+// A page that is not in the CDN cache yet renders from scratch (a few seconds, longer while imports are running), so a
+// single slow answer is not a broken page: ask once more before reporting it. Real errors (404, redirects) are not retried.
+async function checkOne(url: string): Promise<Problem | null> {
+  const first = await checkOnce(url)
+  if (first && first.status === 'error') return (await checkOnce(url)) ?? null
+  return first
 }
 
 export async function POST(request: Request) {

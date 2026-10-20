@@ -10,12 +10,13 @@ export async function generateStaticParams() {
 }
 
 import { cache } from 'react'
-import { notFound, redirect } from 'next/navigation'
+import { notFound, permanentRedirect, redirect } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
 import { isRepeatPerformance } from '@/lib/repeatPerformances'
+import { idTailPattern, slugIdTail } from '@/lib/renamedEvents'
 import type { EventCategory, EventStatus } from '@/lib/types/database'
 import {
   getTicketmasterAffiliateLink, getViagogoAffiliateLink, isTicketmasterCommissionEligible,
@@ -372,7 +373,16 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   if (seoAlias) redirect(`/events/${seoAlias}`)
 
   const event    = await getEvent(slug)
-  if (!event) notFound()
+  if (!event) {
+    // Ticketmaster renamed the show after this link was made: find it by its id tail and send the visitor on.
+    const tail = slugIdTail(slug)
+    if (tail) {
+      const { data: found } = await createPublicClient().from('events').select('slug, ticketmaster_id').like('ticketmaster_id', idTailPattern(tail)).limit(5) as unknown as { data: Array<{ slug: string; ticketmaster_id: string | null }> | null }
+      const hits = (found ?? []).filter(e => e.ticketmaster_id?.endsWith(tail) && e.slug !== slug)
+      if (hits.length === 1) permanentRedirect(`/events/${hits[0].slug}`)
+    }
+    notFound()
+  }
 
   // A show that has already happened: say so plainly and point at what is still on,
   // instead of selling tickets that no longer exist.
