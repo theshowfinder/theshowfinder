@@ -34,6 +34,20 @@ async function postJson(url: string, body?: unknown): Promise<{ status: number; 
   return { status: res.status, json }
 }
 
+// One crawl batch, retried: a dropped connection ("Load failed" in Safari, a deploy swapping the
+// server mid-crawl, the Mac napping) used to abort the whole 18k-URL crawl.
+async function postBatchWithRetry(url: string, body: unknown, attempts = 4): Promise<{ status: number; json: any } | null> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const res = await postJson(url, body)
+      if (res.status === 200) return res
+      if (res.status === 401 || res.status === 403) return res            // not a blip: stop at once
+    } catch { /* network drop: retry */ }
+    if (attempt < attempts) await new Promise(r => setTimeout(r, 2000 * attempt))
+  }
+  return null
+}
+
 export default function MorningCleanup() {
   const [steps, setSteps] = useState<Step[]>(INITIAL)
   const [running, setRunning] = useState(false)
@@ -149,17 +163,20 @@ export default function MorningCleanup() {
         if (!list.ok) throw new Error(listJson.error ?? `HTTP ${list.status}`)
         const urls: string[] = listJson.urls
         const found: Problem[] = []
+        let unchecked = 0
         const BATCH = 150
         for (let i = 0; i < urls.length; i += BATCH) {
           if (stop.current) break
-          set('crawl', 'run', `checked ${Math.min(i, urls.length)} of ${urls.length}… ${found.length} problem${found.length === 1 ? '' : 's'} so far`)
-          const { status, json } = await postJson('/api/admin/site-check', { urls: urls.slice(i, i + BATCH) })
-          if (status !== 200) throw new Error(json?.error ?? `HTTP ${status}`)
-          found.push(...(json.problems as Problem[]))
+          set('crawl', 'run', `checked ${Math.min(i, urls.length)} of ${urls.length}… ${found.length} problem${found.length === 1 ? '' : 's'} so far${unchecked ? `, ${unchecked} could not be reached` : ''}`)
+          const res = await postBatchWithRetry('/api/admin/site-check', { urls: urls.slice(i, i + BATCH) })
+          if (res && (res.status === 401 || res.status === 403)) throw new Error(`HTTP ${res.status}: admin session expired, log in again`)
+          if (!res) { unchecked += urls.slice(i, i + BATCH).length; continue }   // keep going, report it at the end
+          found.push(...(res.json.problems as Problem[]))
           setProblems([...found])
         }
         crawled = !stop.current
-        set('crawl', found.length ? 'fail' : crawled ? 'ok' : 'warn', `${urls.length} URLs checked · ${found.length} problem${found.length === 1 ? '' : 's'}`)
+        set('crawl', found.length ? 'fail' : unchecked ? 'warn' : crawled ? 'ok' : 'warn', `${urls.length - unchecked} of ${urls.length} URLs checked · ${found.length} problem${found.length === 1 ? '' : 's'}${unchecked ? ` · ${unchecked} could not be reached after retries` : ''}`)
+        if (unchecked) reasons.push(`${unchecked} sitemap URLs could not be checked (connection kept dropping); run the crawl again`)
         if (found.length) reasons.push(`${found.length} sitemap URL${found.length === 1 ? '' : 's'} not returning a clean 200 (listed below)`)
         if (!crawled) reasons.push('Sitemap crawl was stopped before it finished')
       } catch (e) {
