@@ -8,6 +8,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import RunSweepButton from './RunSweepButton'
 import RunJobButtons from './RunJobButtons'
 import MorningCleanup from './MorningCleanup'
+import ImportCheck from './ImportCheck'
+import { loadImportCards } from '@/lib/importCheck'
 
 function ago(iso: string | null, now: Date): string {
   if (!iso) return 'never'
@@ -21,7 +23,7 @@ const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : '0%
 
 export default async function HealthPage() {
   await requireAdmin()
-  const snap = await loadHealthSnapshot()
+  const [snap, importCards] = await Promise.all([loadHealthSnapshot(), loadImportCards()])
   const { data: sweepState } = await createAdminClient().from('tm_sweep_state').select('mode, last_stats').eq('id', 1).maybeSingle()
   const sweepMode = (sweepState as { mode?: string } | null)?.mode ?? 'unknown'
   const { data: gigState } = await createAdminClient().from('gigsberg_sweep_state' as never).select('mode').eq('id', 1).maybeSingle()
@@ -52,6 +54,12 @@ export default async function HealthPage() {
             </ul>
           )}
           <p className="text-xs text-slate-500 mt-3">Job history started {monitored}. Alerts email ALERT_EMAIL (default hello@theshowfinder.com) three times a day, only when something new is wrong or has been open for 3 days.</p>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-extrabold text-slate-900 mb-1">Morning import check</h2>
+          <p className="text-sm text-slate-500 mb-3">Every source we import from, confirmed against the imported data itself (not just “the job said OK”). Each card has its own Run now button and shows what the run actually did. Imports also run automatically every day; this proves they did.</p>
+          <ImportCheck cards={importCards} />
         </section>
 
         <section>

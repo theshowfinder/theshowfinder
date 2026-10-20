@@ -15,6 +15,8 @@ const RUNNABLE = new Set([
   'sync-onsale',
   'sync-council-events',
   'check-gigsberg-inventory',
+  'sync-gigsberg',
+  'sync-city-news',
 ])
 
 export async function POST(request: Request) {
