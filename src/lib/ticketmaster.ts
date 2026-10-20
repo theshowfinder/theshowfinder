@@ -497,6 +497,9 @@ async function upsertEventArtists(
   if (!attractions?.length) return
 
   for (let i = 0; i < attractions.length; i++) {
+    // Some Ticketmaster attractions arrive with no name; artists.name is NOT NULL, so skip them
+    // quietly instead of logging a failed upsert on every sync.
+    if (!attractions[i]?.name?.trim()) continue
     const artistId = await upsertArtist(db, attractions[i], artistCache)
     if (!artistId) continue
 
