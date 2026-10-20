@@ -25,8 +25,9 @@ import type { ArtistSocialLinks } from '@/lib/artistEnrich'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enrichArtist } from '@/lib/artistEnrichRun'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { fallbackEventImage } from '@/lib/eventImages'
 import {
-  toArtistEventRows, shouldIndexArtistPage, artistMetaDescription, buildArtistSummary, fallbackGenreLabel,
+  toArtistEventRows, shouldIndexArtistPage, artistMetaDescription, buildArtistSummary, fallbackGenreLabel, dominantArtistCategory,
   type ArtistEventLink, type ArtistEventRow,
 } from '@/lib/artistEvents'
 
@@ -311,7 +312,14 @@ export default async function ArtistPage({ params }: PageProps) {
             style={{ filter: 'brightness(0.55)' }}
           />
         ) : (
-          <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #1A1A2E, #E8003D)' }} />
+          // No artist photo: show the picture for the kind of show (sport, comedy, theatre...) rather than a blank gradient.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={fallbackEventImage(dominantArtistCategory(eventRows) ?? 'concert', artist.name)}
+            alt=""
+            className="w-full h-full object-cover object-center"
+            style={{ filter: 'brightness(0.55)' }}
+          />
         )}
         <div className="absolute inset-0 flex flex-col justify-end">
           <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-10">

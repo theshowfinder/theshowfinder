@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  toArtistEventRows, shouldIndexArtistPage, shouldListArtistInSitemap, artistMetaDescription, buildArtistSummary, fallbackGenreLabel,
+  toArtistEventRows, shouldIndexArtistPage, shouldListArtistInSitemap, artistMetaDescription, buildArtistSummary, fallbackGenreLabel, dominantArtistCategory,
   type ArtistEventLink,
 } from './artistEvents.ts'
 
@@ -85,5 +85,10 @@ describe('buildArtistSummary / fallbackGenreLabel', () => {
   test('fallback genre is the most common category', () => {
     assert.equal(fallbackGenreLabel([row('a', '2027-01-01', 'v', 'c', 'comedy'), row('b', '2027-01-02', 'v', 'c', 'comedy'), row('c', '2027-01-03', 'v', 'c', 'concert')]), 'Comedy')
     assert.equal(fallbackGenreLabel([row('a', '2027-01-01', 'v', 'c', null)]), null)
+  })
+  test('football fixtures stored as concerts are still sport', () => {
+    const fixtures = ['Derby County vs Stoke City', 'Derby County vs Watford'].map((title, i) => ({ ...row(String(i), '2027-01-01', 'Pride Park', 'Derby', 'concert'), title }))
+    assert.equal(dominantArtistCategory(fixtures), 'sports')
+    assert.equal(fallbackGenreLabel(fixtures), 'Sport')
   })
 })

@@ -8,6 +8,9 @@
 // Google saw thousands of near-empty pages. The real data is event_artists ->
 // events, which this module shapes into list rows.
 
+import { inferEventCategory } from './eventImages.ts'
+import type { EventCategory } from './types/database.ts'
+
 export interface ArtistEventRow {
   id: string
   slug: string
@@ -115,12 +118,23 @@ const CATEGORY_LABELS: Record<string, string> = {
   family: 'Family',
 }
 
-// The most common event category across the artist's upcoming shows, as a label.
-export function fallbackGenreLabel(rows: ArtistEventRow[]): string | null {
-  const counts = new Map<string, number>()
-  for (const r of rows) if (r.category && CATEGORY_LABELS[r.category]) counts.set(r.category, (counts.get(r.category) ?? 0) + 1)
-  let best: string | null = null
+// The most common kind of show across the artist's upcoming dates. A stored category is only a hint:
+// events created from a ticket feed can carry the wrong one (football fixtures stored as "concert"), so
+// the title is checked too ("Derby County vs Stoke City" is a sports fixture whatever it was stored as).
+export function dominantArtistCategory(rows: ArtistEventRow[]): EventCategory | null {
+  const counts = new Map<EventCategory, number>()
+  for (const r of rows) {
+    if (!r.category || !CATEGORY_LABELS[r.category]) continue
+    const cat = inferEventCategory(r.title, r.category as EventCategory)
+    counts.set(cat, (counts.get(cat) ?? 0) + 1)
+  }
+  let best: EventCategory | null = null
   for (const [cat, n] of counts) if (!best || n > (counts.get(best) ?? 0)) best = cat
+  return best
+}
+
+export function fallbackGenreLabel(rows: ArtistEventRow[]): string | null {
+  const best = dominantArtistCategory(rows)
   return best ? CATEGORY_LABELS[best] : null
 }
 
