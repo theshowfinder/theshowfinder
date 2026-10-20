@@ -27,6 +27,17 @@ async function handleGet(request: Request) {
   const maxPerRun = Number.isFinite(requested) && requested > 0 ? Math.min(requested, 1000) : DEFAULT_PER_RUN
   const db = createAdminClient()
 
+  // Artists made from other feeds (Gigsberg / See Tickets fixtures) have no photo: borrow the same-name
+  // Ticketmaster artist's. Best effort; never stops the enrichment below.
+  let imagesFilled = 0
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (db as any).rpc('fill_artist_images_from_twins') as { data: number | null }
+    imagesFilled = data ?? 0
+  } catch (err) {
+    console.error('[enrich-artists] fill images from twins failed', err instanceof Error ? err.message : err)
+  }
+
   const { data: busiest, error: viewErr } = await db
     .from('artists_with_upcoming').select('id')
     .order('upcoming_count', { ascending: false })
@@ -67,7 +78,7 @@ async function handleGet(request: Request) {
   }
 
   return NextResponse.json({
-    success: true, candidates: todo.length, ...tally, ...counters,
+    success: true, imagesFilled, candidates: todo.length, ...tally, ...counters,
     note: todo.length >= maxPerRun ? 'Batch limit reached: run again (or wait for tomorrow) to continue.' : undefined,
     seconds: Math.round((Date.now() - started) / 1000),
   })
