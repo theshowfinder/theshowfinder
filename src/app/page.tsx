@@ -48,6 +48,7 @@ import NewsCardGrid from '@/components/NewsCardGrid'
 import ScrollRail from '@/components/ScrollRail'
 import OnSaleMosaic, { type OnSaleMosaicTile } from '@/components/OnSaleMosaic'
 import { pickOnSaleMosaic } from '@/lib/onSaleMosaic'
+import { londonDayWithYear } from '@/lib/cityBrief'
 import { eventImageUrl, artistPhotoUrl } from '@/lib/eventImages'
 import { venueLabel } from '@/lib/displayTitle'
 
@@ -258,7 +259,7 @@ async function OnSaleMosaicSection() {
   // Same whole-tour count the click-through page lists, so a tile's "N UK dates" always matches it.
   const picked = await attachTourDateCounts(supabase, pickOnSaleMosaic(allGroups))
 
-  const dayFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short' })
+  const now = new Date()
   const tiles: OnSaleMosaicTile[] = picked.map(g => {
     const events = [...g.events].sort((a, b) => a.start_date.localeCompare(b.start_date))
     const first = events[0]
@@ -271,7 +272,7 @@ async function OnSaleMosaicSection() {
       presale: g.saleType === 'presale',
       meta: dates > 1
         ? `${dates} UK dates`
-        : `${venueLabel(first.venue_name, first.venue_city)} · ${dayFmt.format(new Date(first.start_date))}`,
+        : `${venueLabel(first.venue_name, first.venue_city)} · ${londonDayWithYear(first.start_date, now)}`,
     }
   })
   return <OnSaleMosaic tiles={tiles} total={allGroups.length} />

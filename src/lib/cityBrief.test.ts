@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildEdition, editionHeadline, freshnessStamp, stalestSync, type EditionEvent } from './cityBrief.ts'
+import { buildEdition, editionHeadline, freshnessStamp, stalestSync, londonDayWithYear, type EditionEvent } from './cityBrief.ts'
 
 const now = new Date('2026-10-20T08:00:00Z')   // 09:00 BST on Tue 20 Oct
 let n = 0
@@ -83,5 +83,15 @@ describe('cityBrief', () => {
     assert.equal(stalestSync([{ last_synced_at: '2026-10-20T05:00:00Z' }, { last_synced_at: '2026-10-19T01:00:00Z' }]), '2026-10-19T01:00:00Z')
     assert.equal(stalestSync([{ last_synced_at: '2026-10-20T05:00:00Z' }, { last_synced_at: null }]), null)
     assert.equal(stalestSync([]), null)
+  })
+})
+
+describe('londonDayWithYear', () => {
+  const now = new Date('2026-10-20T12:00:00Z')
+  test('a show in the current year has no year, as before', () => {
+    assert.equal(londonDayWithYear('2026-10-29T18:00:00Z', now), 'Thu 29 Oct')
+  })
+  test('a show next year says so: Jimmy Carr 29 Oct 2027 must not read as this month', () => {
+    assert.equal(londonDayWithYear('2027-10-29T17:00:00Z', now), 'Fri 29 Oct 2027')
   })
 })

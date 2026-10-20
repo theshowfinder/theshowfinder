@@ -113,6 +113,31 @@ export function saleBadgeText(saleType: SaleType, isoDate: string, now: Date = n
   return `${saleType === 'presale' ? 'Presale opens' : 'On sale'} ${fmtOnSaleLabel(isoDate)}`
 }
 
+// A show whose presale ended months before the public on-sale date is not
+// newly going on sale: its tickets were already sold (Paul Smith 'Happy',
+// Derby: presale 25-27 Feb, then Ticketmaster lists 23 Oct as a "public
+// on-sale" for a late release of held seats). Normal presales end hours or
+// days before the public sale, so a gap of more than 14 days means the date
+// is a re-release, and calling it "On sale this week" would be wrong.
+export const RE_RELEASE_GAP_DAYS = 14
+
+type SaleDates = { onsale_date?: string | null; public_onsale_start?: string | null; presale_start?: string | null; presale_end?: string | null }
+
+export function isReRelease(e: SaleDates): boolean {
+  const publicStart = e.public_onsale_start ?? e.onsale_date
+  if (!publicStart) return false
+  const gapMs = (a: string, b: string) => Date.parse(a) - Date.parse(b)
+  const limit = RE_RELEASE_GAP_DAYS * 86_400_000
+  if (e.presale_end) return gapMs(publicStart, e.presale_end) > limit
+  // No presale end recorded: fall back to the presale start with a longer allowance (a presale can run for weeks).
+  if (e.presale_start) return gapMs(publicStart, e.presale_start) > 60 * 86_400_000
+  return false
+}
+
+export function dropReReleases<T extends SaleDates>(events: T[]): T[] {
+  return events.filter(e => !isReRelease(e))
+}
+
 // VIP / "Venue Premium Tickets" packages and classes ("Fishies Week 7") are products
 // or sessions, not shows going on sale: keep them out of the On Sale cards. The normal
 // ticket row for the same show is untouched, and the ticket type is chosen on its page.

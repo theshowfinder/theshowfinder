@@ -416,3 +416,32 @@ describe('same act, differently named listings are one tile only when the dates 
     assert.equal(names([ev('1', 'Kane', '2027-04-02T18:00:00Z'), ev('2', 'Kane Brown', '2027-04-03T18:00:00Z')]).length, 2)
   })
 })
+
+describe('isReRelease: a late ticket release is not a new on-sale', async () => {
+  const { isReRelease, dropReReleases } = await import('./on-sale.ts')
+
+  test('Paul Smith: presale ended 27 Feb, "public on-sale" 23 Oct is a re-release', () => {
+    assert.equal(isReRelease({ presale_start: '2026-02-25T10:00:00Z', presale_end: '2026-02-27T09:00:00Z', onsale_date: '2026-10-23T09:00:00Z' }), true)
+  })
+
+  test('a normal presale ending the day before the public sale is a genuine on-sale', () => {
+    assert.equal(isReRelease({ presale_start: '2026-10-20T10:00:00Z', presale_end: '2026-10-22T09:00:00Z', onsale_date: '2026-10-22T10:00:00Z' }), false)
+  })
+
+  test('no presale at all is a genuine on-sale', () => {
+    assert.equal(isReRelease({ onsale_date: '2026-10-23T09:00:00Z' }), false)
+  })
+
+  test('presale start only: a long allowance, so a normal multi-week presale is kept', () => {
+    assert.equal(isReRelease({ presale_start: '2026-10-01T10:00:00Z', onsale_date: '2026-10-23T09:00:00Z' }), false)
+    assert.equal(isReRelease({ presale_start: '2026-02-25T10:00:00Z', onsale_date: '2026-10-23T09:00:00Z' }), true)
+  })
+
+  test('dropReReleases keeps the genuine ones', () => {
+    const kept = dropReReleases([
+      { id: 'a', presale_end: '2026-02-27T09:00:00Z', onsale_date: '2026-10-23T09:00:00Z' },
+      { id: 'b', onsale_date: '2026-10-23T09:00:00Z' },
+    ])
+    assert.deepEqual(kept.map(e => e.id), ['b'])
+  })
+})

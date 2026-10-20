@@ -10,7 +10,7 @@ import type { EventWithVenue, Artist } from './types/database'
 import {
   groupEventsByArtist, type OnSaleGroup,
   onSaleThisWeekWindow, presaleOpenNowWindow,
-  capGroupsBySeries, dropPastSales, dropPackageListings, mergeTourDates, onSaleSlugOf,
+  capGroupsBySeries, dropPastSales, dropPackageListings, dropReReleases, mergeTourDates, onSaleSlugOf,
 } from './on-sale.ts'
 import { londonDayWindow, londonDaysAheadWindow, londonWeekendDayWindows, type DateWindow } from './intelligence.ts'
 import { isTonightEvent, sortTonightEvents } from './tonight.ts'
@@ -581,7 +581,7 @@ export async function fetchOnSaleThisWeekEvents(
   if (city) query = query.ilike('venue_city', city)
 
   const { data } = await query as unknown as { data: EventWithVenue[] | null }
-  return dropPackageListings(data ?? [])
+  return dropReReleases(dropPackageListings(data ?? []))
 }
 
 // Grouped, deduped version of the above — one card per artist/promoter

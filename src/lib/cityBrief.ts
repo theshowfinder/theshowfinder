@@ -57,8 +57,19 @@ export function londonDay(iso: string): string {
   return DAY_FMT.format(new Date(iso))
 }
 
-function whenLabel(event: EditionEvent): string {
-  return `${londonDay(event.start_date)} · ${londonTime(event.start_date)}`
+const YEAR_FMT = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric' })
+
+/**
+ * "Fri 29 Oct", or "Fri 29 Oct 2027" when the show is in a different calendar year from today. A tour
+ * that goes on sale this week often plays a year ahead, and a bare "Fri 29 Oct" reads as this month.
+ */
+export function londonDayWithYear(iso: string, now: Date): string {
+  const year = YEAR_FMT.format(new Date(iso))
+  return year === YEAR_FMT.format(now) ? londonDay(iso) : `${londonDay(iso)} ${year}`
+}
+
+function whenLabel(event: EditionEvent, now: Date): string {
+  return `${londonDayWithYear(event.start_date, now)} · ${londonTime(event.start_date)}`
 }
 
 const isLive = (e: EditionEvent) => e.status !== 'cancelled' && e.status !== 'postponed'
@@ -90,7 +101,7 @@ export function buildEdition<T extends EditionEvent>(input: EditionInput<T>, lim
       }
       seenIds.add(event.id)
       seenSeries.add(key)
-      tiles.push({ event, kind, label: LABELS[kind], when: whenLabel(event) })
+      tiles.push({ event, kind, label: LABELS[kind], when: whenLabel(event, input.now) })
       added++
     }
   }
