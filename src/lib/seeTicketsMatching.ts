@@ -34,6 +34,10 @@ export type SeeTicketsMatchResult = {
   hasMore?: boolean
   /** Stopped at the time limit with rows left: run it again, nothing is lost (checked rows are not re-scored). */
   incomplete?: boolean
+  /** Where the time went (ms), so a slow run can be diagnosed from the result alone. */
+  timings?: { catalogueMs: number; eventsMs: number; processMs: number; catalogueRows: number; eventRows: number }
+  /** A batch of writes did not finish in time, so the run stopped there. */
+  stalledBatch?: boolean
 }
 
 // Every catalogue row is scored against every event on its date, so the same event strings were
@@ -109,7 +113,8 @@ function score(item: CatalogueRow, event: ShowfinderEvent) {
   return { value, titleMatch, titleOverlap, sameDate, sameCity, venueExact, venueOverlap }
 }
 
-export async function matchSeeTicketsCatalogue(fullRescan = false, options: { limit?: number; afterId?: string; skipUnchanged?: boolean; deadlineMs?: number } = {}): Promise<SeeTicketsMatchResult> {
+export async function matchSeeTicketsCatalogue(fullRescan = false, options: { limit?: number; afterId?: string; skipUnchanged?: boolean; deadlineMs?: number; maxRows?: number } = {}): Promise<SeeTicketsMatchResult> {
+  const t0 = Date.now()
   const db = createAdminClient()
   const catalogue: CatalogueRow[] = []
   const limit = options.limit && options.limit > 0 ? Math.min(options.limit, 500) : null
@@ -126,6 +131,7 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
     if (rows.length < (limit ? limit + 1 : 1000)) break
     if (limit) break
   }
+  const tCatalogue = Date.now()
   const events: ShowfinderEvent[] = []
   // Keyset pagination: OFFSET paging over ~30k events with a venue join got slower on every page
   // and ran into the database statement timeout once the Ticketmaster sweep added thousands of events.
@@ -140,6 +146,7 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
     if (rows.length < 1000) break
     lastEventId = rows[rows.length - 1].id
   }
+  const tEvents = Date.now()
   const eventsByDate = new Map<string, ShowfinderEvent[]>()
   for (const event of events ?? []) {
     const key = dateOnly(event.start_date)
@@ -153,7 +160,9 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
     checked: 0, skippedUnchanged: 0, autoMatched: 0, review: 0, noMatch: 0, errors: 0,
     hasMore,
     nextCursor: rowsToProcess.length ? rowsToProcess[rowsToProcess.length - 1].id : null,
+    timings: { catalogueMs: tCatalogue - t0, eventsMs: tEvents - tCatalogue, processMs: 0, catalogueRows: catalogue.length, eventRows: events.length },
   }
+  console.log(`[see-tickets-matching] loaded ${catalogue.length} catalogue rows in ${tCatalogue - t0}ms and ${events.length} events in ${tEvents - tCatalogue}ms`)
   const stampIds: string[] = []
   // One write per 150 unchanged rows instead of one per row. Flushed after every batch (not once at the end) so that
   // stopping at the time limit leaves almost nothing to write and the function never overruns.
@@ -218,9 +227,18 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
   // the batch deliberately small so the database is not overwhelmed while
   // still completing a full catalogue in one request.
   const batchSize = 50
+  const tProcess = Date.now()
+  let worked = 0   // rows actually scored (rows skipped as unchanged are nearly free and do not count)
   for (let offset = 0; offset < rowsToProcess.length; offset += batchSize) {
     if (options.deadlineMs && Date.now() > options.deadlineMs) { result.incomplete = true; result.hasMore = true; break }
-    const batch = await Promise.all(rowsToProcess.slice(offset, offset + batchSize).map(processItem))
+    if (options.maxRows && worked >= options.maxRows) { result.incomplete = true; result.hasMore = true; break }
+    // A batch that hangs must not take the whole function down with it: give up on it after 40 seconds.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const stalled = new Promise<'stalled'>(resolve => { timer = setTimeout(() => resolve('stalled'), 40_000) })
+    const raced = await Promise.race([Promise.all(rowsToProcess.slice(offset, offset + batchSize).map(processItem)), stalled])
+    clearTimeout(timer)
+    if (raced === 'stalled') { result.errors += 1; result.stalledBatch = true; result.incomplete = true; result.hasMore = true; console.error(`[see-tickets-matching] batch at ${offset} stalled`); break }
+    const batch = raced
     result.checked += batch.length
     for (const outcome of batch) {
       result.errors += outcome.errors
@@ -228,9 +246,12 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
       result.review += outcome.review
       result.noMatch += outcome.noMatch
       result.skippedUnchanged = (result.skippedUnchanged ?? 0) + outcome.skipped
+      if (!outcome.skipped) worked++
     }
     await flushStamps()
   }
+  result.timings!.processMs = Date.now() - tProcess
+  console.log(`[see-tickets-matching] processed ${result.checked} rows (${worked} scored) in ${result.timings!.processMs}ms${result.incomplete ? ', stopped early' : ''}`)
   await flushStamps()
   return result
 }

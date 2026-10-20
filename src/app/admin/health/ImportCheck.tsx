@@ -29,6 +29,27 @@ async function runJob(job: string): Promise<StepResult> {
   }
 }
 
+/** Matching works in slices of ~1,500 rows: press again (done here automatically) until it reports nothing left. */
+async function runMatching(job: string, maxParts = 12): Promise<StepResult> {
+  let totalChecked = 0
+  for (let part = 1; part <= maxParts; part++) {
+    try {
+      const { status, json } = await postJson('/api/admin/run-job', { job })
+      const http = json?.httpStatus
+      const body = json?.body
+      if (status !== 200 || (http && http >= 400) || body?.success === false) {
+        return { ok: false, text: `Failed on part ${part} (HTTP ${http ?? status})${body?.error ? `: ${String(body.error).slice(0, 200)}` : json?.error ? `: ${json.error}` : ''}${totalChecked ? ` · ${totalChecked} rows done before that` : ''}` }
+      }
+      totalChecked += body?.matching?.checked ?? 0
+      if (!body?.matching?.incomplete) return { ok: true, text: `${describeRun(job, body)}${part > 1 ? ` (${part} parts)` : ''}` }
+      if (body?.matching?.stalledBatch) return { ok: false, text: `A batch of database writes stalled on part ${part}. ${totalChecked} rows done so far; run again to continue.` }
+    } catch (e) {
+      return { ok: false, text: `Request failed: ${e instanceof Error ? e.message : String(e)}` }
+    }
+  }
+  return { ok: false, text: `Still more to match after ${maxParts} parts (${totalChecked} rows done). Run again to finish.` }
+}
+
 /** Sweeps work in slices: press again until the lap and the dead-event check both report done. */
 async function runSweep(job: string, endpoint: string, forceFirst: boolean, maxPresses = 6): Promise<StepResult> {
   let last: any = null
@@ -60,7 +81,7 @@ const STEPS: Record<ImportSourceKey, Array<{ label: string; run: () => Promise<S
   ],
   see_tickets: [
     { label: 'Feed download', run: () => runJob('sync-see-tickets') },
-    { label: 'Linking to events', run: () => runJob('match-see-tickets') },
+    { label: 'Linking to events', run: () => runMatching('match-see-tickets') },
   ],
   gigsberg: [
     { label: 'UK sweep', run: () => runSweep('sync-gigsberg-sweep', '/api/cron/sync-gigsberg-sweep', true) },

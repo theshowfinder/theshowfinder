@@ -12,7 +12,7 @@ async function handleGet(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   try {
-    const matching = await matchSeeTicketsCatalogue(false, { skipUnchanged: true, deadlineMs: Date.now() + 200_000 })
+    const matching = await matchSeeTicketsCatalogue(false, { skipUnchanged: true, deadlineMs: Date.now() + 150_000, maxRows: 1500 })
     return NextResponse.json({ success: true, finished: new Date().toISOString(), matching })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
