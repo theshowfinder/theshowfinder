@@ -46,6 +46,10 @@ import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
 import ScrollRail from '@/components/ScrollRail'
+import OnSaleMosaic, { type OnSaleMosaicTile } from '@/components/OnSaleMosaic'
+import { pickOnSaleMosaic } from '@/lib/onSaleMosaic'
+import { eventImageUrl, artistPhotoUrl } from '@/lib/eventImages'
+import { venueLabel } from '@/lib/displayTitle'
 
 type FeaturedQueryResult = { data: EventWithVenue[] | null; error: { message: string } | null }
 
@@ -245,134 +249,43 @@ async function HomepageStats() {
   )
 }
 
-async function OnSaleThisWeek() {
+// The block straight under the hero: only shows whose public on-sale (or presale) falls in the current week, as an
+// image mosaic (big tile = the most prominent show). Same pool as /on-sale-this-week, so a tile never 404s on click.
+async function OnSaleMosaicSection() {
   const supabase = createPublicClient()
-  const nowISO    = new Date().toISOString()
-
-  // fetchOnSaleThisWeek (src/lib/eventPools.ts) is the single source of
-  // truth for this window/sort/dedupe — the /on-sale-this-week/[slug]
-  // detail page resolves every card against the same merged pool this
-  // produces, so a card rendered here can never 404 on click from a window
-  // mismatch (see on-sale.ts's onSaleThisWeekWindow for the full history).
   const artistsData = await fetchAllArtists(supabase)
-
   const allGroups = await fetchOnSaleThisWeek(supabase, artistsData ?? [], { limit: 500 })
-  const groups    = allGroups.slice(0, 12)
-  const overflow  = allGroups.length > 12 ? allGroups.length : 0
+  const picked = pickOnSaleMosaic(allGroups)
 
-  // For each qualifying artist, count ALL upcoming events (not just those in
-  // the onsale window). We build a single OR-filtered query using ILIKE
-  // 'ArtistName%' so we only fetch the ~10-100 events per artist we need,
-  // staying well within PostgREST's row limits.
+  // Total upcoming UK dates per shown artist (not just the ones going on sale), for the "6 UK dates" line.
   const upcomingCount = new Map<string, number>()
-  if (groups.length > 0) {
-    const orFilter = groups
-      .map(g => `title.ilike.${g.artistName.replace(/[%_\\]/g, '\\$&')}%`)
-      .join(',')
-
-    const { data: upcomingTitles } = await supabase
-      .from('listed_events_with_venue')
-      .select('title')
-      .gte('start_date', nowISO)
-      .or(orFilter)
-      .limit(2000) as unknown as { data: { title: string }[] | null }
-
-    for (const { title } of (upcomingTitles ?? [])) {
+  if (picked.length > 0) {
+    const orFilter = picked.map(g => `title.ilike.${g.artistName.replace(/[%_\\]/g, '\\$&')}%`).join(',')
+    const { data: titles } = await supabase
+      .from('listed_events_with_venue').select('title').gte('start_date', new Date().toISOString()).or(orFilter).limit(2000) as unknown as { data: { title: string }[] | null }
+    for (const { title } of titles ?? []) {
       const slug = onSaleSlugOf(title)
       upcomingCount.set(slug, (upcomingCount.get(slug) ?? 0) + 1)
     }
   }
 
-  return (
-    <section className="bg-white py-10 sm:py-14 border-t border-slate-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-end justify-between mb-7">
-          <div>
-            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
-              Tickets just released
-            </p>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">On Sale This Week</h2>
-          </div>
-          {overflow > 0 && (
-            <Link href="/on-sale-this-week" className="text-sm font-semibold hover:underline hidden sm:block" style={{ color: '#026CDF' }}>
-              View all {allGroups.length} →
-            </Link>
-          )}
-        </div>
-
-        {groups.length === 0 ? (
-          <p className="text-slate-500 text-sm py-4">
-            No major tickets going on sale this week — check back soon.
-          </p>
-        ) : (
-          <>
-            <ScrollRail label="On sale this week">
-              {groups.map(group => {
-                const isPresale = group.saleType === 'presale'
-                return (
-                <Link
-                  key={group.slug}
-                  href={`/on-sale-this-week/${group.slug}`}
-                  className="group block rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5"
-                >
-                  <div className="relative h-48 overflow-hidden bg-slate-900">
-                    {group.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={group.image_url}
-                        alt={group.artistName}
-                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A1A2E, #E8003D)' }}>
-                        <span className="text-5xl">🎤</span>
-                      </div>
-                    )}
-                    <div className="absolute top-3 left-3">
-                      <span className="text-xs font-bold uppercase tracking-wider text-white px-2.5 py-1 rounded-full" style={{ backgroundColor: isPresale ? '#E8003D' : '#026CDF' }}>
-                        {isPresale ? 'Presale' : 'On Sale This Week'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="p-4">
-                    <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
-                      {group.dbArtist?.tour_name ?? 'Live Tour'}
-                    </p>
-                    <h3 className="font-extrabold text-slate-900 text-lg leading-tight mb-2 group-hover:text-red-600 transition-colors">
-                      {group.artistName}
-                    </h3>
-                    {(() => {
-                      const total = upcomingCount.get(group.slug) ?? group.events.length
-                      return total > 0 ? (
-                        <p className="text-sm text-slate-500 mb-3">
-                          🗓 {total} UK date{total !== 1 ? 's' : ''}
-                        </p>
-                      ) : null
-                    })()}
-                    <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
-                      🎟️ {saleBadgeText(group.saleType, group.onsale_date)}
-                    </div>
-                  </div>
-                </Link>
-                )
-              })}
-            </ScrollRail>
-            {overflow > 0 && (
-              <div className="mt-10 text-center">
-                <Link
-                  href="/on-sale-this-week"
-                  className="inline-block font-bold px-8 py-3.5 rounded-xl text-sm hover:opacity-90 transition-opacity text-white"
-                  style={{ backgroundColor: '#026CDF' }}
-                >
-                  View all {allGroups.length} artists on sale this week →
-                </Link>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </section>
-  )
+  const dayFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short' })
+  const tiles: OnSaleMosaicTile[] = picked.map(g => {
+    const events = [...g.events].sort((a, b) => a.start_date.localeCompare(b.start_date))
+    const first = events[0]
+    const dates = Math.max(upcomingCount.get(g.slug) ?? 0, events.length)
+    return {
+      href: `/on-sale-this-week/${g.slug}`,
+      title: g.artistName,
+      imageUrl: eventImageUrl(artistPhotoUrl(g.artistName, g.image_url), first.category, first.title),
+      chip: saleBadgeText(g.saleType, g.onsale_date),
+      presale: g.saleType === 'presale',
+      meta: dates > 1
+        ? `${dates} UK dates`
+        : `${venueLabel(first.venue_name, first.venue_city)} · ${dayFmt.format(new Date(first.start_date))}`,
+    }
+  })
+  return <OnSaleMosaic tiles={tiles} total={allGroups.length} />
 }
 
 async function NationalNews() {
@@ -630,17 +543,17 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── ON SALE THIS WEEK: image mosaic, straight under the hero so social-post visitors land on it ── */}
+      <Suspense fallback={<HomeSectionSkeleton />}>
+        <OnSaleMosaicSection />
+      </Suspense>
+
       {/* ── LOCAL SPOTLIGHT (only renders once a city is detected) ─ */}
       <LocalSpotlight />
 
       {/* ── ENTERTAINMENT NEWS (national, not city-scoped) ────────── */}
       <Suspense fallback={<HomeSectionSkeleton />}>
         <NationalNews />
-      </Suspense>
-
-      {/* ── ON SALE THIS WEEK ─────────────────────── */}
-      <Suspense fallback={<HomeSectionSkeleton />}>
-        <OnSaleThisWeek />
       </Suspense>
 
       {/* ── PRESALES OPEN NOW ─────────────────────── */}
