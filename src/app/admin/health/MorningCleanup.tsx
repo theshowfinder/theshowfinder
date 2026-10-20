@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { describeRun } from '@/lib/importStatus'
 
 type StepState = 'wait' | 'run' | 'ok' | 'warn' | 'fail'
 interface Step { key: string; label: string; state: StepState; detail: string }
@@ -8,10 +9,14 @@ interface Problem { url: string; status: number | string; note?: string }
 type Report = Record<string, number>
 
 const JOBS: Array<{ job: string; label: string }> = [
+  { job: 'sync-onsale', label: 'Ticketmaster new on-sales' },
   { job: 'sync-see-tickets', label: 'See Tickets feed' },
   { job: 'sync-council-events', label: 'Council events' },
+  { job: 'sync-city-news', label: 'City news' },
+  { job: 'sync-gigsberg', label: 'Gigsberg listings' },
   { job: 'match-gigsberg', label: 'Gigsberg matching' },
   { job: 'match-see-tickets', label: 'See Tickets matching' },
+  { job: 'import-feed-events', label: 'Add Gigsberg / See Tickets shows missing from the site' },
   { job: 'refresh-listings', label: 'Refresh listings' },
 ]
 
@@ -20,6 +25,7 @@ const INITIAL: Step[] = [
   { key: 'gb', label: 'Gigsberg sweep', state: 'wait', detail: '' },
   ...JOBS.map(j => ({ key: j.job, label: j.label, state: 'wait' as StepState, detail: '' })),
   { key: 'clean', label: 'Cleanliness counts', state: 'wait', detail: '' },
+  { key: 'health', label: 'Health check and import confirmation', state: 'wait', detail: '' },
   { key: 'crawl', label: 'Sitemap crawl (404s and passed events)', state: 'wait', detail: '' },
 ]
 
@@ -100,23 +106,37 @@ export default function MorningCleanup() {
     set('gb', gb.ok ? ((gb as { warn?: boolean }).warn ? 'warn' : 'ok') : 'fail', gb.detail)
     if (!gb.ok) reasons.push(`Gigsberg sweep: ${gb.detail}`)
 
-    // 3: jobs, refresh-listings last
-    for (const { job, label } of JOBS) {
-      if (stop.current) break
-      set(job, 'run', 'running…')
+    // 3: jobs, refresh-listings last. Each reports what it actually did in plain English.
+    async function runJobStep(job: string, label: string, suffix = ''): Promise<unknown> {
+      const key = job
+      set(key, 'run', `running${suffix}…`)
       try {
         const { status, json } = await postJson('/api/admin/run-job', { job })
         const http = json?.httpStatus
-        if (status !== 200 || (http && http >= 400)) {
-          const msg = `HTTP ${http ?? status}${json?.body?.error ? `: ${json.body.error}` : ''}`
-          set(job, 'fail', msg)
-          reasons.push(`${label}: ${msg}`)
-        } else {
-          set(job, 'ok', `${Math.round((json?.ms ?? 0) / 1000)}s`)
+        const body = json?.body
+        if (status !== 200 || (http && http >= 400) || body?.success === false) {
+          const msg = `HTTP ${http ?? status}${body?.error ? `: ${String(body.error).slice(0, 200)}` : ''}`
+          set(key, 'fail', msg)
+          reasons.push(`${label}${suffix}: ${msg}`)
+          return null
         }
+        const mode = body?.mode ?? body?.sweep?.mode
+        set(key, mode === 'dry' ? 'warn' : 'ok', `${describeRun(job, body)} · ${Math.round((json?.ms ?? 0) / 1000)}s`)
+        return body
       } catch (e) {
-        set(job, 'fail', e instanceof Error ? e.message : String(e))
-        reasons.push(`${label}: request failed`)
+        set(key, 'fail', e instanceof Error ? e.message : String(e))
+        reasons.push(`${label}${suffix}: request failed`)
+        return null
+      }
+    }
+
+    for (const { job, label } of JOBS) {
+      if (stop.current) break
+      const body = await runJobStep(job, label) as { mode?: string; gigsberg?: { imported?: number }; see_tickets?: { imported?: number } } | null
+      if (job === 'import-feed-events' && body?.mode === 'live' && ((body.gigsberg?.imported ?? 0) + (body.see_tickets?.imported ?? 0)) > 0) {
+        // new events exist now: link them straight away
+        await runJobStep('match-gigsberg', 'Gigsberg matching', ' (re-run after import)')
+        await runJobStep('match-see-tickets', 'See Tickets matching', ' (re-run after import)')
       }
     }
 
@@ -148,6 +168,25 @@ export default function MorningCleanup() {
       const msg = e instanceof Error ? e.message : String(e)
       set('clean', 'fail', msg)
       reasons.push(`Cleanliness counts failed: ${msg}`)
+    }
+
+    // 4b: health check + import confirmation, so the one verdict covers both
+    try {
+      set('health', 'run', 'checking…')
+      const res = await fetch('/api/admin/health-summary', { cache: 'no-store' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
+      const issues = (json.issues ?? []) as Array<{ severity: string; message: string }>
+      const imports = (json.imports ?? []) as Array<{ label: string; state: string; headline: string }>
+      const notDone = imports.filter(i => i.state !== 'done' && i.state !== 'off')
+      issues.forEach(i => reasons.push(`Health check: ${i.message}`))
+      notDone.forEach(i => reasons.push(`Import not confirmed, ${i.label}: ${i.headline}`))
+      set('health', issues.length || notDone.length ? 'fail' : 'ok',
+        `${issues.length} health issue${issues.length === 1 ? '' : 's'} · ${imports.length - notDone.length} of ${imports.length} imports confirmed`)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      set('health', 'fail', msg)
+      reasons.push(`Health check failed: ${msg}`)
     }
 
     // 5: crawl
@@ -201,7 +240,7 @@ export default function MorningCleanup() {
           <input type="checkbox" checked={skipCrawl} disabled={running} onChange={e => setSkipCrawl(e.target.checked)} /> skip the sitemap crawl
         </label>
       </div>
-      <p className="text-xs text-slate-500 mb-3">Runs every sweep in order (each obeys its own off / dry / live mode), then counts anything stale, then requests every page in the sitemap looking for 404s and “This event has passed” pages. Takes roughly 10–25 minutes; keep the tab open.</p>
+      <p className="text-xs text-slate-500 mb-3">Runs every import in order (each obeys its own off / dry / live mode), matches and links, adds missing feed shows, counts anything stale, runs the health check and import confirmation, then requests every page in the sitemap looking for 404s and “This event has passed” pages. Takes roughly 10–25 minutes; keep the tab open.</p>
 
       <ul className="space-y-1.5 text-sm">
         {steps.map(s => (

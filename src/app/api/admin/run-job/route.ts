@@ -17,6 +17,7 @@ const RUNNABLE = new Set([
   'check-gigsberg-inventory',
   'sync-gigsberg',
   'sync-city-news',
+  'import-feed-events',
 ])
 
 export async function POST(request: Request) {

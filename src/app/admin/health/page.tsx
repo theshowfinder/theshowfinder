@@ -9,6 +9,8 @@ import RunSweepButton from './RunSweepButton'
 import RunJobButtons from './RunJobButtons'
 import MorningCleanup from './MorningCleanup'
 import ImportCheck from './ImportCheck'
+import PlatformTiles from './PlatformTiles'
+import { loadPlatformTiles } from '@/lib/platformStats'
 import { loadImportCards } from '@/lib/importCheck'
 
 function ago(iso: string | null, now: Date): string {
@@ -23,7 +25,7 @@ const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : '0%
 
 export default async function HealthPage() {
   await requireAdmin()
-  const [snap, importCards] = await Promise.all([loadHealthSnapshot(), loadImportCards()])
+  const [snap, importCards, platformTiles] = await Promise.all([loadHealthSnapshot(), loadImportCards(), loadPlatformTiles()])
   const { data: sweepState } = await createAdminClient().from('tm_sweep_state').select('mode, last_stats').eq('id', 1).maybeSingle()
   const sweepMode = (sweepState as { mode?: string } | null)?.mode ?? 'unknown'
   const { data: gigState } = await createAdminClient().from('gigsberg_sweep_state' as never).select('mode').eq('id', 1).maybeSingle()
@@ -54,6 +56,12 @@ export default async function HealthPage() {
             </ul>
           )}
           <p className="text-xs text-slate-500 mt-3">Job history started {monitored}. Alerts email ALERT_EMAIL (default hello@theshowfinder.com) three times a day, only when something new is wrong or has been open for 3 days.</p>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-extrabold text-slate-900 mb-1">Events by platform</h2>
+          <p className="text-sm text-slate-500 mb-3">How many events on the site come from, or are linked to, each platform. Click any number to see the individual events and their pages.</p>
+          <PlatformTiles tiles={platformTiles} />
         </section>
 
         <section>

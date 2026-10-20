@@ -3,7 +3,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { IMPORT_SOURCES, evaluateImports, type ImportCard, type ImportSourceKey, type RunRow, type SweepMode } from '@/lib/importStatus'
 
-export const MODE_TABLES: Partial<Record<ImportSourceKey, string>> = {
+export const MODE_TABLES: Record<string, string> = {
+  feed_import: 'feed_import_state',
   ticketmaster: 'tm_sweep_state',
   see_tickets: 'see_tickets_sweep_state',
   gigsberg: 'gigsberg_sweep_state',

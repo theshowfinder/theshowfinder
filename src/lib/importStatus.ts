@@ -223,6 +223,13 @@ export function describeRun(job: string, body: unknown): string {
         const fetched = per.reduce((n, c) => n + (num(c.fetched) ?? 0), 0)
         return `${fmt(fetched)} stories fetched across ${per.length} cities, ${fmt(num(body.errors))} errors`
       }
+      case 'import-feed-events': {
+        const g = isRec(body.gigsberg) ? body.gigsberg : {}
+        const t = isRec(body.see_tickets) ? body.see_tickets : {}
+        const mode = String(body.mode ?? '?')
+        if (mode === 'live') return `Gigsberg ${fmt(num(g.imported))} added, See Tickets ${fmt(num(t.imported))} added (saved)`
+        return `${mode.toUpperCase()}: not saved. Would add ${fmt(num(g.wouldImport))} Gigsberg and ${fmt(num(t.wouldImport))} See Tickets shows`
+      }
       default:
         return 'Finished OK'
     }

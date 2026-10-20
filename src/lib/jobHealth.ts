@@ -16,6 +16,7 @@ export const JOB_EXPECTATIONS: Record<string, { label: string; maxHoursSinceSucc
   'match-gigsberg':            { label: 'Gigsberg matching',             maxHoursSinceSuccess: 30 },
   'check-gigsberg-inventory':  { label: 'Gigsberg inventory check',      maxHoursSinceSuccess: 14 },
   'sync-see-tickets':          { label: 'See Tickets feed',              maxHoursSinceSuccess: 30 },
+  'import-feed-events':        { label: 'Import shows from Gigsberg / See Tickets', maxHoursSinceSuccess: 30 },
   'match-see-tickets':         { label: 'See Tickets matching',          maxHoursSinceSuccess: 30 },
   'sync-city-news':            { label: 'City news sync',                maxHoursSinceSuccess: 16 },
   'sync-council-events':       { label: 'Council events',                maxHoursSinceSuccess: 30 },

@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: Request) {
   try { await requireAdmin() } catch { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
   const { source, mode } = await request.json().catch(() => ({})) as { source?: string; mode?: string }
-  const table = source ? MODE_TABLES[source as keyof typeof MODE_TABLES] : undefined
+  const table = source ? MODE_TABLES[source] : undefined
   if (!table || !mode || !['off', 'dry', 'live'].includes(mode)) return NextResponse.json({ error: 'Unknown source or mode' }, { status: 400 })
   const { error } = await createAdminClient().from(table as never).update({ mode } as never).eq('id', 1)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
