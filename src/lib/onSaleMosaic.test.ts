@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { rankOnSaleGroups, mosaicTileCount, pickOnSaleMosaic, venueSize } from './onSaleMosaic.ts'
+import { rankOnSaleGroups, mosaicTileCount, pickOnSaleMosaic, venueSize, isFixtureTitle } from './onSaleMosaic.ts'
 
 const g = (name: string, onsale: string, cap: number | null) => ({ name, onsale_date: onsale, events: [{ venue_capacity: cap }] })
 
@@ -34,5 +34,25 @@ describe('onSaleMosaic', () => {
     const picked = pickOnSaleMosaic(many)
     assert.equal(picked.length, 9)
     assert.equal(picked[0].name, 's19')
+  })
+})
+
+describe('football and other match fixtures stay out of the homepage block', () => {
+  const show = (name: string, title: string, venue: string) => ({ name, onsale_date: '2026-10-21', events: [{ title, venue_name: venue, venue_capacity: null }] })
+  test('isFixtureTitle: matches and clubs yes, tours and darts no', () => {
+    for (const t of ['Blackburn Rovers V Norwich City', 'Blackburn Rovers v Derby County', 'England vs Australia', 'Derby County FC', 'Women\'s Football: Lionesses'])
+      assert.equal(isFixtureTitle(t), true, t)
+    for (const t of ['Jack Johnson', 'BetMGM Premier League Darts', 'KENSHI YONEZU 2026-2027 WORLD TOUR / GHOST', 'Jimmy Carr - Killing Jokes', 'Dave: Live'])
+      assert.equal(isFixtureTitle(t), false, t)
+  })
+  test('the big Ewood Park fixtures no longer lead; real shows take the tiles', () => {
+    const picked = pickOnSaleMosaic([
+      show('Blackburn Rovers V Norwich City', 'Blackburn Rovers V Norwich City', 'Ewood Park'),
+      show('Blackburn Rovers v Derby County', 'Blackburn Rovers v Derby County', 'Ewood Park'),
+      show('Jack Johnson', 'Jack Johnson', 'The O2'),
+      show('Toto', 'Toto', 'Utilita Arena Birmingham'),
+      show('Small act', 'Small act', 'YES Basement'),
+    ])
+    assert.deepEqual(picked.map(p => p.name).sort(), ['Jack Johnson', 'Small act', 'Toto'])
   })
 })

@@ -17,7 +17,24 @@ export function venueSize(name: string | null | undefined, capacity: number | nu
   return 300
 }
 
-type RankableEvent = { venue_capacity?: number | null; venue_name?: string | null }
+type RankableEvent = { venue_capacity?: number | null; venue_name?: string | null; title?: string | null }
+
+// A match, not a show: "Blackburn Rovers v Norwich City", "England vs Australia", "Derby County FC".
+// Stadium fixtures rank top by venue size (Ewood Park looks like a 8,000-seat room) and would fill the
+// homepage block with a club's home games while real tours go on sale the same week. Darts, boxing and
+// other touring sport are not fixtures and are left alone.
+const FIXTURE_TITLE = /\s(?:v|vs\.?|versus)\s/i
+const FOOTBALL_TITLE = /\b(?:football|soccer|afc|fa cup|carabao cup|efl)\b|\bfc\b/i
+
+export function isFixtureTitle(title: string | null | undefined): boolean {
+  const t = title ?? ''
+  return FIXTURE_TITLE.test(t) || FOOTBALL_TITLE.test(t)
+}
+
+/** True when every date in the group is a match fixture. */
+export function isFixtureGroup(g: { events: RankableEvent[] }): boolean {
+  return g.events.length > 0 && g.events.every(e => isFixtureTitle(e.title))
+}
 
 /** Biggest venue first (a show at a 10,000-seat arena leads a 300-seat room), then the earliest sale. */
 export function rankOnSaleGroups<G extends Pick<OnSaleGroup, 'onsale_date'> & { events: RankableEvent[] }>(groups: G[]): G[] {
@@ -38,6 +55,6 @@ export function mosaicTileCount(available: number, max = 9): number {
 }
 
 export function pickOnSaleMosaic<G extends Pick<OnSaleGroup, 'onsale_date'> & { events: RankableEvent[] }>(groups: G[], max = 9): G[] {
-  const ranked = rankOnSaleGroups(groups)
+  const ranked = rankOnSaleGroups(groups.filter(g => !isFixtureGroup(g)))
   return ranked.slice(0, mosaicTileCount(ranked.length, max))
 }
