@@ -10,7 +10,7 @@
 import { extractArtistName } from './on-sale.ts'
 import { isBareProviderHomepage } from './intelligence.ts'
 import {
-  getTicketmasterAffiliateLink,
+  ticketmasterOutLink,
   getSeeTicketsAffiliateLink,
   getViagogoAffiliateLink,
   getStubHubAffiliateLink,
@@ -81,7 +81,7 @@ export function buildTonightTicketOffers(event: TonightTicketEvent, artists: Art
   const offers: TicketOffer[] = []
 
   if (event.tickets_url) {
-    offers.push({ kind: 'official', label: 'Find tickets', href: getTicketmasterAffiliateLink(event.tickets_url) })
+    offers.push({ kind: 'official', label: 'Find tickets', href: ticketmasterOutLink(event.tickets_url) })
   }
   if (event.own_ticket_url) {
     offers.push({ kind: 'direct', label: 'Check availability', href: event.own_ticket_url })

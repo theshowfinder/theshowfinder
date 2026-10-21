@@ -68,7 +68,7 @@ export async function loadLinkSamples(): Promise<LinkSample[]> {
   const t = tm.data?.[0]
   if (t) {
     const final = getTicketmasterAffiliateLink(t.tickets_url, `evt-${t.slug}`)
-    out.push({ provider: 'Ticketmaster', slug: t.slug, stored: t.tickets_url, final, tracked: final.startsWith('https://ticketmaster.evyy.net/c/'), how: 'Impact tracking link (ticketmaster.evyy.net)' })
+    out.push({ provider: 'Ticketmaster', slug: t.slug, stored: t.tickets_url, final, tracked: final.startsWith('https://ticketmaster.evyy.net/c/'), how: 'Own /out/tm hop (bots filtered out) that forwards to the Impact tracking link (ticketmaster.evyy.net)' })
   }
   const g = gb.data?.[0]
   if (g) {

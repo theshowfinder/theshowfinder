@@ -14,6 +14,17 @@ export function getTicketmasterAffiliateLink(destinationUrl: string, subId?: str
   return `https://ticketmaster.evyy.net/c/${IMPACT_PARTNER_ID}/${TICKETMASTER_CAMPAIGN_ID}/${TICKETMASTER_AD_ID}?u=${encoded}${sub ? `&subId1=${sub}` : ''}`
 }
 
+// The link public pages should carry for a Ticketmaster ticket button. It points
+// at our own /out/tm hop rather than at Impact, so crawlers and scrapers that follow
+// every link on a page never "click" the affiliate link (the route only forwards a
+// request that looks like a person in a browser). Use `absolute` where the link
+// leaves the site (share buttons, emails); on-page buttons use the relative path.
+export function ticketmasterOutLink(destinationUrl: string, subId?: string, absolute = false): string {
+  const sub = cleanSubId(subId)
+  const path = `/out/tm?u=${encodeURIComponent(destinationUrl)}${sub ? `&s=${sub}` : ''}`
+  return absolute ? `https://www.theshowfinder.com${path}` : path
+}
+
 // Tracking tags are limited to letters, digits, dash and underscore (so they can
 // never break the link or smuggle in extra parameters) and 50 characters.
 export function cleanSubId(value: string | null | undefined): string {

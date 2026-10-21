@@ -23,7 +23,7 @@ import { buildArtistShareText } from '@/lib/shareText'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import type { EventWithVenue } from '@/lib/types/database'
 import {
-  getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
+  ticketmasterOutLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
   getStubHubAffiliateLink, getGigsbergAffiliateLink, getVividSeatsAffiliateLink, getEventimAffiliateLink,
 } from '@/lib/affiliate'
 
@@ -239,7 +239,7 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
                       )}
                       {event.tickets_url && !isPast ? (
                         <TrackedTicketLink
-                          href={getTicketmasterAffiliateLink(event.tickets_url)}
+                          href={ticketmasterOutLink(event.tickets_url)}
                           provider="Ticketmaster"
                           section="primary"
                           context={slug}
@@ -276,7 +276,7 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
               {/* Primary ticket sources */}
               {(dbArtist?.tickets_url ?? firstTicketUrl) && (
                 <TrackedTicketLink
-                  href={getTicketmasterAffiliateLink(dbArtist?.tickets_url ?? firstTicketUrl!)}
+                  href={ticketmasterOutLink(dbArtist?.tickets_url ?? firstTicketUrl!)}
                   provider="Ticketmaster"
                   section="primary"
                   context={slug}

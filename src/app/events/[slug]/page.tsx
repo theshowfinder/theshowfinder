@@ -19,7 +19,7 @@ import { isRepeatPerformance } from '@/lib/repeatPerformances'
 import { idTailPattern, slugIdTail } from '@/lib/renamedEvents'
 import type { EventCategory, EventStatus } from '@/lib/types/database'
 import {
-  getTicketmasterAffiliateLink, getViagogoAffiliateLink, isTicketmasterCommissionEligible,
+  ticketmasterOutLink, getViagogoAffiliateLink, isTicketmasterCommissionEligible,
   getStubHubAffiliateLink, getGigsbergAffiliateLink, getSeeTicketsAffiliateLink,
 } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
@@ -235,7 +235,7 @@ const getRelatedEvents = cache(async (event: EventDetail, headlinerId: string | 
 
 function buildProviders(event: Pick<EventDetail, 'slug' | 'presale_start' | 'public_onsale_start' | 'onsale_date' | 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>) {
   const mainPrimary = event.tickets_url
-    ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: getTicketmasterAffiliateLink(event.tickets_url, `evt-${event.slug}`) }]
+    ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: ticketmasterOutLink(event.tickets_url, `evt-${event.slug}`) }]
     : event.gigsberg_affiliate_url
       ? [{ name: 'Gigsberg', tagline: event.gigsberg_inventory_status === 'available' ? 'Secondary-market tickets via Gigsberg' : 'Check availability on Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(event.gigsberg_affiliate_url) }]
     : []
@@ -543,7 +543,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     venue:         event.venue,
     priceFrom:     event.price_from,
     priceCurrency: event.currency,
-    offerUrl:      primary[0]?.href ?? canonicalUrl,
+    offerUrl:      canonicalUrl,
     validFrom:     saleDateUnreliable ? earliestOnSale(event.presale_start) : earliestOnSale(event.presale_start, event.public_onsale_start, event.onsale_date),
     performers:    headliners.map(h => h.artist?.name).filter((n): n is string => !!n),
   })
@@ -1066,7 +1066,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                     ? getSeeTicketsAffiliateLink(o.url, `evt-${event.slug}`)
                     : o.kind === 'gigsberg'
                       ? getGigsbergAffiliateLink(o.url)
-                      : getTicketmasterAffiliateLink(o.url, `evt-${o.fromSlug}`)
+                      : ticketmasterOutLink(o.url, `evt-${o.fromSlug}`)
                   const bg = o.kind === 'see_tickets' ? '#E4022D' : o.kind === 'gigsberg' ? '#1a1f6e' : '#026CDF'
                   return (
                     <TrackedTicketLink

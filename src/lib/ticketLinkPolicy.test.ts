@@ -48,7 +48,7 @@ describe('buildTonightTicketOffers', () => {
     assert.deepEqual(offers, [{
       kind: 'official',
       label: 'Find tickets',
-      href: 'https://ticketmaster.evyy.net/c/7328658/1965662/24023?u=https%3A%2F%2Fwww.ticketmaster.co.uk%2Fevent%2F123',
+      href: '/out/tm?u=https%3A%2F%2Fwww.ticketmaster.co.uk%2Fevent%2F123',
     }])
   })
 
@@ -112,7 +112,7 @@ describe('buildTonightTicketOffers', () => {
     assert.deepEqual(offers, [{
       kind: 'official',
       label: 'Find tickets',
-      href: 'https://ticketmaster.evyy.net/c/7328658/1965662/24023?u=https%3A%2F%2Fwww.ticketmaster.co.uk%2Fevent%2F999',
+      href: '/out/tm?u=https%3A%2F%2Fwww.ticketmaster.co.uk%2Fevent%2F999',
     }])
   })
 })

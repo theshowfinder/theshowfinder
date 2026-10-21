@@ -9,6 +9,7 @@ import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   getTicketmasterAffiliateLink,
+  ticketmasterOutLink,
   getSeeTicketsAffiliateLink,
   isAwinTrackingLink,
   wrapWithEnvTemplate,
@@ -32,6 +33,23 @@ describe('getTicketmasterAffiliateLink', () => {
     const link = getTicketmasterAffiliateLink('https://www.ticketmaster.co.uk/search?q=Donny Osmond')
     const encoded = link.split('?u=')[1]
     assert.equal(decodeURIComponent(encoded), 'https://www.ticketmaster.co.uk/search?q=Donny Osmond')
+  })
+})
+
+describe('ticketmasterOutLink', () => {
+  test('points at our own /out/tm hop, never at Impact', () => {
+    const link = ticketmasterOutLink('https://www.ticketmaster.co.uk/event/123', 'evt-abc')
+    assert.equal(link, '/out/tm?u=https%3A%2F%2Fwww.ticketmaster.co.uk%2Fevent%2F123&s=evt-abc')
+    assert.ok(!link.includes('evyy.net'))
+  })
+
+  test('leaves the tag out when there is none, and cleans an unsafe one', () => {
+    assert.ok(!ticketmasterOutLink('https://www.ticketmaster.co.uk/x').includes('&s='))
+    assert.ok(ticketmasterOutLink('https://www.ticketmaster.co.uk/x', 'a b&c=d').endsWith('&s=a-b-c-d'))
+  })
+
+  test('absolute form is used for share buttons', () => {
+    assert.ok(ticketmasterOutLink('https://www.ticketmaster.co.uk/x', undefined, true).startsWith('https://www.theshowfinder.com/out/tm?u='))
   })
 })
 

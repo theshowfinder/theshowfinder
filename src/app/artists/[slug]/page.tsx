@@ -7,7 +7,7 @@ import type { Metadata } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
 import type { Artist, Tour, TourDate } from '@/lib/types/database'
 import {
-  getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
+  ticketmasterOutLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
   getStubHubAffiliateLink, getGigsbergAffiliateLink, getVividSeatsAffiliateLink, getEventimAffiliateLink,
 } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
@@ -169,7 +169,6 @@ export default async function ArtistPage({ params }: PageProps) {
     : null
 
   const canonicalUrl = `https://www.theshowfinder.com/artists/${artist.slug}`
-  const artistTicketUrl = artist.tickets_url ? getTicketmasterAffiliateLink(artist.tickets_url) : canonicalUrl
 
   // One MusicEvent per upcoming date, bundled under a single @graph — this is
   // what lets an artist page surface as a rich "tour dates" result in Google.
@@ -199,7 +198,7 @@ export default async function ArtistPage({ params }: PageProps) {
     image: [artistPhoto ? new URL(artistPhoto, SITE_IMAGE_URL).toString() : SITE_IMAGE_URL],
     offers: {
       '@type':       'Offer',
-      url:            artist.tickets_url ? artistTicketUrl : canonicalUrl,
+      url:            canonicalUrl,
       priceCurrency:  'GBP',
       availability:   'https://schema.org/InStock',
       ...(earliestOnSale(artist.onsale_date) ? { validFrom: earliestOnSale(artist.onsale_date) } : {}),
@@ -508,7 +507,7 @@ export default async function ArtistPage({ params }: PageProps) {
               {artist.tickets_url && (
                 <div>
                   <TrackedTicketLink
-                    href={getTicketmasterAffiliateLink(artist.tickets_url)}
+                    href={ticketmasterOutLink(artist.tickets_url)}
                     provider="Ticketmaster"
                     section="primary"
                     context={artist.slug}
@@ -518,7 +517,7 @@ export default async function ArtistPage({ params }: PageProps) {
                     Get Tickets
                   </TrackedTicketLink>
                   <div className="mt-2 flex justify-center">
-                    <CopyLinkButton link={getTicketmasterAffiliateLink(artist.tickets_url)} label="Share with friends" />
+                    <CopyLinkButton link={ticketmasterOutLink(artist.tickets_url, undefined, true)} label="Share with friends" />
                   </div>
                 </div>
               )}
