@@ -101,11 +101,23 @@ describe('isTicketmasterDestination', () => {
     assert.ok(isTicketmasterDestination('https://www.ticketmaster.com/x'))
   })
 
+  test('accepts every kind of host our live event links actually use', () => {
+    for (const u of [
+      'https://theatre.ticketmaster.co.uk/event/1', 'https://attractions.ticketmaster.co.uk/x', 'https://comedy.ticketmaster.co.uk/x',
+      'https://www.universe.com/events/tom-mcrae-tickets-PKNDRM?ref=ticketmaster', 'https://www.ticketweb.uk/event/1', 'https://www.ticketweb.co.uk/event/1',
+      'https://www.eticketing.co.uk/x', 'https://app.bundl.travel/x', 'https://www.eventtravel.com/x',
+      'https://nationschampionshiprugby.tmtickets.co.uk/', 'https://www.ticketmastergiftcard.com/',
+    ]) {
+      assert.ok(isTicketmasterDestination(u), u)
+    }
+  })
+
   test('rejects anything else, so it can never be an open redirect', () => {
     for (const bad of [
       '', null, undefined, 'not a url', 'javascript:alert(1)', 'https://evil.example/ticketmaster.co.uk',
       'https://ticketmaster.co.uk.evil.example/x', 'https://evilticketmaster.co.uk/x',
       'https://user:pw@www.ticketmaster.co.uk/x', 'https://www.viagogo.co.uk/x', '//evil.example', '/events/x',
+      'https://evil-universe.com/x', 'https://universe.com.evil.example/x', 'https://eticketing.co.uk.evil.example/', 'https://notbundl.travel/x',
     ]) {
       assert.equal(isTicketmasterDestination(bad as string | null | undefined), false, String(bad))
     }

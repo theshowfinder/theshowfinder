@@ -51,8 +51,22 @@ export function automatedRequestReason(req: OutboundRequestLike): string | null 
   return null
 }
 
-// The redirect may only ever lead to a Ticketmaster page, so it can never be used
-// as an open redirect to some other site.
+// The redirect may only lead to a ticket page that Ticketmaster's own feed gives us, so
+// it can never be used as an open redirect to some other site. The hosts below are
+// every host that appears in our live data (checked 21 Oct 2026): Ticketmaster itself
+// plus the Ticketmaster-owned or Ticketmaster-feed ticketing sites it sends us to
+// (Universe, TicketWeb, tmtickets event shops, eticketing, travel-package partners).
+// A host not listed here gets a 400, which is a dead button, so when the live data
+// shows a new one (the admin Feeds page and the out_tm logs show 'invalid'), add it.
+const ALLOWED_DESTINATION_HOSTS = [
+  'ticketmaster.co.uk', 'ticketmaster.ie', 'ticketmaster.com', 'ticketmaster.de', 'ticketmaster.es', 'ticketmaster.fr',
+  'ticketmastergiftcard.com', 'tmtickets.co.uk',
+  'universe.com',
+  'ticketweb.uk', 'ticketweb.co.uk', 'ticketweb.com',
+  'livenation.co.uk', 'livenation.com',
+  'eticketing.co.uk', 'bundl.travel', 'eventtravel.com',
+]
+
 export function isTicketmasterDestination(value: string | null | undefined): boolean {
   if (!value) return false
   let url: URL
@@ -64,9 +78,7 @@ export function isTicketmasterDestination(value: string | null | undefined): boo
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return false
   if (url.username || url.password) return false
   const host = url.hostname.toLowerCase()
-  return host === 'ticketmaster.co.uk' || host.endsWith('.ticketmaster.co.uk')
-    || host === 'ticketmaster.com' || host.endsWith('.ticketmaster.com')
-    || host === 'ticketmaster.ie' || host.endsWith('.ticketmaster.ie')
+  return ALLOWED_DESTINATION_HOSTS.some(h => host === h || host.endsWith(`.${h}`))
 }
 
 export type OutboundDecision =
