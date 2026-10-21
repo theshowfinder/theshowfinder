@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { automatedRequestReason, isTicketmasterDestination, decideOutbound } from './outboundGuard.ts'
+import { automatedRequestReason, isTicketmasterDestination, decideOutbound, decideProviderOutbound, isAllowedDestination } from './outboundGuard.ts'
 
 const CHROME = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36'
 const SAFARI_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'
@@ -187,5 +187,61 @@ describe('decideOutbound', () => {
   test('only a non-Ticketmaster destination is refused', () => {
     assert.equal(decideOutbound(req(person), 'https://evil.example/x').kind, 'invalid')
     assert.equal(decideOutbound(req(person), null).kind, 'invalid')
+  })
+})
+
+describe('other providers: See Tickets (Awin), Gigsberg, resale sites', () => {
+  const bot = req({ ...person, 'User-Agent': 'Mozilla/5.0 (compatible; PerplexityBot/1.0)' })
+  const pclick = 'https://www.awin1.com/pclick.php?p=40510475737&a=2896631&m=7816'
+  const stPage = 'https://www.seetickets.com/event/deirdre-o-kane/steamworks/3709373?aff=aw'
+  const stTour = 'https://www.seetickets.com/n/tour/the-play-that-goes-wrong/1234'
+  const gb = 'https://www.gigsberg.com/event/coldplay-wembley-123?aff=showfinder'
+
+  test('accepts the link shapes in our live data, and only ours', () => {
+    for (const [p, u] of [['st', pclick], ['st', stPage], ['st', stTour], ['gb', gb], ['gb', 'https://gigsberg.com/x'],
+      ['vg', 'https://www.viagogo.co.uk/ww/SearchResults?q=x'], ['sh', 'https://www.stubhub.co.uk/x'], ['vs', 'https://www.vividseats.com/x'], ['ev', 'https://www.eventim.co.uk/x']] as const) {
+      assert.ok(isAllowedDestination(p, u), `${p} ${u}`)
+    }
+    for (const [p, u] of [
+      ['st', 'https://www.awin1.com/pclick.php?p=1&a=999999&m=7816'],      // another publisher's link
+      ['st', 'https://www.awin1.com/pclick.php?p=1&a=2896631&m=1234'],     // another merchant
+      ['st', 'https://www.awin1.com/somethingelse.php?a=2896631&m=7816'],
+      ['st', 'https://evilseetickets.com/x'], ['gb', 'https://gigsberg.com.evil.example/x'],
+      ['gb', 'https://www.ticketmaster.co.uk/x'], ['vg', 'https://www.stubhub.co.uk/x'],
+    ] as const) {
+      assert.equal(isAllowedDestination(p, u), false, `${p} ${u}`)
+    }
+  })
+
+  test('See Tickets: a person goes through Awin with the event tag', () => {
+    const d1 = decideProviderOutbound('st', req(person), pclick, 'evt-abc')
+    assert.ok(d1.kind === 'redirect' && d1.tracked && d1.location === `${pclick}&clickref=evt-abc`)
+    const d2 = decideProviderOutbound('st', req(person), stTour, 'evt-abc')
+    assert.ok(d2.kind === 'redirect' && d2.tracked && d2.location.startsWith('https://www.awin1.com/cread.php?awinmid=7816&awinaffid=2896631&ued='))
+  })
+
+  test('See Tickets: a bot never reaches Awin', () => {
+    const d1 = decideProviderOutbound('st', bot, pclick, 'evt-abc')
+    assert.deepEqual(d1, { kind: 'lookup-plain', destination: pclick, reason: 'automated-user-agent' })
+    const d2 = decideProviderOutbound('st', bot, stPage)
+    assert.ok(d2.kind === 'redirect' && !d2.tracked && d2.location === 'https://www.seetickets.com/event/deirdre-o-kane/steamworks/3709373')
+    const cread = `https://www.awin1.com/cread.php?awinmid=7816&awinaffid=2896631&ued=${encodeURIComponent(stTour)}`
+    const d3 = decideProviderOutbound('st', bot, cread)
+    assert.ok(d3.kind === 'redirect' && !d3.tracked && d3.location === stTour)
+  })
+
+  test('Gigsberg: a person gets the aff tag, a bot does not', () => {
+    const p = decideProviderOutbound('gb', req(person), 'https://www.gigsberg.com/event/x-1')
+    assert.ok(p.kind === 'redirect' && p.tracked && p.location === 'https://www.gigsberg.com/event/x-1?aff=showfinder')
+    const b = decideProviderOutbound('gb', bot, gb)
+    assert.ok(b.kind === 'redirect' && !b.tracked && b.location === 'https://www.gigsberg.com/event/coldplay-wembley-123')
+  })
+
+  test('resale sites without a programme yet: everyone reaches the same page', () => {
+    const u = 'https://www.viagogo.co.uk/ww/SearchResults?q=x'
+    const p = decideProviderOutbound('vg', req(person), u)
+    const b = decideProviderOutbound('vg', bot, u)
+    assert.ok(p.kind === 'redirect' && p.location === u)
+    assert.ok(b.kind === 'redirect' && b.location === u && !b.tracked)
   })
 })

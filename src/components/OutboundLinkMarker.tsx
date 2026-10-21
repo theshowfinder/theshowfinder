@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 
-// Marks a Ticketmaster button as clicked by a person.
+// Marks an affiliate ticket button (/out/<provider>) as clicked by a person.
 //
 // Ticketmaster buttons point at our own /out/tm redirect. When someone presses,
 // taps, focuses or right-clicks one of those links, this adds `h=1` to the link
@@ -25,7 +25,7 @@ export default function OutboundLinkMarker() {
       } catch {
         return
       }
-      if (url.origin !== window.location.origin || url.pathname !== '/out/tm' || url.searchParams.get('h') === '1') return
+      if (url.origin !== window.location.origin || !url.pathname.startsWith('/out/') || url.searchParams.get('h') === '1') return
       url.searchParams.set('h', '1')
       link.href = url.toString()
     }

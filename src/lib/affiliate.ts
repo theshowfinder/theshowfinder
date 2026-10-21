@@ -14,15 +14,20 @@ export function getTicketmasterAffiliateLink(destinationUrl: string, subId?: str
   return `https://ticketmaster.evyy.net/c/${IMPACT_PARTNER_ID}/${TICKETMASTER_CAMPAIGN_ID}/${TICKETMASTER_AD_ID}?u=${encoded}${sub ? `&subId1=${sub}` : ''}`
 }
 
-// The link public pages should carry for a Ticketmaster ticket button. It points
-// at our own /out/tm hop rather than at Impact, so crawlers and scrapers that follow
-// every link on a page never "click" the affiliate link (the route only forwards a
-// request that looks like a person in a browser). Use `absolute` where the link
-// leaves the site (share buttons, emails); on-page buttons use the relative path.
-export function ticketmasterOutLink(destinationUrl: string, subId?: string, absolute = false): string {
+// The link public pages carry on an affiliate ticket button: our own /out/<provider>
+// hop instead of the affiliate network's link, so crawlers and scrapers that follow
+// every link on a page never "click" the affiliate link (the route only sends a
+// request that looks like a person in a browser through the affiliate link; anything
+// else goes to the plain page). Providers: tm Ticketmaster, st See Tickets, gb
+// Gigsberg, vg Viagogo, sh StubHub, vs Vivid Seats, ev Eventim. Use `absolute` where
+// the link leaves the site (share buttons); on-page buttons use the relative path.
+export function outLink(provider: 'tm' | 'st' | 'gb' | 'vg' | 'sh' | 'vs' | 'ev', destinationUrl: string, subId?: string, absolute = false): string {
   const sub = cleanSubId(subId)
-  const path = `/out/tm?u=${encodeURIComponent(destinationUrl)}${sub ? `&s=${sub}` : ''}`
+  const path = `/out/${provider}?u=${encodeURIComponent(destinationUrl)}${sub ? `&s=${sub}` : ''}`
   return absolute ? `https://www.theshowfinder.com${path}` : path
+}
+export function ticketmasterOutLink(destinationUrl: string, subId?: string, absolute = false): string {
+  return outLink('tm', destinationUrl, subId, absolute)
 }
 
 // Tracking tags are limited to letters, digits, dash and underscore (so they can

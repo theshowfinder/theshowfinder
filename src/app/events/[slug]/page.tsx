@@ -18,10 +18,7 @@ import { createPublicClient } from '@/lib/supabase/public'
 import { isRepeatPerformance } from '@/lib/repeatPerformances'
 import { idTailPattern, slugIdTail } from '@/lib/renamedEvents'
 import type { EventCategory, EventStatus } from '@/lib/types/database'
-import {
-  ticketmasterOutLink, getViagogoAffiliateLink, isTicketmasterCommissionEligible,
-  getStubHubAffiliateLink, getGigsbergAffiliateLink, getSeeTicketsAffiliateLink,
-} from '@/lib/affiliate'
+import { ticketmasterOutLink, isTicketmasterCommissionEligible, outLink } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { jsonLdScript, buildEventSchema, buildBreadcrumbSchema, earliestOnSale } from '@/lib/jsonld'
@@ -237,13 +234,13 @@ function buildProviders(event: Pick<EventDetail, 'slug' | 'presale_start' | 'pub
   const mainPrimary = event.tickets_url
     ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: ticketmasterOutLink(event.tickets_url, `evt-${event.slug}`) }]
     : event.gigsberg_affiliate_url
-      ? [{ name: 'Gigsberg', tagline: event.gigsberg_inventory_status === 'available' ? 'Secondary-market tickets via Gigsberg' : 'Check availability on Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(event.gigsberg_affiliate_url) }]
+      ? [{ name: 'Gigsberg', tagline: event.gigsberg_inventory_status === 'available' ? 'Secondary-market tickets via Gigsberg' : 'Check availability on Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_affiliate_url) }]
     : []
   // See Tickets is an official booking agent (primary, not resale), and it is
   // the only affiliate partner for West End runs — list it with the primary
   // sellers so those pages lead with it.
   const seeTickets = event.see_tickets_affiliate_url
-    ? [{ name: 'See Tickets', tagline: isSeeTicketsRunPage(event.see_tickets_affiliate_url) ? 'Official booking agent · pick your date on their page' : 'Official booking agent', bg: '#E4022D', href: getSeeTicketsAffiliateLink(event.see_tickets_affiliate_url, `evt-${event.slug}`) }]
+    ? [{ name: 'See Tickets', tagline: isSeeTicketsRunPage(event.see_tickets_affiliate_url) ? 'Official booking agent · pick your date on their page' : 'Official booking agent', bg: '#E4022D', href: outLink('st', event.see_tickets_affiliate_url, `evt-${event.slug}`) }]
     : []
   // Ticketmaster pays no commission during presale and the first 24 hours of
   // general on-sale. In that window, when See Tickets (the official booking agent,
@@ -253,10 +250,10 @@ function buildProviders(event: Pick<EventDetail, 'slug' | 'presale_start' | 'pub
     ? [...seeTickets, ...mainPrimary]
     : [...mainPrimary, ...seeTickets]
   const resale = [
-    ...(event.tickets_url && event.gigsberg_affiliate_url ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(event.gigsberg_affiliate_url) }] : []),
-    ...(!event.tickets_url && !event.gigsberg_affiliate_url && event.gigsberg_url && !isBareProviderHomepage(event.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(event.gigsberg_url) }] : []),
-    ...(event.viagogo_url && !isBareProviderHomepage(event.viagogo_url) ? [{ name: 'Viagogo', bg: '#00a650', href: getViagogoAffiliateLink(event.viagogo_url) }] : []),
-    ...(event.stubhub_url && !isBareProviderHomepage(event.stubhub_url) ? [{ name: 'StubHub', bg: '#400078', href: getStubHubAffiliateLink(event.stubhub_url) }] : []),
+    ...(event.tickets_url && event.gigsberg_affiliate_url ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_affiliate_url) }] : []),
+    ...(!event.tickets_url && !event.gigsberg_affiliate_url && event.gigsberg_url && !isBareProviderHomepage(event.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_url) }] : []),
+    ...(event.viagogo_url && !isBareProviderHomepage(event.viagogo_url) ? [{ name: 'Viagogo', bg: '#00a650', href: outLink('vg', event.viagogo_url) }] : []),
+    ...(event.stubhub_url && !isBareProviderHomepage(event.stubhub_url) ? [{ name: 'StubHub', bg: '#400078', href: outLink('sh', event.stubhub_url) }] : []),
   ]
   return { primary, resale }
 }
@@ -1063,9 +1060,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <div className="grid grid-cols-2 gap-3">
                 {grouping.offers.map(o => {
                   const href = o.kind === 'see_tickets'
-                    ? getSeeTicketsAffiliateLink(o.url, `evt-${event.slug}`)
+                    ? outLink('st', o.url, `evt-${event.slug}`)
                     : o.kind === 'gigsberg'
-                      ? getGigsbergAffiliateLink(o.url)
+                      ? outLink('gb', o.url)
                       : ticketmasterOutLink(o.url, `evt-${o.fromSlug}`)
                   const bg = o.kind === 'see_tickets' ? '#E4022D' : o.kind === 'gigsberg' ? '#1a1f6e' : '#026CDF'
                   return (

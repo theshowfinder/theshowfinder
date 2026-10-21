@@ -1,4 +1,4 @@
-import { getTicketmasterAffiliateLink } from '@/lib/affiliate'
+import { ticketmasterOutLink } from '@/lib/affiliate'
 
 export interface DigestEvent {
   title: string
@@ -166,7 +166,7 @@ export default function WeeklyDigest({ events, weekOf }: Props) {
                                         {event.tickets_url && (
                                           <td style={{ paddingLeft: '10px' }}>
                                             <a
-                                              href={getTicketmasterAffiliateLink(event.tickets_url)}
+                                              href={ticketmasterOutLink(event.tickets_url, 'digest', true)}
                                               style={{
                                                 display: 'inline-block',
                                                 backgroundColor: '#F5F5F0',

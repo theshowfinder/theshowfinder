@@ -9,15 +9,7 @@
 
 import { extractArtistName } from './on-sale.ts'
 import { isBareProviderHomepage } from './intelligence.ts'
-import {
-  ticketmasterOutLink,
-  getSeeTicketsAffiliateLink,
-  getViagogoAffiliateLink,
-  getStubHubAffiliateLink,
-  getGigsbergAffiliateLink,
-  getVividSeatsAffiliateLink,
-  getEventimAffiliateLink,
-} from './affiliate.ts'
+import { ticketmasterOutLink, outLink } from './affiliate.ts'
 import type { Artist } from './types/database'
 
 export interface TonightTicketEvent {
@@ -55,12 +47,12 @@ const RESALE_FIELDS: (keyof Pick<
 
 function affiliateUrl(field: string, url: string): string {
   switch (field) {
-    case 'viagogo_url': return getViagogoAffiliateLink(url)
-    case 'stubhub_url': return getStubHubAffiliateLink(url)
-    case 'gigsberg_url': return getGigsbergAffiliateLink(url)
-    case 'vivid_seats_url': return getVividSeatsAffiliateLink(url)
-    case 'see_tickets_url': return getSeeTicketsAffiliateLink(url)
-    case 'eventim_url': return getEventimAffiliateLink(url)
+    case 'viagogo_url': return outLink('vg', url)
+    case 'stubhub_url': return outLink('sh', url)
+    case 'gigsberg_url': return outLink('gb', url)
+    case 'vivid_seats_url': return outLink('vs', url)
+    case 'see_tickets_url': return outLink('st', url)
+    case 'eventim_url': return outLink('ev', url)
     default: return url
   }
 }

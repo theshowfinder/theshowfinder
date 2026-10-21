@@ -3,7 +3,7 @@ import type { Show } from '@/lib/shows'
 import { eventImageUrl } from '@/lib/eventImages'
 import type { EventCategory } from '@/lib/types/database'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
-import { getSeeTicketsAffiliateLink } from '@/lib/affiliate'
+import { outLink } from '@/lib/affiliate'
 import { seeTicketsUrlForShow } from '@/lib/seeTicketsWestEnd'
 
 function formatDate(iso: string) {
@@ -90,7 +90,7 @@ export default function ShowCard({ show, kind }: Props) {
 
         {seeTicketsUrl && !soldOut && (
           <TrackedTicketLink
-            href={getSeeTicketsAffiliateLink(seeTicketsUrl)}
+            href={outLink('st', seeTicketsUrl)}
             provider="See Tickets"
             section="primary"
             context={`west-end-card:${show.slug}`}

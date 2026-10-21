@@ -22,10 +22,7 @@ import { ArtistsInCity, SimilarArtists } from '@/components/RelatedArtists'
 import { buildArtistShareText } from '@/lib/shareText'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import type { EventWithVenue } from '@/lib/types/database'
-import {
-  ticketmasterOutLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
-  getStubHubAffiliateLink, getGigsbergAffiliateLink, getVividSeatsAffiliateLink, getEventimAffiliateLink,
-} from '@/lib/affiliate'
+import { ticketmasterOutLink, outLink } from '@/lib/affiliate'
 
 interface PageProps {
   params: Promise<{ slug: string }>
@@ -118,10 +115,10 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
 
   // Secondary market links using artist name
   const secondaryMarket = [
-    dbArtist?.gigsberg_url && !isBareProviderHomepage(dbArtist.gigsberg_url) ? { name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(dbArtist.gigsberg_url) } : null,
-    dbArtist?.viagogo_url && !isBareProviderHomepage(dbArtist.viagogo_url) ? { name: 'Viagogo', bg: '#00a650', href: getViagogoAffiliateLink(dbArtist.viagogo_url) } : null,
-    dbArtist?.stubhub_url && !isBareProviderHomepage(dbArtist.stubhub_url) ? { name: 'StubHub', bg: '#400078', href: getStubHubAffiliateLink(dbArtist.stubhub_url) } : null,
-    dbArtist?.vivid_seats_url && !isBareProviderHomepage(dbArtist.vivid_seats_url) ? { name: 'Vivid Seats', bg: '#02044a', href: getVividSeatsAffiliateLink(dbArtist.vivid_seats_url) } : null,
+    dbArtist?.gigsberg_url && !isBareProviderHomepage(dbArtist.gigsberg_url) ? { name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', dbArtist.gigsberg_url) } : null,
+    dbArtist?.viagogo_url && !isBareProviderHomepage(dbArtist.viagogo_url) ? { name: 'Viagogo', bg: '#00a650', href: outLink('vg', dbArtist.viagogo_url) } : null,
+    dbArtist?.stubhub_url && !isBareProviderHomepage(dbArtist.stubhub_url) ? { name: 'StubHub', bg: '#400078', href: outLink('sh', dbArtist.stubhub_url) } : null,
+    dbArtist?.vivid_seats_url && !isBareProviderHomepage(dbArtist.vivid_seats_url) ? { name: 'Vivid Seats', bg: '#02044a', href: outLink('vs', dbArtist.vivid_seats_url) } : null,
   ].filter((offer): offer is { name: string; bg: string; href: string } => offer !== null)
 
   return (
@@ -287,14 +284,14 @@ export default async function OnSaleArtistPage({ params }: PageProps) {
                 </TrackedTicketLink>
               )}
               {dbArtist?.see_tickets_url && (
-                <TrackedTicketLink href={getSeeTicketsAffiliateLink(dbArtist.see_tickets_url)} provider="See Tickets" section="primary" context={slug}
+                <TrackedTicketLink href={outLink('st', dbArtist.see_tickets_url)} provider="See Tickets" section="primary" context={slug}
                   className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: '#e4022d' }}>
                   See Tickets
                 </TrackedTicketLink>
               )}
               {dbArtist?.eventim_url && (
-                <TrackedTicketLink href={getEventimAffiliateLink(dbArtist.eventim_url)} provider="Eventim" section="primary" context={slug}
+                <TrackedTicketLink href={outLink('ev', dbArtist.eventim_url)} provider="Eventim" section="primary" context={slug}
                   className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: '#00a4e0' }}>
                   Eventim

@@ -6,10 +6,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
 import type { Artist, Tour, TourDate } from '@/lib/types/database'
-import {
-  ticketmasterOutLink, getSeeTicketsAffiliateLink, getViagogoAffiliateLink,
-  getStubHubAffiliateLink, getGigsbergAffiliateLink, getVividSeatsAffiliateLink, getEventimAffiliateLink,
-} from '@/lib/affiliate'
+import { ticketmasterOutLink, outLink } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { jsonLdScript, buildBreadcrumbSchema, fallbackEventDescription, earliestOnSale, SITE_IMAGE_URL } from '@/lib/jsonld'
@@ -524,7 +521,7 @@ export default async function ArtistPage({ params }: PageProps) {
               {artist.see_tickets_url && (
                 <div>
                   <TrackedTicketLink
-                    href={getSeeTicketsAffiliateLink(artist.see_tickets_url)}
+                    href={outLink('st', artist.see_tickets_url)}
                     provider="See Tickets"
                     section="primary"
                     context={artist.slug}
@@ -534,13 +531,13 @@ export default async function ArtistPage({ params }: PageProps) {
                     See Tickets
                   </TrackedTicketLink>
                   <div className="mt-2 flex justify-center">
-                    <CopyLinkButton link={getSeeTicketsAffiliateLink(artist.see_tickets_url)} label="Share with friends" />
+                    <CopyLinkButton link={outLink('st', artist.see_tickets_url, undefined, true)} label="Share with friends" />
                   </div>
                 </div>
               )}
               {artist.eventim_url && (
                 <TrackedTicketLink
-                  href={getEventimAffiliateLink(artist.eventim_url)}
+                  href={outLink('ev', artist.eventim_url)}
                   provider="Eventim"
                   section="primary"
                   context={artist.slug}
@@ -599,19 +596,19 @@ export default async function ArtistPage({ params }: PageProps) {
 
               {/* Secondary market */}
               {[
-                artist.gigsberg_url && !isBareProviderHomepage(artist.gigsberg_url) ? { name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(artist.gigsberg_url) } : null,
-                artist.viagogo_url && !isBareProviderHomepage(artist.viagogo_url) ? { name: 'Viagogo', bg: '#00a650', href: getViagogoAffiliateLink(artist.viagogo_url) } : null,
-                artist.stubhub_url && !isBareProviderHomepage(artist.stubhub_url) ? { name: 'StubHub', bg: '#400078', href: getStubHubAffiliateLink(artist.stubhub_url) } : null,
-                artist.vivid_seats_url && !isBareProviderHomepage(artist.vivid_seats_url) ? { name: 'Vivid Seats', bg: '#02044a', href: getVividSeatsAffiliateLink(artist.vivid_seats_url) } : null,
+                artist.gigsberg_url && !isBareProviderHomepage(artist.gigsberg_url) ? { name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', artist.gigsberg_url) } : null,
+                artist.viagogo_url && !isBareProviderHomepage(artist.viagogo_url) ? { name: 'Viagogo', bg: '#00a650', href: outLink('vg', artist.viagogo_url) } : null,
+                artist.stubhub_url && !isBareProviderHomepage(artist.stubhub_url) ? { name: 'StubHub', bg: '#400078', href: outLink('sh', artist.stubhub_url) } : null,
+                artist.vivid_seats_url && !isBareProviderHomepage(artist.vivid_seats_url) ? { name: 'Vivid Seats', bg: '#02044a', href: outLink('vs', artist.vivid_seats_url) } : null,
               ].filter(Boolean).length > 0 && <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                 <h3 className="font-bold text-slate-900 mb-0.5">Available Now</h3>
                 <p className="text-xs text-slate-400 mb-4">Tickets available on secondary market</p>
                 <div className="space-y-2">
                   {[
-                    ...(artist.gigsberg_url && !isBareProviderHomepage(artist.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: getGigsbergAffiliateLink(artist.gigsberg_url) }] : []),
-                    ...(artist.viagogo_url && !isBareProviderHomepage(artist.viagogo_url) ? [{ name: 'Viagogo', bg: '#00a650', href: getViagogoAffiliateLink(artist.viagogo_url) }] : []),
-                    ...(artist.stubhub_url && !isBareProviderHomepage(artist.stubhub_url) ? [{ name: 'StubHub', bg: '#400078', href: getStubHubAffiliateLink(artist.stubhub_url) }] : []),
-                    ...(artist.vivid_seats_url && !isBareProviderHomepage(artist.vivid_seats_url) ? [{ name: 'Vivid Seats', bg: '#02044a', href: getVividSeatsAffiliateLink(artist.vivid_seats_url) }] : []),
+                    ...(artist.gigsberg_url && !isBareProviderHomepage(artist.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', artist.gigsberg_url) }] : []),
+                    ...(artist.viagogo_url && !isBareProviderHomepage(artist.viagogo_url) ? [{ name: 'Viagogo', bg: '#00a650', href: outLink('vg', artist.viagogo_url) }] : []),
+                    ...(artist.stubhub_url && !isBareProviderHomepage(artist.stubhub_url) ? [{ name: 'StubHub', bg: '#400078', href: outLink('sh', artist.stubhub_url) }] : []),
+                    ...(artist.vivid_seats_url && !isBareProviderHomepage(artist.vivid_seats_url) ? [{ name: 'Vivid Seats', bg: '#02044a', href: outLink('vs', artist.vivid_seats_url) }] : []),
                   ].map(({ name, bg, href }) => (
                     <TrackedTicketLink
                       key={name}

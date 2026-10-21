@@ -66,7 +66,7 @@ describe('buildTonightTicketOffers', () => {
       { title: 'Coldplay | Music of the Spheres', tickets_url: null, own_ticket_url: null },
       artists,
     )
-    assert.deepEqual(offers, [{ kind: 'resale', label: 'Resale tickets', href: 'https://www.viagogo.co.uk/ww/SearchResults?q=Coldplay+2026' }])
+    assert.deepEqual(offers, [{ kind: 'resale', label: 'Resale tickets', href: '/out/vg?u=https%3A%2F%2Fwww.viagogo.co.uk%2Fww%2FSearchResults%3Fq%3DColdplay%2B2026' }])
   })
 
   test('headliner’s only resale link is a bare provider homepage — excluded, never shown as a resale offer', () => {
@@ -88,7 +88,7 @@ describe('buildTonightTicketOffers', () => {
       { title: 'Coldplay | Music of the Spheres', tickets_url: null, own_ticket_url: null },
       artists,
     )
-    assert.deepEqual(offers, [{ kind: 'resale', label: 'Resale tickets', href: 'https://www.stubhub.co.uk/coldplay-tickets' }])
+    assert.deepEqual(offers, [{ kind: 'resale', label: 'Resale tickets', href: '/out/sh?u=https%3A%2F%2Fwww.stubhub.co.uk%2Fcoldplay-tickets' }])
   })
 
   test('all three offers can coexist, official first then direct then resale', () => {

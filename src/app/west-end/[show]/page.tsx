@@ -17,7 +17,7 @@ import ShowCard from '@/components/ShowCard'
 import { getWestEndShows } from '@/lib/showPool'
 import { eventImageUrl } from '@/lib/eventImages'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
-import { getSeeTicketsAffiliateLink } from '@/lib/affiliate'
+import { outLink } from '@/lib/affiliate'
 import { seeTicketsUrlForShow } from '@/lib/seeTicketsWestEnd'
 import NewsletterInline from '@/components/NewsletterInline'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
@@ -132,7 +132,7 @@ export default async function WestEndShowPage({ params }: { params: Promise<{ sh
             <div className="flex flex-col sm:flex-row gap-3">
               {seeTicketsUrl && (
                 <TrackedTicketLink
-                  href={getSeeTicketsAffiliateLink(seeTicketsUrl)}
+                  href={outLink('st', seeTicketsUrl)}
                   provider="See Tickets"
                   section="hero_cta"
                   context={`west-end-show:${show.slug}`}
@@ -167,7 +167,7 @@ export default async function WestEndShowPage({ params }: { params: Promise<{ sh
             <p className="text-slate-600 text-sm mb-6 max-w-2xl">
               Can&apos;t see the date you want? Booking periods open in stages, so some dates may not be listed yet.{' '}
               <TrackedTicketLink
-                href={getSeeTicketsAffiliateLink(seeTicketsUrl)}
+                href={outLink('st', seeTicketsUrl)}
                 provider="See Tickets"
                 section="primary"
                 context={`west-end-show-calendar:${show.slug}`}
