@@ -9,8 +9,12 @@
 // looks like a person clicking a link in a browser.
 
 // Words that appear in the user-agent of crawlers, scrapers, HTTP libraries,
-// link-preview fetchers, uptime monitors and headless browsers.
-const AUTOMATED_UA = /bot|crawl|spider|slurp|scrape|fetch|monitor|check|probe|scan|preview|archiver|validator|analy[sz]|lighthouse|pagespeed|headless|phantom|puppeteer|playwright|selenium|curl|wget|httpie|python|requests|aiohttp|httpx|urllib|libwww|java\/|apache-http|okhttp|go-http|node-fetch|axios|undici|got\(|postman|insomnia|facebookexternalhit|whatsapp|telegram|discord|slack|twitter|linkedin|skype|bingpreview|google-read-aloud|petalsearch|yandex|baidu|duckduck|semrush|ahrefs|mj12|dotbot|bytespider|gptbot|claude|anthropic|perplexity|ccbot|amazon/i
+// link-preview fetchers, uptime monitors and headless browsers. Deliberately does
+// NOT list app names (Instagram, Facebook, Twitter/X, LinkedIn, TikTok, Telegram,
+// Slack, Discord): their in-app browsers carry those names, and real people reach
+// us from social posts that way. Their preview fetchers (Twitterbot, Slackbot...)
+// are caught by 'bot'.
+const AUTOMATED_UA = /bot|crawl|spider|slurp|scrape|fetch|monitor|check|probe|scan|preview|archiver|validator|analy[sz]|lighthouse|pagespeed|headless|phantom|puppeteer|playwright|selenium|curl|wget|httpie|python|requests|aiohttp|httpx|urllib|libwww|java\/|apache-http|okhttp|go-http|node-fetch|axios|undici|got\(|postman|insomnia|facebookexternalhit|whatsapp|bingpreview|google-read-aloud|petalsearch|yandex|baidu|duckduck|semrush|ahrefs|mj12|dotbot|bytespider|gptbot|claude|anthropic|perplexity|ccbot|amazon/i
 
 export interface OutboundRequestLike {
   method: string

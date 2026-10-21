@@ -44,6 +44,27 @@ describe('automatedRequestReason', () => {
     }
   })
 
+  test('lets people through who arrive from social apps (in-app browsers)', () => {
+    for (const ua of [
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22A3354 Instagram 350.0.0.10.100 (iPhone15,2; iOS 18_0; en_GB; en-GB; scale=3.00; 1170x2532; 123456789)',
+      'Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/AP2A) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/129.0.0.0 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/480.0.0.40.100;]',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Twitter for iPhone/10.50',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 LinkedInApp/9.30.1234',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 musical_ly_35.0.0 BytedanceWebview/d8a21c6',
+      'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36 Telegram-Android/10.0 (Google Pixel 8)',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Slack/4.38.0 Chrome/124.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) discord/0.0.300 Chrome/124.0.0.0 Safari/537.36',
+    ]) {
+      assert.equal(automatedRequestReason(req({ ...person, 'User-Agent': ua })), null, ua)
+    }
+  })
+
+  test('still blocks the preview fetchers of those apps', () => {
+    for (const ua of ['Twitterbot/1.0', 'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)', 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)', 'TelegramBot (like TwitterBot)', 'LinkedInBot/1.0 (compatible; Mozilla/5.0; Apache-HttpClient +https://www.linkedin.com)']) {
+      assert.equal(automatedRequestReason(req({ ...person, 'User-Agent': ua })), 'automated-user-agent', ua)
+    }
+  })
+
   test('blocks a missing or tiny user-agent', () => {
     assert.equal(automatedRequestReason(req({ 'Accept-Language': 'en' })), 'no-user-agent')
     assert.equal(automatedRequestReason(req({ ...person, 'User-Agent': 'Mozilla' })), 'no-user-agent')
