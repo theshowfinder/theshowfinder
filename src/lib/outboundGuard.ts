@@ -1,12 +1,20 @@
-// Guards for our own outbound ticket redirect (/out/tm).
+// Our own outbound ticket redirect (/out/tm): decides where a click on a Ticketmaster
+// button goes.
 //
 // Why this exists: Ticketmaster's affiliate team (Impact) warned us that the
 // account was generating a lot of clicks with no sales, which is what automated
 // traffic looks like. Every public page used to contain the raw Impact tracking
 // link (ticketmaster.evyy.net/...) in its HTML, and any crawler, link-checker or
-// scraper that follows links "clicked" it. Public pages now link to
-// /out/tm?u=...; that route (disallowed in robots.txt) only forwards a request that
-// looks like a person clicking a link in a browser.
+// scraper that follows links "clicked" it. Public pages now link to /out/tm.
+//
+// Design rule: NEVER stop anybody reaching Ticketmaster. Every valid request is
+// redirected to Ticketmaster. A request that looks like a person in a browser goes
+// via our Impact tracking link (so we are credited); anything else, or anything we
+// are unsure about, goes to the plain Ticketmaster page, which cannot register an
+// Impact click. So a wrongly-judged person still lands on the right Ticketmaster
+// page and only loses the commission on that one click.
+
+import { getTicketmasterAffiliateLink } from './affiliate.ts'
 
 // Words that appear in the user-agent of crawlers, scrapers, HTTP libraries,
 // link-preview fetchers, uptime monitors and headless browsers. Deliberately does
@@ -57,4 +65,17 @@ export function isTicketmasterDestination(value: string | null | undefined): boo
   return host === 'ticketmaster.co.uk' || host.endsWith('.ticketmaster.co.uk')
     || host === 'ticketmaster.com' || host.endsWith('.ticketmaster.com')
     || host === 'ticketmaster.ie' || host.endsWith('.ticketmaster.ie')
+}
+
+export type OutboundDecision =
+  | { kind: 'invalid' }
+  | { kind: 'redirect'; location: string; tracked: boolean; reason: string | null }
+
+// Where should this request go? Invalid destinations (not a Ticketmaster page) are
+// the only thing refused; everything else is sent to Ticketmaster.
+export function decideOutbound(req: OutboundRequestLike, destination: string | null, tag?: string): OutboundDecision {
+  if (!isTicketmasterDestination(destination)) return { kind: 'invalid' }
+  const reason = automatedRequestReason(req)
+  if (reason) return { kind: 'redirect', location: destination!, tracked: false, reason }
+  return { kind: 'redirect', location: getTicketmasterAffiliateLink(destination!, tag), tracked: true, reason: null }
 }

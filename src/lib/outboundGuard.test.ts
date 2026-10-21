@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { automatedRequestReason, isTicketmasterDestination } from './outboundGuard.ts'
+import { automatedRequestReason, isTicketmasterDestination, decideOutbound } from './outboundGuard.ts'
 
 const CHROME = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36'
 const SAFARI_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'
@@ -106,5 +106,39 @@ describe('isTicketmasterDestination', () => {
     ]) {
       assert.equal(isTicketmasterDestination(bad as string | null | undefined), false, String(bad))
     }
+  })
+})
+
+describe('decideOutbound', () => {
+  const dest = 'https://www.ticketmaster.co.uk/event/123'
+
+  test('a person goes through our Impact tracking link, with the tag', () => {
+    const d = decideOutbound(req(person), dest, 'evt-abc')
+    assert.ok(d.kind === 'redirect' && d.tracked)
+    assert.ok(d.kind === 'redirect' && d.location.startsWith('https://ticketmaster.evyy.net/c/7328658/1965662/24023?u='))
+    assert.ok(d.kind === 'redirect' && d.location.endsWith('&subId1=evt-abc'))
+  })
+
+  test('a bot, a HEAD request or an odd client is still sent to Ticketmaster, but not via Impact', () => {
+    for (const r of [
+      req({ ...person, 'User-Agent': 'Mozilla/5.0 (compatible; GPTBot/1.1)' }),
+      req(person, 'HEAD'),
+      req({ 'User-Agent': CHROME }),
+      req({ ...person, 'Sec-Purpose': 'prefetch' }),
+    ]) {
+      const d = decideOutbound(r, dest, 'evt-abc')
+      assert.deepEqual(d.kind === 'redirect' && { loc: d.location, tracked: d.tracked }, { loc: dest, tracked: false })
+    }
+  })
+
+  test('nobody who reaches a valid link is ever refused', () => {
+    for (const r of [req({}), req(person, 'HEAD'), req({ 'User-Agent': 'curl/8' }, 'POST')]) {
+      assert.equal(decideOutbound(r, dest).kind, 'redirect')
+    }
+  })
+
+  test('only a non-Ticketmaster destination is refused', () => {
+    assert.equal(decideOutbound(req(person), 'https://evil.example/x').kind, 'invalid')
+    assert.equal(decideOutbound(req(person), null).kind, 'invalid')
   })
 })
