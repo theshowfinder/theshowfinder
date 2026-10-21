@@ -70,8 +70,9 @@ function londonOffsetMinutes(utcMs: number): number {
 
 /**
  * schema.org startDate -> UTC ISO. A value with a Z / offset is taken as written. A value with no zone
- * ("2026-10-24T19:30:00") is UK wall-clock time, not UTC. A bare date ("2026-10-24") becomes 12:00 UK time
- * so the day can never slip across midnight.
+ * ("2026-10-24T19:30:00") is UK wall-clock time, not UTC. A bare date ("2026-10-24") becomes MIDNIGHT UK
+ * time: the site-wide rule is that a midnight start means "time not known", so it is shown as a date only
+ * (never a made-up "12:00" or "00:00"). A listed time of exactly 00:00 is treated the same way.
  */
 export function startDateToIso(raw: string | undefined | null): string | null {
   if (!raw) return null
@@ -84,11 +85,39 @@ export function startDateToIso(raw: string | undefined | null): string | null {
   if (!m) { const d = new Date(s); return Number.isNaN(d.getTime()) ? null : d.toISOString() }
   const [y, mo, da] = [Number(m[1]), Number(m[2]), Number(m[3])]
   const hasTime = m[4] != null
-  const [h, mi, se] = hasTime ? [Number(m[4]), Number(m[5]), Number(m[6] ?? 0)] : [12, 0, 0]
+  const [h, mi, se] = hasTime ? [Number(m[4]), Number(m[5]), Number(m[6] ?? 0)] : [0, 0, 0]
   const guess = Date.UTC(y, mo - 1, da, h, mi, se)
   let utc = guess - londonOffsetMinutes(guess) * 60000
   utc = guess - londonOffsetMinutes(utc) * 60000   // second pass settles the hour around a clock change
   return new Date(utc).toISOString()
+}
+
+/** True when an ISO start is midnight UK time, i.e. the listing gave no start time. */
+export function isUkMidnight(iso: string): boolean {
+  const ms = Date.parse(iso)
+  if (!Number.isFinite(ms)) return false
+  const local = ms + londonOffsetMinutes(ms) * 60000
+  return local % 86_400_000 === 0
+}
+
+/** UTC ISO of midnight UK time at the start of the UK day containing `now`. */
+export function startOfUkDayIso(now: number): string {
+  const local = now + londonOffsetMinutes(now) * 60000
+  const midnightLocal = local - (((local % 86_400_000) + 86_400_000) % 86_400_000)
+  let utc = midnightLocal - londonOffsetMinutes(midnightLocal) * 60000
+  utc = midnightLocal - londonOffsetMinutes(utc) * 60000
+  return new Date(utc).toISOString()
+}
+
+/**
+ * Has this event already happened? A timed event is past 6 hours after it starts; a date-only one
+ * (midnight UK) stays current for the whole of its day, so a market "today" is still listed today.
+ */
+export function isPastStart(startIso: string, now: number): boolean {
+  const t = Date.parse(startIso)
+  if (!Number.isFinite(t)) return true
+  if (isUkMidnight(startIso)) return startIso < startOfUkDayIso(now)
+  return t < now - 6 * 3_600_000
 }
 
 export interface ParsedLocation {
@@ -229,7 +258,8 @@ export interface LedgerRow { state: 'event' | 'past' | 'noevent' | 'gone'; check
 export function pageId(url: string): number {
   let path = ''
   try { path = new URL(url).pathname } catch { return 0 }
-  const m = path.match(/\/(\d{4,})\/?$/) ?? path.match(/\/(\d{4,})-[^/]*$/)
+  // /slug/176524101/ · /3163019-slug · /slug-p1069321 (NewMind) · /slug-29102026-3162662/ (Visit Glasgow)
+  const m = path.match(/-p(\d{4,})\/?$/) ?? path.match(/-\d{8}-(\d{4,})\/?$/) ?? path.match(/\/(\d{4,})\/?$/) ?? path.match(/\/(\d{4,})-[^/]*$/)
   return m ? Number(m[1]) : 0
 }
 
@@ -284,4 +314,54 @@ export function sameShow(a: string, b: string): boolean {
   if (x === y) return true
   const [short, long] = x.length <= y.length ? [x, y] : [y, x]
   return short.length >= 12 && long.includes(short)
+}
+
+// ── robots.txt ───────────────────────────────────────────────────────────────
+
+export interface RobotsRules { allow: string[]; disallow: string[]; crawlDelaySec: number | null }
+
+/**
+ * The rules that apply to our crawler: the group naming "theshowfinderbot" if there is one, otherwise the "*" group.
+ * Only Allow / Disallow path prefixes ("*" and "$" wildcards supported) and Crawl-delay are used.
+ */
+export function parseRobots(text: string, agentToken = 'theshowfinderbot'): RobotsRules {
+  const groups: Array<{ agents: string[]; rules: RobotsRules }> = []
+  let current: { agents: string[]; rules: RobotsRules } | null = null
+  let lastWasAgent = false
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/#.*$/, '').trim()
+    const m = line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/)
+    if (!m) continue
+    const key = m[1].toLowerCase()
+    const value = m[2].trim()
+    if (key === 'user-agent') {
+      if (!current || !lastWasAgent) { current = { agents: [], rules: { allow: [], disallow: [], crawlDelaySec: null } }; groups.push(current) }
+      current.agents.push(value.toLowerCase())
+      lastWasAgent = true
+      continue
+    }
+    lastWasAgent = false
+    if (!current) continue
+    if (key === 'disallow' && value) current.rules.disallow.push(value)
+    else if (key === 'allow' && value) current.rules.allow.push(value)
+    else if (key === 'crawl-delay') { const n = Number(value); if (Number.isFinite(n) && n > 0) current.rules.crawlDelaySec = n }
+  }
+  const own = groups.find(g => g.agents.some(a => a !== '*' && agentToken.includes(a)))
+  const star = groups.find(g => g.agents.includes('*'))
+  return (own ?? star)?.rules ?? { allow: [], disallow: [], crawlDelaySec: null }
+}
+
+function robotsPatternMatches(pattern: string, path: string): number {
+  const anchored = pattern.endsWith('$')
+  const body = anchored ? pattern.slice(0, -1) : pattern
+  const re = new RegExp('^' + body.split('*').map(p => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + (anchored ? '$' : ''))
+  return re.test(path) ? body.replace(/\*/g, '').length : -1
+}
+
+/** Longest matching rule wins; Allow wins a tie. */
+export function robotsAllows(rules: RobotsRules, pathAndQuery: string): boolean {
+  let best = -1, allowed = true
+  for (const p of rules.disallow) { const n = robotsPatternMatches(p, pathAndQuery); if (n > best) { best = n; allowed = false } }
+  for (const p of rules.allow) { const n = robotsPatternMatches(p, pathAndQuery); if (n >= best && n >= 0) { best = n; allowed = true } }
+  return allowed
 }

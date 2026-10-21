@@ -40,7 +40,7 @@ import { formatShareWhen } from '@/lib/shareText'
 import EventCard from '@/components/EventCard'
 import { buildShareText } from '@/lib/shareText'
 import { googleCalendarUrl } from '@/lib/ics'
-import { displayTitle, londonTimeSuffix, venueLabel } from '@/lib/displayTitle'
+import { displayTitle, londonTimeSuffix, londonTimeOrNull, venueLabel } from '@/lib/displayTitle'
 import { buildEventFaq, cleanBoxOffice, cleanVenueNote, type EventDetails, type VenueDetails } from '@/lib/eventDetails'
 import ShowDatesList from '@/components/ShowDatesList'
 import type { ShowDate } from '@/lib/showDates'
@@ -276,8 +276,9 @@ function fmtDate(iso: string) {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
 }
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' })
+// null when the time is not known (midnight London): never show a made-up "00:00".
+function fmtTime(iso: string): string | null {
+  return londonTimeOrNull(iso)
 }
 function fmtPrice(from: number | null, to: number | null, currency: string) {
   if (!from) return null
@@ -774,10 +775,12 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                   <dt className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Date</dt>
                   <dd className="font-semibold text-slate-800">{fmtDate(event.start_date)}</dd>
                 </div>
-                <div className="bg-white border border-slate-200 rounded-xl p-4">
-                  <dt className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Start time</dt>
-                  <dd className="font-semibold text-slate-800">{fmtTime(event.start_date)}</dd>
-                </div>
+                {fmtTime(event.start_date) && (
+                  <div className="bg-white border border-slate-200 rounded-xl p-4">
+                    <dt className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Start time</dt>
+                    <dd className="font-semibold text-slate-800">{fmtTime(event.start_date)}</dd>
+                  </div>
+                )}
                 {event.doors_time && (
                   <div className="bg-white border border-slate-200 rounded-xl p-4">
                     <dt className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Doors open</dt>

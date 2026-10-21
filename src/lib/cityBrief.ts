@@ -68,8 +68,10 @@ export function londonDayWithYear(iso: string, now: Date): string {
   return year === YEAR_FMT.format(now) ? londonDay(iso) : `${londonDay(iso)} ${year}`
 }
 
+// No time shown when the listing gave none (midnight London), never "00:00".
 function whenLabel(event: EditionEvent, now: Date): string {
-  return `${londonDayWithYear(event.start_date, now)} · ${londonTime(event.start_date)}`
+  const t = londonTime(event.start_date)
+  return t === '00:00' || t === '24:00' ? londonDayWithYear(event.start_date, now) : `${londonDayWithYear(event.start_date, now)} · ${t}`
 }
 
 const isLive = (e: EditionEvent) => e.status !== 'cancelled' && e.status !== 'postponed'

@@ -153,7 +153,7 @@ export interface FaqInput {
   venueAddress: string | null
   city: string | null
   dateLabel: string          // e.g. "Saturday 24 October 2026"
-  startLabel: string         // e.g. "19:30"
+  startLabel: string | null  // e.g. "19:30"; null when the start time is not known
   doorsLabel: string | null  // e.g. "18:30"
   status: string
   details: EventDetails | null
@@ -181,6 +181,12 @@ export function buildEventFaq(input: FaqInput): FaqItem[] {
     })
   }
 
+  if (!startLabel) {
+    faq.push({
+      q: `What time does ${title} start?`,
+      a: `${title} is on ${dateLabel}${where ? ` at ${where}` : ''}. A start time hasn't been listed, so check the organiser's page before you go.`,
+    })
+  } else {
   faq.push({
     q: `What time does ${title} start?`,
     a: doorsLabel
@@ -194,6 +200,7 @@ export function buildEventFaq(input: FaqInput): FaqItem[] {
       ? `Official set times for ${title} haven't been published. Doors open at ${doorsLabel} and the listed start is ${startLabel}. Running orders are usually confirmed by the venue or artist closer to the date, so check their social channels, and arrive for doors if you want to catch the support.`
       : `Official set times for ${title} haven't been published. The listed start is ${startLabel}. Running orders are usually confirmed by the venue or artist closer to the date, so check their social channels.`,
   })
+  }
 
   if (details?.support?.length) {
     faq.push({

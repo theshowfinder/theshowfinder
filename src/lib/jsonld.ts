@@ -67,13 +67,23 @@ const EVENT_STATUS_MAP: Record<string, string> = {
   sold_out:  'https://schema.org/EventScheduled', // sold out ≠ cancelled — event is still happening
 }
 
+// schema.org date for an event start: a plain "2026-10-24" when the time is not known (midnight
+// London, the site-wide rule), otherwise the full ISO time. Google accepts a date-only startDate.
+export function schemaStartDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  const hm = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hour12: false }).format(d)
+  if (hm !== '00:00' && hm !== '24:00') return iso
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+}
+
 export function buildEventSchema(input: EventSchemaInput) {
   return {
     '@context':    'https://schema.org',
     '@type':       'Event',
     name:          input.name,
     url:           input.url,
-    startDate:     input.startDate,
+    startDate:     schemaStartDate(input.startDate),
     ...(input.endDate ? { endDate: input.endDate } : {}),
     description:   input.description?.trim()
       ? input.description.trim()

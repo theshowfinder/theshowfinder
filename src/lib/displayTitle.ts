@@ -11,6 +11,23 @@ export function displayTitle(title: string): string {
   return cleaned || title
 }
 
+/**
+ * Site-wide rule: an event whose start is exactly midnight London time has NO known start time
+ * (Ticketmaster date-only listings, tourist-board pages that only give a day). Never show "00:00".
+ */
+export function isTimeUnknown(iso: string): boolean {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return true
+  const t = d.toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hour12: false })
+  return t === '00:00' || t === '24:00'
+}
+
+/** "19:30" in London time, or null when the time is not known (midnight). */
+export function londonTimeOrNull(iso: string): string | null {
+  if (isTimeUnknown(iso)) return null
+  return new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
 /** " · 19:30" in London time, or '' when the feed gave no real time (midnight). */
 export function londonTimeSuffix(iso: string): string {
   const d = new Date(iso)

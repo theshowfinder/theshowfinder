@@ -14,8 +14,10 @@
 import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { EventStatus } from './types/database'
+import { eventFromHtml, isHtmlParser } from './localEventHtml'
 import {
-  eventFromPage, parseSitemap, matchesDetailPattern, chooseUrlsToFetch, sameShow,
+  eventFromPage, parseSitemap, matchesDetailPattern, chooseUrlsToFetch, sameShow, isPastStart, parseRobots, robotsAllows,
+  type RobotsRules,
   type ScrapedLocalEvent, type SitemapEntry, type LedgerRow,
 } from './localEventParsing'
 import { resolveEventCity } from './localEventCity'
@@ -48,6 +50,8 @@ export interface LocalEventSource {
   page_size: number | null
   max_pages: number
   max_details_per_run: number
+  /** How event pages are read: 'jsonld' (schema.org Event markup) or one of the HTML readers in localEventHtml.ts. */
+  parser: string
   enabled: boolean
   last_run_at: string | null
   last_stats: SourceStats | null
@@ -69,6 +73,9 @@ export interface SourceStats {
   restored: number
   errors: number
   unseenLeft: number      // discovered pages not yet read (a large sitemap is worked through over several runs)
+  errorStatuses?: Record<string, number>   // why pages could not be read: HTTP status, or 'timeout'
+  robotsSkipped?: number  // pages robots.txt asks crawlers not to read
+  crawlDelaySec?: number | null
   stoppedEarly: boolean
   detail?: string
   goneTitles: string[]
@@ -105,6 +112,23 @@ export async function loadSources(db: DbClient, filter: { city?: string; key?: s
   if (filter.key) rows = rows.filter(r => r.key === filter.key)
   // Longest-waiting source first, so a short time budget still rotates through every source.
   return rows.sort((a, b) => (a.last_run_at ?? '').localeCompare(b.last_run_at ?? ''))
+}
+
+// ── Reading one event page ───────────────────────────────────────────────────
+
+function readEventPage(parser: string | null | undefined, html: string, pageUrl: string, fallbackCity: string) {
+  return isHtmlParser(parser) ? eventFromHtml(parser, html, pageUrl, fallbackCity) : eventFromPage(html, pageUrl, fallbackCity)
+}
+
+// ── robots.txt: what a site asks crawlers not to read, and how fast to go ─────
+
+const MAX_CRAWL_DELAY_SEC = 10
+async function loadRobots(baseUrl: string): Promise<RobotsRules> {
+  const res = await fetchWithStatus(absolute(baseUrl, '/robots.txt'), 'text/plain,*/*')
+  return res.body ? parseRobots(res.body) : { allow: [], disallow: [], crawlDelaySec: null }
+}
+function pathOf(url: string): string {
+  try { const u = new URL(url); return u.pathname + u.search } catch { return url }
 }
 
 // ── Discovery: which event pages does this source list? ──────────────────────
@@ -333,14 +357,23 @@ async function refreshSource(db: DbClient, source: LocalEventSource, settings: S
 
   const ledger = await loadLedger(loose, source.key)
   const existingUrls = await loadExistingUrls(loose, source)
-  const toFetch = chooseUrlsToFetch(found.entries, ledger, Date.now(), source.max_details_per_run)
+  // Respect robots.txt: skip pages the site asks crawlers not to read, and keep to its Crawl-delay
+  // (one page at a time with that pause) so the sweep never hammers a small site.
+  const robots = await loadRobots(source.base_url)
+  const allowedEntries = found.entries.filter(e => robotsAllows(robots, pathOf(e.url)))
+  stats.robotsSkipped = found.entries.length - allowedEntries.length
+  const crawlDelaySec = robots.crawlDelaySec ? Math.min(robots.crawlDelaySec, MAX_CRAWL_DELAY_SEC) : null
+  stats.crawlDelaySec = crawlDelaySec
+  const concurrency = crawlDelaySec ? 1 : DETAIL_CONCURRENCY
+  const pause = crawlDelaySec ? crawlDelaySec * 1000 : REQUEST_DELAY_MS
+  const toFetch = chooseUrlsToFetch(allowedEntries, ledger, Date.now(), source.max_details_per_run)
 
   const now = Date.now()
   const written = new Set<string>()
   let knownChecked = 0, knownGone = 0, breakerTripped = false
-  for (let i = 0; i < toFetch.length; i += DETAIL_CONCURRENCY) {
+  for (let i = 0; i < toFetch.length; i += concurrency) {
     if (Date.now() > deadline) { stats.stoppedEarly = true; break }
-    const batch = toFetch.slice(i, i + DETAIL_CONCURRENCY)
+    const batch = toFetch.slice(i, i + concurrency)
     const pages = await Promise.all(batch.map(async url => ({ url, ...(await fetchWithStatus(url)) })))
     const ledgerRows: Array<{ url: string; state: LedgerRow['state']; start_date?: string | null }> = []
 
@@ -363,11 +396,16 @@ async function refreshSource(db: DbClient, source: LocalEventSource, settings: S
         }
         return
       }
-      if (!page.body) { stats.errors++; return }   // timeout / 403 / 5xx: say nothing, look again next time
+      if (!page.body) {   // timeout / 403 / 5xx: say nothing, look again next time
+        stats.errors++
+        const k = String(page.status ?? 'timeout')
+        stats.errorStatuses = { ...(stats.errorStatuses ?? {}), [k]: (stats.errorStatuses?.[k] ?? 0) + 1 }
+        return
+      }
 
-      const ev = eventFromPage(page.body, page.url, source.city)
+      const ev = readEventPage(source.parser, page.body, page.url, source.city)
       if (!ev) { stats.noEvent++; ledgerRows.push({ url: page.url, state: 'noevent' }); return }
-      if (new Date(ev.startDate).getTime() < now - 6 * 3_600_000) { stats.past++; ledgerRows.push({ url: page.url, state: 'past', start_date: ev.startDate }); return }
+      if (isPastStart(ev.startDate, now)) { stats.past++; ledgerRows.push({ url: page.url, state: 'past', start_date: ev.startDate }); return }
 
       const city = resolveEventCity(ev.city, source.city, { lat: ev.lat, lng: ev.lng })
       if (!city) {   // too far from every city we cover: not shown (and taken down if an earlier run had listed it)
@@ -392,7 +430,7 @@ async function refreshSource(db: DbClient, source: LocalEventSource, settings: S
 
     await writeLedger(loose, source.key, ledgerRows)
     for (const r of ledgerRows) written.add(r.url)
-    await sleep(REQUEST_DELAY_MS)
+    await sleep(pause)
   }
 
   stats.unseenLeft = found.entries.filter(e => !ledger.has(e.url) && !written.has(e.url)).length
@@ -409,13 +447,14 @@ async function refreshSource(db: DbClient, source: LocalEventSource, settings: S
       .order('last_synced_at', { ascending: true, nullsFirst: true })
       .limit(2000)
     const dropped = ((rows ?? []) as Array<{ id: string; title: string; source_url: string }>).filter(r => !listed.has(r.source_url)).slice(0, MAX_VERIFY_PER_SOURCE)
-    await verifyEvents(loose, dropped, stats, settings, deadline)
+    await verifyEvents(source.parser, loose, dropped, stats, settings, deadline)
   }
   return stats
 }
 
 /** Check events directly on their own page: 404/410 or a "cancelled" marker removes them; a live page is stamped as refreshed. */
 async function verifyEvents(
+  parser: string,
   loose: Loose,
   rows: Array<{ id: string; title: string; source_url: string }>,
   stats: SourceStats,
@@ -436,7 +475,7 @@ async function verifyEvents(
       continue
     }
     if (!res.body) { out.unclear++; continue }
-    const ev = eventFromPage(res.body, row.source_url, '')
+    const ev = readEventPage(parser, res.body, row.source_url, '')
     if (!ev) { out.unclear++; continue }
     if (ev.status === 'cancelled') {
       out.cancelledByPage++
@@ -472,7 +511,7 @@ async function cleanSource(db: DbClient, source: LocalEventSource, settings: Set
     .limit(600)
   const list = (rows ?? []) as Array<{ id: string; title: string; source_url: string }>
   stats.discovered = list.length
-  const result = await verifyEvents(loose, list, stats, settings, deadline)
+  const result = await verifyEvents(source.parser, loose, list, stats, settings, deadline)
   stats.fetched = result.checked
   stats.events = result.stillLive
   stats.errors = result.unclear
@@ -500,6 +539,7 @@ export interface CandidateSource {
   sitemap_child_pattern?: string | null
   page_param?: string | null
   page_size?: number | null
+  parser?: string | null
 }
 
 export function slugKey(text: string): string {
@@ -516,7 +556,7 @@ export async function probeCandidateSource(c: CandidateSource, city: string): Pr
     id: 'probe', key: 'probe', city, label: 'probe', event_source: `${slugKey(city)}_council`, base_url: c.base_url.replace(/\/$/, ''),
     discovery: c.discovery, discovery_url: c.discovery_url, detail_pattern: c.detail_pattern,
     sitemap_child_pattern: c.sitemap_child_pattern || null, page_param: c.page_param || null, page_size: c.page_size ?? null,
-    max_pages: 3, max_details_per_run: 0, enabled: true, last_run_at: null, last_stats: null,
+    max_pages: 3, max_details_per_run: 0, parser: c.parser || 'jsonld', enabled: true, last_run_at: null, last_stats: null,
   }
   const found = source.discovery === 'sitemap' ? await discoverSitemap(source) : await discoverListing(source)
   const step = Math.max(1, Math.floor(found.entries.length / 6))
@@ -524,8 +564,8 @@ export async function probeCandidateSource(c: CandidateSource, city: string): Pr
   const sample = await Promise.all(picks.map(async e => {
     const res = await fetchWithStatus(e.url)
     if (!res.body) return { url: e.url, ok: false, reason: `HTTP ${res.status ?? 'no response'}` }
-    const ev = eventFromPage(res.body, e.url, city)
-    if (!ev) return { url: e.url, ok: false, reason: 'page has no schema.org Event markup' }
+    const ev = readEventPage(source.parser, res.body, e.url, city)
+    if (!ev) return { url: e.url, ok: false, reason: isHtmlParser(source.parser) ? 'no upcoming date found on the page' : 'page has no schema.org Event markup' }
     return { url: e.url, ok: true, title: ev.title, start: ev.startDate, venue: ev.venueName, city: resolveEventCity(ev.city, city, { lat: ev.lat, lng: ev.lng }) ?? '(outside our cities)' }
   }))
   return { discovered: found.entries.length, complete: found.complete, sample }

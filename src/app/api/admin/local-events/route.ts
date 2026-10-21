@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncCouncilEvents, probeCandidateSource, slugKey, type CandidateSource } from '@/lib/councilEvents'
 import { CITIES } from '@/lib/cities'
+import { isHtmlParser } from '@/lib/localEventHtml'
 
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
@@ -20,6 +21,7 @@ interface Body {
   sitemap_child_pattern?: string
   page_param?: string
   page_size?: number
+  parser?: string
 }
 
 function candidateFrom(b: Body): CandidateSource | string {
@@ -36,6 +38,7 @@ function candidateFrom(b: Body): CandidateSource | string {
     sitemap_child_pattern: b.sitemap_child_pattern || null,
     page_param: b.page_param || null,
     page_size: b.page_size ?? null,
+    parser: isHtmlParser(b.parser) ? b.parser : 'jsonld',
   }
 }
 

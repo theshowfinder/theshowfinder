@@ -167,7 +167,8 @@ export async function fetchLocalEvents(
     .select('*')
     .eq('category', 'local')
     .ilike('venue_city', city)
-    .gte('start_date', now.toISOString())
+    // From the start of today (UK), not "now": a date-only listing (stored at midnight UK) is on all day.
+    .gte('start_date', londonDayWindow(now).startISO)
     .lt('start_date', new Date(now.getTime() + days * 86_400_000).toISOString())
     .in('status', LIVE_EVENT_STATUSES)
     .order('start_date', { ascending: true })

@@ -4,10 +4,11 @@ import { useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { readCityCookie, subscribeNoop, getServerCitySnapshot } from '@/lib/cityCookie'
 import { groupDatesByCity, type ShowDate } from '@/lib/showDates'
+import { londonTimeSuffix } from '@/lib/displayTitle'
 
 const when = (iso: string) =>
   new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) +
-  ' · ' + new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' })
+  londonTimeSuffix(iso)
 
 const SHOWN = 6
 

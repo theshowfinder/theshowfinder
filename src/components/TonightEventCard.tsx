@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { londonTimeOrNull } from '@/lib/displayTitle'
 import type { Artist } from '@/lib/types/database'
 import type { TonightEvent } from '@/lib/eventPools.ts'
 import { buildTonightTicketOffers } from '@/lib/ticketLinkPolicy'
@@ -8,8 +9,9 @@ const statusConfig: Record<string, { label: string; classes: string }> = {
   sold_out: { label: 'Sold Out', classes: 'bg-red-600 text-white' },
 }
 
+// "All day" when the listing gave no time (midnight London), never "00:00".
 function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' })
+  return londonTimeOrNull(iso) ?? 'All day'
 }
 
 // Tonight's own row — deliberately a compact, text-focused list row

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   parseAddressString, extractEventsJsonLd, startDateToIso, parseLocation, eventFromPage, parseSitemap, matchesDetailPattern,
-  chooseUrlsToFetch, pageId, sameShow, mapSchemaStatus, type LedgerRow,
+  chooseUrlsToFetch, pageId, sameShow, mapSchemaStatus, isUkMidnight, startOfUkDayIso, isPastStart, parseRobots, robotsAllows, type LedgerRow,
 } from './localEventParsing.ts'
 
 const page = (json: unknown) => `<html><script type="application/ld+json">${JSON.stringify(json)}</script></html>`
@@ -25,10 +25,25 @@ test('start dates with no zone are UK wall-clock time (BST and GMT)', () => {
   assert.equal(startDateToIso('2026-10-24T19:30:00Z'), '2026-10-24T19:30:00.000Z')
 })
 
-test('a bare date lands at midday UK time so the day cannot move', () => {
-  assert.equal(startDateToIso('2026-07-04'), '2026-07-04T11:00:00.000Z')
-  assert.equal(startDateToIso('2026-12-04'), '2026-12-04T12:00:00.000Z')
+test('a bare date lands at midnight UK time (= "time not known"), so no made-up time is shown', () => {
+  assert.equal(startDateToIso('2026-07-04'), '2026-07-03T23:00:00.000Z')   // BST
+  assert.equal(startDateToIso('2026-12-04'), '2026-12-04T00:00:00.000Z')   // GMT
+  assert.equal(startDateToIso('2026-10-30 18:30:00'), '2026-10-30T18:30:00.000Z')   // no zone, GMT day
+  assert.equal(startDateToIso('2026-10-22 14:00:00 +0100'), '2026-10-22T13:00:00.000Z')
   assert.equal(startDateToIso(''), null)
+})
+
+test('midnight UK means the time is not known; such events stay current all day', () => {
+  assert.ok(isUkMidnight('2026-07-03T23:00:00.000Z'))
+  assert.ok(isUkMidnight('2026-12-04T00:00:00.000Z'))
+  assert.ok(!isUkMidnight('2026-12-04T12:00:00.000Z'))
+  assert.equal(startOfUkDayIso(Date.parse('2026-07-04T15:00:00Z')), '2026-07-03T23:00:00.000Z')
+  assert.equal(startOfUkDayIso(Date.parse('2026-12-04T15:00:00Z')), '2026-12-04T00:00:00.000Z')
+  const now = Date.parse('2026-07-04T20:00:00Z')
+  assert.equal(isPastStart('2026-07-03T23:00:00.000Z', now), false)    // today, no time: still on
+  assert.equal(isPastStart('2026-07-02T23:00:00.000Z', now), true)     // yesterday
+  assert.equal(isPastStart('2026-07-04T10:00:00.000Z', now), true)     // timed, 10 hours ago
+  assert.equal(isPastStart('2026-07-04T18:00:00.000Z', now), false)    // timed, 2 hours ago
 })
 
 test('location accepts an object, an array or a plain string', () => {
@@ -120,6 +135,8 @@ test('never-seen pages: same lastmod day falls back to highest id first', () => 
   assert.equal(pageId('https://a.com/event/some-show/176524101/'), 176524101)
   assert.equal(pageId('https://a.com/events/3163019-fajitas-with-fair'), 3163019)
   assert.equal(pageId('https://a.com/event/some-show/'), 0)
+  assert.equal(pageId('https://a.com/whats-on/2026-iihf-cup-final-p1036981'), 1036981)
+  assert.equal(pageId('https://a.com/events/art-show-29102026-3162662/'), 3162662)
   const found = [
     { url: 'https://a.com/event/old/100000101/', lastmod: '2026-10-20T01:00:00Z' },
     { url: 'https://a.com/event/new/900000101/', lastmod: '2026-10-20T03:00:00Z' },
@@ -135,4 +152,20 @@ test('a large backlog still leaves room for refreshes', () => {
   const chosen = chooseUrlsToFetch(found, ledger, now, 10)
   assert.equal(chosen.length, 10)
   assert.ok(chosen.includes('https://a.com/event/known/100/'))
+})
+
+test('robots.txt: our group or *, longest match wins, crawl-delay', () => {
+  const txt = `User-agent: *\nDisallow: /plugins/crm/count/\nAllow: /\nCrawl-delay: 2\n\nUser-agent: GPTBot\nDisallow: /`
+  const r = parseRobots(txt)
+  assert.equal(r.crawlDelaySec, 2)
+  assert.ok(robotsAllows(r, '/event/foo/123/'))
+  assert.ok(!robotsAllows(r, '/plugins/crm/count/x'))
+  const own = parseRobots(`User-agent: *\nDisallow: /\n\nUser-agent: TheShowFinderBot\nAllow: /events/\nDisallow: /`)
+  assert.ok(robotsAllows(own, '/events/x'))
+  assert.ok(!robotsAllows(own, '/other'))
+  const wild = parseRobots(`User-agent: *\nDisallow: /*?print=\nDisallow: /search$`)
+  assert.ok(!robotsAllows(wild, '/event/a?print=1'))
+  assert.ok(robotsAllows(wild, '/search/results'))
+  assert.ok(!robotsAllows(wild, '/search'))
+  assert.deepEqual(parseRobots(''), { allow: [], disallow: [], crawlDelaySec: null })
 })
