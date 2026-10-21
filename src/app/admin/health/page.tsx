@@ -120,8 +120,8 @@ export default async function HealthPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-extrabold text-slate-900 mb-1">Council events (Derby)</h2>
-          <p className="text-sm text-slate-500 mb-3">Every council event the sync sees is now stamped as refreshed. Events the council site stops listing are checked on their own page; only a 404/410 or a “cancelled” marker counts. Mode is <b>{councilMode}</b>: dry reports what it would cancel, live cancels it (capped per run, and skipped if any listing could not be read in full). Use “Run Council events” above to test it.</p>
+          <h2 className="text-lg font-extrabold text-slate-900 mb-1">Local events (all cities) · <a href="/admin/local-events" className="underline text-[#E8003D]">per-city refresh and clean</a></h2>
+          <p className="text-sm text-slate-500 mb-3">Council, venue and tourist-board listings for every city with a source. Events a site stops listing are checked on their own page; only a 404/410 or a “cancelled” marker removes one. Mode is <b>{councilMode}</b>: dry reports what it would cancel, live cancels it (capped per run, and skipped if any listing could not be read in full). Use “Run Council events” above to test it.</p>
           {councilLast && <pre className="text-xs bg-slate-900 text-slate-100 rounded-xl p-4 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(councilLast, null, 2)}</pre>}
         </section>
 

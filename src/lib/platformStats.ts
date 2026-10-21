@@ -75,7 +75,7 @@ export async function loadPlatformTiles(): Promise<PlatformTile[]> {
     count(d => events(d).eq('source', 'see_tickets')),
     count(d => d.from('see_tickets_catalogue_events').select('id', { count: 'exact', head: true }).not('gone_at', 'is', null).gte('event_date', TODAY())),
 
-    count(d => events(d).eq('source', 'derby_council')),
+    count(d => events(d).like('source', '%_council')),
 
     db.rpc('health_tm_freshness').then((r: { data: Array<{ stale_48h: number | string }> | null }) => (r.data?.[0] ? Number(r.data[0].stale_48h) : null)).catch(() => null) as Promise<number | null>,
     db.from('feed_import_state').select('mode, last_stats').eq('id', 1).maybeSingle().then((r: { data: { mode: string; last_stats: Record<string, unknown> | null } | null }) => r.data).catch(() => null) as Promise<{ mode: string; last_stats: Record<string, unknown> | null } | null>,
@@ -83,7 +83,7 @@ export async function loadPlatformTiles(): Promise<PlatformTile[]> {
     newest('events', 'last_synced_at', q => q.not('ticketmaster_id', 'is', null)),
     newest('gigsberg_catalogue_events', 'last_seen_at'),
     newest('see_tickets_catalogue_events', 'last_seen_at'),
-    newest('events', 'updated_at', q => q.eq('source', 'derby_council')),
+    newest('events', 'updated_at', q => q.like('source', '%_council')),
   ])
 
   const stats = importState?.last_stats as { at?: string; gigsberg?: ImportBit; see_tickets?: ImportBit } | null

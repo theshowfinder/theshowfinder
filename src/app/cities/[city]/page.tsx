@@ -27,7 +27,7 @@ import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import { buildCityCollectionSchema, cityCanonicalUrl, cityPageDescription, cityPageTitle } from '@/lib/citySeo'
 import CityNewsletterForm from '@/components/CityNewsletterForm'
-import { fetchEventsThisWeek, fetchTopEvents, fetchNearbyEvents, fetchRecentlyAddedEvents, fetchCityCategoryCounts, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek, attachTourDateCounts } from '@/lib/eventPools'
+import { fetchEventsThisWeek, fetchLocalEvents, fetchTopEvents, fetchNearbyEvents, fetchRecentlyAddedEvents, fetchCityCategoryCounts, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek, attachTourDateCounts } from '@/lib/eventPools'
 import { resolveCityEventCount } from '@/lib/cityEventCount'
 import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import PresaleGrid from '@/components/PresaleGrid'
@@ -141,6 +141,7 @@ export default async function CityPage({
   const [
     tonightEvents,
     eventsThisWeek,
+    localEventsRaw,
     topEvents,
     presaleGroups,
     onsaleGroups,
@@ -167,6 +168,9 @@ export default async function CityPage({
     // eventPools.ts) so the two never drift the way the old per-page
     // copies did.
     fetchEventsThisWeek(supabase, { city: cityName, limit: 30 }),
+
+    // Council / venue / tourist-board listings for this city over the next ~8 weeks (the "What's on locally" section).
+    fetchLocalEvents(supabase, { city: cityName, limit: 16 }),
 
     // The biggest shows beyond this week, out to ~2 months — same shared
     // helper as the homepage's Top Events section.
@@ -272,9 +276,13 @@ export default async function CityPage({
     presaleLive: presaleGroups.length,
   })
   const editionStamp = freshnessStamp(editionData.lastSyncedAt, now)
+  // Local listings already shown in "Events this week" are not repeated in their own section.
+  const weekIds = new Set(eventsThisWeek.map(e => e.id))
+  const localEvents = localEventsRaw.filter(e => !weekIds.has(e.id)).slice(0, 12)
   const editionNav = [
     tonightEvents.length > 0 && { href: '#tonight', label: 'Tonight' },
     eventsThisWeek.length > 0 && { href: '#this-week', label: 'This week' },
+    localEvents.length > 0 && { href: '#local', label: 'Local' },
     presaleGroups.length > 0 && { href: '#presales', label: 'Presales' },
     onsaleGroups.length > 0 && { href: '#on-sale', label: 'On sale' },
     cityNews.length > 0 && { href: '#news', label: 'News' },
@@ -512,6 +520,26 @@ export default async function CityPage({
             </div>
             <ScrollRail label={`Events this week in ${cityName}`}>
               {eventsThisWeek.map(event => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </ScrollRail>
+          </section>
+        )}
+
+        {/* ── WHAT'S ON LOCALLY: council / venue / tourist-board listings (hidden when none) ── */}
+        {localEvents.length > 0 && (
+          <section id="local" className="scroll-mt-20">
+            <div className="mb-7">
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+                Local listings
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                What&apos;s On Locally in {cityName}
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">Markets, festivals, workshops and community nights from {cityName}&apos;s own event listings</p>
+            </div>
+            <ScrollRail label={`What's on locally in ${cityName}`}>
+              {localEvents.map(event => (
                 <EventCard key={event.id} event={event} />
               ))}
             </ScrollRail>

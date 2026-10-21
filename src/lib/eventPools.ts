@@ -155,6 +155,26 @@ export async function fetchEventsThisWeek(
   })
 }
 
+// Council / venue / tourist-board listings for one city (category 'local': markets, festivals, workshops, community
+// nights) over the next ~8 weeks, spread across days with one card per show. Feeds the "What's on locally" section of
+// each city page, which is how a city feels like its own place rather than a list of ticketed gigs.
+export async function fetchLocalEvents(
+  supabase: SupabaseClient,
+  { city, limit = 12, days = 56, now = new Date() }: { city: string; limit?: number; days?: number; now?: Date },
+): Promise<EventWithVenue[]> {
+  const { data } = await supabase
+    .from('listed_events_with_venue')
+    .select('*')
+    .eq('category', 'local')
+    .ilike('venue_city', city)
+    .gte('start_date', now.toISOString())
+    .lt('start_date', new Date(now.getTime() + days * 86_400_000).toISOString())
+    .in('status', LIVE_EVENT_STATUSES)
+    .order('start_date', { ascending: true })
+    .limit(250) as unknown as { data: EventWithVenue[] | null }
+  return mixEvents(data ?? [], { limit, maxPerVenue: 2, maxAttractions: 3, mode: 'week' })
+}
+
 // Same per-day fetch + mix as fetchEventsThisWeek, over the coming weekend
 // (Fri 17:00 - Sun night) for the "{city} this weekend" pages.
 export async function fetchEventsThisWeekend(

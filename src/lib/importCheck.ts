@@ -39,7 +39,7 @@ export async function loadImportCards(now = new Date()): Promise<ImportCard[]> {
     newest('events', 'last_synced_at', q => q.not('ticketmaster_id', 'is', null)),
     newest('see_tickets_catalogue_events', 'last_seen_at'),
     newest('gigsberg_catalogue_events', 'last_seen_at'),
-    newest('events', 'updated_at', q => q.eq('source', 'derby_council')),
+    newest('events', 'updated_at', q => q.like('source', '%_council')),
     newest('city_news', 'fetched_at'),
   ])
 

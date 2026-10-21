@@ -17,7 +17,7 @@ async function handleGet(request: Request) {
   console.log(`[sync] Starting council events sync at ${started}`)
 
   try {
-    const result = await syncCouncilEvents()
+    const result = await syncCouncilEvents({ budgetMs: 150_000 })
     return NextResponse.json({
       success: true,
       started,

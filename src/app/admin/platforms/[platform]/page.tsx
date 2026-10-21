@@ -70,7 +70,7 @@ export default async function PlatformPage({ params, searchParams }: { params: P
   } else {
     let query = db.from('events').select('id, title, slug, start_date, status, tickets_url, last_synced_at, ticketmaster_id, gigsberg_affiliate_url, see_tickets_affiliate_url, source, venue:venues(name, city)', { count: 'exact' }).gte('start_date', nowIso).in('status', LIVE_EVENT_STATUSES)
     if (platform === 'ticketmaster') query = query.not('ticketmaster_id', 'is', null)
-    if (platform === 'council') query = query.eq('source', 'derby_council')
+    if (platform === 'council') query = query.like('source', '%_council')
     if (view === 'no_link') query = query.is('tickets_url', null)
     if (view === 'stale') query = query.lt('last_synced_at', new Date(new Date(nowIso).getTime() - 48 * 3_600_000).toISOString())
     if (view === 'with_gigsberg' || (platform === 'gigsberg' && view === 'on_site')) query = query.not('gigsberg_affiliate_url', 'is', null)

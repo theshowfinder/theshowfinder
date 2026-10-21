@@ -28,6 +28,12 @@ export default async function AdminPage() {
             Feeds &amp; matching
           </Link>
           <Link
+            href="/admin/local-events"
+            className="text-sm font-bold text-slate-700 hover:text-slate-900"
+          >
+            Local events
+          </Link>
+          <Link
             href="/admin/health"
             className="text-sm font-bold text-slate-700 hover:text-slate-900"
           >

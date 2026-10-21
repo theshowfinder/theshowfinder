@@ -58,7 +58,7 @@
     },
     {
       "path": "/api/cron/sync-council-events",
-      "schedule": "15 3 * * *"
+      "schedule": "15 */2 * * *"
     },
     {
       "path": "/api/cron/weekly-digest",
