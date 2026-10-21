@@ -19,10 +19,12 @@ import { getTicketmasterAffiliateLink } from './affiliate.ts'
 // Words that appear in the user-agent of crawlers, scrapers, HTTP libraries,
 // link-preview fetchers, uptime monitors and headless browsers. Deliberately does
 // NOT list app names (Instagram, Facebook, Twitter/X, LinkedIn, TikTok, Telegram,
-// Slack, Discord): their in-app browsers carry those names, and real people reach
+// Slack, Discord, WhatsApp): their in-app browsers carry those names, and real people reach
 // us from social posts that way. Their preview fetchers (Twitterbot, Slackbot...)
-// are caught by 'bot'.
-const AUTOMATED_UA = /bot|crawl|spider|slurp|scrape|preview|archiver|lighthouse|pagespeed|headless|phantom|puppeteer|playwright|selenium|curl|wget|httpie|python|aiohttp|httpx|urllib|libwww|java\/|apache-http|okhttp|go-http|node-fetch|axios|undici|postman|insomnia|facebookexternalhit|whatsapp|google-read-aloud|petalsearch|yandex|baidu|duckduck|semrush|ahrefs|mj12|dotbot|bytespider|ccbot|perplexity|claude|anthropic/i
+// are caught by 'bot'. WhatsApp's link-preview fetcher has a user-agent that STARTS
+// with 'WhatsApp/'; its in-app browser starts with 'Mozilla/5.0', so only the former
+// is matched.
+const AUTOMATED_UA = /^whatsapp\/|bot|crawl|spider|slurp|scrape|bingpreview|skypeuripreview|archiver|lighthouse|pagespeed|headless|phantom|puppeteer|playwright|selenium|curl|wget|httpie|python|aiohttp|httpx|urllib|libwww|java\/|apache-http|okhttp|go-http|node-fetch|axios|undici|postman|insomnia|facebookexternalhit|google-read-aloud|petalsearch|yandex|baidu|duckduck|semrush|ahrefs|mj12|dotbot|bytespider|ccbot|perplexity|claude|anthropic/i
 
 export interface OutboundRequestLike {
   method: string

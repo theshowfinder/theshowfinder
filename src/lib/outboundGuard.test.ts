@@ -32,7 +32,8 @@ describe('automatedRequestReason', () => {
       'curl/8.4.0 something',
       'node-fetch/1.0 (+https://github.com/bitinn/node-fetch)',
       'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
-      'WhatsApp/2.23.20 A',
+      'WhatsApp/2.23.20.0 A',
+      'WhatsApp/2.2346.52 i',
       'Mozilla/5.0 (X11; Linux x86_64) HeadlessChrome/120.0.0.0 Safari/537.36',
       'Go-http-client/2.0 1234567',
       'meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)',
@@ -54,6 +55,8 @@ describe('automatedRequestReason', () => {
       'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36 Telegram-Android/10.0 (Google Pixel 8)',
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Slack/4.38.0 Chrome/124.0.0.0 Safari/537.36',
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) discord/0.0.300 Chrome/124.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 WhatsApp/2.24.20.80',
+      'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36 WhatsApp/2.24.20.80',
     ]) {
       assert.equal(automatedRequestReason(req({ ...person, 'User-Agent': ua })), null, ua)
     }
