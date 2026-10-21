@@ -109,6 +109,38 @@ describe('isTicketmasterDestination', () => {
   })
 })
 
+describe('decideOutbound: a real click is never lost', () => {
+  const dest = 'https://www.ticketmaster.co.uk/event/123'
+
+  test('a click marked by the page script is credited even when browser headers look odd', () => {
+    for (const headers of [
+      { 'User-Agent': CHROME },                                         // privacy tool stripped Accept-Language
+      { ...person, 'Sec-Fetch-Mode': 'cors' },
+      { ...person, 'Sec-Fetch-Dest': 'empty' },
+    ]) {
+      const d = decideOutbound(req(headers), dest, 'evt-abc', true)
+      assert.ok(d.kind === 'redirect' && d.tracked, JSON.stringify(headers))
+    }
+  })
+
+  test('the marker never overrides a declared bot, a missing user-agent, a prefetch or a non-GET', () => {
+    for (const r of [
+      req({ ...person, 'User-Agent': 'Mozilla/5.0 (compatible; GPTBot/1.1)' }),
+      req({ 'Accept-Language': 'en' }),
+      req({ ...person, 'Sec-Purpose': 'prefetch' }),
+      req(person, 'HEAD'),
+    ]) {
+      const d = decideOutbound(r, dest, 'evt-abc', true)
+      assert.ok(d.kind === 'redirect' && !d.tracked)
+    }
+  })
+
+  test('without the marker an odd request is sent to plain Ticketmaster', () => {
+    const d = decideOutbound(req({ 'User-Agent': CHROME }), dest, 'evt-abc', false)
+    assert.ok(d.kind === 'redirect' && !d.tracked)
+  })
+})
+
 describe('decideOutbound', () => {
   const dest = 'https://www.ticketmaster.co.uk/event/123'
 

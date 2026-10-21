@@ -22,7 +22,7 @@ import { getTicketmasterAffiliateLink } from './affiliate.ts'
 // Slack, Discord): their in-app browsers carry those names, and real people reach
 // us from social posts that way. Their preview fetchers (Twitterbot, Slackbot...)
 // are caught by 'bot'.
-const AUTOMATED_UA = /bot|crawl|spider|slurp|scrape|fetch|monitor|check|probe|scan|preview|archiver|validator|analy[sz]|lighthouse|pagespeed|headless|phantom|puppeteer|playwright|selenium|curl|wget|httpie|python|requests|aiohttp|httpx|urllib|libwww|java\/|apache-http|okhttp|go-http|node-fetch|axios|undici|got\(|postman|insomnia|facebookexternalhit|whatsapp|bingpreview|google-read-aloud|petalsearch|yandex|baidu|duckduck|semrush|ahrefs|mj12|dotbot|bytespider|gptbot|claude|anthropic|perplexity|ccbot|amazon/i
+const AUTOMATED_UA = /bot|crawl|spider|slurp|scrape|preview|archiver|lighthouse|pagespeed|headless|phantom|puppeteer|playwright|selenium|curl|wget|httpie|python|aiohttp|httpx|urllib|libwww|java\/|apache-http|okhttp|go-http|node-fetch|axios|undici|postman|insomnia|facebookexternalhit|whatsapp|google-read-aloud|petalsearch|yandex|baidu|duckduck|semrush|ahrefs|mj12|dotbot|bytespider|ccbot|perplexity|claude|anthropic/i
 
 export interface OutboundRequestLike {
   method: string
@@ -71,11 +71,20 @@ export type OutboundDecision =
   | { kind: 'invalid' }
   | { kind: 'redirect'; location: string; tracked: boolean; reason: string | null }
 
+// Reasons that are weak signals: real browsers can occasionally trip them (a privacy
+// tool stripping headers, an unusual webview). A click that the page's own script
+// marked as made by a person (see OutboundLinkMarker) overrides these, so nobody
+// who really clicked loses the commission. The other reasons (a declared bot, no
+// user-agent, a non-GET request, a prefetch) are never overridden.
+const SOFT_REASONS = new Set(['not-a-navigation', 'not-a-document', 'no-accept-language'])
+
 // Where should this request go? Invalid destinations (not a Ticketmaster page) are
-// the only thing refused; everything else is sent to Ticketmaster.
-export function decideOutbound(req: OutboundRequestLike, destination: string | null, tag?: string): OutboundDecision {
+// the only thing refused; everything else is sent to Ticketmaster. `humanSignal` is
+// true when the link carries the marker our page script adds on a real pointer,
+// touch or keyboard interaction (crawlers never run it, and it is not in the HTML).
+export function decideOutbound(req: OutboundRequestLike, destination: string | null, tag?: string, humanSignal = false): OutboundDecision {
   if (!isTicketmasterDestination(destination)) return { kind: 'invalid' }
   const reason = automatedRequestReason(req)
-  if (reason) return { kind: 'redirect', location: destination!, tracked: false, reason }
-  return { kind: 'redirect', location: getTicketmasterAffiliateLink(destination!, tag), tracked: true, reason: null }
+  if (reason && !(humanSignal && SOFT_REASONS.has(reason))) return { kind: 'redirect', location: destination!, tracked: false, reason }
+  return { kind: 'redirect', location: getTicketmasterAffiliateLink(destination!, tag), tracked: true, reason: reason ? `${reason}-overridden-by-click` : null }
 }

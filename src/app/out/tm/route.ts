@@ -15,7 +15,8 @@ const HEADERS = { 'Cache-Control': 'private, no-store, max-age=0', 'X-Robots-Tag
 function handle(request: Request) {
   const url = new URL(request.url)
   const tag = url.searchParams.get('s') ?? undefined
-  const decision = decideOutbound(request, url.searchParams.get('u'), tag)
+  const human = url.searchParams.get('h') === '1'
+  const decision = decideOutbound(request, url.searchParams.get('u'), tag, human)
 
   // One structured line per request in the Vercel runtime logs, so any future
   // question about this traffic can be answered from real data.
@@ -27,6 +28,7 @@ function handle(request: Request) {
     ua: (request.headers.get('user-agent') ?? '').slice(0, 160),
     ref: (request.headers.get('referer') ?? '').slice(0, 120),
     country: request.headers.get('x-vercel-ip-country') ?? undefined,
+    human,
     tag,
   }))
 

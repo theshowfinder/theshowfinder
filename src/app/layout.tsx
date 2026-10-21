@@ -5,6 +5,7 @@ import './globals.css'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 import Toast from '@/components/Toast'
+import OutboundLinkMarker from '@/components/OutboundLinkMarker'
 import { jsonLdScript, buildWebsiteSchema, buildOrganizationSchema } from '@/lib/jsonld'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
@@ -86,6 +87,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           dangerouslySetInnerHTML={{ __html: jsonLdScript(buildOrganizationSchema()) }}
         />
         <Header />
+        <OutboundLinkMarker />
         <main className="flex-1">{children}</main>
         <Footer />
         <Toast />
