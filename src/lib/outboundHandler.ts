@@ -64,6 +64,18 @@ export async function handleOutbound(request: Request, provider: OutProvider): P
     ...(outcome === 'invalid' ? { dest: (url.searchParams.get('u') ?? '').slice(0, 200) } : {}),
   }))
 
+  // Durable daily count (outbound_click_daily), so before/after can be shown from our own data. Never delays the
+  // visitor by more than 400 ms and never fails the redirect.
+  try {
+    await Promise.race([
+      (createAdminClient() as unknown as { rpc: (f: string, a: Record<string, string | null>) => Promise<unknown> })
+        .rpc('bump_outbound_click', { p_provider: provider, p_outcome: outcome, p_reason: reason }),
+      new Promise(resolve => setTimeout(resolve, 400)),
+    ])
+  } catch {
+    // counting is best-effort
+  }
+
   if (!location) return new Response(null, { status: 400, headers: HEADERS })
   return new Response(null, { status: 302, headers: { ...HEADERS, Location: location } })
 }
