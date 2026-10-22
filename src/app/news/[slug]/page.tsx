@@ -102,13 +102,14 @@ export default async function NewsStoryPage({ params }: Props) {
     { name: story.headline, url },
   ])
 
-  const alertBox = (variant: string) => (
+  const alertBox = (variant: string, stacked = false) => (
     <NewsletterInline
       source={variant}
       subject={story.artist_name}
       heading="Hear about the next big tour first"
       blurb="We email you as soon as new tours are announced, with the presale and on-sale times, so you are ready the moment tickets drop. Free, and you can unsubscribe any time."
       buttonLabel="Get tour alerts"
+      stacked={stacked}
     />
   )
 
@@ -232,7 +233,7 @@ export default async function NewsStoryPage({ params }: Props) {
         </div>
 
         <aside className="hidden lg:block">
-          <div className="sticky top-24">{alertBox('news-article')}</div>
+          <div className="sticky top-24">{alertBox('news-article', true)}</div>
         </aside>
       </div>
 

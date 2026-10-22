@@ -90,7 +90,8 @@ async function linkArtist(db: Loose, eventId: string, name: string | null): Prom
 }
 
 interface GigsbergRow extends FeedRow { id: number; event_time: string | null; performer1: string | null }
-interface SeeTicketsRow extends FeedRow { id: string; primary_artist: string | null; second_artist: string | null }
+// event_time: the show's local start time from the feed ("19:30"), a generated column (migration 086).
+interface SeeTicketsRow extends FeedRow { id: string; event_time: string | null; primary_artist: string | null; second_artist: string | null }
 
 async function createGigsbergEvent(db: Loose, row: GigsbergRow): Promise<string> {
   const venueId = await findOrCreateVenue(db, row.venue!, row.city!)
@@ -114,7 +115,7 @@ async function createSeeTicketsEvent(db: Loose, row: SeeTicketsRow): Promise<str
   const slug = `${slugify(`${row.name}-${row.event_date}-${row.city}`)}-${slugify(row.id).slice(0, 24)}`
   const { data: event, error } = await db.from('events').insert({
     title: row.name, slug, description: `Live event in ${row.city}. Check See Tickets for current ticket availability.`, category, venue_id: venueId,
-    start_date: londonToUtcIso(row.event_date!, null), currency: 'GBP', see_tickets_affiliate_url: row.url,
+    start_date: londonToUtcIso(row.event_date!, row.event_time), currency: 'GBP', see_tickets_affiliate_url: row.url,
     source: 'see_tickets', source_url: row.url, status: 'upcoming', image_url: fallbackEventImage(category, row.name),
   }).select('id').single()
   if (error || !event) throw new Error(error?.message ?? 'Could not create event')
@@ -184,7 +185,7 @@ export async function importFeedEvents(opts: { deadlineMs: number }): Promise<Fe
 
   // See Tickets
   const s = result.see_tickets
-  const sRows = await fetchCandidates<SeeTicketsRow>(db, 'see_tickets_catalogue_events', 'id, name, event_date, venue, city, primary_artist, second_artist, url', today, horizon)
+  const sRows = await fetchCandidates<SeeTicketsRow>(db, 'see_tickets_catalogue_events', 'id, name, event_date, event_time, venue, city, primary_artist, second_artist, url', today, horizon)
   s.candidates = sRows.length
   for (const row of sRows) {
     if (outOfTime()) { result.status = 'partial'; break }

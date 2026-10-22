@@ -34,6 +34,9 @@ describe('londonToUtcIso', () => {
   test('summer (BST) shows are an hour earlier in UTC, winter (GMT) the same', () => {
     assert.equal(londonToUtcIso('2027-06-24', '19:30:00'), '2027-06-24T18:30:00.000Z')
     assert.equal(londonToUtcIso('2027-01-20', '19:30'), '2027-01-20T19:30:00.000Z')
-    assert.equal(londonToUtcIso('2026-11-20', null), '2026-11-20T19:00:00.000Z')
+    // no time in the feed: midnight UK = "time not known", never a made-up 7pm
+    assert.equal(londonToUtcIso('2026-11-20', null), '2026-11-20T00:00:00.000Z')
+    assert.equal(londonToUtcIso('2027-06-24', null), '2027-06-23T23:00:00.000Z')
+    assert.equal(londonToUtcIso('2026-11-20', 'doors'), '2026-11-20T00:00:00.000Z')
   })
 })

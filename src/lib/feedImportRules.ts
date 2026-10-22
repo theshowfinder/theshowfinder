@@ -63,9 +63,13 @@ export function skipReason(row: FeedRow, sameDay: KnownEvent[], today: string): 
   return null
 }
 
-/** Local London wall-clock date + time -> UTC ISO string (handles BST). */
+/**
+ * Local London wall-clock date + time -> UTC ISO string (handles BST).
+ * No time in the feed = midnight UK, the site-wide "time not known" value (shown as a date only), never an
+ * invented 7pm.
+ */
 export function londonToUtcIso(date: string, time: string | null | undefined): string {
-  const t = /^\d{2}:\d{2}(:\d{2})?$/.test(time ?? '') ? (time as string) : '19:00:00'
+  const t = /^\d{2}:\d{2}(:\d{2})?$/.test(time ?? '') ? (time as string) : '00:00:00'
   const full = t.length === 5 ? `${t}:00` : t
   const guess = Date.parse(`${date}T${full}Z`)
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(guess))

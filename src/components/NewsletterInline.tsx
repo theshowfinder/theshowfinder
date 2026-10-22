@@ -16,6 +16,8 @@ interface Props {
   heading?: string
   blurb?: string
   buttonLabel?: string
+  // Narrow places (a sidebar): email box and button stacked full width instead of side by side.
+  stacked?: boolean
 }
 
 // Compact, self-contained sign-up card for content pages (event, artist,
@@ -29,6 +31,7 @@ export default function NewsletterInline({
   heading,
   blurb,
   buttonLabel = 'Get alerts',
+  stacked = false,
 }: Props) {
   const [email,   setEmail]   = useState('')
   const [result,  setResult]  = useState<SubscribeResult | null>(null)
@@ -85,7 +88,7 @@ export default function NewsletterInline({
           <h2 className="text-lg sm:text-xl font-extrabold leading-tight">{title}</h2>
           <p className="text-sm text-white/70 mt-1 mb-4 leading-relaxed">{text}</p>
 
-          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2.5">
+          <form onSubmit={handleSubmit} className={`flex flex-col gap-2.5 ${stacked ? '' : 'sm:flex-row'}`}>
             <label htmlFor={`nl-${source}`} className="sr-only">Email address</label>
             <input
               id={`nl-${source}`}
