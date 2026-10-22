@@ -12,7 +12,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { searchGigsbergAffiliateListings } from '@/lib/gigsbergAffiliate'
 import { fallbackEventImage, inferEventCategory } from '@/lib/eventImages'
 import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
-import { comparableVenue, londonToUtcIso, normalize, overlap, skipReason, slugify, type FeedRow, type KnownEvent, type SkipReason } from '@/lib/feedImportRules'
+import { cleanFeedDescription, comparableVenue, feedCategory, feedPriceFrom, londonToUtcIso, normalize, overlap, postcodeFrom, resolveFeedCity, skipReason, slugify, type FeedRow, type KnownEvent, type SkipReason } from '@/lib/feedImportRules'
 
 type Mode = 'off' | 'dry' | 'live'
 
@@ -63,7 +63,26 @@ async function loadKnownEvents(db: Loose): Promise<Map<string, KnownEvent[]>> {
   return byDate
 }
 
-async function findOrCreateVenue(db: Loose, venue: string, city: string): Promise<string> {
+// Map coordinates for a new venue from its postcode (postcodes.io: free, no key). Lets the city pages' "Around <city>"
+// section place it by distance. Any failure just leaves the venue without coordinates.
+async function postcodeLocation(postcode: string | null): Promise<{ lat: number; lng: number } | null> {
+  if (!postcode) return null
+  const controller = new AbortController()
+  const t = setTimeout(() => controller.abort(), 3000)
+  try {
+    const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`, { signal: controller.signal })
+    if (!res.ok) return null
+    const body = await res.json() as { result?: { latitude?: number | null; longitude?: number | null } }
+    const lat = body.result?.latitude, lng = body.result?.longitude
+    return typeof lat === 'number' && typeof lng === 'number' ? { lat, lng } : null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(t)
+  }
+}
+
+async function findOrCreateVenue(db: Loose, venue: string, city: string, address: string | null = null): Promise<string> {
   const slug = slugify(`${venue}-${city}`)
   const { data: bySlug } = await db.from('venues').select('id').eq('slug', slug).maybeSingle()
   if (bySlug?.id) return bySlug.id as string
@@ -72,7 +91,12 @@ async function findOrCreateVenue(db: Loose, venue: string, city: string): Promis
   const want = comparableVenue(venue)
   const hit = (inCity ?? []).find(v => normalize(v.name) === normalize(venue) || (want !== '' && comparableVenue(v.name) === want) || overlap(v.name, venue) >= 0.8)
   if (hit) return hit.id
-  const { data, error } = await db.from('venues').insert({ name: venue, slug, address: `${venue}, ${city}`, postcode: '', city, country: 'GB' }).select('id').single()
+  const postcode = postcodeFrom(address)
+  const where = await postcodeLocation(postcode)
+  const { data, error } = await db.from('venues').insert({
+    name: venue, slug, address: address ?? `${venue}, ${city}`, postcode: postcode ?? '', city, country: 'GB',
+    ...(where ? { lat: where.lat, lng: where.lng } : {}),
+  }).select('id').single()
   if (error || !data) throw new Error(error?.message ?? 'Could not create venue')
   return data.id as string
 }
@@ -89,13 +113,16 @@ async function linkArtist(db: Loose, eventId: string, name: string | null): Prom
   return (existing?.image_url as string | null | undefined) ?? null
 }
 
-interface GigsbergRow extends FeedRow { id: number; event_time: string | null; performer1: string | null }
+// type_name / sub_type: Gigsberg's own category ("Sport" / "Football"), generated columns (migration 086).
+interface GigsbergRow extends FeedRow { id: number; event_time: string | null; performer1: string | null; type_name: string | null; sub_type: string | null; image_url: string | null }
 // event_time: the show's local start time from the feed ("19:30"), a generated column (migration 086).
-interface SeeTicketsRow extends FeedRow { id: string; event_time: string | null; primary_artist: string | null; second_artist: string | null }
+// venue_address: the feed's full address (generated column, migration 086), used to place the show in the right city.
+// feed_description / search_price / min_price / max_price: the seller's own text and face-value prices.
+interface SeeTicketsRow extends FeedRow { id: string; event_time: string | null; venue_address: string | null; primary_artist: string | null; second_artist: string | null; feed_description: string | null; search_price: string | null; min_price: string | number | null; max_price: string | number | null }
 
 async function createGigsbergEvent(db: Loose, row: GigsbergRow): Promise<string> {
   const venueId = await findOrCreateVenue(db, row.venue!, row.city!)
-  const category = inferEventCategory(row.name)
+  const category = feedCategory('gigsberg', row.type_name, row.sub_type) ?? inferEventCategory(row.name)
   const slug = `${slugify(`${row.name}-${row.event_date}-${row.city}`)}-${row.id}`
   const { data: event, error } = await db.from('events').insert({
     title: row.name, slug, description: `Live event in ${row.city}. Check Gigsberg for current ticket availability.`, category, venue_id: venueId,
@@ -104,17 +131,32 @@ async function createGigsbergEvent(db: Loose, row: GigsbergRow): Promise<string>
   }).select('id').single()
   if (error || !event) throw new Error(error?.message ?? 'Could not create event')
   const artistImage = await linkArtist(db, event.id, row.performer1)
-  await db.from('events').update({ image_url: artistImage ?? fallbackEventImage(category, row.name) }).eq('id', event.id)
-  await db.from('gigsberg_catalogue_events').update({ matched_event_id: event.id, match_status: 'approved_new', match_reason: 'Imported automatically from the Gigsberg catalogue', match_checked_at: new Date().toISOString(), image_status: artistImage ? 'artist_image' : 'branded_fallback' }).eq('id', row.id)
+  // Picture: our artist's photo, else Gigsberg's performer photo (about 430px wide, fine for cards), else our artwork.
+  const feedImage = gigsbergImage(row.image_url)
+  await db.from('events').update({ image_url: artistImage ?? feedImage ?? fallbackEventImage(category, row.name) }).eq('id', event.id)
+  await db.from('gigsberg_catalogue_events').update({ matched_event_id: event.id, match_status: 'approved_new', match_reason: 'Imported automatically from the Gigsberg catalogue', match_checked_at: new Date().toISOString(), image_status: artistImage ? 'artist_image' : feedImage ? 'feed_image' : 'branded_fallback' }).eq('id', row.id)
   return event.id as string
 }
 
+// Gigsberg performer photos live on gigsberg.com and redirect to www; store the final address.
+function gigsbergImage(url: string | null): string | null {
+  if (!url || !/^https:\/\/(www\.)?gigsberg\.com\/files\/images\//i.test(url)) return null
+  return url.replace(/^https:\/\/gigsberg\.com\//i, 'https://www.gigsberg.com/')
+}
+
+// See Tickets' feed picture is a 70px thumbnail, too small to use: the page shows our artist photo when we have
+// one, else our category artwork. Text and face-value prices come from the feed.
 async function createSeeTicketsEvent(db: Loose, row: SeeTicketsRow): Promise<string> {
-  const venueId = await findOrCreateVenue(db, row.venue!, row.city!)
-  const category = inferEventCategory(row.name)
+  const venueId = await findOrCreateVenue(db, row.venue!, row.city!, row.venue_address)
+  const category = feedCategory('see_tickets', row.genre) ?? inferEventCategory(row.name)
   const slug = `${slugify(`${row.name}-${row.event_date}-${row.city}`)}-${slugify(row.id).slice(0, 24)}`
+  const priceFrom = feedPriceFrom(row.min_price, row.search_price)
+  const top = feedPriceFrom(row.max_price, null)
+  const priceTo = priceFrom != null && top != null && top > priceFrom ? top : null
   const { data: event, error } = await db.from('events').insert({
-    title: row.name, slug, description: `Live event in ${row.city}. Check See Tickets for current ticket availability.`, category, venue_id: venueId,
+    title: row.name, slug, category, venue_id: venueId,
+    description: cleanFeedDescription(row.feed_description) ?? `Live event in ${row.city}. Check See Tickets for current ticket availability.`,
+    price_from: priceFrom, price_to: priceTo,
     start_date: londonToUtcIso(row.event_date!, row.event_time), currency: 'GBP', see_tickets_affiliate_url: row.url,
     source: 'see_tickets', source_url: row.url, status: 'upcoming', image_url: fallbackEventImage(category, row.name),
   }).select('id').single()
@@ -161,8 +203,10 @@ export async function importFeedEvents(opts: { deadlineMs: number }): Promise<Fe
 
   // Gigsberg
   const g = result.gigsberg
-  const gRows = await fetchCandidates<GigsbergRow>(db, 'gigsberg_catalogue_events', 'id, name, event_date, event_time, venue, city, performer1, url', today, horizon)
+  const gRows = await fetchCandidates<GigsbergRow>(db, 'gigsberg_catalogue_events', 'id, name, event_date, event_time, venue, city, performer1, type_name, sub_type, image_url, url', today, horizon)
   g.candidates = gRows.length
+  // Our city names first (the duplicate check and the city pages both compare cities): see resolveFeedCity.
+  for (const r of gRows) r.city = resolveFeedCity(r.city, null)
   for (const row of gRows) {
     if (outOfTime()) { result.status = 'partial'; break }
     const why = skipReason(row, sameDay(row.event_date!), today)
@@ -185,8 +229,9 @@ export async function importFeedEvents(opts: { deadlineMs: number }): Promise<Fe
 
   // See Tickets
   const s = result.see_tickets
-  const sRows = await fetchCandidates<SeeTicketsRow>(db, 'see_tickets_catalogue_events', 'id, name, event_date, event_time, venue, city, primary_artist, second_artist, url', today, horizon)
+  const sRows = await fetchCandidates<SeeTicketsRow>(db, 'see_tickets_catalogue_events', 'id, name, event_date, event_time, venue, city, venue_address, genre, primary_artist, second_artist, feed_description, search_price, min_price, max_price, url', today, horizon)
   s.candidates = sRows.length
+  for (const r of sRows) r.city = resolveFeedCity(r.city, r.venue_address)
   for (const row of sRows) {
     if (outOfTime()) { result.status = 'partial'; break }
     const why = skipReason(row, sameDay(row.event_date!), today)
@@ -217,6 +262,7 @@ export async function createEventFromCatalogue(platform: 'gigsberg' | 'see_ticke
   if (!row) return { ok: false, error: 'That listing no longer exists.' }
   if (row.matched_event_id) return { ok: false, error: 'That listing is already linked to a site event.' }
   if (row.gone_at) return { ok: false, error: 'That listing has been removed from the feed.' }
+  row.city = resolveFeedCity(row.city, platform === 'see_tickets' ? row.venue_address : null)
   if (!row.venue?.trim() || !row.city?.trim()) return { ok: false, error: 'The feed gives no venue or city for this show, so a page cannot be built. Hide it or link it by hand.' }
   if (!row.event_date || row.event_date < londonDate(new Date().toISOString())) return { ok: false, error: 'That show is in the past.' }
   try {

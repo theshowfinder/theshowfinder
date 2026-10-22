@@ -9,6 +9,9 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: '**.ticketmaster.com'       },
       { protocol: 'https', hostname: '**.livenation.com'         },
       { protocol: 'https', hostname: 'images.universe.com'       },
+      // Gigsberg performer photos, used on shows imported from the Gigsberg catalogue (event page hero).
+      { protocol: 'https', hostname: 'www.gigsberg.com'          },
+      { protocol: 'https', hostname: 'gigsberg.com'              },
     ],
   },
   // Keep /venues/<slug> free of searchParams so it can be CDN-cached. The
