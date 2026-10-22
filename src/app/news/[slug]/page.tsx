@@ -14,25 +14,45 @@ import StoryCard from '@/components/StoryCard'
 
 interface Props { params: Promise<{ slug: string }> }
 
+interface StoryEditorial {
+  standfirst: string
+  presaleEligibility: string
+  tourNote: string
+}
+
+function storyEditorial(slug: string): StoryEditorial | null {
+  if (slug !== 'sam-fender-uk-tour-dates-announced-oct-2026') return null
+  return {
+    standfirst: 'Sam Fender takes his biggest headline tour yet to eight UK stadium dates across five cities, with Wunderhorse as special guest. Album presale access requires a qualifying preorder by 9am Monday 26 October; general sale starts Friday 30 October at 9:30am.',
+    presaleEligibility: 'To qualify for the album presale, preorder the new album from Sam Fender’s official store by 9am Monday 26 October. The presale code and link are due by email by 8pm Tuesday 27 October.',
+    tourNote: 'Wunderhorse is confirmed as special guest on the UK stadium dates.',
+  }
+}
+
+function displayVenueName(name: string | null): string | null {
+  return name === 'St James Park' ? 'St James’ Park' : name
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   const story = await fetchStory(createPublicClient(), slug)
   if (!story) return { title: 'News story not found', robots: { index: false } }
   const url = storyUrl(story.slug)
   const image = storyImage(story, true)
+  const standfirst = storyEditorial(story.slug)?.standfirst ?? story.standfirst
   return {
     title: story.template_headline,
-    description: story.standfirst.slice(0, 160),
+    description: standfirst.slice(0, 160),
     alternates: { canonical: url },
     openGraph: {
       type: 'article',
       title: story.headline,
-      description: story.standfirst,
+      description: standfirst,
       url,
       publishedTime: story.published_at,
       images: [{ url: image, alt: story.artist_name }],
     },
-    twitter: { card: 'summary_large_image', title: story.headline, description: story.standfirst, images: [image] },
+    twitter: { card: 'summary_large_image', title: story.headline, description: standfirst, images: [image] },
   }
 }
 
@@ -91,9 +111,11 @@ export default async function NewsStoryPage({ params }: Props) {
   const url = storyUrl(story.slug)
   const artistHref = story.artist_slug ? `/artists/${story.artist_slug}` : null
   const firstName = story.artist_name
+  const editorial = storyEditorial(story.slug)
+  const standfirst = editorial?.standfirst ?? story.standfirst
 
   const schema = buildNewsArticleSchema({
-    headline: story.headline, description: story.standfirst, url, image: storyImage(story, true),
+    headline: story.headline, description: standfirst, url, image: storyImage(story, true),
     datePublished: story.published_at, dateModified: story.updated_at, about: story.artist_name,
   })
   const crumbs = buildBreadcrumbSchema([
@@ -138,7 +160,7 @@ export default async function NewsStoryPage({ params }: Props) {
             {story.story_type === 'tour_announcement' ? 'Just announced' : 'New dates'}
           </p>
           <h1 className="text-3xl sm:text-5xl font-extrabold leading-[1.08] tracking-tight max-w-3xl">{story.headline}</h1>
-          <p className="mt-4 text-base sm:text-lg text-white/85 max-w-2xl leading-relaxed">{story.standfirst}</p>
+          <p className="mt-4 text-base sm:text-lg text-white/85 max-w-2xl leading-relaxed">{standfirst}</p>
           <p className="mt-4 text-xs text-white/60">
             By TheShowFinder · {publishedFmt.format(new Date(story.published_at))} · From the official ticket listings
           </p>
@@ -174,6 +196,9 @@ export default async function NewsStoryPage({ params }: Props) {
                 <span>Popular shows can go fast. Be ready a few minutes early, signed in to your ticket account.</span>
               </li>
             </ul>
+            {editorial?.presaleEligibility && (
+              <p className="mt-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm leading-relaxed text-amber-950">{editorial.presaleEligibility}</p>
+            )}
             {artistHref && (
               <Link
                 href={artistHref}
@@ -186,6 +211,13 @@ export default async function NewsStoryPage({ params }: Props) {
           </section>
 
           <div className="lg:hidden">{alertBox('news-article-top')}</div>
+
+          {editorial?.tourNote && (
+            <section aria-label="Tour information" className="rounded-2xl bg-white border border-slate-200 p-5 sm:p-6">
+              <h2 className="text-lg font-extrabold text-slate-900 mb-2">Special guest</h2>
+              <p className="text-slate-700 leading-relaxed">{editorial.tourNote}</p>
+            </section>
+          )}
 
           {/* ── The dates ── */}
           {dates.length > 0 && (
@@ -204,7 +236,7 @@ export default async function NewsStoryPage({ params }: Props) {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="font-bold text-slate-900 truncate">{d.venue_city ?? d.venue_name}</p>
-                        <p className="text-sm text-slate-500 truncate">{d.venue_name}{time ? ` · ${time}` : ''}</p>
+                        <p className="text-sm text-slate-500 truncate">{displayVenueName(d.venue_name)}{time ? ` · ${time}` : ''}</p>
                       </div>
                       {d.slug && (
                         <Link
@@ -219,7 +251,7 @@ export default async function NewsStoryPage({ params }: Props) {
                   )
                 })}
               </ol>
-              <p className="mt-2 text-xs text-slate-500">Dates and times from the official ticket listings. Check each event page for the latest availability.</p>
+              <p className="mt-2 text-xs text-slate-500">Dates and times are from the official ticket listings. Each Tickets button opens the Showfinder event page, where you can check the latest availability and ticket links.</p>
             </section>
           )}
 
