@@ -179,10 +179,16 @@ const SOFT_REASONS = new Set(['not-a-navigation', 'not-a-document', 'no-accept-l
 // site is refused; everything else is sent on. `humanSignal` is true when the link
 // carries the marker our page script adds on a real pointer, touch or keyboard
 // interaction (crawlers never run it, and it is not in the HTML).
-export function decideProviderOutbound(provider: OutProvider, req: OutboundRequestLike, destination: string | null, tag?: string, humanSignal = false): OutboundDecision {
+// 22 Oct 2026: bots on residential proxies (Brazil, India, Saudi Arabia, Russia… desktop Chrome with full browser
+// headers) passed every header check and were sent through the affiliate links (Impact: 3,635 clicks on 21 Oct, all
+// desktop). They never run the page script, so the click marker is now REQUIRED: only a click a person made on
+// our page (h=1), or a link we handed to a person to share (share buttons, emails: v=s) that also looks like a
+// browser, goes through the affiliate link. Everything else reaches the same page without the affiliate link.
+export function decideProviderOutbound(provider: OutProvider, req: OutboundRequestLike, destination: string | null, tag?: string, humanSignal = false, sharedLink = false): OutboundDecision {
   if (!isAllowedDestination(provider, destination)) return { kind: 'invalid' }
   const dest = destination!
-  const reason = automatedRequestReason(req)
+  const headerReason = automatedRequestReason(req)
+  const reason = headerReason ?? (humanSignal || sharedLink ? null : 'no-click-marker')
   if (reason && !(humanSignal && SOFT_REASONS.has(reason))) {
     const plain = plainLink(provider, dest)
     return plain === null
@@ -193,6 +199,6 @@ export function decideProviderOutbound(provider: OutProvider, req: OutboundReque
 }
 
 // Ticketmaster shorthand (kept for existing callers and tests).
-export function decideOutbound(req: OutboundRequestLike, destination: string | null, tag?: string, humanSignal = false): OutboundDecision {
-  return decideProviderOutbound('tm', req, destination, tag, humanSignal)
+export function decideOutbound(req: OutboundRequestLike, destination: string | null, tag?: string, humanSignal = false, sharedLink = false): OutboundDecision {
+  return decideProviderOutbound('tm', req, destination, tag, humanSignal, sharedLink)
 }

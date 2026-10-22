@@ -160,7 +160,7 @@ describe('decideOutbound', () => {
   const dest = 'https://www.ticketmaster.co.uk/event/123'
 
   test('a person goes through our Impact tracking link, with the tag', () => {
-    const d = decideOutbound(req(person), dest, 'evt-abc')
+    const d = decideOutbound(req(person), dest, 'evt-abc', true)
     assert.ok(d.kind === 'redirect' && d.tracked)
     assert.ok(d.kind === 'redirect' && d.location.startsWith('https://ticketmaster.evyy.net/c/7328658/1965662/24023?u='))
     assert.ok(d.kind === 'redirect' && d.location.endsWith('&subId1=evt-abc'))
@@ -214,9 +214,9 @@ describe('other providers: See Tickets (Awin), Gigsberg, resale sites', () => {
   })
 
   test('See Tickets: a person goes through Awin with the event tag', () => {
-    const d1 = decideProviderOutbound('st', req(person), pclick, 'evt-abc')
+    const d1 = decideProviderOutbound('st', req(person), pclick, 'evt-abc', true)
     assert.ok(d1.kind === 'redirect' && d1.tracked && d1.location === `${pclick}&clickref=evt-abc`)
-    const d2 = decideProviderOutbound('st', req(person), stTour, 'evt-abc')
+    const d2 = decideProviderOutbound('st', req(person), stTour, 'evt-abc', true)
     assert.ok(d2.kind === 'redirect' && d2.tracked && d2.location.startsWith('https://www.awin1.com/cread.php?awinmid=7816&awinaffid=2896631&ued='))
   })
 
@@ -231,7 +231,7 @@ describe('other providers: See Tickets (Awin), Gigsberg, resale sites', () => {
   })
 
   test('Gigsberg: a person gets the aff tag, a bot does not', () => {
-    const p = decideProviderOutbound('gb', req(person), 'https://www.gigsberg.com/event/x-1')
+    const p = decideProviderOutbound('gb', req(person), 'https://www.gigsberg.com/event/x-1', undefined, true)
     assert.ok(p.kind === 'redirect' && p.tracked && p.location === 'https://www.gigsberg.com/event/x-1?aff=showfinder')
     const b = decideProviderOutbound('gb', bot, gb)
     assert.ok(b.kind === 'redirect' && !b.tracked && b.location === 'https://www.gigsberg.com/event/coldplay-wembley-123')
@@ -243,5 +243,21 @@ describe('other providers: See Tickets (Awin), Gigsberg, resale sites', () => {
     const b = decideProviderOutbound('vg', bot, u)
     assert.ok(p.kind === 'redirect' && p.location === u)
     assert.ok(b.kind === 'redirect' && b.location === u && !b.tracked)
+  })
+})
+
+describe('the click marker is required (22 Oct: proxy bots with full browser headers)', () => {
+  const dest = 'https://www.ticketmaster.co.uk/event/123'
+  test('a perfect browser request WITHOUT the marker does not go through the affiliate link', () => {
+    const d = decideOutbound(req(person), dest, 'evt-abc')
+    assert.deepEqual(d, { kind: 'redirect', location: dest, tracked: false, reason: 'no-click-marker' })
+  })
+  test('a link handed to a person (share button, email) is credited when opened in a browser', () => {
+    const d = decideOutbound(req(person), dest, 'digest', false, true)
+    assert.ok(d.kind === 'redirect' && d.tracked)
+  })
+  test('a shared link fetched by a bot or previewer is not', () => {
+    const d = decideOutbound(req({ ...person, 'User-Agent': 'WhatsApp/2.23.20.0 A' }), dest, 'digest', false, true)
+    assert.ok(d.kind === 'redirect' && !d.tracked)
   })
 })

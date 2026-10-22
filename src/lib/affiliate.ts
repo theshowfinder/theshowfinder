@@ -24,7 +24,8 @@ export function getTicketmasterAffiliateLink(destinationUrl: string, subId?: str
 export function outLink(provider: 'tm' | 'st' | 'gb' | 'vg' | 'sh' | 'vs' | 'ev', destinationUrl: string, subId?: string, absolute = false): string {
   const sub = cleanSubId(subId)
   const path = `/out/${provider}?u=${encodeURIComponent(destinationUrl)}${sub ? `&s=${sub}` : ''}`
-  return absolute ? `https://www.theshowfinder.com${path}` : path
+  // v=s marks a link handed to a person (share button, email): see decideProviderOutbound.
+  return absolute ? `https://www.theshowfinder.com${path}&v=s` : path
 }
 export function ticketmasterOutLink(destinationUrl: string, subId?: string, absolute = false): string {
   return outLink('tm', destinationUrl, subId, absolute)

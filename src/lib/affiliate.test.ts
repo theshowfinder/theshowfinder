@@ -50,6 +50,7 @@ describe('ticketmasterOutLink', () => {
 
   test('absolute form is used for share buttons', () => {
     assert.ok(ticketmasterOutLink('https://www.ticketmaster.co.uk/x', undefined, true).startsWith('https://www.theshowfinder.com/out/tm?u='))
+    assert.ok(ticketmasterOutLink('https://www.ticketmaster.co.uk/x', undefined, true).endsWith('&v=s'))
   })
 })
 

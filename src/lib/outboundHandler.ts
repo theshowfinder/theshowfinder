@@ -32,7 +32,8 @@ export async function handleOutbound(request: Request, provider: OutProvider): P
   const url = new URL(request.url)
   const tag = url.searchParams.get('s') ?? undefined
   const human = url.searchParams.get('h') === '1'
-  const decision = decideProviderOutbound(provider, request, url.searchParams.get('u'), tag, human)
+  const shared = url.searchParams.get('v') === 's'
+  const decision = decideProviderOutbound(provider, request, url.searchParams.get('u'), tag, human, shared)
 
   let location: string | null = null
   let outcome: 'invalid' | 'tracked' | 'plain' = 'invalid'
@@ -58,6 +59,7 @@ export async function handleOutbound(request: Request, provider: OutProvider): P
     ref: (request.headers.get('referer') ?? '').slice(0, 120),
     country: request.headers.get('x-vercel-ip-country') ?? undefined,
     human,
+    shared,
     tag,
     ...(outcome === 'invalid' ? { dest: (url.searchParams.get('u') ?? '').slice(0, 200) } : {}),
   }))
