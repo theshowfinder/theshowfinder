@@ -28,7 +28,7 @@ import {
   type ArtistEventLink, type ArtistEventRow,
 } from '@/lib/artistEvents'
 
-export const revalidate = 600
+export const revalidate = 3600
 
 // Opt this dynamic route into on-demand static generation: no pages are built
 // ahead of time, but each page is generated on first request, then cached on
