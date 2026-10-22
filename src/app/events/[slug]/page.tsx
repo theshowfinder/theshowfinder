@@ -77,6 +77,7 @@ interface EventDetail {
   currency: string
   tickets_url: string | null
   own_ticket_url: string | null
+  source: string | null
   viagogo_url: string | null
   stubhub_url: string | null
   gigsberg_url: string | null
@@ -100,7 +101,7 @@ const eventSelect = (withDetails: boolean) => `
       id, title, slug, description, category,
       start_date, end_date, onsale_date, presale_start, public_onsale_start, doors_time,${withDetails ? ' details,' : ''}
       image_url, price_from, price_to, currency,
-      tickets_url, own_ticket_url, viagogo_url, stubhub_url, gigsberg_url, gigsberg_affiliate_url, see_tickets_affiliate_url,
+      tickets_url, own_ticket_url, source, viagogo_url, stubhub_url, gigsberg_url, gigsberg_affiliate_url, see_tickets_affiliate_url,
       gigsberg_highlighted, gigsberg_highlight_until, gigsberg_inventory_status, status, tags,
       venue:venues(id, name, slug, address, city, postcode, website${withDetails ? ', details' : ''}),
       artists:event_artists(
@@ -454,7 +455,14 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const soldOutGigsberg = event.status === 'sold_out' ? resale.find(r => r.name === 'Gigsberg') ?? null : null
   const moreOptions = soldOutGigsberg ? resale.filter(r => r.name !== 'Gigsberg') : resale
   const grouping = await getCanonicalInfo(event.id, event)
-  const ownTicketUrl = event.own_ticket_url && !isGigsbergUrl(event.own_ticket_url) ? event.own_ticket_url : null
+  // Local events (council / tourism-board listings: Visit Bristol, Visit Leicester...) keep their listing page in
+  // own_ticket_url. That is the organiser's information page, not tickets we hold, so it is never shown as
+  // "Buy Direct": it gets a plain "Event details & booking" link below any real ticket sellers instead.
+  const isLocalListing = event.category === 'local' || /_council$/.test(event.source ?? '')
+  const ownLink = event.own_ticket_url && !isGigsbergUrl(event.own_ticket_url) ? event.own_ticket_url : null
+  const ownTicketUrl = isLocalListing ? null : ownLink
+  const localListingUrl = isLocalListing ? ownLink : null
+  const localListingHost = localListingUrl ? (() => { try { return new URL(localListingUrl).hostname.replace(/^www\./, '') } catch { return 'the organiser' } })() : null
   const highlightActive = event.gigsberg_highlighted && event.gigsberg_inventory_status === 'available' && (!event.gigsberg_highlight_until || new Date(event.gigsberg_highlight_until) > new Date())
   const headliners = event.artists
     .filter(a => a.is_headliner && a.artist)
@@ -635,7 +643,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                   className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm md:inline-flex md:gap-2 md:text-lg md:px-8 md:py-4 md:min-h-0 md:shadow-lg"
                   style={{ backgroundColor: '#E8003D' }}
                 >
-                  Get Tickets ↗
+                  {localListingUrl ? 'Event details & booking ↓' : 'Get Tickets ↗'}
                 </a>
               )}
             </div>
@@ -1001,7 +1009,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 </p>
                 <p className="text-slate-500 text-sm mt-2">Check below for resale options</p>
               </div>
-            ) : (
+            ) : primary.length === 0 && localListingUrl ? null : (
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                 <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-4">{event.tickets_url ? 'Official Tickets' : 'Ticket Marketplace'}</h3>
                 <div className="flex flex-col gap-3">
@@ -1053,6 +1061,24 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 Resale tickets may be priced above face value. Always check the seller&apos;s terms.
               </p>
             </div>
+            )}
+
+            {/* Local listing (council / tourism board): the organiser's page for times, prices and booking. */}
+            {localListingUrl && !isCancelledOrPostponed && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">Event details &amp; booking</h3>
+                <p className="text-xs text-slate-400 mb-4">Listed by {localListingHost}. Times, prices and how to book are on their page.</p>
+                <TrackedTicketLink
+                  href={localListingUrl}
+                  provider={`Local listing (${localListingHost})`}
+                  section="also_available"
+                  context={event.slug}
+                  className="flex items-center justify-between rounded-xl px-5 py-4 border-2 border-slate-900 text-slate-900 font-extrabold hover:bg-slate-50 transition-colors min-h-[56px]"
+                >
+                  <span>Open on {localListingHost}</span>
+                  <span className="text-xl ml-3">↗</span>
+                </TrackedTicketLink>
+              </div>
             )}
 
             {/* Package / extra-session ticket links merged into this canonical event. */}
