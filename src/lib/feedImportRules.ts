@@ -48,7 +48,7 @@ export type SkipReason = 'no_venue_or_city' | 'no_link' | 'package' | 'not_a_sho
 // is NOT a test marker; those rows are real gigs (Hermanos Gutiérrez, José González...) with a mislabelled genre.
 const NOT_A_SHOW_GENRES = new Set(['ATTRACTIONS', 'CINEMA'])
 const NOT_A_SHOW_TITLE = new RegExp([
-  String.raw`^\s*test\b|\btest (?:event|listing|show|product|page)\b|\bdo not (?:buy|purchase|book)\b`,
+  String.raw`^\s*test\b|\btest (?:event|listing|show|product|page)\b|\b(?:only )?for test(?:ing)?(?: only)?\b|\btest only\b|\bdo not (?:buy|purchase|book)\b`,
   String.raw`\bwalking tours?\b|\bwalks?\s*$`,
   String.raw`\bquiz\b`,
   String.raw`\b(?:antiques?|vintage|craft|wedding|record|book|comic|toy|collectors?|christmas|xmas|food|beer|gin|wine)(?: and \w+)? (?:fairs?|fayres?|markets?|exhibitions?)\b`,

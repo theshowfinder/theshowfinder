@@ -47,6 +47,7 @@ describe('not a show (live feed examples, 22 Oct 2026)', () => {
     no('Rock Oyster 2027 - Accommodation')
     no('MAGNETAR DANCE - CAR PARK')
     no('Test Event 1')
+    no('ONLY FOR TEST') // a Gigsberg test listing at Wembley Stadium
     no('The Whole Me Global Conference 2027')
     assert.equal(skipReason(row({ name: 'HUGE POP QUIZ' }), [], today), 'not_a_show')
   })
