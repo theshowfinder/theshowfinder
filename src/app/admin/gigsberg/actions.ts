@@ -105,7 +105,7 @@ export async function approveExistingGigsbergMatchAction(formData: FormData) {
   if (!Number.isFinite(catalogueId) || !eventId) throw new Error('Missing Gigsberg or Showfinder event')
 
   const { db, row } = await getCatalogueRow(catalogueId)
-  let highlight = requestedHighlight && row.inventory_status === 'available'
+  const highlight = requestedHighlight && row.inventory_status === 'available'
   const { error: eventError } = await db.from('events').update({
     gigsberg_affiliate_url: row.url,
     gigsberg_highlighted: highlight,
@@ -161,18 +161,41 @@ export async function rejectGigsbergMatchAction(formData: FormData) {
   const catalogueId = Number(formData.get('catalogue_id'))
   if (!Number.isFinite(catalogueId)) throw new Error('Missing Gigsberg catalogue record')
   const { db } = await getCatalogueRow(catalogueId)
+  // 'rejected' is never re-matched (gigsbergMatching only reads pending/review/no_match), never imported by the
+  // automatic feed import (it only takes no_match rows), and catalogue syncs never reset it (they do not write
+  // match_status). Undo with restoreGigsbergMatchAction.
   const { error } = await db.from('gigsberg_catalogue_events').update({
     match_status: 'rejected',
-    match_reason: 'Rejected by admin',
+    match_reason: 'Removed from the list by admin',
     match_checked_at: new Date().toISOString(),
   }).eq('id', catalogueId)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/gigsberg/matches')
   const returnTo = String(formData.get('return_to') ?? '')
+  const anchor = String(formData.get('return_anchor') ?? '').replace(/[^a-zA-Z0-9_-]/g, '')
   if (returnTo.startsWith('/admin/')) {
-    redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}approved=rejected`)
+    const [path] = returnTo.split('#', 1)
+    redirect(`${path}${path.includes('?') ? '&' : '?'}approved=rejected${anchor ? `#${anchor}` : ''}`)
   }
   redirect('/admin/gigsberg/matches?approved=rejected')
+}
+
+/** Undo "Remove from list": back to review when it had a suggested event, else a new-event candidate. */
+export async function restoreGigsbergMatchAction(formData: FormData) {
+  await checkAuth()
+  const catalogueId = Number(formData.get('catalogue_id'))
+  if (!Number.isFinite(catalogueId)) throw new Error('Missing Gigsberg catalogue record')
+  const { db, row } = await getCatalogueRow(catalogueId)
+  const { error } = await db.from('gigsberg_catalogue_events').update({
+    match_status: row.matched_event_id ? 'review' : 'no_match',
+    match_reason: 'Put back on the list by admin',
+    match_checked_at: new Date().toISOString(),
+  }).eq('id', catalogueId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/gigsberg/matches')
+  const returnTo = String(formData.get('return_to') ?? '')
+  if (returnTo.startsWith('/admin/')) redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}approved=restored`)
+  redirect('/admin/gigsberg/matches?filter=removed&approved=restored')
 }
 
 export async function linkGigsbergToExistingEventAction(formData: FormData) {
