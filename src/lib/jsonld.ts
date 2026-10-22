@@ -206,3 +206,29 @@ export function buildOrganizationSchema() {
     sameAs:     SOCIAL_LINKS.map((link) => link.href),
   }
 }
+
+/** NewsArticle for our own news stories (/news/<slug>). */
+export function buildNewsArticleSchema(input: {
+  headline: string
+  description: string
+  url: string
+  image: string | null
+  datePublished: string
+  dateModified: string
+  about?: string | null
+}) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'NewsArticle',
+    headline: input.headline.slice(0, 110),
+    description: input.description,
+    mainEntityOfPage: { '@type': 'WebPage', '@id': input.url },
+    url: input.url,
+    image: [input.image ?? SITE_IMAGE_URL],
+    datePublished: input.datePublished,
+    dateModified: input.dateModified,
+    author: { '@type': 'Organization', name: 'TheShowFinder', url: BASE_URL },
+    publisher: { '@type': 'Organization', name: 'TheShowFinder', url: BASE_URL, logo: { '@type': 'ImageObject', url: SITE_IMAGE_URL } },
+    ...(input.about ? { about: { '@type': 'PerformingGroup', name: input.about } } : {}),
+  }
+}

@@ -35,6 +35,7 @@ import LocalSpotlight from '@/components/LocalSpotlight'
 import LocalHeroCopy from '@/components/LocalHeroCopy'
 import CategoryStrip from '@/components/CategoryStrip'
 import WestEndStrip from '@/components/WestEndStrip'
+import HeadlineNews from '@/components/HeadlineNews'
 import type { EventWithVenue, CityNews } from '@/lib/types/database'
 import { saleBadgeText, groupDateCount } from '@/lib/on-sale'
 import { fetchEventsThisWeek, fetchPresalesOpenNow, fetchOnSaleThisWeek, attachTourDateCounts, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
@@ -470,6 +471,11 @@ const EventCardSkeleton = () => (
 export default function HomePage() {
   return (
     <>
+      {/* ── HEADLINE NEWS: our newest tour announcements, newest first ── */}
+      <Suspense fallback={null}>
+        <HeadlineNews />
+      </Suspense>
+
       {/* ── HERO ────────────────────────────────────────────────── */}
       <section
         className="relative overflow-hidden flex flex-col items-center justify-center text-white min-h-[56vh] md:min-h-screen"

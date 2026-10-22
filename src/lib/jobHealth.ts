@@ -24,6 +24,7 @@ export const JOB_EXPECTATIONS: Record<string, { label: string; maxHoursSinceSucc
   'indexnow':                  { label: 'IndexNow pings',                maxHoursSinceSuccess: 30 },
   'event-reminders':           { label: 'Event reminders',               maxHoursSinceSuccess: 30 },
   'follow-alerts':             { label: 'Follow alerts',                 maxHoursSinceSuccess: 30 },
+  'news-alerts':               { label: 'Just-announced alerts',         maxHoursSinceSuccess: 16 },
   'health-check':              { label: 'Health check (this alert job)', maxHoursSinceSuccess: 14 },
   'weekly-digest':             { label: 'Weekly digest',                 maxHoursSinceSuccess: 192 },
 }

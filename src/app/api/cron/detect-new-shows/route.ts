@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { detectNewShows } from '@/lib/newShowsDetector'
+import { generateNewsStories } from '@/lib/newsStoriesJob'
 import { withJobRun } from '@/lib/jobRuns'
 
 export const maxDuration = 120
@@ -17,7 +18,16 @@ async function handleGet(request: Request) {
   const started = new Date().toISOString()
   try {
     const result = await detectNewShows()
-    return NextResponse.json({ success: true, started, finished: new Date().toISOString(), ...result })
+    // Our own headline stories (image, hook headline, article page). Kept separate so a problem here can never
+    // stop the existing news items above.
+    let stories: unknown = null
+    try {
+      stories = await generateNewsStories()
+    } catch (err) {
+      stories = { error: err instanceof Error ? err.message : String(err) }
+      console.error('[detect-new-shows] news stories failed:', stories)
+    }
+    return NextResponse.json({ success: true, started, finished: new Date().toISOString(), ...result, stories })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('[detect-new-shows] Fatal error:', message)

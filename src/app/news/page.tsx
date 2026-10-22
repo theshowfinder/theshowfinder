@@ -8,6 +8,8 @@ import NewsCardGrid from '@/components/NewsCardGrid'
 import NewsletterInline from '@/components/NewsletterInline'
 import { jsonLdScript, buildItemListSchema } from '@/lib/jsonld'
 import type { CityNews } from '@/lib/types/database'
+import { fetchLatestStories } from '@/lib/newsStoriesData'
+import StoryCard from '@/components/StoryCard'
 
 const NEWS_OG_IMAGE = 'https://www.theshowfinder.com/og-image.png'
 
@@ -50,6 +52,7 @@ export default async function NewsPage() {
     .eq('city_slug', NEWS_HUB_SLUG)
     .order('published_at', { ascending: false })
     .limit(100) as unknown as { data: CityNews[] | null }
+  const stories = await fetchLatestStories(supabase, { limit: 24 })
 
   // Same recency-ranking contract city pages/homepage use (see
   // rankCityNewsForDisplay in newsPublishing.ts) — redundant with the
@@ -57,11 +60,14 @@ export default async function NewsPage() {
   // and unit-tested rather than implicit in a Supabase query string.
   const items = rankCityNewsForDisplay(data ?? [], 100)
 
-  const itemListSchema = buildItemListSchema(items.map(i => ({ name: i.headline, url: i.url })))
+  const itemListSchema = buildItemListSchema([
+    ...stories.map(s => ({ name: s.headline, url: `https://www.theshowfinder.com/news/${s.slug}` })),
+    ...items.map(i => ({ name: i.headline, url: i.url })),
+  ])
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
-      {items.length > 0 && (
+      {(items.length > 0 || stories.length > 0) && (
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: jsonLdScript(itemListSchema) }}
@@ -82,14 +88,23 @@ export default async function NewsPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        {items.length === 0 ? (
+        {stories.length > 0 && (
+          <section aria-labelledby="tour-news" className="mb-12">
+            <h2 id="tour-news" className="text-xl sm:text-2xl font-extrabold text-slate-900 mb-5">Just announced</h2>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {stories.map(s => <StoryCard key={s.id} story={s} />)}
+            </div>
+          </section>
+        )}
+        {items.length === 0 && stories.length === 0 ? (
           <div className="text-center py-24">
             <p className="text-6xl mb-4">📰</p>
             <h2 className="text-xl font-semibold text-slate-700 mb-2">No news right now</h2>
             <p className="text-slate-500">Check back soon.</p>
           </div>
         ) : (
-          <>
+          items.length > 0 && <>
+            {stories.length > 0 && <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 mb-2">More ticket news</h2>}
             <p className="text-sm text-slate-500 mb-6">
               {items.length} stor{items.length !== 1 ? 'ies' : 'y'}
             </p>

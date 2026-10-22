@@ -73,6 +73,14 @@
       "schedule": "0 17 * * *"
     },
     {
+      "path": "/api/cron/news-alerts",
+      "schedule": "20 5 * * *"
+    },
+    {
+      "path": "/api/cron/news-alerts",
+      "schedule": "20 17 * * *"
+    },
+    {
       "path": "/api/cron/indexnow",
       "schedule": "30 4 * * *"
     },
