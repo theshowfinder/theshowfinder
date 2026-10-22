@@ -140,6 +140,15 @@ export function tokenOverlap(left: string, right: string) {
 }
 
 // ---- Venues -----------------------------------------------------------------
+function cityTokens(...cities: Array<string | null | undefined>): Set<string> {
+  const out = new Set<string>()
+  for (const city of cities) for (const token of normalize(city ?? '').split(' ')) if (token) out.add(token)
+  return out
+}
+function withoutWords(value: string, words: Set<string>): string {
+  if (!words.size) return value
+  return normalize(value).split(' ').filter(token => token && !words.has(token)).join(' ')
+}
 // Gigsberg adds old names in brackets ("OVO Hydro (formerly The SSE Hydro)") and
 // words like "Stadium" that Ticketmaster may leave out ("Loftus Road" vs
 // "Loftus Road Stadium"). Compare the venue's own name only.
@@ -233,7 +242,13 @@ export function fixtureMatch(listingName: string, eventTitle: string): boolean |
 export function score(catalogue: CatalogueRow, event: ShowfinderEvent) {
   const sameDate = dateOnly(catalogue.event_date) === dateOnly(event.start_date)
   const sameCity = sameCityName(catalogue.city, event.venue?.city)
-  const venueOverlap = Math.max(tokenOverlap(catalogue.venue ?? '', event.venue?.name ?? ''), tokenOverlap(cleanVenue(catalogue.venue), cleanVenue(event.venue?.name)))
+  // The town is not evidence of the same venue: "Olympia London" and "The London Dungeon" share only
+  // "London", "Plymouth Pavilions" and "Plymouth University" only "Plymouth". Strip both cities first.
+  const cityWords = cityTokens(catalogue.city, event.venue?.city)
+  const venueOverlap = Math.max(
+    tokenOverlap(withoutWords(catalogue.venue ?? '', cityWords), withoutWords(event.venue?.name ?? '', cityWords)),
+    tokenOverlap(withoutWords(cleanVenue(catalogue.venue), cityWords), withoutWords(cleanVenue(event.venue?.name), cityWords)),
+  )
   const sameVenue = Boolean(cleanVenue(catalogue.venue) && cleanVenue(catalogue.venue) === cleanVenue(event.venue?.name))
   // Some catalogue records have the artist only in the event name and leave
   // performer1/performer2 empty. Keep the structured performer fields first,

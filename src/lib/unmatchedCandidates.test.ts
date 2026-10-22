@@ -42,4 +42,13 @@ describe('rankCandidates', () => {
     assert.ok(ranked[0].why.includes('same showtime'))
     assert.ok(ranked[1].why.some(w => w.startsWith('different time')))
   })
+  test('a shared town name is not a similar venue: Khalid at Olympia London is never offered the London Eye or London Dungeon', () => {
+    const l = row({ name: 'Khalid', performer1: 'Khalid', event_date: '2026-10-24', event_time: '20:00:00', venue: 'Olympia London', city: 'London' })
+    const eye = ev('eye', 'London Eye - Standard Experience', { start_date: '2026-10-24T09:00:00Z', venue: { name: 'The London Eye', city: 'London' } })
+    const dungeon = ev('dg', 'London Dungeon - Standard Entry', { start_date: '2026-10-24T09:00:00Z', venue: { name: 'The London Dungeon', city: 'London' } })
+    assert.deepEqual(rankCandidates(l, [eye, dungeon]), [])
+    const p = row({ name: 'Professor Brian Cox', performer1: 'Brian Cox', event_date: '2026-10-24', event_time: '19:30:00', venue: 'Plymouth Pavilions', city: 'Plymouth' })
+    const ice = ev('ice', 'Into The Ice', { start_date: '2026-10-24T08:00:00Z', venue: { name: 'Plymouth University', city: 'Plymouth' } })
+    assert.deepEqual(rankCandidates(p, [ice]), [])
+  })
 })

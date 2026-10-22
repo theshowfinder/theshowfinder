@@ -30,7 +30,10 @@ export function rankCandidates(row: CatalogueRow, events: ShowfinderEvent[], max
       tokenOverlap(meaningful(row.performer1 ?? ''), meaningful(event.title)),
     )
     const venueClose = s.sameVenue || s.venueOverlap >= 0.5
-    const plausible = s.performerExact || s.performerOverlap >= 0.34 || looseTitle >= 0.34 || (s.sameCity && venueClose)
+    // With no name in common, only a show at the same venue AND the same showtime (or no time known)
+    // is worth offering: anything else on the day in that city (London Eye, a museum) is noise.
+    const sameSlot = s.timeGap === null || s.timeGap <= SAME_SHOW_TIME_MINUTES
+    const plausible = s.performerExact || s.performerOverlap >= 0.34 || looseTitle >= 0.34 || (s.sameCity && venueClose && sameSlot)
     if (!plausible) continue
     const why: string[] = []
     if (s.titlePerformerExact || s.linkedArtistExact) why.push('name matches')
