@@ -71,8 +71,13 @@ export function toArtistEventRows(links: ArtistEventLink[] | null | undefined): 
 // An artist page with nothing to show (no upcoming events and no curated tour
 // dates) is a thin page: keep it out of Google's index until there is something
 // on it. `follow` stays true so links on it still count.
-export function shouldIndexArtistPage(input: { upcomingEvents: number; tourDates: number }): boolean {
-  return input.upcomingEvents > 0 || input.tourDates > 0
+// A page with a single show and no photo (typically a small act added from the
+// See Tickets / Gigsberg feeds) only repeats that show's own page, so it is kept
+// out too; it comes back by itself once the act has a second date or a photo.
+export function shouldIndexArtistPage(input: { upcomingEvents: number; tourDates: number; hasPhoto?: boolean }): boolean {
+  if (input.tourDates > 0 || input.upcomingEvents >= 2) return true
+  if (input.upcomingEvents === 1) return input.hasPhoto !== false
+  return false
 }
 
 // Sitemap entry rule. A one-show artist's page mostly duplicates that show's

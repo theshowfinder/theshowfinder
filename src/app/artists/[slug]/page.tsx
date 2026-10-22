@@ -86,8 +86,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description = artistMetaDescription(artist.name, upcomingEvents)
   // Artists with nothing upcoming have an empty page — keep it out of the index
   // until there is something on it.
-  const indexable = shouldIndexArtistPage({ upcomingEvents: upcomingEvents.length, tourDates: tourDateCount })
   const photo       = artistPhotoUrl(artist.name, artist.image_url)
+  const indexable = shouldIndexArtistPage({ upcomingEvents: upcomingEvents.length, tourDates: tourDateCount, hasPhoto: Boolean(photo) })
   const ogImage     = photo ? new URL(photo, 'https://www.theshowfinder.com').toString() : 'https://www.theshowfinder.com/og-image.png'
   const canonical   = `https://www.theshowfinder.com/artists/${slug}`
 

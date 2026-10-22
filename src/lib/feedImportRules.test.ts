@@ -175,3 +175,12 @@ describe('description, price and postcode from the feeds', () => {
     assert.equal(postcodeFrom('No postcode here'), null)
   })
 })
+
+import { inferEventCategory } from './eventImages.ts'
+describe('title-based category guess (fallback when a feed label says nothing)', () => {
+  test('a circus is a family show unless the title says it is an adult night', () => {
+    assert.equal(inferEventCategory('Zippos Circus'), 'family')
+    assert.equal(inferEventCategory('York LesBiQueer Collective: The Circus Of Fools!'), 'concert')
+    assert.equal(inferEventCategory('Circus of Horrors: Adults Only'), 'concert')
+  })
+})

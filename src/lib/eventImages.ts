@@ -15,6 +15,8 @@ const SPORTS_TERMS = /\b(football|soccer|fc|vs\.?|versus|match|fixture|united|ro
 const COMEDY_TERMS = /\b(comedy|comedian|stand[- ]?up|comic|laughs?|funny|humour|humor)\b/i
 const THEATRE_TERMS = /\b(theatre|theater|musical|opera|ballet|play|drama|pantomime|west end)\b/i
 const FAMILY_TERMS = /\b(family|kids?|children|disney|cbeebies|paw patrol|circus|magic|dinosaur|ice skating show)\b/i
+// Words that make a "circus" or "magic" night an adult show, not a family one ("The Circus Of Fools", queer cabaret).
+const ADULT_TERMS = /\b(adults?|adult only|18\+|over 18s?|burlesque|cabaret|drag|\w*queer|lesbian|lgbtq?|after dark|xxx)\b/i
 
 // Our own pictures for football clubs: passionate supporters in the club's colours holding scarves with the
 // club's name (original artwork, no crests or logos). Used for the club's home fixtures ("Burnley FC vs Stoke
@@ -78,7 +80,7 @@ export function artistPhotoUrl(name: string | null | undefined, imageUrl: string
 export function inferEventCategory(title: string, category: EventCategory = 'concert'): EventCategory {
   if (THEATRE_TERMS.test(title)) return 'theatre'
   if (COMEDY_TERMS.test(title)) return 'comedy'
-  if (FAMILY_TERMS.test(title)) return 'family'
+  if (FAMILY_TERMS.test(title) && !ADULT_TERMS.test(title)) return 'family'
   if (SPORTS_TERMS.test(title)) return 'sports'
   return category
 }

@@ -3,6 +3,8 @@
 //   off  = does nothing
 //   dry  = finds and counts what it would import, writes nothing
 //   live = creates the events (capped per run), each linked to its catalogue row
+// gigsberg_mode / see_tickets_mode override it per feed (null = follow mode), so one feed can go live first.
+// Order: shows in our 40 cities first, then soonest date first, so the daily cap fills the most useful pages.
 // Only shows the matcher has already given a "no match" verdict are candidates: matching comes first, a page is
 // created only once we know the show cannot be matched to anything we hold.
 // Every candidate passes the duplicate / package / future / venue rules in feedImportRules.ts first. A Gigsberg
@@ -12,6 +14,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { searchGigsbergAffiliateListings } from '@/lib/gigsbergAffiliate'
 import { fallbackEventImage, inferEventCategory } from '@/lib/eventImages'
 import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
+import { CITIES } from '@/lib/cities'
 import { cleanFeedDescription, comparableVenue, feedCategory, feedPriceFrom, londonToUtcIso, normalize, overlap, postcodeFrom, resolveFeedCity, skipReason, slugify, type FeedRow, type KnownEvent, type SkipReason } from '@/lib/feedImportRules'
 
 type Mode = 'off' | 'dry' | 'live'
@@ -27,13 +30,19 @@ export interface PlatformImportStats {
 }
 
 export interface FeedImportResult {
+  /** 'live' when either feed is live; per-feed modes below. */
   mode: Mode
+  gigsbergMode: Mode
+  seeTicketsMode: Mode
   status: 'disabled' | 'complete' | 'partial'
   maxPerRun: number
   gigsberg: PlatformImportStats
   see_tickets: PlatformImportStats
   durationMs: number
 }
+
+const OUR_CITIES = new Set(CITIES.map(c => c.name))
+const isOurCity = (city: string | null) => !!city && OUR_CITIES.has(city)
 
 const emptyStats = (): PlatformImportStats => ({ candidates: 0, eligible: 0, skipped: {}, wouldImport: 0, imported: 0, errors: 0, sample: [] })
 const bump = (s: PlatformImportStats, key: SkipReason | 'no_inventory') => { s.skipped[key] = (s.skipped[key] ?? 0) + 1 }
@@ -101,14 +110,16 @@ async function findOrCreateVenue(db: Loose, venue: string, city: string, address
   return data.id as string
 }
 
-async function linkArtist(db: Loose, eventId: string, name: string | null): Promise<string | null> {
+// Links the show to its act, creating the act when we do not have it yet. A new act gets the feed's photo when
+// there is one (Gigsberg performer photos), so its artist page is not a blank. Existing acts are never changed.
+async function linkArtist(db: Loose, eventId: string, name: string | null, photoForNew: string | null = null): Promise<string | null> {
   const clean = (name ?? '').trim()
   if (clean.length < 2 || clean.length > 80) return null
   const slug = slugify(clean)
   if (!slug) return null
   const { data: existing } = await db.from('artists').select('id, image_url').eq('slug', slug).maybeSingle()
   let id = existing?.id as string | undefined
-  if (!id) id = (await db.from('artists').insert({ name: clean, slug }).select('id').single()).data?.id
+  if (!id) id = (await db.from('artists').insert({ name: clean, slug, ...(photoForNew ? { image_url: photoForNew } : {}) }).select('id').single()).data?.id
   if (id) await db.from('event_artists').insert({ event_id: eventId, artist_id: id, is_headliner: true, order: 0 })
   return (existing?.image_url as string | null | undefined) ?? null
 }
@@ -130,9 +141,9 @@ async function createGigsbergEvent(db: Loose, row: GigsbergRow): Promise<string>
     source: 'gigsberg', source_url: row.url, status: 'upcoming',
   }).select('id').single()
   if (error || !event) throw new Error(error?.message ?? 'Could not create event')
-  const artistImage = await linkArtist(db, event.id, row.performer1)
   // Picture: our artist's photo, else Gigsberg's performer photo (about 430px wide, fine for cards), else our artwork.
   const feedImage = gigsbergImage(row.image_url)
+  const artistImage = await linkArtist(db, event.id, row.performer1, feedImage)
   await db.from('events').update({ image_url: artistImage ?? feedImage ?? fallbackEventImage(category, row.name) }).eq('id', event.id)
   await db.from('gigsberg_catalogue_events').update({ matched_event_id: event.id, match_status: 'approved_new', match_reason: 'Imported automatically from the Gigsberg catalogue', match_checked_at: new Date().toISOString(), image_status: artistImage ? 'artist_image' : feedImage ? 'feed_image' : 'branded_fallback' }).eq('id', row.id)
   return event.id as string
@@ -184,11 +195,16 @@ async function fetchCandidates<T>(db: Loose, table: string, columns: string, fro
 export async function importFeedEvents(opts: { deadlineMs: number }): Promise<FeedImportResult> {
   const started = Date.now()
   const db = createAdminClient() as Loose
-  const { data: state } = await db.from('feed_import_state').select('mode, max_per_run').eq('id', 1).maybeSingle() as { data: { mode: Mode; max_per_run: number } | null }
-  const mode: Mode = state?.mode ?? 'dry'
+  const { data: state } = await db.from('feed_import_state').select('mode, max_per_run, gigsberg_mode, see_tickets_mode').eq('id', 1).maybeSingle() as { data: { mode: Mode; max_per_run: number; gigsberg_mode: Mode | null; see_tickets_mode: Mode | null } | null }
+  const baseMode: Mode = state?.mode ?? 'dry'
+  const gMode: Mode = state?.gigsberg_mode ?? baseMode
+  const sMode: Mode = state?.see_tickets_mode ?? baseMode
+  const mode: Mode = gMode === 'live' || sMode === 'live' ? 'live' : gMode === 'off' && sMode === 'off' ? 'off' : 'dry'
   const maxPerRun = state?.max_per_run ?? 150
-  const result: FeedImportResult = { mode, status: 'complete', maxPerRun, gigsberg: emptyStats(), see_tickets: emptyStats(), durationMs: 0 }
+  const result: FeedImportResult = { mode, gigsbergMode: gMode, seeTicketsMode: sMode, status: 'complete', maxPerRun, gigsberg: emptyStats(), see_tickets: emptyStats(), durationMs: 0 }
   if (mode === 'off') { result.status = 'disabled'; return result }
+  // Our cities first, then soonest (rows arrive sorted by date; the sort is stable).
+  const ourCitiesFirst = <T extends FeedRow>(rows: T[]) => rows.sort((a, b) => Number(!isOurCity(a.city)) - Number(!isOurCity(b.city)))
 
   const today = londonDate(new Date().toISOString())
   const horizon = londonDate(new Date(Date.now() + 24 * 30 * 86_400_000).toISOString())
@@ -203,18 +219,22 @@ export async function importFeedEvents(opts: { deadlineMs: number }): Promise<Fe
 
   // Gigsberg
   const g = result.gigsberg
-  const gRows = await fetchCandidates<GigsbergRow>(db, 'gigsberg_catalogue_events', 'id, name, event_date, event_time, venue, city, performer1, type_name, sub_type, image_url, url', today, horizon)
+  const gRows = gMode === 'off' ? [] : await fetchCandidates<GigsbergRow>(db, 'gigsberg_catalogue_events', 'id, name, event_date, event_time, venue, city, performer1, type_name, sub_type, image_url, url', today, horizon)
   g.candidates = gRows.length
   // Our city names first (the duplicate check and the city pages both compare cities): see resolveFeedCity.
   for (const r of gRows) r.city = resolveFeedCity(r.city, null)
+  ourCitiesFirst(gRows)
+  // Each live candidate costs one Gigsberg inventory call; shows with no tickets are re-checked on later runs.
+  let inventoryChecks = 0
   for (const row of gRows) {
     if (outOfTime()) { result.status = 'partial'; break }
     const why = skipReason(row, sameDay(row.event_date!), today)
     if (why) { bump(g, why); continue }
     g.eligible++
-    if (mode === 'dry') { g.wouldImport++; if (g.sample.length < 12) g.sample.push(`${row.name} | ${row.venue}, ${row.city} | ${row.event_date}`); remember(row); continue }
-    if (g.imported >= maxPerRun) { result.status = 'partial'; continue }
+    if (gMode === 'dry') { g.wouldImport++; if (g.sample.length < 12) g.sample.push(`${row.name} | ${row.venue}, ${row.city} | ${row.event_date}`); remember(row); continue }
+    if (g.imported >= maxPerRun || inventoryChecks >= maxPerRun * 3) { result.status = 'partial'; continue }
     try {
+      inventoryChecks++
       const inv = await searchGigsbergAffiliateListings({ event_id: Number(row.id), currency_code: 'GBP' })
       await db.from('gigsberg_catalogue_events').update({ inventory_status: inv.total > 0 ? 'available' : 'no_inventory', inventory_checked_at: new Date().toISOString() }).eq('id', row.id)
       if (!(inv.total > 0)) { bump(g, 'no_inventory'); continue }
@@ -229,15 +249,16 @@ export async function importFeedEvents(opts: { deadlineMs: number }): Promise<Fe
 
   // See Tickets
   const s = result.see_tickets
-  const sRows = await fetchCandidates<SeeTicketsRow>(db, 'see_tickets_catalogue_events', 'id, name, event_date, event_time, venue, city, venue_address, genre, primary_artist, second_artist, feed_description, search_price, min_price, max_price, url', today, horizon)
+  const sRows = sMode === 'off' ? [] : await fetchCandidates<SeeTicketsRow>(db, 'see_tickets_catalogue_events', 'id, name, event_date, event_time, venue, city, venue_address, genre, primary_artist, second_artist, feed_description, search_price, min_price, max_price, url', today, horizon)
   s.candidates = sRows.length
   for (const r of sRows) r.city = resolveFeedCity(r.city, r.venue_address)
+  ourCitiesFirst(sRows)
   for (const row of sRows) {
     if (outOfTime()) { result.status = 'partial'; break }
     const why = skipReason(row, sameDay(row.event_date!), today)
     if (why) { bump(s, why); continue }
     s.eligible++
-    if (mode === 'dry') { s.wouldImport++; if (s.sample.length < 12) s.sample.push(`${row.name} | ${row.venue}, ${row.city} | ${row.event_date}`); remember(row); continue }
+    if (sMode === 'dry') { s.wouldImport++; if (s.sample.length < 12) s.sample.push(`${row.name} | ${row.venue}, ${row.city} | ${row.event_date}`); remember(row); continue }
     if (s.imported >= maxPerRun) { result.status = 'partial'; continue }
     try {
       await createSeeTicketsEvent(db, row)

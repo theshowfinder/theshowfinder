@@ -34,6 +34,12 @@ describe('shouldIndexArtistPage', () => {
     assert.equal(shouldIndexArtistPage({ upcomingEvents: 1, tourDates: 0 }), true)
     assert.equal(shouldIndexArtistPage({ upcomingEvents: 0, tourDates: 3 }), true)
   })
+  test('a single show with no photo is not indexed until a second date or a photo arrives', () => {
+    assert.equal(shouldIndexArtistPage({ upcomingEvents: 1, tourDates: 0, hasPhoto: false }), false)
+    assert.equal(shouldIndexArtistPage({ upcomingEvents: 1, tourDates: 0, hasPhoto: true }), true)
+    assert.equal(shouldIndexArtistPage({ upcomingEvents: 2, tourDates: 0, hasPhoto: false }), true)
+    assert.equal(shouldIndexArtistPage({ upcomingEvents: 0, tourDates: 2, hasPhoto: false }), true)
+  })
 })
 
 describe('shouldListArtistInSitemap', () => {
