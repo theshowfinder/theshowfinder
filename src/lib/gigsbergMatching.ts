@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPages, fetchAllPagesParallel } from '@/lib/pagedFetch'
+import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
 import {
   bucketEventsByDate,
   dateOnly,
@@ -70,7 +71,9 @@ async function loadCatalogue(db: Db, fullRescan: boolean): Promise<CatalogueRow[
 // fetched later, only for the few events that could actually match.
 async function loadUpcomingEvents(db: Db): Promise<ShowfinderEvent[]> {
   const now = new Date().toISOString()
-  const { count, error: countError } = await db.from('events').select('id', { count: 'exact', head: true }).gte('start_date', now)
+  // Cancelled / postponed rows are never link targets: Ticketmaster often cancels a listing and
+  // re-lists the same show under a new id, and the dead copy would tie with (or steal) the live one.
+  const { count, error: countError } = await db.from('events').select('id', { count: 'exact', head: true }).gte('start_date', now).in('status', LIVE_EVENT_STATUSES)
   if (countError) throw new Error(countError.message)
   const rows = await fetchAllPagesParallel<Omit<ShowfinderEvent, 'artists'>>(
     count ?? 0,
@@ -78,6 +81,7 @@ async function loadUpcomingEvents(db: Db): Promise<ShowfinderEvent[]> {
       .from('events')
       .select('id, title, start_date, gigsberg_affiliate_url, venue:venues(name, city)')
       .gte('start_date', now)
+      .in('status', LIVE_EVENT_STATUSES)
       .order('id', { ascending: true })
       .range(from, to) as unknown as PromiseLike<PageResult<Omit<ShowfinderEvent, 'artists'>>>,
   )

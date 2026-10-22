@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
 
 type CatalogueRow = {
   id: string
@@ -157,7 +158,7 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
   // and ran into the database statement timeout once the Ticketmaster sweep added thousands of events.
   let lastEventId: string | null = null
   for (;;) {
-    let q = db.from('events').select('id, title, start_date, created_at, see_tickets_affiliate_url, venue:venues(name, city)').gte('start_date', new Date().toISOString()).order('id', { ascending: true }).limit(1000)
+    let q = db.from('events').select('id, title, start_date, created_at, see_tickets_affiliate_url, venue:venues(name, city)').gte('start_date', new Date().toISOString()).in('status', LIVE_EVENT_STATUSES).order('id', { ascending: true }).limit(1000)
     if (lastEventId) q = q.gt('id', lastEventId)
     const { data, error } = await q as unknown as { data: ShowfinderEvent[] | null; error: { message: string } | null }
     if (error) throw new Error(error.message)

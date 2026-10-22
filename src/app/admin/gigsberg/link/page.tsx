@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { linkGigsbergToExistingEventAction } from '../actions'
+import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
 import { clockMinutes, formatClock, londonMinutes } from '@/lib/gigsbergMatchScoring'
 
 const at = (minutes: number | null) => (minutes === null ? '' : ` · ${formatClock(minutes)}`)
@@ -46,6 +47,7 @@ export default async function LinkGigsbergEventPage({ searchParams }: { searchPa
     .from('events')
     .select('id, title, slug, start_date, venue:venues(name, city)')
     .gte('start_date', new Date().toISOString())
+    .in('status', LIVE_EVENT_STATUSES)   // a cancelled Ticketmaster copy of the show is never the one to link
     .ilike('title', `%${query}%`)
     .order('start_date', { ascending: true })
     .limit(50) as unknown as { data: EventRow[] | null }
