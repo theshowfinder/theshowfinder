@@ -60,6 +60,11 @@ interface ArtistRow {
 
 interface EventDetail {
   id: string
+  // Migration 090: set when this listing was merged into another copy of the same show (another room / venue
+  // record of the same building, or a council copy). Its page then redirects there.
+  merged_into?: string | null
+  // Council / tourism listing pages of merged copies: shown only when the event has no seller at all.
+  info_links?: { source: string | null; url: string }[] | null
   title: string
   slug: string
   description: string | null
@@ -99,7 +104,7 @@ interface EventDetail {
 
 const eventSelect = (withDetails: boolean) => `
       id, title, slug, description, category,
-      start_date, end_date, onsale_date, presale_start, public_onsale_start, doors_time,${withDetails ? ' details,' : ''}
+      start_date, end_date, onsale_date, presale_start, public_onsale_start, doors_time,${withDetails ? ' details, merged_into, info_links,' : ''}
       image_url, price_from, price_to, currency,
       tickets_url, own_ticket_url, source, viagogo_url, stubhub_url, gigsberg_url, gigsberg_affiliate_url, see_tickets_affiliate_url,
       gigsberg_highlighted, gigsberg_highlight_until, gigsberg_inventory_status, status, tags,
@@ -185,6 +190,7 @@ const getCanonicalInfo = cache(async (eventId: string, own: { tickets_url: strin
       .from('events')
       .select('id, slug, title, start_date, source, tickets_url, see_tickets_affiliate_url, gigsberg_affiliate_url')
       .in('id', ids)
+      .is('merged_into', null)   // a merged copy's seller links were already moved onto this event
       .in('status', LIVE_EVENT_STATUSES)
       .gte('start_date', new Date().toISOString())
     const siblings: SiblingEvent[] = ((rows ?? []) as unknown as Omit<SiblingEvent, 'is_package'>[])
@@ -384,6 +390,13 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     notFound()
   }
 
+  // Merged into another listing of the same show (src/lib/venueFamilyMerge.ts): send visitors and search engines
+  // there, while that listing is still live. If it is not, this page stands on its own again.
+  if (event.merged_into) {
+    const { data: kept } = await createPublicClient().from('events').select('slug, status, start_date').eq('id', event.merged_into).maybeSingle() as unknown as { data: { slug: string; status: string; start_date: string } | null }
+    if (kept && kept.slug !== slug && LIVE_EVENT_STATUSES.includes(kept.status) && !isEventPast(kept.start_date)) permanentRedirect(`/events/${kept.slug}`)
+  }
+
   // A show that has already happened: say so plainly and point at what is still on,
   // instead of selling tickets that no longer exist.
   if (isEventPast(event.start_date)) {
@@ -461,7 +474,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const isLocalListing = event.category === 'local' || /_council$/.test(event.source ?? '')
   const ownLink = event.own_ticket_url && !isGigsbergUrl(event.own_ticket_url) ? event.own_ticket_url : null
   const ownTicketUrl = isLocalListing ? null : ownLink
-  const localListingUrl = isLocalListing ? ownLink : null
+  // A merged council / tourism copy's page is kept in info_links: offered only when no seller sells this show.
+  const infoLink = !primary.length && !resale.length && !ownTicketUrl ? (event.info_links ?? []).find(l => /^https?:\/\//.test(l.url))?.url ?? null : null
+  const localListingUrl = isLocalListing ? ownLink ?? infoLink : infoLink
   const localListingHost = localListingUrl ? (() => { try { return new URL(localListingUrl).hostname.replace(/^www\./, '') } catch { return 'the organiser' } })() : null
   const highlightActive = event.gigsberg_highlighted && event.gigsberg_inventory_status === 'available' && (!event.gigsberg_highlight_until || new Date(event.gigsberg_highlight_until) > new Date())
   const headliners = event.artists

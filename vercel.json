@@ -94,6 +94,10 @@
       "schedule": "20 6 * * *"
     },
     {
+      "path": "/api/cron/merge-duplicates",
+      "schedule": "35 4,6,14 * * *"
+    },
+    {
       "path": "/api/cron/refresh-listings",
       "schedule": "45 4 * * *"
     },
