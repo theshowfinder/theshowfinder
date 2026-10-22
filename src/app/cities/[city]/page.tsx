@@ -46,6 +46,7 @@ import CityTicketSources from '@/components/CityTicketSources'
 import CityMorningEdition from '@/components/CityMorningEdition'
 import { fetchCityEdition } from '@/lib/cityEdition'
 import { buildEdition, editionHeadline, freshnessStamp } from '@/lib/cityBrief'
+import { excludePreviouslyShown } from '@/lib/cityDisplayRows'
 
 // No city page is built at deploy time: each is generated on first request, then
 // cached and refreshed in the background (see `revalidate`). Building all 40 cities
@@ -269,19 +270,34 @@ export default async function CityPage({
 
   // Morning edition: image-led tiles, a factual headline and a freshness stamp that only shows when
   // the city's data really was refreshed recently.
-  const editionTiles = buildEdition({ now, ...editionData })
+  // Today's shows have their own prominent Tonight row. Let the edition
+  // choose other listings so its image tiles do not repeat those cards.
+  const tonightIds = new Set(tonightEvents.map(event => event.id))
+  const notTonight = <T extends { id: string }>(rows: T[]) => rows.filter(row => !tonightIds.has(row.id))
+  const editionTiles = buildEdition({
+    now,
+    ...editionData,
+    onSaleToday: notTonight(editionData.onSaleToday),
+    onSaleWeek: notTonight(editionData.onSaleWeek),
+    presaleOpen: notTonight(editionData.presaleOpen),
+    top: notTonight(editionData.top),
+  })
   const editionHeadlineText = editionHeadline({
     cityName,
     onSaleThisWeek: onsaleGroups.length,
     presaleLive: presaleGroups.length,
   })
   const editionStamp = freshnessStamp(editionData.lastSyncedAt, now)
-  // Local listings already shown in "Events this week" are not repeated in their own section.
-  const weekIds = new Set(eventsThisWeek.map(e => e.id))
-  const localEvents = localEventsRaw.filter(e => !weekIds.has(e.id)).slice(0, 12)
+  // Each event card gets one placement on the city page, in visual order.
+  // The edition and Tonight take priority; lower rails do not repeat them.
+  const shownEventIds = new Set([...editionTiles.map(tile => tile.event.id), ...tonightIds])
+  const weekEvents = excludePreviouslyShown(eventsThisWeek, shownEventIds)
+  const localEvents = excludePreviouslyShown(localEventsRaw, shownEventIds, 12)
+  const newEvents = excludePreviouslyShown(recentlyAdded, shownEventIds)
+  const upcomingTopEvents = excludePreviouslyShown(topEvents, shownEventIds)
   const editionNav = [
     tonightEvents.length > 0 && { href: '#tonight', label: 'Tonight' },
-    eventsThisWeek.length > 0 && { href: '#this-week', label: 'This week' },
+    weekEvents.length > 0 && { href: '#this-week', label: 'This week' },
     localEvents.length > 0 && { href: '#local', label: 'Local' },
     presaleGroups.length > 0 && { href: '#presales', label: 'Presales' },
     onsaleGroups.length > 0 && { href: '#on-sale', label: 'On sale' },
@@ -351,7 +367,7 @@ export default async function CityPage({
     { name: cityName, url: canonical },
   ])
   const itemListSchema = buildItemListSchema(
-    eventsThisWeek.slice(0, 20).map(ev => ({
+    weekEvents.slice(0, 20).map(ev => ({
       name: ev.title,
       url:  `https://www.theshowfinder.com/events/${ev.slug}`,
     }))
@@ -499,7 +515,7 @@ export default async function CityPage({
         {cityName === 'London' && <WestEndStrip inline />}
 
         {/* ── EVENTS THIS WEEK (ticketed shows + local events, merged) ── */}
-        {eventsThisWeek.length > 0 && (
+        {weekEvents.length > 0 && (
           <section id="this-week" className="scroll-mt-20">
             <div className="flex items-end justify-between mb-7">
               <div>
@@ -519,7 +535,7 @@ export default async function CityPage({
               </Link>
             </div>
             <ScrollRail label={`Events this week in ${cityName}`}>
-              {eventsThisWeek.map(event => (
+              {weekEvents.map(event => (
                 <EventCard key={event.id} event={event} />
               ))}
             </ScrollRail>
@@ -547,7 +563,7 @@ export default async function CityPage({
         )}
 
         {/* ── JUST ADDED: shows first listed in the last 7 days (hidden when fewer than 3) ── */}
-        {recentlyAdded.length >= 3 && (
+        {newEvents.length >= 3 && (
           <section>
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
@@ -559,7 +575,7 @@ export default async function CityPage({
               <p className="text-sm text-slate-500 mt-1">Shows listed for the first time in the last 7 days</p>
             </div>
             <ScrollRail label={`Just added in ${cityName}`}>
-              {recentlyAdded.map(event => (
+              {newEvents.map(event => (
                 <EventCard key={event.id} event={event} />
               ))}
             </ScrollRail>
@@ -683,7 +699,7 @@ export default async function CityPage({
         </section>}
 
         {/* ── TOP EVENTS (beyond this week, up to ~2 months out) ── */}
-        {topEvents.length > 0 && (
+        {upcomingTopEvents.length > 0 && (
           <section>
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
@@ -694,7 +710,7 @@ export default async function CityPage({
               </h2>
             </div>
             <ScrollRail label={`Top events in ${cityName}`}>
-              {topEvents.map(event => (
+              {upcomingTopEvents.map(event => (
                 <EventCard key={event.id} event={event} />
               ))}
             </ScrollRail>
