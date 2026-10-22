@@ -250,6 +250,9 @@ describe('real cases from the review queue, 22 Oct 2026', () => {
   test('the main show wins over its Venue Premium / Share a Suite listing', () => {
     assert.equal(isMatchableEvent({ name: 'Kevin Bridges' }, { title: 'Venue Premium - Kevin Bridges:  Here If You Need Me' }), false)
     assert.equal(isMatchableEvent({ name: 'Kevin Bridges' }, { title: 'Share a Suite - Kevin Bridges' }), false)
+    assert.equal(isMatchableEvent({ name: 'The Kilimanjaro Darkjazz Ensemble' }, { title: 'The Kilimanjaro Darkjazz Ensemble - Restaurant' }), false)
+    assert.equal(isMatchableEvent({ name: 'The Kilimanjaro Darkjazz Ensemble' }, { title: 'The Kilimanjaro Darkjazz Ensemble' }), true)
+    assert.equal(isMatchableEvent({ name: 'Christmas Party & Three-Course Dinner' }, { title: 'Christmas Party & Three-Course Dinner at The Norfolk Mead' }), true)
     const main = event({ id: 'main', title: 'Kevin Bridges:  Here If You Need Me', start_date: '2026-10-27T17:30:00Z', venue: hydro })
     const premium = event({ id: 'premium', title: 'Venue Premium - Kevin Bridges:  Here If You Need Me', start_date: '2026-10-27T17:30:00Z', venue: hydro })
     const d = decideMatch(listing({ name: 'Kevin Bridges', performer1: 'Kevin Bridges', venue: 'OVO Hydro (formerly The SSE Hydro)', city: 'Glasgow', event_date: '2026-10-27', event_time: '18:30:00' }), [premium, main])

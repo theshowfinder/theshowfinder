@@ -43,14 +43,16 @@ export default async function LinkGigsbergEventPage({ searchParams }: { searchPa
   }
 
   const query = (params.q ?? catalogue.name).trim()
-  const { data: events } = await db
-    .from('events')
-    .select('id, title, slug, start_date, venue:venues(name, city)')
+  // Only events visitors can see: no cancelled Ticketmaster copies, no duplicate or premium/restaurant copies of a show.
+  const { data: listed } = await db
+    .from('listed_events_with_venue')
+    .select('id, title, slug, start_date, venue_name, venue_city')
     .gte('start_date', new Date().toISOString())
-    .in('status', LIVE_EVENT_STATUSES)   // a cancelled Ticketmaster copy of the show is never the one to link
+    .in('status', LIVE_EVENT_STATUSES)
     .ilike('title', `%${query}%`)
     .order('start_date', { ascending: true })
-    .limit(50) as unknown as { data: EventRow[] | null }
+    .limit(50) as unknown as { data: Array<{ id: string; title: string; slug: string; start_date: string; venue_name: string | null; venue_city: string | null }> | null }
+  const events: EventRow[] = (listed ?? []).map(e => ({ id: e.id, title: e.title, slug: e.slug, start_date: e.start_date, venue: { name: e.venue_name ?? '', city: e.venue_city ?? '' } }))
 
   return (
     <main className="min-h-screen bg-slate-50">

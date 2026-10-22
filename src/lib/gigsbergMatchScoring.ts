@@ -323,7 +323,10 @@ export function hasTitleEvidence(item: CatalogueRow, event: ShowfinderEvent): bo
 // listing to "Venue Premium - Kevin Bridges" instead of "Kevin Bridges" left
 // both looking equally good, so obvious matches went to manual review.
 const NOT_THE_SHOW = /\b(vip|premium|hospitality|lounge|packages?|upgrades?|share a suite|suites?|meet\s*(?:&|and)?\s*greets?|ticket\s+experiences?|fast[\s-]?track|parking|screening)\b/i
+// "The Kilimanjaro Darkjazz Ensemble - Restaurant": a restaurant-table ticket for the show, not the show.
+const RESTAURANT_COPY = /[-–—:|]\s*(restaurant|dining)(\s+(tickets?|tables?))?\s*$/i
 export function isMatchableEvent(item: Pick<CatalogueRow, 'name'>, event: Pick<ShowfinderEvent, 'title'>): boolean {
+  if (RESTAURANT_COPY.test(event.title) && !/\b(restaurant|dining)\b/i.test(item.name)) return false
   const m = NOT_THE_SHOW.exec(event.title)
   if (!m) return true
   // The listing itself is that product ("Paul Heaton - Hospitality"): same kind may match.
