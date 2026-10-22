@@ -15,7 +15,7 @@ import { searchGigsbergAffiliateListings } from '@/lib/gigsbergAffiliate'
 import { fallbackEventImage, inferEventCategory } from '@/lib/eventImages'
 import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
 import { CITIES } from '@/lib/cities'
-import { cleanFeedDescription, comparableVenue, feedCategory, feedPriceFrom, londonToUtcIso, normalize, overlap, postcodeFrom, resolveFeedCity, skipReason, slugify, type FeedRow, type KnownEvent, type SkipReason } from '@/lib/feedImportRules'
+import { cleanFeedDescription, comparableVenue, feedCategory, feedPriceFrom, londonToUtcIso, normalize, overlap, postcodeFrom, resolveFeedCity, skipReason, slugify, venueBusy, type FeedRow, type KnownEvent, type SkipReason } from '@/lib/feedImportRules'
 
 type Mode = 'off' | 'dry' | 'live'
 
@@ -230,6 +230,7 @@ export async function importFeedEvents(opts: { deadlineMs: number }): Promise<Fe
     if (outOfTime()) { result.status = 'partial'; break }
     const why = skipReason(row, sameDay(row.event_date!), today)
     if (why) { bump(g, why); continue }
+    if (feedCategory('gigsberg', row.type_name, row.sub_type) !== 'sports' && venueBusy(row, sameDay(row.event_date!))) { bump(g, 'venue_busy'); continue }
     g.eligible++
     if (gMode === 'dry') { g.wouldImport++; if (g.sample.length < 12) g.sample.push(`${row.name} | ${row.venue}, ${row.city} | ${row.event_date}`); remember(row); continue }
     if (g.imported >= maxPerRun || inventoryChecks >= maxPerRun * 3) { result.status = 'partial'; continue }

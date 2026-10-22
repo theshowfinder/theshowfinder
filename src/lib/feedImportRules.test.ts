@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { skipReason, londonToUtcIso, isNotAShow, resolveFeedCity, feedCategory, cleanFeedDescription, feedPriceFrom, postcodeFrom, type FeedRow, type KnownEvent } from './feedImportRules.ts'
+import { skipReason, londonToUtcIso, isNotAShow, resolveFeedCity, feedCategory, cleanFeedDescription, feedPriceFrom, postcodeFrom, venueBusy, type FeedRow, type KnownEvent } from './feedImportRules.ts'
 
 const today = '2026-10-20'
 const row = (over: Partial<FeedRow> = {}): FeedRow => ({ id: 1, name: 'Black Stone Cherry', event_date: '2026-11-20', venue: 'Rock City Nottingham', city: 'Nottingham', url: 'https://x/1', ...over })
@@ -183,5 +183,18 @@ describe('title-based category guess (fallback when a feed label says nothing)',
     assert.equal(inferEventCategory('Zippos Circus'), 'family')
     assert.equal(inferEventCategory('York LesBiQueer Collective: The Circus Of Fools!'), 'concert')
     assert.equal(inferEventCategory('Circus of Horrors: Adults Only'), 'concert')
+  })
+})
+
+describe('venueBusy', () => {
+  const row = (name: string, venue: string, city: string) => ({ name, venue, city, event_date: '2026-12-04', url: 'https://gigsberg.com/x' }) as FeedRow
+  test('a show Ticketmaster lists under its tour name at the same venue that day is left for matching', () => {
+    assert.equal(venueBusy(row('Sex Pistols feat. Frank Carter', 'O2 Academy Leeds', 'Leeds'), [{ title: 'Anarchy in the U.K Tour - Celebrating 50 Years of Punk', date: '2026-12-04', city: 'Leeds', venue: 'O2 Academy Leeds' }]), true)
+  })
+  test('only a premium package at the venue does not block the show', () => {
+    assert.equal(venueBusy(row('EsDeeKid', 'OVO Arena Wembley', 'London'), [{ title: 'Esdee Kid - Venue Premium Tickets', date: '2026-12-04', city: 'London', venue: 'OVO Arena Wembley' }]), false)
+  })
+  test('a show at another venue in the same town does not block it', () => {
+    assert.equal(venueBusy(row('Rory', 'O2 Academy Brixton', 'London'), [{ title: 'Something Else', date: '2026-12-04', city: 'London', venue: 'Roundhouse' }]), false)
   })
 })

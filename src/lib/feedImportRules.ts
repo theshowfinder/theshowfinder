@@ -39,7 +39,7 @@ export function overlap(left: string | null | undefined, right: string | null | 
   return shared / Math.max(a.size, b.size)
 }
 
-export type SkipReason = 'no_venue_or_city' | 'no_link' | 'package' | 'not_a_show' | 'not_in_future' | 'duplicate' | 'bad_name'
+export type SkipReason = 'no_venue_or_city' | 'no_link' | 'package' | 'not_a_show' | 'not_in_future' | 'duplicate' | 'bad_name' | 'venue_busy'
 
 // Things the feeds sell that are not a show anyone would look for on the site: walking tours, attractions and film
 // screenings (See Tickets genres ATTRACTIONS / CINEMA), pub quizzes, wedding / antiques / trade fairs, festival
@@ -262,4 +262,17 @@ export function postcodeFrom(address: string | null | undefined): string | null 
   const m = /\b([A-Z]{1,2}\d[A-Z\d]?)\s*([\dO])([A-Z]{2})\b/i.exec(address ?? '')
   if (!m) return null
   return `${m[1]} ${m[2].replace(/O/i, '0')}${m[3]}`.toUpperCase()
+}
+
+/**
+ * Another show (not a premium package) is already listed at this venue on this day. For a concert / comedy / theatre
+ * row that is usually the same show under Ticketmaster's tour name ("Sex Pistols feat. Frank Carter" vs "Anarchy in
+ * the U.K Tour", "Rory" vs "RØRY"), so it is left for the matcher instead of getting a second page. Sport is exempt:
+ * a fixture is rarely on Ticketmaster, and a stadium does not host two matches a day.
+ */
+export function venueBusy(row: FeedRow, sameDay: KnownEvent[]): boolean {
+  const city = normalize(row.city), venue = comparableVenue(row.venue)
+  if (!venue) return false
+  return sameDay.some(e => normalize(e.city) === city && !isPackageOrClassTitle(e.title)
+    && (comparableVenue(e.venue) === venue || overlap(row.venue, e.venue) >= 0.5))
 }
