@@ -60,6 +60,7 @@ export default async function GigsbergAdminPage({
 
   const normalise = (value: string | null | undefined) => (value ?? '').trim().toLowerCase()
   const nowISO = new Date().toISOString()
+  const defaultImportTo = isoDate(new Date(new Date(nowISO).getTime() + 90 * 24 * 60 * 60 * 1000))
   // Count each city separately. A single large events query is subject to
   // Supabase/PostgREST's row cap, which can make later cities falsely appear
   // empty once the response has filled with rows from larger cities.
@@ -157,7 +158,7 @@ export default async function GigsbergAdminPage({
           <form action={manualGigsbergCityImportAction} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 items-end">
             <label className="text-sm font-semibold text-slate-600">City<select name="city" required defaultValue={manualCity ?? ''} className="block w-full mt-1 border border-slate-300 rounded-lg px-3 py-2"><option value="">Choose a city</option>{CITIES.map(item => <option key={item.name}>{item.name}</option>)}</select></label>
             <label className="text-sm font-semibold text-slate-600">From<input type="date" name="from" required defaultValue={manualFrom ?? isoDate(new Date())} className="block w-full mt-1 border border-slate-300 rounded-lg px-3 py-2" /></label>
-            <label className="text-sm font-semibold text-slate-600">To<input type="date" name="to" required defaultValue={manualTo ?? isoDate(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000))} className="block w-full mt-1 border border-slate-300 rounded-lg px-3 py-2" /></label>
+            <label className="text-sm font-semibold text-slate-600">To<input type="date" name="to" required defaultValue={manualTo ?? defaultImportTo} className="block w-full mt-1 border border-slate-300 rounded-lg px-3 py-2" /></label>
             <button type="submit" className="bg-emerald-700 text-white font-bold rounded-lg px-5 py-2.5">Import city events</button>
           </form>
         </section>

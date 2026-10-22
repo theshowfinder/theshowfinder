@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { createArtistAction } from '../../actions'
 
@@ -59,9 +59,7 @@ export default function NewArtistForm() {
   const [bulkText, setBulkText]     = useState('')
   const [dateRows, setDateRows]     = useState<DateRow[]>([{ id: 0 }])
 
-  useEffect(() => {
-    if (!slugEdited) setSlug(slugify(name))
-  }, [name, slugEdited])
+  const displayedSlug = slugEdited ? slug : slugify(name)
 
   const addRow    = () => setDateRows(r => [...r, { id: Date.now() }])
   const removeRow = (id: number) => setDateRows(r => r.filter(x => x.id !== id))
@@ -89,12 +87,12 @@ export default function NewArtistForm() {
             <label className={LABEL}>Slug (auto-generated)</label>
             <input
               name="slug"
-              value={slug}
+              value={displayedSlug}
               onChange={e => { setSlug(e.target.value); setSlugEdited(true) }}
               placeholder="e.g. donny-osmond"
               className={INPUT}
             />
-            <p className="text-xs text-slate-400 mt-1">URL: /artists/{slug || '…'}</p>
+            <p className="text-xs text-slate-400 mt-1">URL: /artists/{displayedSlug || '…'}</p>
           </div>
           <div className="col-span-2">
             <label className={LABEL}>Image URL</label>
