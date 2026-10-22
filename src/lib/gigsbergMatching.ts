@@ -81,7 +81,12 @@ async function loadUpcomingEvents(db: Db): Promise<ShowfinderEvent[]> {
       .order('id', { ascending: true })
       .range(from, to) as unknown as PromiseLike<PageResult<Omit<ShowfinderEvent, 'artists'>>>,
   )
-  return rows.map(row => ({ ...row, artists: [] }))
+  // Duplicate listings of a show (venue-premium, hospitality...: event_canonical_map) are never link targets:
+  // the Gigsberg button belongs on the page people actually see.
+  const nonCanonical = new Set((await fetchAllPages<{ id: string }>((from, to) =>
+    db.from('event_canonical_map').select('id').eq('is_canonical', false).order('id', { ascending: true }).range(from, to) as unknown as PromiseLike<PageResult<{ id: string }>>,
+  )).map(r => r.id))
+  return rows.filter(row => !nonCanonical.has(row.id)).map(row => ({ ...row, artists: [] }))
 }
 
 async function attachLinkedArtists(db: Db, events: ShowfinderEvent[], loaded: Set<string>) {
@@ -160,6 +165,8 @@ export async function matchGigsbergCatalogue(
 
     const { error } = await db.from('gigsberg_catalogue_events').update({
       matched_event_id: decision.event?.id ?? null,
+      // A review keeps the matcher's best guess, so the admin screens can offer it as a one-click link.
+      suggested_event_id: decision.status === 'review' ? decision.suggestion?.id ?? null : null,
       match_status: decision.status,
       match_confidence: decision.confidence,
       match_reason: decision.reason,
@@ -168,6 +175,10 @@ export async function matchGigsbergCatalogue(
     if (error) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0 }
 
     if (decision.event) {
+      // Moved to a better event (e.g. from "Venue Premium - X" to "X"): take the link off the old one.
+      if (item.matched_event_id && item.matched_event_id !== decision.event.id) {
+        await db.from('events').update({ gigsberg_affiliate_url: null }).eq('id', item.matched_event_id).eq('gigsberg_affiliate_url', item.url)
+      }
       const { error: linkError } = await db.from('events').update({ gigsberg_affiliate_url: item.url }).eq('id', decision.event.id)
       if (linkError) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0 }
       return { errors: 0, autoMatched: 1, review: 0, noMatch: 0 }

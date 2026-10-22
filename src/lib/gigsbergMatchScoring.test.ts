@@ -204,10 +204,73 @@ describe('showtimes — two performances in a day', () => {
     assert.equal(decideMatch(gb(2, '19:30:00'), [m, e]).event?.id, 'ev-evening')
   })
 
-  test('two events at the same time stay ambiguous (review), never a coin-flip link', () => {
+  test('the same show listed twice by Ticketmaster (identical title, venue and time) links to one copy, always the same one', () => {
+    // Changed 22 Oct 2026: these are the same performance, so leaving them in review only lost the Gigsberg
+    // button (Deep Purple and Ocean Colour Scene at AO Arena were listed twice). The copy that already has
+    // this listing's link wins, else a stable order, so re-runs never move the button.
     const a = { ...evening, venue: { name: 'The Alexandra', city: 'Birmingham' } }
     const twin = { ...a, id: 'ev-twin' }
     const gb = { ...row(2, '19:30:00'), venue: 'New Alexandra Theatre', city: 'Birmingham' }
-    assert.equal(decideMatch(gb, [a, twin]).status, 'review')
+    const first = decideMatch(gb, [a, twin])
+    assert.equal(first.status, 'auto_matched')
+    assert.equal(decideMatch(gb, [twin, a]).event?.id, first.event?.id)
+    const linked = { ...twin, gigsberg_affiliate_url: gb.url }
+    assert.equal(decideMatch(gb, [a, linked]).event?.id, 'ev-twin')
+  })
+})
+
+import { fixtureTeams, fixtureMatch, sameTeam, cleanVenue, isMatchableEvent } from './gigsbergMatchScoring.ts'
+
+describe('real cases from the review queue, 22 Oct 2026', () => {
+  const hydro = { name: 'OVO Hydro', city: 'Glasgow' }
+  test('football: QPR v Swansea City is Queens Park Rangers vs Swansea City', () => {
+    assert.deepEqual(fixtureTeams('Queens Park Rangers vs Swansea City'), ['queens park rangers', 'swansea city'])
+    assert.equal(fixtureMatch('Queens Park Rangers vs Swansea City', 'QPR v Swansea City'), true)
+    const d = decideMatch(
+      listing({ name: 'Queens Park Rangers vs Swansea City', performer1: 'Queens Park Rangers', venue: 'Loftus Road', city: 'London', event_date: '2026-10-24', event_time: '15:00:00' }),
+      [event({ id: 'qpr', title: 'QPR v Swansea City', start_date: '2026-10-24T14:00:00Z', venue: { name: 'Loftus Road Stadium', city: 'London' } })],
+    )
+    assert.equal(d.status, 'auto_matched')
+    assert.equal(d.event?.id, 'qpr')
+  })
+  test('football: a different fixture, a women\'s game or a screening is never a candidate', () => {
+    assert.equal(fixtureMatch('AFC Bournemouth vs Aston Villa', 'Blackpool FC V Aston Villa U21'), false)
+    assert.equal(fixtureMatch('Crystal Palace vs Newcastle United', 'Crystal Palace V Chelsea Women'), false)
+    assert.equal(fixtureMatch('Sunderland vs Leeds United', 'Sunderland V Leeds: Live Premier League Screening'), false)
+    assert.equal(fixtureMatch('Coventry City vs Sunderland', 'Sunderland - The Point - Indiepalooza'), false)
+    assert.equal(sameTeam('manchester', 'manchester united'), false)
+    assert.equal(sameTeam('swansea', 'swansea city'), true)
+    assert.equal(fixtureMatch('Paul Heaton', 'Paul Heaton'), null)
+    const d = decideMatch(
+      listing({ name: 'Coventry City vs Sunderland', performer1: 'Sunderland', venue: 'Building Society Arena', city: 'Coventry', event_date: '2026-10-31' }),
+      [event({ title: 'Sunderland - The Point - Indiepalooza', start_date: '2026-10-31T18:00:00Z', venue: { name: 'The Point', city: 'Sunderland' } })],
+    )
+    assert.equal(d.status, 'no_match')
+  })
+  test('the main show wins over its Venue Premium / Share a Suite listing', () => {
+    assert.equal(isMatchableEvent({ name: 'Kevin Bridges' }, { title: 'Venue Premium - Kevin Bridges:  Here If You Need Me' }), false)
+    assert.equal(isMatchableEvent({ name: 'Kevin Bridges' }, { title: 'Share a Suite - Kevin Bridges' }), false)
+    const main = event({ id: 'main', title: 'Kevin Bridges:  Here If You Need Me', start_date: '2026-10-27T17:30:00Z', venue: hydro })
+    const premium = event({ id: 'premium', title: 'Venue Premium - Kevin Bridges:  Here If You Need Me', start_date: '2026-10-27T17:30:00Z', venue: hydro })
+    const d = decideMatch(listing({ name: 'Kevin Bridges', performer1: 'Kevin Bridges', venue: 'OVO Hydro (formerly The SSE Hydro)', city: 'Glasgow', event_date: '2026-10-27', event_time: '18:30:00' }), [premium, main])
+    assert.equal(d.status, 'auto_matched')
+    assert.equal(d.event?.id, 'main')
+  })
+  test('venue names: old names in brackets and "Stadium" do not stop a match', () => {
+    assert.equal(cleanVenue('OVO Hydro (formerly The SSE Hydro)'), 'ovo hydro')
+    assert.equal(cleanVenue('Loftus Road Stadium'), cleanVenue('Loftus Road'))
+  })
+  test('two shows a day: each listing goes to the event with the closer showtime', () => {
+    const am = event({ id: 'am', title: 'Gladiators Live Tour 2026', start_date: '2026-10-24T09:00:00Z', venue: hydro })
+    const pm = event({ id: 'pm', title: 'Gladiators Live Tour 2026', start_date: '2026-10-24T15:00:00Z', venue: hydro })
+    const base = { name: 'Gladiators Live', performer1: 'Gladiators Live', venue: 'OVO Hydro (formerly The SSE Hydro)', city: 'Glasgow', event_date: '2026-10-24' }
+    const early = decideMatch(listing({ ...base, id: 1, event_time: '11:30:00' }), [pm, am])
+    const late = decideMatch(listing({ ...base, id: 2, event_time: '17:30:00' }), [am, pm])
+    assert.equal(early.event?.id, 'am')
+    assert.equal(late.event?.id, 'pm')
+  })
+  test('a review keeps the suggested event so it can be confirmed in one click', () => {
+    const d = decideMatch(listing({ name: 'The Darkness Live', performer1: null, city: 'Leeds' }), [event({ id: 's', title: 'Darkness Live Tour', venue: { name: 'Elsewhere', city: 'York' } })])
+    if (d.status === 'review') assert.equal(d.suggestion?.id, 's')
   })
 })

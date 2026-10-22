@@ -108,6 +108,19 @@ export default async function FeedsPage() {
                   </div>
                 ))}
               </div>
+              {(() => {
+                // Per-feed totals, so "Gigsberg + See Tickets" is not read as the whole overlap between those two.
+                const n = (k: string) => Number((overlap as Record<string, number>)[k] ?? 0)
+                const gb = n('all3') + n('tm_gb') + n('gb_st') + n('gb_only')
+                const st = n('all3') + n('tm_st') + n('gb_st') + n('st_only')
+                const both = n('all3') + n('gb_st')
+                return (
+                  <p className="text-sm text-slate-700 mb-3">
+                    <b>{fmt(gb)}</b> events have a Gigsberg button and <b>{fmt(st)}</b> a See Tickets button; <b>{fmt(both)}</b> have both ({pct(both, gb)} of the Gigsberg ones).
+                    {' '}Gigsberg is mostly arena shows and football, See Tickets mostly smaller gigs and comedy, so the overlap is naturally modest.
+                  </p>
+                )
+              })()}
               <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-left text-xs uppercase tracking-wider text-slate-500 border-b border-slate-100"><tr><th className="p-3">Combination</th><th className="p-3">Buttons</th><th className="p-3">Share</th><th className="p-3 text-right">Events</th></tr></thead>

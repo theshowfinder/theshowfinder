@@ -6,7 +6,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
 import { rankCandidates, type Candidate } from '@/lib/unmatchedCandidates'
-import { londonMinutes, formatClock, clockMinutes, type CatalogueRow, type ShowfinderEvent } from '@/lib/gigsbergMatchScoring'
+import { londonMinutes, formatClock, clockMinutes, isMatchableEvent, type CatalogueRow, type ShowfinderEvent } from '@/lib/gigsbergMatchScoring'
 import { createEventAction, hideAction, linkAction, unhideAction } from './actions'
 
 const PAGE = 25
@@ -26,12 +26,20 @@ const dayShift = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`)
 type EvRow = { id: string; title: string; slug: string; start_date: string; status: string; venue_name: string | null; venue_city: string | null; gigsberg_affiliate_url: string | null; see_tickets_affiliate_url: string | null }
 const toShowfinder = (e: EvRow): ShowfinderEvent & EvRow => ({ ...e, venue: { name: e.venue_name ?? '', city: e.venue_city ?? '' }, artists: [] })
 
+// Site events that day. Reads the events table itself: the events_with_venue view has no affiliate-link
+// columns, and asking it for them failed every time, silently, so no suggestion was ever shown (fixed 22 Oct 2026).
+// A failure is now reported on the page instead of looking like "no event matches".
 async function eventsOnDay(db: Loose, date: string): Promise<Array<ShowfinderEvent & EvRow>> {
-  const { data } = await db.from('events_with_venue')
-    .select('id, title, slug, start_date, status, venue_name, venue_city, gigsberg_affiliate_url, see_tickets_affiliate_url')
+  const { data, error } = await db.from('events')
+    .select('id, title, slug, start_date, status, gigsberg_affiliate_url, see_tickets_affiliate_url, venue:venues(name, city)')
     .gte('start_date', new Date(Date.parse(dayShift(date, 0)) - 3_600_000).toISOString()).lt('start_date', dayShift(date, 1))
-    .in('status', LIVE_EVENT_STATUSES).limit(1000)
-  return ((data ?? []) as EvRow[]).map(toShowfinder)
+    .in('status', LIVE_EVENT_STATUSES).order('start_date').range(0, 999)
+  if (error) throw new Error(`Could not load site events for ${date}: ${error.message}`)
+  return ((data ?? []) as Array<EvRow & { venue: { name: string | null; city: string | null } | null }>)
+    .map(e => ({ ...e, venue_name: e.venue?.name ?? null, venue_city: e.venue?.city ?? null }))
+    // Premium / hospitality / suite copies of a show are never the thing to link.
+    .filter(e => isMatchableEvent({ name: '' }, e))
+    .map(toShowfinder)
 }
 
 function toCatalogueRow(platform: Platform, r: Record<string, any>): CatalogueRow { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -65,6 +73,7 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
 
   type Item = { key: string; catalogue: Record<string, any> | null; event: EvRow | null; candidates: Candidate[]; catalogueCandidates: Array<Record<string, any>> } // eslint-disable-line @typescript-eslint/no-explicit-any
   const items: Item[] = []
+  const loadErrors: string[] = []
   let total = 0
 
   if (view === 'soldout') {
@@ -96,7 +105,9 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
     const rows = (data ?? []) as Array<Record<string, any>> // eslint-disable-line @typescript-eslint/no-explicit-any
     const dates = [...new Set(rows.map(r => r.event_date as string))]
     const byDate = new Map<string, Array<ShowfinderEvent & EvRow>>()
-    await Promise.all(dates.map(async d => { byDate.set(d, await eventsOnDay(db, d)) }))
+    await Promise.all(dates.map(async d => {
+      try { byDate.set(d, await eventsOnDay(db, d)) } catch (e) { loadErrors.push(e instanceof Error ? e.message : String(e)) }
+    }))
     for (const r of rows) {
       const candidates = rankCandidates(toCatalogueRow(platform, r), byDate.get(r.event_date) ?? [], 4)
       items.push({ key: String(r.id), catalogue: r, event: null, candidates, catalogueCandidates: [] })
@@ -118,6 +129,7 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
         <Link href="/admin/feeds" className="text-sm text-slate-500 hover:text-slate-700">← Feeds &amp; matching</Link>
       </header>
       <main className="max-w-6xl mx-auto px-4 py-6">
+        {loadErrors.length > 0 && <div className="mb-3 rounded-xl border px-4 py-3 text-sm font-semibold bg-red-50 border-red-200 text-red-800">Suggestions could not be loaded for some days, so a row saying &ldquo;no site event&rdquo; may be wrong: {loadErrors[0]}</div>}
         {sp.msg && <div className={`mb-3 rounded-xl border px-4 py-3 text-sm font-semibold ${sp.ok === '1' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>{sp.msg}</div>}
         <div className="flex flex-wrap gap-2 mb-3">
           <Link href={`/admin/unmatched?platform=gigsberg&view=${view}`} className={tab(platform === 'gigsberg')}>Gigsberg ({unlinkedGb.toLocaleString('en-GB')})</Link>
@@ -193,7 +205,7 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
                   )}
                   {isHidden
                     ? <form action={unhideAction}><input type="hidden" name="platform" value={platform} /><input type="hidden" name="catalogue_id" value={String(item.catalogue!.id)} /><button className="text-slate-600 font-semibold border border-slate-300 rounded-lg px-3 py-1">Restore</button></form>
-                    : <form action={hideAction}><input type="hidden" name="platform" value={platform} /><input type="hidden" name="catalogue_id" value={String(item.catalogue!.id)} /><button className="text-slate-600 font-semibold border border-slate-300 rounded-lg px-3 py-1">Hide: not on our site</button></form>}
+                    : <form action={hideAction}><input type="hidden" name="platform" value={platform} /><input type="hidden" name="catalogue_id" value={String(item.catalogue!.id)} /><button className="rounded-lg border border-red-300 bg-red-50 px-3 py-1 text-red-700 font-bold hover:bg-red-100" title="Take it off this list (no tickets, wrong show, not wanted). It will not be matched or imported. Undo from the Hidden tab.">✕ Remove from list</button></form>}
                 </div>
               </div>
               <div className="mt-3 border-t border-slate-100 pt-3 space-y-2">

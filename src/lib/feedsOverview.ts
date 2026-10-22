@@ -14,7 +14,7 @@ export const COMBOS: Combo[] = [
   { key: 'all3',    label: 'On all 3 feeds',                 tm: true,  gb: true,  st: true,  hint: 'Ticketmaster, Gigsberg and See Tickets buttons' },
   { key: 'tm_gb',   label: 'Ticketmaster + Gigsberg',        tm: true,  gb: true,  st: false, hint: 'Could See Tickets have it too?' },
   { key: 'tm_st',   label: 'Ticketmaster + See Tickets',     tm: true,  gb: false, st: true,  hint: 'Could Gigsberg have it too? (resale backup if it sells out)' },
-  { key: 'gb_st',   label: 'Gigsberg + See Tickets',         tm: false, gb: true,  st: true,  hint: 'Not on Ticketmaster' },
+  { key: 'gb_st',   label: 'Gigsberg + See Tickets, no Ticketmaster', tm: false, gb: true,  st: true,  hint: 'Only shows Ticketmaster does not sell (shows on all three are in the first row)' },
   { key: 'tm_only', label: 'Ticketmaster only',              tm: true,  gb: false, st: false, hint: 'No Gigsberg or See Tickets button yet' },
   { key: 'gb_only', label: 'Gigsberg only',                  tm: false, gb: true,  st: false, hint: 'Created from Gigsberg' },
   { key: 'st_only', label: 'See Tickets only',               tm: false, gb: false, st: true,  hint: 'Created from See Tickets' },
