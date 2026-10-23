@@ -16,7 +16,7 @@ async function handleGet(request: Request) {
   try {
     const dryRun = new URL(request.url).searchParams.get('dry') === '1'
     const result = await mergeVenueFamilyDuplicates({ dryRun })
-    if (!dryRun && result.merged) {
+    if (!dryRun && (result.merged || result.extrasMerged)) {
       revalidatePath('/cities/[city]', 'page')
       revalidatePath('/venues/[slug]', 'page')
       revalidatePath('/events')

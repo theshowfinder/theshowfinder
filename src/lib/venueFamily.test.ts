@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { venueBuildingName, sameBuilding, sameShow, pickKeeper, findDuplicateGroups, titlesFullyMatch, type GroupEvent } from './venueFamily.ts'
+import { venueBuildingName, sameBuilding, sameShow, pickKeeper, findDuplicateGroups, findExtraHomes, titlesFullyMatch, type GroupEvent } from './venueFamily.ts'
 
 const academy  = { id: 'v1', name: 'O2 Academy Birmingham',  city: 'Birmingham', postcode: 'B1 1DB' }
 const academy2 = { id: 'v2', name: 'O2 Academy2 Birmingham', city: 'Birmingham', postcode: 'B1 1DB' }
@@ -70,5 +70,22 @@ describe('duplicate groups', () => {
   test('title match: leading words count, a different act does not', () => {
     assert.equal(titlesFullyMatch('Boyzlife Featuring Keith Duffy & Brian McFadden', 'Boyzlife - Music Hall'), true)
     assert.equal(titlesFullyMatch('Christmas Concert', 'Hue and Cry'), false)
+  })
+})
+
+describe('extras', () => {
+  const park = { id: 'dp', name: 'Donington Park', city: 'Derby', postcode: 'DE74 2RP' }
+  test('festival extras fold into the festival, a hotel bundle into its show', () => {
+    const festival = ev({ id: 'fest', venue: park, title: 'Download Festival 2027', start_date: '2027-06-10T10:00:00Z' })
+    const candy = ev({ id: 'x1', venue: park, title: 'Download 2027 - Charge Candy', start_date: '2027-06-09T19:00:00Z' })
+    const madness = ev({ id: 'mad', venue: academy, title: 'Madness', start_date: '2027-07-02T16:00:00Z' })
+    const bundle = ev({ id: 'x2', venue: academy, title: 'Madness - Official Ticket and Hotel Bundle', start_date: '2027-07-02T16:01:00Z' })
+    const homes = findExtraHomes([candy, bundle], [festival, madness])
+    assert.equal(homes.find(h => h.extra.id === 'x1')?.main?.id, 'fest')
+    assert.equal(homes.find(h => h.extra.id === 'x2')?.main?.id, 'mad')
+  })
+  test('an extra with no main show nearby is left for a person', () => {
+    const lonely = ev({ id: 'x3', venue: park, title: 'Creamfields 2027 - Non Camping Parking', start_date: '2027-08-27T19:00:00Z' })
+    assert.equal(findExtraHomes([lonely], [])[0].main, null)
   })
 })

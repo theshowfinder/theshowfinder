@@ -341,3 +341,42 @@ export function findDuplicateGroups<T extends GroupEvent>(events: T[], isLocalSo
     return { key: evs.map(e => e.id).sort().join(','), confident: why.length === 0, reasons: why, keep, duplicates, events: evs }
   })
 }
+
+// ── Extras (hotel bundles, camping, parking, VIP...) ─────────────────────────
+
+const firstWord = (title: string) => norm(title).replace(/^(the|a|an)\s+/, '').split(' ')[0] ?? ''
+const daysApart = (a: string, b: string) => Math.round(Math.abs(Date.parse(`${londonDay(a)}T12:00:00Z`) - Date.parse(`${londonDay(b)}T12:00:00Z`)) / 86_400_000)
+
+export const EXTRA_WINDOW_DAYS = 4
+
+/**
+ * The main show each extra belongs to: same building, within 4 days (festival camping is often dated the eve),
+ * the main show's first word is the extra's ("Download 2027 - Charge Candy" -> "Download Festival 2027"). The
+ * nearest date wins, then the main whose whole title starts the extra's. Extras with no clear home are returned
+ * with main = null, for a person to decide.
+ */
+export function findExtraHomes<T extends GroupEvent>(extras: T[], mains: T[]): { extra: T; main: T | null; why: string }[] {
+  const byWord = new Map<string, T[]>()
+  for (const m of mains) {
+    const w = firstWord(m.title)
+    if (w.length < 3) continue
+    const list = byWord.get(w)
+    if (list) list.push(m); else byWord.set(w, [m])
+  }
+  return extras.map(extra => {
+    const w = firstWord(extra.title)
+    const candidates = (byWord.get(w) ?? [])
+      .filter(m => m.id !== extra.id && sameBuilding(m.venue, extra.venue) && daysApart(m.start_date, extra.start_date) <= EXTRA_WINDOW_DAYS)
+    if (!candidates.length) return { extra, main: null, why: 'no main show at this venue within 4 days' }
+    const extraNorm = norm(extra.title)
+    const rank = (m: T) => [daysApart(m.start_date, extra.start_date), extraNorm.startsWith(norm(m.title)) ? 0 : 1, isTicketmasterPrimary(m) ? 0 : 1] as const
+    const sorted = [...candidates].sort((a, b) => {
+      const ra = rank(a), rb = rank(b)
+      return ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2] || a.id.localeCompare(b.id)
+    })
+    const [best, next] = sorted
+    // Two different shows equally close (two acts sharing a first word at one venue): a person decides.
+    if (next && rank(next)[0] === rank(best)[0] && rank(next)[1] === rank(best)[1] && actTitle(next.title) !== actTitle(best.title)) return { extra, main: null, why: 'two possible main shows' }
+    return { extra, main: best, why: 'main show at the same venue' }
+  })
+}

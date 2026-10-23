@@ -8,6 +8,17 @@ export const PACKAGE_TITLE = /\b(vip|premium|hospitality|lounge|packages?|upgrad
 // headline night out ("Fishies Week 10", "Toddler Workshop", "Guided Walks ...").
 export const NOT_A_HEADLINE = /\b(week\s*\d+|workshops?|classes|class|lessons?|guided\s+walks?|ghost\s+walks?|brunch|afternoon\s+tea|bottomless|open\s+day|fishies)\b/i
 
+// Things Ticketmaster lists as their own "event" that are an extra on a show: hotel bundles, festival camping,
+// parking, lockers, phone charging, souvenirs, VIP / hospitality upgrades. Found on the live site 23 Oct 2026
+// ("Download 2027 - Charge Candy", "Madness - Official Ticket and Hotel Bundle", "Creamfields 2027 - Non Camping
+// Parking"). They are folded into their main show by the merge job, never listed as shows.
+export const EXTRA_TITLE = /\b(hotel\s+bundl\w*|no\s+ticket\s+included|official\s+vip|vip\s+(tickets?|packages?|experiences?|upgrades?)|ticket\s+experiences?|hospitality|upgrades?|camping|campervans?|caravans?|glamping|bell\s+(tents?|for)|safari\s+(tents?|for)|tipis?|yurts?|crew\s+huts?|car\s*parks?|parking|shuttles?|coach\s+(travel|packages?|transfers?)|lockers?|souvenirs?|charge\s+candy|phone\s+charging|merch(andise)?\s+bundles?|rock\s+retreat|mini\s+moshers|wagon\s+for|bedouin|emperor\s+bell)\b/i
+
+/** An extra sold against a show (hotel bundle, camping, parking, VIP upgrade...), not a show. */
+export function isExtraTitle(title: string | null | undefined): boolean {
+  return !!title && EXTRA_TITLE.test(title)
+}
+
 /** A package / upgrade / class listing: not something to promote as a show in its own right. */
 export function isPackageOrClassTitle(title: string | null | undefined): boolean {
   if (!title) return false

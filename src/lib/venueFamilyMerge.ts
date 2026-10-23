@@ -13,8 +13,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPages } from '@/lib/pagedFetch'
 import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
-import { isPackageOrClassTitle } from '@/lib/eventTitles'
-import { findDuplicateGroups, keepReason, type DuplicateGroup, type GroupEvent } from '@/lib/venueFamily'
+import { isExtraTitle, isPackageOrClassTitle } from '@/lib/eventTitles'
+import { findDuplicateGroups, findExtraHomes, keepReason, type DuplicateGroup, type GroupEvent } from '@/lib/venueFamily'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Db = any
@@ -40,6 +40,10 @@ export interface MergeRunResult {
   alreadyDecided: number
   linkClashes: number
   linksMoved: number
+  /** Extras (hotel bundles, camping, parking, VIP...) folded into their main show. */
+  extrasMerged: number
+  /** Extras with no clear main show, sent to event_merge_reviews. */
+  extrasToReview: number
   examples: string[]
 }
 
@@ -55,7 +59,8 @@ async function loadCandidates(db: Db): Promise<{ events: MergeEvent[]; localSour
   ])
   const venueById = new Map(venues.map((v: any) => [v.id, v]))
   const hidden = new Set(nonCanon.map((r: any) => r.id))
-  const events = rows.filter((e: any) => e.venue_id && venueById.has(e.venue_id) && !hidden.has(e.id) && !isPackageOrClassTitle(e.title))
+  // Packages and extras are kept here: extras are folded into their main show below; neither is grouped as a show.
+  const events = rows.filter((e: any) => e.venue_id && venueById.has(e.venue_id) && !hidden.has(e.id))
   const ids = new Set(events.map((e: any) => e.id))
   const links = await fetchAllPages<any>((from, to) => db.from('event_artists').select('event_id, artist_id, is_headliner').order('event_id').order('artist_id').range(from, to))
   const mine = links.filter((r: any) => ids.has(r.event_id))
@@ -159,12 +164,13 @@ export async function mergeVenueFamilyDuplicates(opts: { dryRun?: boolean; limit
   const db: Db = createAdminClient()
   const { events, localSources } = await loadCandidates(db)
   const isLocal = (s: string | null) => !!s && (localSources.has(s) || /_council$/.test(s))
-  const groups = findDuplicateGroups(events, isLocal)
+  const shows = events.filter(e => !isPackageOrClassTitle(e.title) && !isExtraTitle(e.title))
+  const groups = findDuplicateGroups(shows, isLocal)
 
   const { data: decided } = await db.from('event_merge_reviews').select('group_key, status').neq('status', 'open')
   const decidedKeys = new Map(((decided ?? []) as any[]).map(r => [r.group_key, r.status]))
 
-  const res: MergeRunResult = { dryRun, eventsScanned: events.length, groups: groups.length, confident: 0, merged: 0, duplicatesMerged: 0, sentToReview: 0, alreadyDecided: 0, linkClashes: 0, linksMoved: 0, examples: [] }
+  const res: MergeRunResult = { dryRun, eventsScanned: events.length, groups: groups.length, confident: 0, merged: 0, duplicatesMerged: 0, sentToReview: 0, alreadyDecided: 0, linkClashes: 0, linksMoved: 0, extrasMerged: 0, extrasToReview: 0, examples: [] }
   let done = 0
   for (const g of groups) {
     if (decidedKeys.get(g.key) === 'not_duplicate') { res.alreadyDecided++; continue }
@@ -189,7 +195,25 @@ export async function mergeVenueFamilyDuplicates(opts: { dryRun?: boolean; limit
     await db.from('event_merge_reviews').update({ status: 'merged', decided_at: new Date().toISOString() }).eq('group_key', g.key).eq('status', 'open')
     res.merged++
   }
-  if (!dryRun && res.merged) {
+  // Extras: fold each into its main show (same building, within 4 days); unclear ones go to a person.
+  for (const { extra, main, why } of findExtraHomes(events.filter(e => isExtraTitle(e.title)), shows)) {
+    if (!main) {
+      res.extrasToReview++
+      if (!dryRun) await db.from('event_merge_reviews').upsert({
+        kind: 'duplicate_group', group_key: `extra:${extra.id}`, event_ids: [extra.id], suggested_keep_id: null, reasons: [`extra (hotel bundle, camping, parking, VIP...): ${why}`],
+        summary: { events: [{ id: extra.id, slug: extra.slug, title: extra.title, start: extra.start_date, venue: extra.venue.name, source: extra.source ?? 'ticketmaster' }] },
+      }, { onConflict: 'group_key', ignoreDuplicates: true })
+      continue
+    }
+    if (decidedKeys.get(`extra:${extra.id}`) === 'not_duplicate') continue
+    res.extrasMerged++
+    if (res.examples.length < 40) res.examples.push(`extra: ${extra.title} -> ${main.title} @ ${main.venue.name}`)
+    if (!dryRun) {
+      const r = await mergeOne(db, main, extra, false)
+      res.linksMoved += r.moved
+    }
+  }
+  if (!dryRun && (res.merged || res.extrasMerged)) {
     const { error } = await db.rpc('refresh_event_canonical')
     if (error) throw new Error(`refresh_event_canonical: ${error.message}`)
   }
