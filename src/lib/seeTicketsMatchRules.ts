@@ -61,6 +61,16 @@ export function overlap(left: string | null | undefined, right: string | null | 
   return shared / Math.max(a.size, b.size)
 }
 
+/** Word overlap for venue names: every word counts ("The Live Room" is a name, not filler). */
+function venueWordOverlap(left: string | null | undefined, right: string | null | undefined): number {
+  const a = new Set(normalize(left).split(' ').filter(t => t.length > 2))
+  const b = new Set(normalize(right).split(' ').filter(t => t.length > 2))
+  if (!a.size || !b.size) return 0
+  let shared = 0
+  for (const t of a) if (b.has(t)) shared++
+  return shared / Math.max(a.size, b.size)
+}
+
 const LONDON = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 const partsCache = new Map<string, { day: string; minutes: number | null }>()
 function london(iso: string) {
@@ -125,7 +135,7 @@ export function score(row: StRow, event: StEvent): ScoreDetail {
   const sameDate = dateOnly(row.event_date) === dateOnly(event.start_date)
   const sameCity = normalize(row.city) === normalize(event.venue?.city)
   const venueExact = Boolean(comparableVenue(row.venue) && comparableVenue(row.venue) === comparableVenue(event.venue?.name))
-  const venueOverlap = Math.max(overlap(row.venue, event.venue?.name ?? null), overlap(comparableVenue(row.venue), comparableVenue(event.venue?.name)))
+  const venueOverlap = Math.max(venueWordOverlap(row.venue, event.venue?.name ?? null), venueWordOverlap(comparableVenue(row.venue), comparableVenue(event.venue?.name)))
   const a = feedMinutes(row.event_time), b = eventMinutes(event.start_date)
   const timeGap = a !== null && b !== null ? Math.abs(a - b) : null
   let value = titleMatch ? 0.55 : titleOverlap * 0.55

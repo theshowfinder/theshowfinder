@@ -43,6 +43,13 @@ describe('duplicate groups', () => {
     const other = ev({ id: 'other', venue: academy, title: 'The Lathums', ticketmaster_id: 'y' })
     assert.equal(findDuplicateGroups([airbagFull, other], () => false).length, 0)
   })
+  test('a council copy at the same venue record with a shorter title is merged', () => {
+    const tm = ev({ id: 'tm', venue: academy2, title: 'Placebo - 30th Anniversary Tour', tickets_url: 'https://www.ticketmaster.co.uk/x', details: { promoter: 'p' } })
+    const council = ev({ id: 'c', venue: academy2, title: 'Placebo', source: 'cardiff_council', ticketmaster_id: null, start_date: '2026-10-23T23:00:00+00:00' })
+    const [g] = findDuplicateGroups([tm, { ...council, start_date: '2026-10-22T23:00:00+00:00' }], s => s === 'cardiff_council')
+    assert.equal(g?.keep.id, 'tm')
+    assert.equal(g?.confident, true)
+  })
   test('the same act in two towns on one day is not merged', () => {
     const leedsShow = ev({ id: 'leeds', venue: leeds, ticketmaster_id: 'z' })
     assert.equal(findDuplicateGroups([airbagFull, leedsShow], () => false).length, 0)

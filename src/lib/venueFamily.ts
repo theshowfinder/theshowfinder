@@ -297,7 +297,11 @@ export function findDuplicateGroups<T extends GroupEvent>(events: T[], isLocalSo
     const mins = list.map(e => londonStartMinutes(e.start_date))
     for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
       const a = list[i], b = list[j]
-      if (a.venue_id === b.venue_id) continue   // same venue record: the existing canonical grouping's job
+      // Same venue record too: the older grouping (event_canonical_map) only joins identical titles, so "Placebo"
+      // from a council feed and Ticketmaster's "Placebo - 30th Anniversary Tour" at Utilita Arena Cardiff fell
+      // between the two. Events reaching here are already canonical, so nothing is grouped twice.
+      // Two Ticketmaster products at the same venue record (hospitality, hotel bundles) stay as they are.
+      if (a.venue_id === b.venue_id && !isLocalSource(a.source) && !isLocalSource(b.source)) continue
       if (mins[i] !== null && mins[j] !== null && Math.abs(mins[i]! - mins[j]!) > SAME_SHOW_MINUTES) continue
       const show = sameShow(a, b)
       if (!show) continue

@@ -23,6 +23,10 @@ describe('See Tickets matching', () => {
     assert.equal(d.status, 'auto_matched')
     assert.equal(d.best?.event.id, 'uhoh')
   })
+  test('venue words all count: The Live Room@Caroline Social Club is The Live Room', () => {
+    const d = decide(row({ name: 'Jim Moray', venue: 'The Live Room@Caroline Social Club', city: 'Shipley', event_time: '19:30' }), [ev('jm', 'Jim Moray', '2026-11-20T18:30:00Z', 'The Live Room', 'Saltaire')])
+    assert.equal(d.status, 'auto_matched')
+  })
   test('"The" alone is not a shared name', () => {
     assert.equal(overlap('The Rosadocs', 'The Teenagers'), 0)
     assert.equal(decide(row({ name: 'The Rosadocs' }), [ev('t', 'The Teenagers', '2026-11-20T19:30:00Z')]).status, 'no_match')
