@@ -12,11 +12,22 @@ export const NOT_A_HEADLINE = /\b(week\s*\d+|workshops?|classes|class|lessons?|g
 // parking, lockers, phone charging, souvenirs, VIP / hospitality upgrades. Found on the live site 23 Oct 2026
 // ("Download 2027 - Charge Candy", "Madness - Official Ticket and Hotel Bundle", "Creamfields 2027 - Non Camping
 // Parking"). They are folded into their main show by the merge job, never listed as shows.
-export const EXTRA_TITLE = /\b(hotel\s+bundl\w*|no\s+ticket\s+included|official\s+vip|vip\s+(tickets?|packages?|experiences?|upgrades?)|ticket\s+experiences?|hospitality|upgrades?|camping|campervans?|caravans?|glamping|bell\s+(tents?|for)|safari\s+(tents?|for)|tipis?|yurts?|crew\s+huts?|car\s*parks?|parking|shuttles?|coach\s+(travel|packages?|transfers?)|lockers?|souvenirs?|charge\s+candy|phone\s+charging|merch(andise)?\s+bundles?|rock\s+retreat|mini\s+moshers|wagon\s+for|bedouin|emperor\s+bell)\b/i
+export const EXTRA_TITLE = /\b(hotel\s+bundl\w*|no\s+(event\s+)?tickets?\s+included|upgrades?\s+only|official\s+vip|vip\s+(tickets?|packages?|experiences?|upgrades?)|ticket\s+experiences?|hospitality|(car|motorbike|motorcycle)\s*park(ing)?(\s+pass)?|parking|shuttles?|coach\s+(travel|packages?|transfers?)|arena\s+lockers?|souvenirs?|t-?shirts?|lanyards?|merch(andise)?(\s+bundles?)?|charge\s+candy|phone\s+charging|power\s+hook-?up|campervans?|caravans?|motorhomes?|airstreams?|glamping|cabins?|yurts?|tipis?|bell\s+(tents?|house|for)|bell\s+tents?|(luxury|classic|deluxe|premium|super|empty|arena|lotus)\s+bell|bedouin|safari\s+(tents?|for|suite|grand)|shikar|touareg|tipi\s+lodges?|eco\s+lodges?|summerhouse|tenthouse|country\s+wagon|crew\s+huts?|rock\s+retreat|live\s+in\s+vehicles)\b/i
 
-/** An extra sold against a show (hotel bundle, camping, parking, VIP upgrade...), not a show. */
+// Unmistakable anywhere in a title ("Kehlani VIP Upgrades (UPGRADE ONLY NO TICKET INCLUDED)").
+const EXTRA_ANYWHERE = /\b(hotel\s+bundl\w*|no\s+(event\s+)?tickets?\s+included|tickets?\s+not\s+included|upgrades?\s+only|official\s+vip|vip\s+(tickets?\s+)?(experiences?|upgrades?))\b/i
+// The act name ends at " - ", " | " or ": " ("Download 2027 - Souvenir", "Madness- Official Ticket and Hotel Bundle").
+const AFTER_ACT = /^.*?\S\s*(?:-|–|—|\|)\s+|^.*?:\s+/
+
+/**
+ * An extra sold against a show (hotel bundle, camping, parking, VIP upgrade...), not a show. Extra words only
+ * count after the act's name, so bands called Caravan Palace or Souvenir are never mistaken for extras.
+ */
 export function isExtraTitle(title: string | null | undefined): boolean {
-  return !!title && EXTRA_TITLE.test(title)
+  if (!title) return false
+  if (EXTRA_ANYWHERE.test(title)) return true
+  const m = AFTER_ACT.exec(title)
+  return !!m && EXTRA_TITLE.test(title.slice(m[0].length))
 }
 
 /** A package / upgrade / class listing: not something to promote as a show in its own right. */

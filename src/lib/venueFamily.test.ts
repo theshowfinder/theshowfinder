@@ -76,7 +76,7 @@ describe('duplicate groups', () => {
 describe('extras', () => {
   const park = { id: 'dp', name: 'Donington Park', city: 'Derby', postcode: 'DE74 2RP' }
   test('festival extras fold into the festival, a hotel bundle into its show', () => {
-    const festival = ev({ id: 'fest', venue: park, title: 'Download Festival 2027', start_date: '2027-06-10T10:00:00Z' })
+    const festival = ev({ id: 'fest', venue: park, title: 'Download 2027 - Weekend Arena', start_date: '2027-06-10T10:00:00Z' })
     const candy = ev({ id: 'x1', venue: park, title: 'Download 2027 - Charge Candy', start_date: '2027-06-09T19:00:00Z' })
     const madness = ev({ id: 'mad', venue: academy, title: 'Madness', start_date: '2027-07-02T16:00:00Z' })
     const bundle = ev({ id: 'x2', venue: academy, title: 'Madness - Official Ticket and Hotel Bundle', start_date: '2027-07-02T16:01:00Z' })
@@ -87,5 +87,25 @@ describe('extras', () => {
   test('an extra with no main show nearby is left for a person', () => {
     const lonely = ev({ id: 'x3', venue: park, title: 'Creamfields 2027 - Non Camping Parking', start_date: '2027-08-27T19:00:00Z' })
     assert.equal(findExtraHomes([lonely], [])[0].main, null)
+  })
+})
+
+describe('festival ticket types', () => {
+  const field = { id: 'cf', name: 'Daresbury', city: 'Warrington', postcode: 'WA4 4AB' }
+  test('entry tickets are shows, tents and parking are extras that fold into an entry ticket', async () => {
+    const { isExtraTitle } = await import('./eventTitles.ts')
+    assert.equal(isExtraTitle('Creamfields 2027 - 3 Day Camping - Standard'), false)
+    assert.equal(isExtraTitle('Reading Festival 2027 - Weekend Non-Camping'), false)
+    assert.equal(isExtraTitle('Creamfields 2027 - Non Camping Parking'), true)
+    assert.equal(isExtraTitle('Download 2027 - RIP Luxury Yurt for 2 in Metal Meadow 2'), true)
+    assert.equal(isExtraTitle('Reading Festival 2027 - Event Lineup T-Shirt'), true)
+    assert.equal(isExtraTitle('Caravan Palace'), false)
+    assert.equal(isExtraTitle('Souvenir - a Tribute to Orchestral Manoeuvres in the Dark'), false)
+    assert.equal(isExtraTitle('The Caravan, Camping and Motorhome Show 2027'), false)
+    assert.equal(isExtraTitle('Madness- Official Ticket and Hotel Bundls'), true)
+    assert.equal(isExtraTitle('Kehlani VIP Upgrades (UPGRADE ONLY NO TICKET INCLUDED)'), true)
+    const fri = ev({ id: 'fri', venue: field, title: 'Creamfields 2027 - Friday - Standard', start_date: '2027-08-27T12:00:00Z' })
+    const parking = ev({ id: 'park', venue: field, title: 'Creamfields 2027 - Non Camping Parking', start_date: '2027-08-26T19:00:00Z' })
+    assert.equal(findExtraHomes([parking], [fri])[0].main?.id, 'fri')
   })
 })

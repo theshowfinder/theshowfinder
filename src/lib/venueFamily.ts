@@ -348,6 +348,15 @@ const firstWord = (title: string) => norm(title).replace(/^(the|a|an)\s+/, '').s
 const daysApart = (a: string, b: string) => Math.round(Math.abs(Date.parse(`${londonDay(a)}T12:00:00Z`) - Date.parse(`${londonDay(b)}T12:00:00Z`)) / 86_400_000)
 
 export const EXTRA_WINDOW_DAYS = 4
+// The extra names the main show's act: one act name starts the other ("Madness" / "Madness - Official Ticket and
+// Hotel Bundle", "Download 2027" / "Download 2027 - Souvenir"). A shared first word alone is not enough.
+function sameAct(mainTitle: string, extraTitle: string): boolean {
+  const a = actTitle(mainTitle), b = norm(extraTitle).replace(/^the\s+/, '')
+  // "Pete Tong- Official Ticket and Hotel Bundle": the act ends at "- " too, not only at " - ".
+  const extraAct = norm(extraTitle.split(/\s*[-–—|]\s+|:\s+/)[0]).replace(/^the\s+/, '')
+  return a.length >= 3 && (b === a || b.startsWith(`${a} `) || extraAct === a || (extraAct.length >= 3 && a.startsWith(`${extraAct} `)))
+}
+const ENTRY_TICKET = /\b(weekend|general\s+admission|standard|day\s+tickets?|[1-5]\s+day|friday|saturday|sunday|non[\s-]?camping|camping|ticket)\b/i
 
 /**
  * The main show each extra belongs to: same building, within 4 days (festival camping is often dated the eve),
@@ -366,17 +375,20 @@ export function findExtraHomes<T extends GroupEvent>(extras: T[], mains: T[]): {
   return extras.map(extra => {
     const w = firstWord(extra.title)
     const candidates = (byWord.get(w) ?? [])
-      .filter(m => m.id !== extra.id && sameBuilding(m.venue, extra.venue) && daysApart(m.start_date, extra.start_date) <= EXTRA_WINDOW_DAYS)
+      .filter(m => m.id !== extra.id && sameBuilding(m.venue, extra.venue) && daysApart(m.start_date, extra.start_date) <= EXTRA_WINDOW_DAYS && sameAct(m.title, extra.title))
     if (!candidates.length) return { extra, main: null, why: 'no main show at this venue within 4 days' }
     const extraNorm = norm(extra.title)
-    const rank = (m: T) => [daysApart(m.start_date, extra.start_date), extraNorm.startsWith(norm(m.title)) ? 0 : 1, isTicketmasterPrimary(m) ? 0 : 1] as const
+    // An entry ticket is the show: prefer the plain show or a general entry ticket (weekend, day, standard)
+    // over another ticket type, then the nearest date, then the shortest title.
+    const entry = (m: T) => extraNorm.startsWith(norm(m.title)) ? 0 : ENTRY_TICKET.test(m.title) ? 1 : 2
+    const rank = (m: T) => [entry(m), daysApart(m.start_date, extra.start_date), m.title.length] as const
     const sorted = [...candidates].sort((a, b) => {
       const ra = rank(a), rb = rank(b)
       return ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2] || a.id.localeCompare(b.id)
     })
     const [best, next] = sorted
     // Two different shows equally close (two acts sharing a first word at one venue): a person decides.
-    if (next && rank(next)[0] === rank(best)[0] && rank(next)[1] === rank(best)[1] && actTitle(next.title) !== actTitle(best.title)) return { extra, main: null, why: 'two possible main shows' }
+    if (next && rank(best)[0] === 2 && rank(next)[0] === 2 && rank(next)[1] === rank(best)[1] && actTitle(next.title) !== actTitle(best.title)) return { extra, main: null, why: 'two possible main shows' }
     return { extra, main: best, why: 'main show at the same venue' }
   })
 }
