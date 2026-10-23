@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { venueBuildingName, sameBuilding, sameShow, pickKeeper, findDuplicateGroups, findExtraHomes, titlesFullyMatch, type GroupEvent } from './venueFamily.ts'
+import { venueBuildingName, sameBuilding, sameShow, pickKeeper, findDuplicateGroups, findExtraHomes, isSameShow, titlesFullyMatch, type GroupEvent } from './venueFamily.ts'
 
 const academy  = { id: 'v1', name: 'O2 Academy Birmingham',  city: 'Birmingham', postcode: 'B1 1DB' }
 const academy2 = { id: 'v2', name: 'O2 Academy2 Birmingham', city: 'Birmingham', postcode: 'B1 1DB' }
@@ -107,5 +107,35 @@ describe('festival ticket types', () => {
     const fri = ev({ id: 'fri', venue: field, title: 'Creamfields 2027 - Friday - Standard', start_date: '2027-08-27T12:00:00Z' })
     const parking = ev({ id: 'park', venue: field, title: 'Creamfields 2027 - Non Camping Parking', start_date: '2027-08-26T19:00:00Z' })
     assert.equal(findExtraHomes([parking], [fri])[0].main?.id, 'fri')
+  })
+})
+
+describe('the one same-show rule (isSameShow)', () => {
+  const guildhall = { id: 'g', name: 'O2 Guildhall Southampton', city: 'Southampton', postcode: 'SO14 7LP' }
+  const townOnly = { id: 't', name: 'Southampton', city: 'Southampton', postcode: null }
+  const at = (id: string, title: string, start: string, venue: typeof guildhall | typeof townOnly, artists: { id: string; name: string }[] = []) => ({ id, title, start_date: start, venue, artists })
+  test('a council listing with no time and only the town is the Ticketmaster show that night', () => {
+    const tm = at('tm', 'Massive Wagons + Terrorvision', '2027-01-28T19:00:00Z', guildhall)
+    const council = at('c', 'Massive Wagons & Terrorvision', '2027-01-28T00:00:00Z', townOnly)
+    assert.equal(isSameShow(council, tm), 'strong')
+  })
+  test('the act named with extra words ("Take That Live") is the same show when the act is linked', () => {
+    const tm = at('tm', 'Take That', '2027-01-28T19:00:00Z', guildhall, [{ id: 'a', name: 'Take That' }])
+    assert.equal(isSameShow(at('c', 'Take That Live', '2027-01-28T19:15:00Z', guildhall), tm), 'strong')
+  })
+  test('a tribute night is not the act', () => {
+    const tm = at('tm', 'Take That', '2027-01-28T19:00:00Z', guildhall)
+    assert.equal(isSameShow(at('c', 'Take That Tribute Night', '2027-01-28T19:00:00Z', guildhall), tm), null)
+  })
+  test('two festivals with a shared word are not the same', () => {
+    assert.equal(isSameShow(at('a', 'Derby Beer Festival', '2027-01-28T12:00:00Z', guildhall), at('b', 'Derby Gin Festival', '2027-01-28T12:00:00Z', guildhall)), null)
+  })
+  test('early and late shows are two shows', () => {
+    const early = at('e', 'Mica Paris', '2027-01-28T17:00:00Z', guildhall)
+    const late = at('l', 'Mica Paris', '2027-01-28T19:45:00Z', guildhall)
+    assert.equal(isSameShow(early, late), null)
+  })
+  test('door time vs stage time (45 minutes) is the same show', () => {
+    assert.equal(isSameShow(at('a', 'Lucia & The Best Boys', '2027-01-28T19:30:00Z', guildhall), at('b', 'Lucia & the Best Boys', '2027-01-28T20:15:00Z', guildhall)), 'strong')
   })
 })

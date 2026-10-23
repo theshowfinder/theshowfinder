@@ -85,7 +85,23 @@ function nameContains(a: string, b: string): boolean {
  *   'postcode' / 'coords'  names unrelated, but the same postcode or within 150 m: weaker (neighbours share postcodes)
  * A shared town name alone is never a match ("O2 Academy" in Leeds and Birmingham are two buildings).
  */
-export function sameBuilding(a: VenueLike, b: VenueLike): 'venue' | 'name' | 'postcode' | 'coords' | null {
+// Council and tourism feeds often give only a town or area as the "venue" ("Southampton", "Central Bristol",
+// "West Midlands"). That says which town, not which building.
+const PLACE_WORDS = /\b(central|north|south|east|west|greater|city|centre|center|area|various|venues?|online|tbc|uk|midlands|somerset|yorkshire|devon|cornwall|kent|surrey|sussex|essex|hampshire|county)\b/g
+/** The venue name is only a town or area, not a building. */
+export function isPlaceOnly(v: VenueLike): boolean {
+  const n = norm(v.name)
+  if (!n) return true
+  const rest = ` ${n} `.replace(` ${norm(v.city)} `, ' ').replace(PLACE_WORDS, ' ').replace(/\b(the|and|of)\b/g, ' ').trim()
+  return rest === ''
+}
+
+/**
+ * Why two venues are the same building, or null.
+ *   'place' = one side names only a town or area and it is the other's town: the building is unknown, so only an
+ *             exact act match on the same day counts as the same show (see isSameShow).
+ */
+export function sameBuilding(a: VenueLike, b: VenueLike): 'venue' | 'name' | 'postcode' | 'coords' | 'place' | null {
   if (a.id && b.id && a.id === b.id) return 'venue'
   const pa = normalPostcode(a.postcode), pb = normalPostcode(b.postcode)
   const samePostcode = Boolean(pa && pa === pb)
@@ -98,6 +114,7 @@ export function sameBuilding(a: VenueLike, b: VenueLike): 'venue' | 'name' | 'po
   if ((sameTown || samePostcode || close) && nameContains(na, nb)) return 'name'
   if (samePostcode) return 'postcode'
   if (close) return 'coords'
+  if ((isPlaceOnly(a) || isPlaceOnly(b)) && sameTown) return 'place'
   return null
 }
 
@@ -107,7 +124,8 @@ export function sameBuilding(a: VenueLike, b: VenueLike): 'venue' | 'name' | 'po
 export function actTitle(title: string | null | undefined): string {
   const raw = (title ?? '').replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
   const head = raw.split(/\s[-–—|:]\s|:\s/)[0] ?? raw
-  return norm(head).replace(/^the\s+/, '').replace(/\s+/g, ' ').trim()
+  // "&", "+" and "and" are the same joiner ("Massive Wagons + Terrorvision" / "Massive Wagons & Terrorvision").
+  return norm(head).replace(/^the\s+/, '').replace(/\band\b/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 /** Act name without a disambiguation note: "Airbag (Norway)" -> "airbag". */
@@ -135,7 +153,13 @@ function londonParts(iso: string): { day: string; minutes: number | null } {
   return { day: `${g('year')}-${g('month')}-${g('day')}`, minutes: minutes === 0 ? null : minutes }
 }
 
-export const SAME_SHOW_MINUTES = 30
+/**
+ * Start times this close are the same performance (a feed's door time vs the stage time). One number for the whole
+ * site: the merge job, the importers and the Gigsberg and See Tickets matchers all use it.
+ */
+export const SAME_SHOW_MINUTES = 45
+/** Start times further apart than this are another performance of the same act (early / late show, matinee). */
+export const OTHER_PERFORMANCE_MINUTES = 90
 
 /** Start time in minutes after midnight London, null when not announced (stored as midnight). */
 export function londonStartMinutes(iso: string): number | null { return londonParts(iso).minutes }
@@ -325,11 +349,11 @@ export function findDuplicateGroups<T extends GroupEvent>(events: T[], isLocalSo
     const duplicates = evs.filter(e => e.id !== keep.id)
     const why: string[] = []
     if (gp.some(p => p.show === 'weak')) why.push('act not certain (start time not announced and titles differ, or a generic night name)')
-    const loose = [...new Set(gp.filter(p => p.bld === 'postcode' || p.bld === 'coords').map(p => p.bld))]
+    const loose = [...new Set(gp.filter(p => p.bld === 'postcode' || p.bld === 'coords' || (p.bld === 'place' && p.show !== 'strong')).map(p => p.bld))]
     if (loose.length) why.push(`building matched only by ${loose.join('/')}`)
     if (evs.filter(isTicketmasterPrimary).length > 1) why.push('Ticketmaster itself lists it in more than one room')
     const times = evs.map(e => londonStartMinutes(e.start_date)).filter((m): m is number => m !== null)
-    if (times.length && Math.max(...times) - Math.min(...times) > SAME_SHOW_MINUTES) why.push('copies start more than 30 minutes apart (two performances?)')
+    if (times.length && Math.max(...times) - Math.min(...times) > SAME_SHOW_MINUTES) why.push(`copies start more than ${SAME_SHOW_MINUTES} minutes apart (two performances?)`)
     if (duplicates.some(e => !gp.some(p => (p.a === e.id && p.b === keep.id) || (p.b === e.id && p.a === keep.id)))) why.push('not every copy matches the kept event directly')
     if (isLocalSource(keep.source)) why.push('the kept copy would be a council / tourism listing')
     const km = londonStartMinutes(keep.start_date)
@@ -391,4 +415,25 @@ export function findExtraHomes<T extends GroupEvent>(extras: T[], mains: T[]): {
     if (next && rank(best)[0] === 2 && rank(next)[0] === 2 && rank(next)[1] === rank(best)[1] && actTitle(next.title) !== actTitle(best.title)) return { extra, main: null, why: 'two possible main shows' }
     return { extra, main: best, why: 'main show at the same venue' }
   })
+}
+
+
+// ── The one same-show rule ───────────────────────────────────────────────────
+
+export interface ShowAtVenue extends ShowLike { venue: VenueLike }
+
+/**
+ * THE rule for "is this the same show?", used by the merge job, the council and feed importers and the matchers:
+ * the same act, in the same building, on the same UK day, starting within 45 minutes (or one time not announced).
+ * Early and late shows (90+ minutes apart) are two shows. Where one side only names the town ('place'), only a
+ * 'strong' act match counts.
+ *   'strong' = the same show; 'weak' = probably, a person should check; null = different shows.
+ */
+export function isSameShow(a: ShowAtVenue, b: ShowAtVenue): 'strong' | 'weak' | null {
+  const bld = sameBuilding(a.venue, b.venue)
+  if (!bld) return null
+  const show = sameShow(a, b)
+  if (!show) return null
+  if (bld === 'place' || bld === 'postcode' || bld === 'coords') return show === 'strong' && bld === 'place' ? 'strong' : 'weak'
+  return show
 }

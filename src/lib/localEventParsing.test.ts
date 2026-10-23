@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   parseAddressString, extractEventsJsonLd, startDateToIso, parseLocation, eventFromPage, parseSitemap, matchesDetailPattern,
-  chooseUrlsToFetch, pageId, sameShow, mapSchemaStatus, isUkMidnight, startOfUkDayIso, isPastStart, parseRobots, robotsAllows, type LedgerRow,
+  chooseUrlsToFetch, pageId, mapSchemaStatus, isUkMidnight, startOfUkDayIso, isPastStart, parseRobots, robotsAllows, type LedgerRow,
 } from './localEventParsing.ts'
 
 const page = (json: unknown) => `<html><script type="application/ld+json">${JSON.stringify(json)}</script></html>`
@@ -112,13 +112,6 @@ test('fetch order: never-seen first (newest lastmod first), then due refreshes; 
   assert.deepEqual(chooseUrlsToFetch(found, ledger, now, 1), ['https://a.com/new-b'])
 })
 
-test('same show detection is loose on wording but not on short fragments', () => {
-  assert.equal(sameShow('Take That Live', 'Take That'), true)
-  assert.equal(sameShow('Take That', 'Take That Tribute Night'), false)   // short names are not matched by containment
-  assert.equal(sameShow('The Bon Jovi Experience', 'Bon Jovi Experience - Live'), true)
-  assert.equal(sameShow('Christmas Lights Switch On', 'Christmas Lights Switch On 2026'), true)
-  assert.equal(sameShow('Derby Beer Festival', 'Derby Gin Festival'), false)
-})
 
 test('address strings and map-place objects give a venue, town and postcode', () => {
   assert.deepEqual(parseAddressString('60 Low Petergate, York, YO1 7HZ, United Kingdom'), { address: '60 Low Petergate', city: 'York', postcode: 'YO1 7HZ' })

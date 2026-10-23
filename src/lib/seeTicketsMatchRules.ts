@@ -1,6 +1,9 @@
 // Pure rules for matching See Tickets feed rows to site events (no '@/' imports, so it runs under `node --test`).
 // src/lib/seeTicketsMatching.ts loads the data and writes the results.
 
+// The site's one definition of "same performance" and "another performance": src/lib/venueFamily.ts.
+import { OTHER_PERFORMANCE_MINUTES, SAME_SHOW_MINUTES } from './venueFamily.ts'
+
 export interface StRow {
   id: string
   name: string
@@ -97,8 +100,7 @@ export function feedMinutes(time: string | null | undefined): number | null {
   return v === 0 ? null : v
 }
 
-/** Start times further apart than this are another performance (early / late show, matinee). */
-export const OTHER_PERFORMANCE_MINUTES = 90
+export { OTHER_PERFORMANCE_MINUTES }
 
 const names = (r: StRow) => [r.primary_artist, r.second_artist, r.name].filter(Boolean) as string[]
 
@@ -143,7 +145,7 @@ export function score(row: StRow, event: StEvent): ScoreDetail {
   if (sameCity) value += 0.1
   value += venueExact ? 0.1 : venueOverlap * 0.1
   // Same performance: a small lift, so the 19:45 late show beats the 17:00 early show of the same act and venue.
-  if (timeGap !== null) value += timeGap <= 30 ? 0.05 : timeGap > OTHER_PERFORMANCE_MINUTES ? -0.1 : 0
+  if (timeGap !== null) value += timeGap <= SAME_SHOW_MINUTES ? 0.05 : timeGap > OTHER_PERFORMANCE_MINUTES ? -0.1 : 0
   // The feed's full title is the event's title: wins a tie with another show by the same act ("Phil Wang: UH OH" over
   // "Phil Wang: Wang in There, Baby!", "Flo & Joan - With Feeling" over "Flo & Joan - The Tivoli Theatre").
   const bare = (s: string | null | undefined) => normalize(s).replace(/\band\b/g, ' ').replace(/\s+/g, '')

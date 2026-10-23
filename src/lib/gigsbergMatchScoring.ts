@@ -6,6 +6,7 @@
 // bucketEventsByDate).
 
 import { resolveFeedCity } from './feedImportRules.ts'
+import { SAME_SHOW_MINUTES } from './venueFamily.ts'
 
 // "Newcastle upon Tyne" (Gigsberg) and "Newcastle" (Ticketmaster) are the same city.
 const cityCache = new Map<string, string>()
@@ -128,7 +129,8 @@ export function showTimeGap(catalogue: Pick<CatalogueRow, 'event_time'>, event: 
 }
 
 // Beyond this the listing and the event are probably different performances.
-export const SAME_SHOW_TIME_MINUTES = 45
+// The site's one definition of "same performance": src/lib/venueFamily.ts.
+export const SAME_SHOW_TIME_MINUTES = SAME_SHOW_MINUTES
 
 export function tokenOverlap(left: string, right: string) {
   const a = new Set(normalize(left).split(' ').filter(token => token.length > 2))

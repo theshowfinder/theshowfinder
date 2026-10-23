@@ -311,14 +311,6 @@ export function normaliseTitle(t: string): string {
   return t.toLowerCase().replace(/&/g, ' and ').replace(/\b(live|tickets?|tour|the)\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
-/** True when a council listing is clearly the same show as an existing ticketed event (so the local one is not added twice). */
-export function sameShow(a: string, b: string): boolean {
-  const x = normaliseTitle(a), y = normaliseTitle(b)
-  if (!x || !y) return false
-  if (x === y) return true
-  const [short, long] = x.length <= y.length ? [x, y] : [y, x]
-  return short.length >= 12 && long.includes(short)
-}
 
 // ── robots.txt ───────────────────────────────────────────────────────────────
 

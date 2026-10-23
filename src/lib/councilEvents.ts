@@ -16,11 +16,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { EventStatus } from './types/database'
 import { eventFromHtml, isHtmlParser } from './localEventHtml'
 import {
-  eventFromPage, parseSitemap, matchesDetailPattern, chooseUrlsToFetch, sameShow, isPastStart, parseRobots, robotsAllows,
+  eventFromPage, parseSitemap, matchesDetailPattern, chooseUrlsToFetch, isPastStart, parseRobots, robotsAllows, startOfUkDayIso,
   type RobotsRules,
   type ScrapedLocalEvent, type SitemapEntry, type LedgerRow,
 } from './localEventParsing'
 import { resolveEventCity } from './localEventCity'
+import { isSameShow } from './venueFamily'
+import { ukDate } from './ukTime'
 
 type DbClient = ReturnType<typeof createAdminClient>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -233,18 +235,28 @@ async function findOrCreateVenue(db: DbClient, ev: ScrapedLocalEvent, city: stri
   return data?.id ?? null
 }
 
-/** The same show already on the site as a ticketed event (Ticketmaster, See Tickets…) is not added a second time. */
-async function isTicketedDuplicate(db: DbClient, ev: ScrapedLocalEvent, city: string): Promise<boolean> {
-  const t = new Date(ev.startDate).getTime()
+/**
+ * The same show already on the site (from Ticketmaster, See Tickets, Gigsberg, or another local listing) is not added
+ * a second time. Uses the site's one same-show rule (isSameShow, src/lib/venueFamily.ts): same act, same building, same
+ * UK day, start within 45 minutes or time not announced; where the listing only names the town, only an exact act
+ * match counts. The old check only looked 4 hours either side, so a listing with no time (stored as midnight) never
+ * met the 7.30pm Ticketmaster show and was added again.
+ */
+async function isAlreadyListed(db: DbClient, ev: ScrapedLocalEvent, city: string): Promise<boolean> {
+  const dayStart = startOfUkDayIso(Date.parse(ev.startDate))
+  const dayEnd = new Date(Date.parse(dayStart) + 26 * 3_600_000).toISOString()   // covers a 25-hour clock-change day
   const { data } = await (db as unknown as Loose)
-    .from('listed_events_with_venue')
-    .select('title')
-    .ilike('venue_city', city)
-    .neq('category', 'local')
-    .gte('start_date', new Date(t - 4 * 3_600_000).toISOString())
-    .lte('start_date', new Date(t + 4 * 3_600_000).toISOString())
-    .limit(60)
-  return ((data ?? []) as Array<{ title: string }>).some(r => sameShow(r.title, ev.title))
+    .from('events')
+    .select('id, title, start_date, source_url, venue:venues!inner(name, city, postcode, lat, lng), artists:event_artists(artist:artists(id, name))')
+    .ilike('venue.city', city)
+    .in('status', ['upcoming', 'on_sale', 'sold_out'])
+    .is('merged_into', null)
+    .gte('start_date', dayStart)
+    .lt('start_date', dayEnd)
+    .limit(500)
+  const mine = { id: 'new', title: ev.title, start_date: ev.startDate, venue: { name: ev.venueName, city, postcode: ev.postcode, lat: ev.lat, lng: ev.lng } }
+  type Row = { id: string; title: string; start_date: string; source_url: string | null; venue: { name: string; city: string; postcode: string | null; lat: number | null; lng: number | null } | null; artists: Array<{ artist: { id: string; name: string | null } | null }> | null }
+  return ((data ?? []) as Row[]).some(r => r.venue && r.source_url !== ev.sourceUrl && ukDate(r.start_date) === ukDate(ev.startDate) && isSameShow(mine, { id: r.id, title: r.title, start_date: r.start_date, venue: r.venue, artists: (r.artists ?? []).flatMap(a => a.artist ? [a.artist] : []) }) === 'strong')
 }
 
 async function upsertLocalEvent(db: DbClient, ev: ScrapedLocalEvent, source: LocalEventSource, city: string): Promise<'written' | 'error'> {
@@ -418,7 +430,7 @@ async function refreshSource(db: DbClient, source: LocalEventSource, settings: S
       if (seen.has(key)) { stats.duplicates++; ledgerRows.push({ url: page.url, state: 'noevent', start_date: ev.startDate }); return }
       seen.add(key)
 
-      if (!existingUrls.has(ev.sourceUrl) && await isTicketedDuplicate(db, ev, city)) { stats.duplicates++; ledgerRows.push({ url: page.url, state: 'noevent', start_date: ev.startDate }); return }
+      if (!existingUrls.has(ev.sourceUrl) && await isAlreadyListed(db, ev, city)) { stats.duplicates++; ledgerRows.push({ url: page.url, state: 'noevent', start_date: ev.startDate }); return }
 
       if (await upsertLocalEvent(db, ev, source, city) === 'written') {
         stats.events++
@@ -445,7 +457,7 @@ async function refreshSource(db: DbClient, source: LocalEventSource, settings: S
       .gte('start_date', new Date().toISOString())
       .in('status', LIVE_STATUSES)
       .order('last_synced_at', { ascending: true, nullsFirst: true })
-      .limit(2000)
+      .limit(500)
     const dropped = ((rows ?? []) as Array<{ id: string; title: string; source_url: string }>).filter(r => !listed.has(r.source_url)).slice(0, MAX_VERIFY_PER_SOURCE)
     await verifyEvents(source.parser, loose, dropped, stats, settings, deadline)
   }
