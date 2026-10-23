@@ -1,4 +1,4 @@
-import test from 'node:test'
+import test, { describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   parseAddressString, extractEventsJsonLd, startDateToIso, parseLocation, eventFromPage, parseSitemap, matchesDetailPattern,
@@ -163,4 +163,33 @@ test('robots.txt: our group or *, longest match wins, crawl-delay', () => {
   assert.ok(robotsAllows(wild, '/search/results'))
   assert.ok(!robotsAllows(wild, '/search'))
   assert.deepEqual(parseRobots(''), { allow: [], disallow: [], crawlDelaySec: null })
+})
+
+describe('Simpleview event data (Visit Manchester, Visit Bristol...)', async () => {
+  const { simpleviewDetails, withSimpleviewDetails } = await import('./localEventParsing.ts')
+  const page = (data: object) => `<html><script>require([], function(){ var data = ${JSON.stringify(data)}; detail.init(data) })</script></html>`
+  const mk = page({
+    recid: '116871101', location: 'TRAFFORD', title: 'Mk', latitude: 53.46428, longitude: -2.285,
+    linkUrl: 'https://www.datathistle.com/details/abc/www.seetickets.com/',
+    openings: [{ startdate: '2027-03-12T00:00:00.000Z', enddate: '2027-03-12T00:00:00.000Z', days: [{ day: 5, open: true, times: [{ timeopen: '0001-01-01T21:00:00.000Z' }] }] }],
+    udfs: [{ name: 'Address1', value_string: 'O2 Victoria Warehouse' }, { name: 'Address2', value_string: 'Trafford Wharf Road' }, { name: 'City', value_string: 'Manchester' }, { name: 'Zip', value_string: 'M17 1AB' }, { name: 'Description', value_string: 'He said "}; not the end"' }],
+  })
+  test('reads the time, venue, postcode and booking link', () => {
+    const d = simpleviewDetails(mk, '2027-03-12')!
+    assert.equal(d.time, '21:00')
+    assert.equal(d.venueName, 'O2 Victoria Warehouse')
+    assert.equal(d.postcode, 'M17 1AB')
+    assert.equal(d.bookingUrl, 'https://www.datathistle.com/details/abc/www.seetickets.com/')
+  })
+  test('a listing with no time and only an area gets the real time and venue', () => {
+    const ev = { title: 'Mk', description: null, imageUrl: null, startDate: '2027-03-12T00:00:00.000Z', status: 'upcoming' as const, sourceUrl: 'https://www.visitmanchester.com/event/mk/116871101/', venueName: 'TRAFFORD', address: null, city: 'Manchester', postcode: null, lat: null, lng: null, ticketUrl: 'https://www.visitmanchester.com/event/mk/116871101/' }
+    const out = withSimpleviewDetails(ev, mk)
+    assert.equal(out.startDate, '2027-03-12T21:00:00.000Z')   // 21:00 UK in March (GMT)
+    assert.equal(out.venueName, 'O2 Victoria Warehouse')
+    assert.equal(out.postcode, 'M17 1AB')
+    assert.equal(out.ticketUrl, 'https://www.datathistle.com/details/abc/www.seetickets.com/')
+  })
+  test('a page without the data block is left as it is', () => {
+    assert.equal(simpleviewDetails('<html></html>', '2027-03-12'), null)
+  })
 })

@@ -361,3 +361,103 @@ export function robotsAllows(rules: RobotsRules, pathAndQuery: string): boolean 
   for (const p of rules.allow) { const n = robotsPatternMatches(p, pathAndQuery); if (n >= best && n >= 0) { best = n; allowed = true } }
   return allowed
 }
+
+// ── Simpleview event data ────────────────────────────────────────────────────
+// Visit Manchester, Bristol, Southampton, Birmingham, Belfast, Liverpool, Portsmouth and other tourism sites run on
+// the Simpleview platform. Their schema.org data gives only the date and an area ("TRAFFORD", "Central Bristol"); the
+// page draws the start time, the venue and the booking link with a script, from a `var data = {...}` block that is in
+// the page we already fetch. Reading it gives the real time (Mk, 12 Mar 2027: 21:00), venue ("O2 Victoria
+// Warehouse", M17 1AB) and booking link. Found 23 Oct 2026: about 2,600 local listings had no time because of this.
+
+export interface SimpleviewDetails {
+  /** "HH:MM" UK wall-clock start for `date`, when the listing gives one. */
+  time: string | null
+  venueName: string | null
+  address: string | null
+  city: string | null
+  postcode: string | null
+  lat: number | null
+  lng: number | null
+  bookingUrl: string | null
+}
+
+/** The JSON object that starts at `start` (a "{"), read with strings respected. */
+function jsonObjectAt(text: string, start: number): unknown {
+  let depth = 0, inString = false, escaped = false
+  for (let i = start; i < text.length; i++) {
+    const c = text[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (c === '\\') escaped = true
+      else if (c === '"') inString = false
+      continue
+    }
+    if (c === '"') inString = true
+    else if (c === '{') depth++
+    else if (c === '}' && --depth === 0) {
+      try { return JSON.parse(text.slice(start, i + 1)) } catch { return null }
+    }
+  }
+  return null
+}
+
+type SvOpening = { startdate?: string; enddate?: string; days?: Array<{ day?: number; open?: boolean; times?: Array<{ timeopen?: string }> }> }
+type SvData = { latitude?: number; longitude?: number; linkUrl?: string; openings?: SvOpening[]; udfs?: Array<{ name?: string; value?: unknown; value_string?: string }> }
+
+/** Start time, venue, address and booking link from a Simpleview page for the show on `date` (YYYY-MM-DD). */
+export function simpleviewDetails(html: string, date: string): SimpleviewDetails | null {
+  const at = html.indexOf('var data = {')
+  if (at < 0) return null
+  const data = jsonObjectAt(html, at + 'var data = '.length) as SvData | null
+  if (!data || typeof data !== 'object') return null
+  const udf = (name: string): string | null => {
+    const u = (data.udfs ?? []).find(x => x?.name === name)
+    const v = u ? (u.value_string ?? (typeof u.value === 'string' ? u.value : null)) : null
+    return typeof v === 'string' && v.trim() ? v.trim() : null
+  }
+  // The opening that covers the date, and that weekday's first start time ("0001-01-01T21:00:00.000Z" = 21:00 local).
+  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay()
+  let time: string | null = null
+  for (const o of data.openings ?? []) {
+    const from = (o.startdate ?? '').slice(0, 10), to = (o.enddate ?? o.startdate ?? '').slice(0, 10)
+    if (!from || date < from || (to && date > to)) continue
+    const dayRow = (o.days ?? []).find(d => d.day === weekday && d.open !== false) ?? ((o.days ?? []).length === 1 ? o.days![0] : undefined)
+    const m = /T(\d{2}):(\d{2})/.exec(dayRow?.times?.[0]?.timeopen ?? '')
+    if (m && !(m[1] === '00' && m[2] === '00')) { time = `${m[1]}:${m[2]}`; break }
+  }
+  const street = [udf('Address2'), udf('Address3')].filter(Boolean).join(', ') || null
+  const booking = udf('Booking website') ?? (typeof data.linkUrl === 'string' ? data.linkUrl : null)
+  return {
+    time,
+    venueName: udf('Address1'),
+    address: [udf('Address1'), street].filter(Boolean).join(', ') || null,
+    city: udf('City'),
+    postcode: udf('Zip'),
+    lat: typeof data.latitude === 'number' && data.latitude !== 0 ? data.latitude : null,
+    lng: typeof data.longitude === 'number' && data.longitude !== 0 ? data.longitude : null,
+    bookingUrl: booking && /^https?:\/\//.test(booking) ? booking : null,
+  }
+}
+
+/**
+ * Fill in what a local listing left out from its page's Simpleview data: the start time (only when the listing had
+ * none), the real venue and postcode (only when the listing named just a town or area), and the booking link.
+ */
+export function withSimpleviewDetails(ev: ScrapedLocalEvent, html: string): ScrapedLocalEvent {
+  const ukDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date(ev.startDate))
+  const sv = simpleviewDetails(html, ukDay)
+  if (!sv) return ev
+  const out = { ...ev }
+  if (sv.time && isUkMidnight(ev.startDate)) out.startDate = startDateToIso(`${ukDay}T${sv.time}:00`) ?? ev.startDate
+  const venueIsArea = !ev.venueName || ev.venueName.trim().toLowerCase() === ev.city.trim().toLowerCase() || /^[A-Z\s&'-]+$/.test(ev.venueName.trim()) || /\b(central|north|south|east|west|greater)\b/i.test(ev.venueName)
+  if (sv.venueName && venueIsArea) {
+    out.venueName = sv.venueName
+    out.address = sv.address ?? out.address
+    out.postcode = sv.postcode ?? out.postcode
+    if (sv.lat !== null && sv.lng !== null) { out.lat = sv.lat; out.lng = sv.lng }
+  } else if (!out.postcode && sv.postcode) {
+    out.postcode = sv.postcode
+  }
+  if (sv.bookingUrl) out.ticketUrl = sv.bookingUrl
+  return out
+}

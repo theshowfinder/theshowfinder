@@ -16,7 +16,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { EventStatus } from './types/database'
 import { eventFromHtml, isHtmlParser } from './localEventHtml'
 import {
-  eventFromPage, parseSitemap, matchesDetailPattern, chooseUrlsToFetch, isPastStart, parseRobots, robotsAllows, startOfUkDayIso,
+  eventFromPage, withSimpleviewDetails, parseSitemap, matchesDetailPattern, chooseUrlsToFetch, isPastStart, parseRobots, robotsAllows, startOfUkDayIso,
   type RobotsRules,
   type ScrapedLocalEvent, type SitemapEntry, type LedgerRow,
 } from './localEventParsing'
@@ -119,7 +119,10 @@ export async function loadSources(db: DbClient, filter: { city?: string; key?: s
 // ── Reading one event page ───────────────────────────────────────────────────
 
 function readEventPage(parser: string | null | undefined, html: string, pageUrl: string, fallbackCity: string) {
-  return isHtmlParser(parser) ? eventFromHtml(parser, html, pageUrl, fallbackCity) : eventFromPage(html, pageUrl, fallbackCity)
+  const ev = isHtmlParser(parser) ? eventFromHtml(parser, html, pageUrl, fallbackCity) : eventFromPage(html, pageUrl, fallbackCity)
+  // Tourism sites on the Simpleview platform keep the start time, venue and booking link in a data block the page
+  // draws with a script: read it so the listing gets its real time and venue (see withSimpleviewDetails).
+  return ev ? withSimpleviewDetails(ev, html) : null
 }
 
 // ── robots.txt: what a site asks crawlers not to read, and how fast to go ─────
