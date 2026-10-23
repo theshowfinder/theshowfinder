@@ -17,6 +17,12 @@ describe('See Tickets matching', () => {
     const d = decide(row({ name: 'Peter Kay', event_time: '19:00', venue: 'Brighton Centre', city: 'Brighton' }), [ev('pk', 'Peter Kay Live', '2026-11-20T19:30:00Z', 'Brighton Centre', 'Brighton')])
     assert.equal(d.status, 'auto_matched')
   })
+  test('the exact show title wins a tie with another show by the same act', () => {
+    const r = row({ name: 'Phil Wang: Uh Oh', primary_artist: 'Phil Wang', venue: 'De Montfort Hall', city: 'Leicester', event_time: '19:30' })
+    const d = decide(r, [ev('other', 'Phil Wang: Wang in There, Baby!', '2026-11-20T19:30:00Z', 'De Montfort Hall', 'Leicester'), ev('uhoh', 'Phil Wang: UH OH', '2026-11-20T19:30:00Z', 'De Montfort Hall', 'Leicester')])
+    assert.equal(d.status, 'auto_matched')
+    assert.equal(d.best?.event.id, 'uhoh')
+  })
   test('"The" alone is not a shared name', () => {
     assert.equal(overlap('The Rosadocs', 'The Teenagers'), 0)
     assert.equal(decide(row({ name: 'The Rosadocs' }), [ev('t', 'The Teenagers', '2026-11-20T19:30:00Z')]).status, 'no_match')

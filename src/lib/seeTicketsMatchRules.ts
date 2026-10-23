@@ -134,6 +134,10 @@ export function score(row: StRow, event: StEvent): ScoreDetail {
   value += venueExact ? 0.1 : venueOverlap * 0.1
   // Same performance: a small lift, so the 19:45 late show beats the 17:00 early show of the same act and venue.
   if (timeGap !== null) value += timeGap <= 30 ? 0.05 : timeGap > OTHER_PERFORMANCE_MINUTES ? -0.1 : 0
+  // The feed's full title is the event's title: wins a tie with another show by the same act ("Phil Wang: UH OH" over
+  // "Phil Wang: Wang in There, Baby!", "Flo & Joan - With Feeling" over "Flo & Joan - The Tivoli Theatre").
+  const bare = (s: string | null | undefined) => normalize(s).replace(/\band\b/g, ' ').replace(/\s+/g, '')
+  if (bare(row.name) && bare(row.name) === bare(event.title)) value += 0.05
   return { value, titleMatch, titleOverlap, sameDate, sameCity, venueExact, venueOverlap, timeGap }
 }
 
@@ -157,7 +161,7 @@ export function decide<E extends StEvent>(row: StRow, candidates: E[]): Decision
   const d = best.detail
   const location = d.sameCity || d.venueExact || d.venueOverlap >= 0.5
   const strongTitle = d.titleMatch || d.titleOverlap >= 0.75
-  const clear = !second || d.value - second.detail.value >= 0.05
+  const clear = !second || d.value - second.detail.value >= 0.05 - 1e-9
   if (strongTitle && d.sameDate && location && clear) return { status: 'auto_matched', best }
   if (d.sameDate && location && d.value >= 0.35) return { status: 'review', best }
   return { status: 'no_match', best }
