@@ -113,6 +113,22 @@ export default async function AdminPage() {
         </div>
       </header>
 
+      {/* The three pages that run the site day to day. */}
+      <nav className="max-w-6xl mx-auto px-4 pt-6 grid sm:grid-cols-3 gap-3">
+        <Link href="/admin/today" className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-slate-400">
+          <p className="text-lg font-extrabold text-slate-900">Today</p>
+          <p className="text-sm text-slate-500">Did everything run overnight? Shows with 3, 2 and 1 seller links.</p>
+        </Link>
+        <Link href="/admin/decisions" className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-slate-400">
+          <p className="text-lg font-extrabold text-slate-900">Decisions</p>
+          <p className="text-sm text-slate-500">The few things the system could not decide: duplicates and unmatched shows.</p>
+        </Link>
+        <Link href="/admin/health" className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-slate-400">
+          <p className="text-lg font-extrabold text-slate-900">Sources</p>
+          <p className="text-sm text-slate-500">Each source: last run, what it did, and a Run now button.</p>
+        </Link>
+      </nav>
+
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-8">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-extrabold text-slate-900">Artists</h2>

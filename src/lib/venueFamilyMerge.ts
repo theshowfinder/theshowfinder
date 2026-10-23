@@ -219,3 +219,37 @@ export async function mergeVenueFamilyDuplicates(opts: { dryRun?: boolean; limit
   }
   return res
 }
+
+/**
+ * A person's decision from the admin Decisions page: merge `dupIds` into `keepId`, exactly as the nightly job would
+ * (seller links, acts, saved events and news move; each copy redirects to the kept event; nothing is deleted).
+ */
+export async function mergeEventsInto(keepId: string, dupIds: string[]): Promise<{ merged: number; clashes: string[] }> {
+  const db: Db = createAdminClient()
+  const ids = [keepId, ...dupIds.filter(id => id && id !== keepId)]
+  const [{ data, error }, { data: srcs }] = await Promise.all([
+    db.from('events').select(`${EVENT_COLUMNS}, merged_into, venue:venues(name, city, postcode, lat, lng)`).in('id', ids),
+    db.from('local_event_sources').select('event_source'),
+  ])
+  if (error) throw new Error(error.message)
+  const byId = new Map(((data ?? []) as any[]).map(e => [e.id, { ...e, artists: [] } as MergeEvent]))
+  const keep = byId.get(keepId)
+  if (!keep) throw new Error('The event to keep no longer exists')
+  if ((keep as any).merged_into) throw new Error('The event to keep has itself been merged into another one')
+  const local = new Set(((srcs ?? []) as any[]).map(r => r.event_source))
+  const isLocal = (s: string | null) => !!s && (local.has(s) || /_council$/.test(s))
+  let merged = 0
+  const clashes: string[] = []
+  for (const id of ids.slice(1)) {
+    const dup = byId.get(id)
+    if (!dup || (dup as any).merged_into) continue
+    const r = await mergeOne(db, keep, dup, isLocal(dup.source))
+    clashes.push(...r.clashes)
+    merged++
+  }
+  if (merged) {
+    const { error: refreshError } = await db.rpc('refresh_event_canonical')
+    if (refreshError) throw new Error(`refresh_event_canonical: ${refreshError.message}`)
+  }
+  return { merged, clashes }
+}
