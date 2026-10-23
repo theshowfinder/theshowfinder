@@ -1,13 +1,15 @@
 {
-  "regions": ["lhr1"],
+  "regions": [
+    "lhr1"
+  ],
   "crons": [
     {
-      "path": "/api/cron/sync-events",
-      "schedule": "0 2 * * *"
+      "path": "/api/cron/sync-ticketmaster-sweep",
+      "schedule": "20 0,1,3,12 * * *"
     },
     {
-      "path": "/api/cron/sync-ticketmaster-sweep",
-      "schedule": "20 0,1,4,5,12 * * *"
+      "path": "/api/cron/sync-gigsberg-sweep",
+      "schedule": "50 1,13 * * *"
     },
     {
       "path": "/api/cron/sync-onsale",
@@ -18,8 +20,20 @@
       "schedule": "15 14 * * *"
     },
     {
+      "path": "/api/cron/sync-gigsberg",
+      "schedule": "30 2 * * *"
+    },
+    {
       "path": "/api/cron/expand-tours",
       "schedule": "35 2 * * *"
+    },
+    {
+      "path": "/api/cron/sync-see-tickets",
+      "schedule": "45 3 * * *"
+    },
+    {
+      "path": "/api/cron/sync-council-events",
+      "schedule": "15 3,9,15,21 * * *"
     },
     {
       "path": "/api/cron/enrich-artists",
@@ -30,84 +44,40 @@
       "schedule": "5 3 * * *"
     },
     {
-      "path": "/api/cron/sync-gigsberg",
-      "schedule": "30 2 * * *"
-    },
-    {
-      "path": "/api/cron/sync-gigsberg-sweep",
-      "schedule": "50 1,13 * * *"
-    },
-    {
-      "path": "/api/cron/sync-see-tickets",
-      "schedule": "45 3 * * *"
+      "path": "/api/cron/match-gigsberg",
+      "schedule": "5 4 * * *"
     },
     {
       "path": "/api/cron/match-see-tickets",
       "schedule": "15 4 * * *"
     },
     {
-      "path": "/api/cron/match-gigsberg",
-      "schedule": "0 3 * * *"
+      "path": "/api/cron/merge-duplicates",
+      "schedule": "35 4,14 * * *"
     },
     {
-      "path": "/api/cron/sync-city-news",
-      "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/cron/sync-city-news",
-      "schedule": "0 15 * * *"
-    },
-    {
-      "path": "/api/cron/sync-council-events",
-      "schedule": "15 */2 * * *"
-    },
-    {
-      "path": "/api/cron/weekly-digest",
-      "schedule": "0 7 * * 1"
-    },
-    {
-      "path": "/api/cron/detect-new-shows",
+      "path": "/api/cron/import-feed-events",
       "schedule": "0 5 * * *"
     },
     {
-      "path": "/api/cron/detect-new-shows",
-      "schedule": "0 17 * * *"
-    },
-    {
-      "path": "/api/cron/news-alerts",
-      "schedule": "20 5 * * *"
-    },
-    {
-      "path": "/api/cron/news-alerts",
-      "schedule": "20 17 * * *"
-    },
-    {
-      "path": "/api/cron/indexnow",
-      "schedule": "30 4 * * *"
-    },
-    {
-      "path": "/api/cron/event-reminders",
-      "schedule": "10 6 * * *"
-    },
-    {
-      "path": "/api/cron/follow-alerts",
-      "schedule": "20 6 * * *"
-    },
-    {
       "path": "/api/cron/merge-duplicates",
-      "schedule": "35 4,6,14 * * *"
+      "schedule": "35 5 * * *"
     },
     {
       "path": "/api/cron/refresh-listings",
-      "schedule": "45 4 * * *"
+      "schedule": "50 5 * * *"
     },
     {
       "path": "/api/cron/refresh-listings",
       "schedule": "45 14 * * *"
     },
     {
+      "path": "/api/cron/indexnow",
+      "schedule": "10 6 * * *"
+    },
+    {
       "path": "/api/cron/check-gigsberg-inventory",
-      "schedule": "15 5 * * *"
+      "schedule": "15 6 * * *"
     },
     {
       "path": "/api/cron/check-gigsberg-inventory",
@@ -118,12 +88,44 @@
       "schedule": "15 17 * * *"
     },
     {
-      "path": "/api/cron/health-check",
-      "schedule": "10 7,13,19 * * *"
+      "path": "/api/cron/sync-city-news",
+      "schedule": "0 3 * * *"
     },
     {
-      "path": "/api/cron/import-feed-events",
-      "schedule": "30 5 * * *"
+      "path": "/api/cron/sync-city-news",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/detect-new-shows",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/detect-new-shows",
+      "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/news-alerts",
+      "schedule": "20 6 * * *"
+    },
+    {
+      "path": "/api/cron/news-alerts",
+      "schedule": "20 17 * * *"
+    },
+    {
+      "path": "/api/cron/event-reminders",
+      "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/cron/follow-alerts",
+      "schedule": "40 6 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-digest",
+      "schedule": "0 7 * * 1"
+    },
+    {
+      "path": "/api/cron/health-check",
+      "schedule": "10 7,13,19 * * *"
     }
   ]
 }

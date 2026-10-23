@@ -8,30 +8,30 @@ const run = (job: string, h: number, status: string, error?: string): JobRunRow 
 const find = (rows: ReturnType<typeof evaluateJobs>, job: string) => rows.find(r => r.job === job)!
 
 test('fresh monitoring raises no overdue or never-ran alarms', () => {
-  const rows = evaluateJobs([run('sync-events', 1, 'ok')], now, new Date(hoursAgo(2)))
-  assert.equal(find(rows, 'sync-events').issue, null)
+  const rows = evaluateJobs([run('sync-ticketmaster-sweep', 1, 'ok')], now, new Date(hoursAgo(2)))
+  assert.equal(find(rows, 'sync-ticketmaster-sweep').issue, null)
   assert.equal(find(rows, 'sync-onsale').issue, null)
 })
 
 test('a job that has not succeeded within its window is overdue', () => {
-  const rows = evaluateJobs([run('sync-events', 40, 'ok'), run('sync-onsale', 1, 'ok')], now, new Date(hoursAgo(100)))
-  assert.equal(find(rows, 'sync-events').issue, 'overdue')
+  const rows = evaluateJobs([run('sync-ticketmaster-sweep', 40, 'ok'), run('sync-onsale', 1, 'ok')], now, new Date(hoursAgo(100)))
+  assert.equal(find(rows, 'sync-ticketmaster-sweep').issue, 'overdue')
   assert.equal(find(rows, 'sync-onsale').issue, null)
   assert.equal(find(rows, 'sync-gigsberg').issue, 'never_ran')
 })
 
 test('a failing last run is flagged and carries its error', () => {
-  const rows = evaluateJobs([run('sync-events', 30, 'ok'), run('sync-events', 2, 'error', 'boom')], now, new Date(hoursAgo(100)))
-  assert.equal(find(rows, 'sync-events').issue, 'failing')
-  assert.equal(find(rows, 'sync-events').lastError, 'boom')
-  assert.equal(find(rows, 'sync-events').failuresLast24h, 1)
+  const rows = evaluateJobs([run('sync-ticketmaster-sweep', 30, 'ok'), run('sync-ticketmaster-sweep', 2, 'error', 'boom')], now, new Date(hoursAgo(100)))
+  assert.equal(find(rows, 'sync-ticketmaster-sweep').issue, 'failing')
+  assert.equal(find(rows, 'sync-ticketmaster-sweep').lastError, 'boom')
+  assert.equal(find(rows, 'sync-ticketmaster-sweep').failuresLast24h, 1)
 })
 
 test('a run stuck in running state is treated as a failure, a recent one is not', () => {
-  const stuck: JobRunRow = { job: 'sync-events', started_at: hoursAgo(1), finished_at: null, status: 'running' }
+  const stuck: JobRunRow = { job: 'sync-ticketmaster-sweep', started_at: hoursAgo(1), finished_at: null, status: 'running' }
   const fresh: JobRunRow = { job: 'sync-onsale', started_at: new Date(now.getTime() - 2 * 60_000).toISOString(), finished_at: null, status: 'running' }
   const rows = evaluateJobs([stuck, fresh], now, new Date(hoursAgo(2)))
-  assert.equal(find(rows, 'sync-events').issue, 'failing')
+  assert.equal(find(rows, 'sync-ticketmaster-sweep').issue, 'failing')
   assert.equal(find(rows, 'sync-onsale').issue, null)
 })
 

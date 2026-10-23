@@ -4,7 +4,6 @@
 
 /** The longest a job may go without a successful run before it counts as overdue. */
 export const JOB_EXPECTATIONS: Record<string, { label: string; maxHoursSinceSuccess: number }> = {
-  'sync-events':               { label: 'Ticketmaster main sync',        maxHoursSinceSuccess: 30 },
   'sync-ticketmaster-sweep':   { label: 'Ticketmaster national sweep',    maxHoursSinceSuccess: 16 },
   'sync-onsale':               { label: 'Ticketmaster on-sale / presale', maxHoursSinceSuccess: 16 },
   'expand-tours':              { label: 'Expand tours',                  maxHoursSinceSuccess: 30 },
@@ -18,7 +17,7 @@ export const JOB_EXPECTATIONS: Record<string, { label: string; maxHoursSinceSucc
   'import-feed-events':        { label: 'Import shows from Gigsberg / See Tickets', maxHoursSinceSuccess: 30 },
   'match-see-tickets':         { label: 'See Tickets matching',          maxHoursSinceSuccess: 30 },
   'sync-city-news':            { label: 'City news sync',                maxHoursSinceSuccess: 16 },
-  'sync-council-events':       { label: 'Local events (all cities)',    maxHoursSinceSuccess: 6 },
+  'sync-council-events':       { label: 'Local events (all cities)',    maxHoursSinceSuccess: 9 },
   'detect-new-shows':          { label: 'New-show detection',            maxHoursSinceSuccess: 16 },
   'refresh-listings':          { label: 'Refresh listings',              maxHoursSinceSuccess: 18 },
   'merge-duplicates':          { label: 'Merge duplicate listings',      maxHoursSinceSuccess: 18 },
