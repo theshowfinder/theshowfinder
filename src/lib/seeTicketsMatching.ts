@@ -1,28 +1,23 @@
+// Matches See Tickets feed rows to site events, then makes every event's See Tickets button agree with the matches.
+// Scoring rules: src/lib/seeTicketsMatchRules.ts (tested).
+//   - Only events visitors can see are link targets: live, and canonical (never a "Venue Premium" / "- Restaurant" /
+//     duplicate / merged copy: event_canonical_map). A row linked to such a copy, or to a cancelled event, is re-scored.
+//   - Manual decisions (approved_existing, approved_new, rejected) are never re-scored, not even by a full rescan.
+//   - The button is set by reconcileSeeTicketsLinks() after matching: the event shows one of the rows matched to it
+//     (manual first, else the current one, else the closest start time), and a See Tickets link left on an event no
+//     row is matched to any more is taken off. Links that never came from the feed are left alone.
 import { createAdminClient } from '@/lib/supabase/admin'
 import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
+import { fetchAllPages } from '@/lib/pagedFetch'
+import { chooseEventUrl, dateOnly, decide, type LinkedRow, type StEvent, type StRow } from '@/lib/seeTicketsMatchRules'
 
-type CatalogueRow = {
-  id: string
-  name: string
-  event_date: string | null
-  venue: string | null
-  city: string | null
-  primary_artist: string | null
-  second_artist: string | null
-  url: string
+type CatalogueRow = StRow & {
   matched_event_id: string | null
   match_checked_at: string | null
   match_status: string | null
 }
 
-type ShowfinderEvent = {
-  id: string
-  title: string
-  start_date: string
-  see_tickets_affiliate_url: string | null
-  created_at: string
-  venue: { name: string; city: string } | null
-}
+type ShowfinderEvent = StEvent & { created_at: string }
 
 export type SeeTicketsMatchResult = {
   checked: number
@@ -30,119 +25,58 @@ export type SeeTicketsMatchResult = {
   autoMatched: number
   review: number
   noMatch: number
+  /** Auto-matched rows moved to another event (off a premium / cancelled copy, or to the right performance). */
+  moved?: number
   errors: number
+  dryRun?: boolean
   nextCursor?: string | null
   hasMore?: boolean
   /** Stopped at the time limit with rows left: run it again, nothing is lost (checked rows are not re-scored). */
   incomplete?: boolean
-  /** Where the time went (ms), so a slow run can be diagnosed from the result alone. */
   timings?: { catalogueMs: number; eventsMs: number; processMs: number; catalogueRows: number; eventRows: number }
-  /** A batch of writes did not finish in time, so the run stopped there. */
   stalledBatch?: boolean
+  links?: ReconcileResult
+  samples?: string[]
 }
 
-// Every catalogue row is scored against every event on its date, so the same event strings were
-// re-normalised thousands of times per run. Memoising gives identical results for a fraction of the CPU.
-const normalizeCache = new Map<string, string>()
-function normalize(value: string | null | undefined) {
-  const input = value ?? ''
-  const hit = normalizeCache.get(input)
-  if (hit !== undefined) return hit
-  const out = input.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
-  if (normalizeCache.size > 200_000) normalizeCache.clear()
-  normalizeCache.set(input, out)
-  return out
-}
+export type ReconcileResult = { set: number; changed: number; cleared: number; samples: string[] }
 
-const venueCache = new Map<string, string>()
-function comparableVenue(value: string | null | undefined) {
-  const input = value ?? ''
-  const hit = venueCache.get(input)
-  if (hit !== undefined) return hit
-  const out = normalize(input)
-    .replace(/\b(the|o2|ao|live|venue|music|entertainment|centre|center|arena|hall|theatre|theater)\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (venueCache.size > 100_000) venueCache.clear()
-  venueCache.set(input, out)
-  return out
-}
+const MATCHABLE = ['pending', 'review', 'no_match', 'auto_matched']
+const CATALOGUE_COLUMNS = 'id, name, event_date, event_time, venue, city, primary_artist, second_artist, url, matched_event_id, match_checked_at, match_status'
+type Db = ReturnType<typeof createAdminClient>
+type Page<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>
 
-// One shared formatter + a memo: building a new Intl.DateTimeFormat for every comparison was the single biggest
-// cost of a matching run (millions of calls), and the run timed out because of it.
-const LONDON_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' })
-const dayCache = new Map<string, string>()
-function dateOnly(value: string | null) {
-  if (!value) return ''
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
-  const hit = dayCache.get(value)
-  if (hit !== undefined) return hit
-  const date = new Date(value)
-  const out = Number.isNaN(date.getTime()) ? value.slice(0, 10) : LONDON_DAY.format(date)
-  if (dayCache.size > 100_000) dayCache.clear()
-  dayCache.set(value, out)
-  return out
-}
-
-const tokenCache = new Map<string, Set<string>>()
-function tokens(value: string | null | undefined) {
-  const input = value ?? ''
-  const hit = tokenCache.get(input)
-  if (hit) return hit
-  const set = new Set(normalize(input).split(' ').filter(token => token.length > 2))
-  if (tokenCache.size > 200_000) tokenCache.clear()
-  tokenCache.set(input, set)
-  return set
-}
-
-function overlap(left: string | null, right: string | null) {
-  const a = tokens(left)
-  const b = tokens(right)
-  if (!a.size || !b.size) return 0
-  let shared = 0
-  for (const token of a) if (b.has(token)) shared++
-  return shared / Math.max(a.size, b.size)
-}
-
-/** The cheap test every candidate must pass (same rule the ranking applies below): used to skip full scoring of the rest. */
-function hasTitleEvidence(names: string[], event: ShowfinderEvent): boolean {
-  const title = normalize(event.title)
-  for (const name of names) {
-    const candidate = normalize(name)
-    if (candidate && title && (title === candidate || title.includes(candidate) || candidate.includes(title))) return true
+async function loadEvents(db: Db): Promise<ShowfinderEvent[]> {
+  const now = new Date().toISOString()
+  const events: ShowfinderEvent[] = []
+  // Keyset pagination: OFFSET paging over ~30k events with a venue join hit the statement timeout.
+  let last: string | null = null
+  for (;;) {
+    let q = db.from('events').select('id, title, start_date, created_at, venue:venues(name, city)').gte('start_date', now).in('status', LIVE_EVENT_STATUSES).order('id', { ascending: true }).limit(1000)
+    if (last) q = q.gt('id', last)
+    const { data, error } = await q as unknown as { data: ShowfinderEvent[] | null; error: { message: string } | null }
+    if (error) throw new Error(error.message)
+    const rows = data ?? []
+    events.push(...rows)
+    if (rows.length < 1000) break
+    last = rows[rows.length - 1].id
   }
-  for (const name of names) if (overlap(name, event.title) >= 0.35) return true
-  return false
+  const hidden = new Set((await fetchAllPages<{ id: string }>((from, to) =>
+    db.from('event_canonical_map').select('id').eq('is_canonical', false).order('id', { ascending: true }).range(from, to) as unknown as Page<{ id: string }>,
+  )).map(r => r.id))
+  return events.filter(e => !hidden.has(e.id))
 }
 
-function score(item: CatalogueRow, event: ShowfinderEvent) {
-  const names = [item.primary_artist, item.second_artist, item.name].filter(Boolean) as string[]
-  const title = normalize(event.title)
-  const titleMatch = names.some(name => {
-    const candidate = normalize(name)
-    return Boolean(candidate && title && (title === candidate || title.includes(candidate) || candidate.includes(title)))
-  })
-  const titleOverlap = Math.max(...names.map(name => overlap(name, event.title)), 0)
-  const sameDate = dateOnly(item.event_date) === dateOnly(event.start_date)
-  const sameCity = normalize(item.city) === normalize(event.venue?.city)
-  const venueExact = Boolean(comparableVenue(item.venue) && comparableVenue(item.venue) === comparableVenue(event.venue?.name))
-  const venueOverlap = Math.max(overlap(item.venue, event.venue?.name ?? null), overlap(comparableVenue(item.venue), comparableVenue(event.venue?.name)))
-  let value = titleMatch ? 0.55 : titleOverlap * 0.55
-  if (sameDate) value += 0.25
-  if (sameCity) value += 0.1
-  value += venueExact ? 0.1 : venueOverlap * 0.1
-  return { value, titleMatch, titleOverlap, sameDate, sameCity, venueExact, venueOverlap }
-}
-
-export async function matchSeeTicketsCatalogue(fullRescan = false, options: { limit?: number; afterId?: string; skipUnchanged?: boolean; deadlineMs?: number; maxRows?: number } = {}): Promise<SeeTicketsMatchResult> {
+export async function matchSeeTicketsCatalogue(fullRescan = false, options: { limit?: number; afterId?: string; skipUnchanged?: boolean; deadlineMs?: number; maxRows?: number; dryRun?: boolean } = {}): Promise<SeeTicketsMatchResult> {
   const t0 = Date.now()
   const db = createAdminClient()
-  const catalogue: CatalogueRow[] = []
+  const dryRun = options.dryRun ?? false
+  const today = new Date().toISOString().slice(0, 10)
   const limit = options.limit && options.limit > 0 ? Math.min(options.limit, 500) : null
+  const catalogue: CatalogueRow[] = []
   for (let offset = 0; ; offset += 1000) {
-    let query = db.from('see_tickets_catalogue_events').select('id, name, event_date, venue, city, primary_artist, second_artist, url, matched_event_id, match_checked_at, match_status').order('id', { ascending: true })
-    query = query.is('gone_at', null)   // rows the feed has stopped listing are never matched
-    if (!fullRescan) query = query.in('match_status', ['pending', 'review', 'no_match']).gte('event_date', new Date().toISOString().slice(0, 10))   // a show that has already happened is never matched
+    // Rows the feed has stopped listing, and shows that have already happened, are never matched.
+    let query = db.from('see_tickets_catalogue_events').select(CATALOGUE_COLUMNS).is('gone_at', null).in('match_status', MATCHABLE).gte('event_date', today).order('id', { ascending: true })
     if (options.afterId) query = query.gt('id', options.afterId)
     query = query.range(offset, offset + (limit ? limit : 999))
     const { data, error } = await query as unknown as { data: CatalogueRow[] | null; error: { message: string } | null }
@@ -153,131 +87,155 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
     if (limit) break
   }
   const tCatalogue = Date.now()
-  const events: ShowfinderEvent[] = []
-  // Keyset pagination: OFFSET paging over ~30k events with a venue join got slower on every page
-  // and ran into the database statement timeout once the Ticketmaster sweep added thousands of events.
-  let lastEventId: string | null = null
-  for (;;) {
-    let q = db.from('events').select('id, title, start_date, created_at, see_tickets_affiliate_url, venue:venues(name, city)').gte('start_date', new Date().toISOString()).in('status', LIVE_EVENT_STATUSES).order('id', { ascending: true }).limit(1000)
-    if (lastEventId) q = q.gt('id', lastEventId)
-    const { data, error } = await q as unknown as { data: ShowfinderEvent[] | null; error: { message: string } | null }
-    if (error) throw new Error(error.message)
-    const rows = data ?? []
-    events.push(...rows)
-    if (rows.length < 1000) break
-    lastEventId = rows[rows.length - 1].id
-  }
+  const events = await loadEvents(db)
   const tEvents = Date.now()
+  const linkable = new Set(events.map(e => e.id))
   const eventsByDate = new Map<string, ShowfinderEvent[]>()
-  const newestCreated = new Map<string, number>()   // newest event creation time per date, for the "anything new on this date?" test
-  for (const event of events ?? []) {
+  const newestCreated = new Map<string, number>()
+  for (const event of events) {
     const key = dateOnly(event.start_date)
     const made = new Date(event.created_at).getTime()
     if (made > (newestCreated.get(key) ?? 0)) newestCreated.set(key, made)
-    const bucket = eventsByDate.get(key) ?? []
-    bucket.push(event)
-    eventsByDate.set(key, bucket)
+    const bucket = eventsByDate.get(key)
+    if (bucket) bucket.push(event); else eventsByDate.set(key, [event])
   }
   const hasMore = Boolean(limit && catalogue.length > limit)
   const rowsToProcess = limit ? catalogue.slice(0, limit) : catalogue
   const result: SeeTicketsMatchResult = {
-    checked: 0, skippedUnchanged: 0, autoMatched: 0, review: 0, noMatch: 0, errors: 0,
-    hasMore,
+    checked: 0, skippedUnchanged: 0, autoMatched: 0, review: 0, noMatch: 0, moved: 0, errors: 0, dryRun, hasMore,
     nextCursor: rowsToProcess.length ? rowsToProcess[rowsToProcess.length - 1].id : null,
     timings: { catalogueMs: tCatalogue - t0, eventsMs: tEvents - tCatalogue, processMs: 0, catalogueRows: catalogue.length, eventRows: events.length },
+    samples: [],
   }
-  console.log(`[see-tickets-matching] loaded ${catalogue.length} catalogue rows in ${tCatalogue - t0}ms and ${events.length} events in ${tEvents - tCatalogue}ms`)
+  console.log(`[see-tickets-matching] loaded ${catalogue.length} catalogue rows and ${events.length} linkable events`)
   const stampIds: string[] = []
-  // One write per 150 unchanged rows instead of one per row. Flushed after every batch (not once at the end) so that
-  // stopping at the time limit leaves almost nothing to write and the function never overruns.
   async function flushStamps() {
-    if (!stampIds.length) return
+    if (!stampIds.length || dryRun) { stampIds.length = 0; return }
     const ids = stampIds.splice(0, stampIds.length)
     const stampedAt = new Date().toISOString()
     const writes: Array<PromiseLike<{ error: unknown }>> = []
     for (let i = 0; i < ids.length; i += 150) writes.push(db.from('see_tickets_catalogue_events').update({ match_checked_at: stampedAt }).in('id', ids.slice(i, i + 150)))
     for (const r of await Promise.all(writes)) if (r.error) result.errors += 1
   }
-  async function processItem(item: CatalogueRow) {
-    // Do not discard a candidate merely because the feed's city or venue
-    // label differs. Ticket feeds commonly use abbreviations, local venue
-    // brands, or a nearby city. Score every event on the same date first;
-    // city and venue still remain confidence checks before auto-linking.
+  type Outcome = { errors: number; autoMatched: number; review: number; noMatch: number; skipped: number; moved: number }
+  const none: Outcome = { errors: 0, autoMatched: 0, review: 0, noMatch: 0, skipped: 0, moved: 0 }
+
+  async function processItem(item: CatalogueRow): Promise<Outcome> {
+    // An automatic link to an event visitors can still see is kept as it is, except on a full rescan.
+    if (item.match_status === 'auto_matched' && !fullRescan && item.matched_event_id && linkable.has(item.matched_event_id)) return { ...none, skipped: 1 }
     const candidates = eventsByDate.get(dateOnly(item.event_date)) ?? []
-    // Nightly cron only: a 'no_match' row that was checked recently stays 'no_match' unless a new
-    // Showfinder event has appeared on its date since. ~10k rows were being re-scored and rewritten
-    // every night, which no longer fits in the function time limit.
+    // Nightly: a recent 'no_match' stays 'no_match' unless a new event has appeared on its date since.
     if (options.skipUnchanged && item.match_status === 'no_match' && item.match_checked_at) {
       const checkedAt = new Date(item.match_checked_at).getTime()
       const fresh = Date.now() - checkedAt < 7 * 86_400_000
       const newOnDate = (newestCreated.get(dateOnly(item.event_date)) ?? 0) > checkedAt
-      if (fresh && !newOnDate) return { errors: 0, autoMatched: 0, review: 0, noMatch: 0, skipped: 1 }
+      if (fresh && !newOnDate) return { ...none, skipped: 1 }
     }
-    // Keep a wider candidate set for the second pass. Feeds often add words
-    // such as "tickets", "live", "tour" or a sponsor name to the title, so
-    // a useful artist overlap can be below the first-pass threshold. Date,
-    // city and venue evidence still decide whether anything is linked.
-    const names = [item.primary_artist, item.second_artist, item.name].filter(Boolean) as string[]
-    const ranked = candidates
-      .filter(event => hasTitleEvidence(names, event))
-      .map(event => ({ event, detail: score(item, event) }))
-      .filter(candidate => candidate.detail.titleMatch || candidate.detail.titleOverlap >= 0.35)
-      .sort((a, b) => b.detail.value - a.detail.value)
-    const best = ranked[0]
-    const second = ranked[1]
-    const locationEvidence = Boolean(best && (best.detail.sameCity || best.detail.venueExact || best.detail.venueOverlap >= 0.5))
-    const strongTitle = Boolean(best && (best.detail.titleMatch || best.detail.titleOverlap >= 0.75))
-    const confident = Boolean(best && strongTitle && best.detail.sameDate && locationEvidence && (!second || best.detail.value - second.detail.value >= 0.05))
-    const review = Boolean(best && !confident && best.detail.sameDate && locationEvidence && best.detail.value >= 0.35)
-    const status = confident ? 'auto_matched' : review ? 'review' : 'no_match'
-    // Same answer as last time: do not rewrite the row (about 10k rows were being rewritten every night, which
-    // no longer fits in the function time limit). Their "checked" time is refreshed in one bulk write at the end.
-    if (!confident && item.match_status === status && !item.matched_event_id) {
+    const { status, best } = decide(item, candidates)
+    const target = status === 'auto_matched' ? best!.event.id : null
+    const counts: Outcome = { ...none, autoMatched: status === 'auto_matched' ? 1 : 0, review: status === 'review' ? 1 : 0, noMatch: status === 'no_match' ? 1 : 0 }
+    if (item.match_status === status && item.matched_event_id === target) {
       stampIds.push(item.id)
-      return { errors: 0, autoMatched: 0, review: review ? 1 : 0, noMatch: review ? 0 : 1, skipped: 0 }
+      return counts
     }
-    const { error } = await db.from('see_tickets_catalogue_events').update({ matched_event_id: confident ? best.event.id : null, match_status: status, match_confidence: best ? Number(best.detail.value.toFixed(3)) : null, match_reason: best ? `${best.event.title} (${Math.round(best.detail.value * 100)}% match)` : 'No close Showfinder event found', match_checked_at: new Date().toISOString() }).eq('id', item.id)
-    if (error) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0, skipped: 0 }
-    if (confident) {
-      const { error: linkError } = await db.from('events').update({ see_tickets_affiliate_url: item.url }).eq('id', best.event.id).is('see_tickets_affiliate_url', null)
-      if (linkError) return { errors: 1, autoMatched: 0, review: 0, noMatch: 0, skipped: 0 }
-      return { errors: 0, autoMatched: 1, review: 0, noMatch: 0, skipped: 0 }
-    } else {
-      if (item.matched_event_id) await db.from('events').update({ see_tickets_affiliate_url: null }).eq('id', item.matched_event_id).eq('see_tickets_affiliate_url', item.url)
-      return { errors: 0, autoMatched: 0, review: review ? 1 : 0, noMatch: review ? 0 : 1, skipped: 0 }
+    if (item.match_status === 'auto_matched' && item.matched_event_id && target && item.matched_event_id !== target) counts.moved = 1
+    if (dryRun) {
+      if (result.samples!.length < 40 && (counts.moved || item.match_status === 'auto_matched' || status === 'auto_matched'))
+        result.samples!.push(`${item.match_status}->${status}: ${item.name} ${item.event_date} ${item.event_time ?? ''} @ ${item.venue} => ${best ? `${best.event.title} (${Math.round(best.detail.value * 100)}%)` : '-'}`)
+      return counts
     }
+    const { error } = await db.from('see_tickets_catalogue_events').update({
+      matched_event_id: target,
+      match_status: status,
+      match_confidence: best ? Number(best.detail.value.toFixed(3)) : null,
+      match_reason: best ? `${best.event.title} (${Math.round(best.detail.value * 100)}% match)` : 'No close Showfinder event found',
+      match_checked_at: new Date().toISOString(),
+    }).eq('id', item.id)
+    return error ? { ...none, errors: 1 } : counts
   }
 
-  // Supabase writes are network-bound. Running them one-by-one makes a full
-  // feed take several minutes and can exceed the Vercel function limit. Keep
-  // the batch deliberately small so the database is not overwhelmed while
-  // still completing a full catalogue in one request.
   const batchSize = 50
   const tProcess = Date.now()
-  let worked = 0   // rows actually scored (rows skipped as unchanged are nearly free and do not count)
+  let worked = 0
   for (let offset = 0; offset < rowsToProcess.length; offset += batchSize) {
     if (options.deadlineMs && Date.now() > options.deadlineMs) { result.incomplete = true; result.hasMore = true; break }
     if (options.maxRows && worked >= options.maxRows) { result.incomplete = true; result.hasMore = true; break }
-    // A batch that hangs must not take the whole function down with it: give up on it after 40 seconds.
     let timer: ReturnType<typeof setTimeout> | undefined
     const stalled = new Promise<'stalled'>(resolve => { timer = setTimeout(() => resolve('stalled'), 40_000) })
     const raced = await Promise.race([Promise.all(rowsToProcess.slice(offset, offset + batchSize).map(processItem)), stalled])
     clearTimeout(timer)
     if (raced === 'stalled') { result.errors += 1; result.stalledBatch = true; result.incomplete = true; result.hasMore = true; console.error(`[see-tickets-matching] batch at ${offset} stalled`); break }
-    const batch = raced
-    result.checked += batch.length
-    for (const outcome of batch) {
-      result.errors += outcome.errors
-      result.autoMatched += outcome.autoMatched
-      result.review += outcome.review
-      result.noMatch += outcome.noMatch
-      result.skippedUnchanged = (result.skippedUnchanged ?? 0) + outcome.skipped
-      if (!outcome.skipped) worked++
+    result.checked += raced.length
+    for (const o of raced) {
+      result.errors += o.errors
+      result.autoMatched += o.autoMatched
+      result.review += o.review
+      result.noMatch += o.noMatch
+      result.moved! += o.moved
+      result.skippedUnchanged = (result.skippedUnchanged ?? 0) + o.skipped
+      if (!o.skipped) worked++
     }
     await flushStamps()
   }
   result.timings!.processMs = Date.now() - tProcess
-  console.log(`[see-tickets-matching] processed ${result.checked} rows (${worked} scored) in ${result.timings!.processMs}ms${result.incomplete ? ', stopped early' : ''}`)
   await flushStamps()
+  // Admin batches (limit) only see part of the catalogue; the buttons are put right once the whole run is done.
+  if (!limit) result.links = await reconcileSeeTicketsLinks({ dryRun })
+  console.log(`[see-tickets-matching] ${JSON.stringify({ ...result, samples: undefined })}`)
   return result
+}
+
+/** Makes each future event's See Tickets button agree with the feed rows matched to it. */
+export async function reconcileSeeTicketsLinks(options: { dryRun?: boolean } = {}): Promise<ReconcileResult> {
+  const db = createAdminClient()
+  const today = new Date().toISOString().slice(0, 10)
+  const now = new Date().toISOString()
+  type Row = { id: string; url: string; event_time: string | null; matched_event_id: string | null; match_status: string; gone_at: string | null }
+  const rows = await fetchAllPages<Row>((from, to) =>
+    db.from('see_tickets_catalogue_events').select('id, url, event_time, matched_event_id, match_status, gone_at').gte('event_date', today).order('id', { ascending: true }).range(from, to) as unknown as Page<Row>)
+  const feedUrls = new Set(rows.map(r => r.url))
+  const byEvent = new Map<string, LinkedRow[]>()
+  for (const r of rows) {
+    if (r.gone_at || !r.matched_event_id || !['auto_matched', 'approved_existing', 'approved_new'].includes(r.match_status)) continue
+    const list = byEvent.get(r.matched_event_id) ?? []
+    list.push({ id: r.id, url: r.url, event_time: r.event_time, manual: r.match_status !== 'auto_matched' })
+    byEvent.set(r.matched_event_id, list)
+  }
+  type Ev = { id: string; start_date: string; see_tickets_affiliate_url: string | null; status: string; title: string }
+  const withLink = await fetchAllPages<Ev>((from, to) =>
+    db.from('events').select('id, start_date, see_tickets_affiliate_url, status, title').gte('start_date', now).not('see_tickets_affiliate_url', 'is', null).order('id', { ascending: true }).range(from, to) as unknown as Page<Ev>)
+  const known = new Map(withLink.map(e => [e.id, e]))
+  const missing = [...byEvent.keys()].filter(id => !known.has(id))
+  for (let i = 0; i < missing.length; i += 200) {
+    const { data } = await db.from('events').select('id, start_date, see_tickets_affiliate_url, status, title').in('id', missing.slice(i, i + 200)) as unknown as { data: Ev[] | null }
+    for (const e of data ?? []) known.set(e.id, e)
+  }
+  const out: ReconcileResult = { set: 0, changed: 0, cleared: 0, samples: [] }
+  const writes: Array<{ id: string; url: string | null; from: string | null; title: string }> = []
+  for (const e of known.values()) {
+    if (new Date(e.start_date).getTime() < Date.now()) continue
+    const linked = byEvent.get(e.id)
+    if (linked && LIVE_EVENT_STATUSES.includes(e.status)) {
+      const want = chooseEventUrl(e.see_tickets_affiliate_url, e.start_date, linked)
+      if (want !== e.see_tickets_affiliate_url) writes.push({ id: e.id, url: want, from: e.see_tickets_affiliate_url, title: e.title })
+    } else if (!linked && e.see_tickets_affiliate_url && feedUrls.has(e.see_tickets_affiliate_url)) {
+      // A feed link no matched row backs up any more (moved to the right event, or the row went to review).
+      writes.push({ id: e.id, url: null, from: e.see_tickets_affiliate_url, title: e.title })
+    }
+  }
+  for (const w of writes) {
+    if (w.url === null) out.cleared++; else if (w.from === null) out.set++; else out.changed++
+    if (out.samples.length < 30) out.samples.push(`${w.url === null ? 'clear' : w.from === null ? 'set' : 'change'}: ${w.title}`)
+  }
+  if (!options.dryRun) {
+    for (let i = 0; i < writes.length; i += 25) {
+      await Promise.all(writes.slice(i, i + 25).map(w => {
+        // Only change the link if nobody else changed it meanwhile.
+        let q = db.from('events').update({ see_tickets_affiliate_url: w.url }).eq('id', w.id)
+        q = w.from === null ? q.is('see_tickets_affiliate_url', null) : q.eq('see_tickets_affiliate_url', w.from)
+        return q
+      }))
+    }
+  }
+  return out
 }

@@ -12,7 +12,10 @@ async function handleGet(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   try {
-    const matching = await matchSeeTicketsCatalogue(false, { skipUnchanged: true, deadlineMs: Date.now() + 150_000, maxRows: 1500 })
+    // ?full=1 re-scores every automatic link (after a rules change); ?dry=1 reports without writing anything.
+    const params = new URL(request.url).searchParams
+    const full = params.get('full') === '1'
+    const matching = await matchSeeTicketsCatalogue(full, { skipUnchanged: !full, deadlineMs: Date.now() + 200_000, maxRows: full ? undefined : 1500, dryRun: params.get('dry') === '1' })
     return NextResponse.json({ success: true, finished: new Date().toISOString(), matching })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
