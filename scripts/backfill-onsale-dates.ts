@@ -110,7 +110,7 @@ async function main() {
   if (!events.length) { console.log('Nothing to do.'); return }
 
   let updated   = 0
-  let nulled     = 0   // TM has no sale date for this event
+  const nulled   = 0   // TM has no sale date for this event
   let notFound  = 0   // 404 from TM
   let errors    = 0
 
