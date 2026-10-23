@@ -21,6 +21,8 @@ test('ignores pages with no Event and events with no start date', () => {
 test('start dates with no zone are UK wall-clock time (BST and GMT)', () => {
   assert.equal(startDateToIso('2026-10-24T19:30:00'), '2026-10-24T18:30:00.000Z')   // BST
   assert.equal(startDateToIso('2026-11-07T19:30:00'), '2026-11-07T19:30:00.000Z')   // GMT
+  assert.equal(startDateToIso('2026-10-24T00:00:00Z'), '2026-10-23T23:00:00.000Z')   // date only written as UTC midnight -> UK midnight (BST)
+  assert.equal(startDateToIso('2026-10-24T19:30:00+01:00'), '2026-10-24T18:30:00.000Z')   // a real time with an offset is kept
   assert.equal(startDateToIso('2026-10-24T19:30:00+01:00'), '2026-10-24T18:30:00.000Z')
   assert.equal(startDateToIso('2026-10-24T19:30:00Z'), '2026-10-24T19:30:00.000Z')
 })

@@ -77,6 +77,10 @@ function londonOffsetMinutes(utcMs: number): number {
 export function startDateToIso(raw: string | undefined | null): string | null {
   if (!raw) return null
   const s = raw.trim()
+  // "2026-10-24T00:00:00Z" / "+00:00" is how many sites write a date with no time. Read as UTC it lands at 1am
+  // in British Summer Time (Fever walking tours on yorkshire.com showed as 01:00): treat it as the bare date.
+  const utcMidnight = s.match(/^(\d{4}-\d{2}-\d{2})T00:00(?::00(?:\.0+)?)?(?:[zZ]|[+-]00:?00)$/)
+  if (utcMidnight) return startDateToIso(utcMidnight[1])
   if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) && /T/.test(s)) {
     const d = new Date(s)
     return Number.isNaN(d.getTime()) ? null : d.toISOString()

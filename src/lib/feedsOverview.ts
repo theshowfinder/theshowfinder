@@ -6,6 +6,7 @@ import {
   getEventimAffiliateLink, getEventbriteAffiliateLink, getGigsbergAffiliateLink, getSeatUniqueAffiliateLink, getSeeTicketsAffiliateLink,
   getSkiddleAffiliateLink, getStubHubAffiliateLink, getTicketmasterAffiliateLink, getViagogoAffiliateLink, getVividSeatsAffiliateLink,
 } from '@/lib/affiliate'
+import { ukToday } from '@/lib/ukTime'
 
 export interface Combo { key: string; label: string; tm: boolean; gb: boolean; st: boolean; hint: string }
 
@@ -123,7 +124,7 @@ const FEED_TABLES: Array<{ platform: FeedProgress['platform']; label: string; ta
 /** For each feed: how many shows it holds and how far matching has got. Head counts only. */
 export async function loadFeedProgress(): Promise<FeedProgress[]> {
   const db = createAdminClient() as Loose
-  const today = new Date().toISOString().slice(0, 10)
+  const today = ukToday()
   const base = (table: string) => db.from(table).select('id', { count: 'exact', head: true }).is('gone_at', null).gte('event_date', today)
   const n = async (q: PromiseLike<{ count: number | null; error: unknown }>): Promise<number | null> => {
     try { const r = await q; return r.error ? null : r.count } catch { return null }

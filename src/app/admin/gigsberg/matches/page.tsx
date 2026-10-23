@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { approveExistingGigsbergMatchAction, checkGigsbergInventoryAction, createGigsbergEventAction, rejectGigsbergMatchAction, restoreGigsbergMatchAction } from '../actions'
+import { ukToday } from '@/lib/ukTime'
 
 type MatchRow = {
   id: number
@@ -42,7 +43,7 @@ export default async function GigsbergMatchesPage({ searchParams }: { searchPara
     .select('id, name, event_date, event_time, venue, city, performer1, url, match_status, match_confidence, match_reason, matched_event_id, suggested_event_id, inventory_status, inventory_checked_at, image_status')
     .in('match_status', statuses)
     // Shows that have already happened can never be matched or sold, so they are not listed.
-    .gte('event_date', new Date().toISOString().slice(0, 10))
+    .gte('event_date', ukToday())
   if (city) query = query.ilike('city', city)
   const { data, error } = await query
     .order('event_date', { ascending: true })

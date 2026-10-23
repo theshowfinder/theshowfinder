@@ -10,6 +10,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
 import { fetchAllPages } from '@/lib/pagedFetch'
 import { chooseEventUrl, dateOnly, decide, type LinkedRow, type StEvent, type StRow } from '@/lib/seeTicketsMatchRules'
+import { ukToday } from '@/lib/ukTime'
 
 type CatalogueRow = StRow & {
   matched_event_id: string | null
@@ -71,7 +72,7 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
   const t0 = Date.now()
   const db = createAdminClient()
   const dryRun = options.dryRun ?? false
-  const today = new Date().toISOString().slice(0, 10)
+  const today = ukToday()
   const limit = options.limit && options.limit > 0 ? Math.min(options.limit, 500) : null
   const catalogue: CatalogueRow[] = []
   for (let offset = 0; ; offset += 1000) {
@@ -188,7 +189,7 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
 /** Makes each future event's See Tickets button agree with the feed rows matched to it. */
 export async function reconcileSeeTicketsLinks(options: { dryRun?: boolean } = {}): Promise<ReconcileResult> {
   const db = createAdminClient()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = ukToday()
   const now = new Date().toISOString()
   type Row = { id: string; url: string; event_time: string | null; matched_event_id: string | null; match_status: string; gone_at: string | null }
   const rows = await fetchAllPages<Row>((from, to) =>

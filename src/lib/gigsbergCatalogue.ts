@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { searchGigsbergAffiliateEvents, type GigsbergAffiliateEvent } from '@/lib/gigsbergAffiliate'
 import { CITIES } from '@/lib/cities'
+import { ukToday } from '@/lib/ukTime'
 
 const PAGE_SIZE = 100
 const UK_COUNTRIES = new Set([
@@ -15,7 +16,7 @@ const UK_COUNTRIES = new Set([
 ])
 
 export function todayIso() {
-  return new Date().toISOString().slice(0, 10)
+  return ukToday()
 }
 
 export function horizonIso() {

@@ -6,6 +6,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
 import { createSeeTicketsEventAction } from '@/app/admin/gigsberg/actions'
+import { ukToday } from '@/lib/ukTime'
 
 type SearchParams = Promise<{ status?: string; city?: string; q?: string; page?: string }>
 
@@ -28,7 +29,7 @@ export default async function SeeTicketsInventoryPage({ searchParams }: { search
   const page = Math.max(1, Number.parseInt(params.page || '1', 10) || 1)
   const pageSize = 150
   const db = createAdminClient()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = ukToday()
 
   const base = () => {
     let request = db.from('see_tickets_catalogue_events').select('*', { count: 'exact', head: true }).gte('event_date', today)

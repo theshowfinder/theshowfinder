@@ -2,6 +2,7 @@
 // platform, and what is not linked yet. Every metric has a `view` that opens the list behind the number.
 import { createAdminClient } from '@/lib/supabase/admin'
 import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
+import { ukToday } from '@/lib/ukTime'
 
 export type PlatformKey = 'ticketmaster' | 'gigsberg' | 'see_tickets' | 'council'
 
@@ -19,7 +20,7 @@ export interface ImportBit { eligible: number; wouldImport: number; imported: nu
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 
 const FUTURE = () => new Date().toISOString()
-const TODAY = () => new Date().toISOString().slice(0, 10)
+const TODAY = () => ukToday()
 
 async function count(build: (db: Loose) => PromiseLike<{ count: number | null; error: unknown }>): Promise<number | null> {
   try {

@@ -16,6 +16,7 @@ import {
   searchGigsbergAffiliateEvents,
   type GigsbergAffiliateEvent,
 } from '@/lib/gigsbergAffiliate'
+import { ukToday } from '@/lib/ukTime'
 
 function formatDate(date: string, time?: string) {
   const value = new Date(`${date}${time ? `T${time}` : 'T00:00:00'}`)
@@ -77,7 +78,7 @@ export default async function GigsbergAdminPage({
   })
 
   const catalogueCounts = new Map<string, number>()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = ukToday()
   const catalogueResults = await runInBatches(CITIES, 8, cityItem =>
     db.from('gigsberg_catalogue_events')
       .select('*', { count: 'exact', head: true })

@@ -11,6 +11,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { searchGigsbergAffiliateListings } from '@/lib/gigsbergAffiliate'
+import { ukToday } from '@/lib/ukTime'
 
 export type InventoryStatus = 'available' | 'no_inventory' | 'check_failed'
 
@@ -33,7 +34,7 @@ export async function checkGigsbergInventoryBatch(
   { limit = 150, concurrency = 4, gapMs = 150 }: { limit?: number; concurrency?: number; gapMs?: number } = {},
 ): Promise<InventoryBatchResult> {
   const db = createAdminClient()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = ukToday()
 
   const { data, error } = await db
     .from('gigsberg_catalogue_events')

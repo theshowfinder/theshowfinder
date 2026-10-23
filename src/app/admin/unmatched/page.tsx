@@ -8,6 +8,7 @@ import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
 import { rankCandidates, type Candidate } from '@/lib/unmatchedCandidates'
 import { londonMinutes, formatClock, clockMinutes, isMatchableEvent, type CatalogueRow, type ShowfinderEvent } from '@/lib/gigsbergMatchScoring'
 import { createEventAction, hideAction, linkAction, unhideAction } from './actions'
+import { ukToday } from '@/lib/ukTime'
 
 const PAGE = 25
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -60,7 +61,7 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
   const q = (sp.q ?? '').trim().replace(/[%_,()\\]/g, ' ')
   const meta = PLATFORM[platform]
   const db = createAdminClient() as Loose
-  const today = new Date().toISOString().slice(0, 10)
+  const today = ukToday()
   const nowIso = new Date().toISOString()
   const from = (page - 1) * PAGE
 
