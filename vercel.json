@@ -33,7 +33,7 @@
     },
     {
       "path": "/api/cron/sync-council-events",
-      "schedule": "15 3,9,15,21 * * *"
+      "schedule": "15 1,3,5,7,9,11,13,15,17,19,21,23 * * *"
     },
     {
       "path": "/api/cron/enrich-artists",

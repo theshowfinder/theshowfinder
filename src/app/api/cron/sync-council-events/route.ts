@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { syncCouncilEvents } from '@/lib/councilEvents'
 import { withJobRun } from '@/lib/jobRuns'
 
-export const maxDuration = 180
+export const maxDuration = 300
 export const dynamic     = 'force-dynamic'
 
 async function handleGet(request: Request) {
@@ -17,7 +17,9 @@ async function handleGet(request: Request) {
   console.log(`[sync] Starting council events sync at ${started}`)
 
   try {
-    const result = await syncCouncilEvents({ budgetMs: 150_000 })
+    // 50 local sources and each run only gets through a few, so it runs every 2 hours with a 4.5-minute budget:
+    // every source is refreshed about once a day.
+    const result = await syncCouncilEvents({ budgetMs: 270_000 })
     return NextResponse.json({
       success: true,
       started,
