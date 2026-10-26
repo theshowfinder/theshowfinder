@@ -36,19 +36,15 @@ import LocalHeroCopy from '@/components/LocalHeroCopy'
 import CategoryStrip from '@/components/CategoryStrip'
 import WestEndStrip from '@/components/WestEndStrip'
 import HeadlineNews from '@/components/HeadlineNews'
-import type { EventWithVenue, CityNews } from '@/lib/types/database'
+import type { EventWithVenue } from '@/lib/types/database'
 import { saleBadgeText, groupDateCount } from '@/lib/on-sale'
 import { fetchEventsThisWeek, fetchPresalesOpenNow, fetchOnSaleThisWeek, attachTourDateCounts, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { listedEventsCount, dropDuplicateEvents } from '@/lib/listedEvents'
 import { CITIES } from '@/lib/cities'
 import { pickFeaturedShows } from '@/lib/featuredShows'
-import { NATIONAL_SLUG } from '@/lib/cityNews'
-import { rankCityNewsForDisplay } from '@/lib/newsPublishing'
 import PresaleGrid from '@/components/PresaleGrid'
-import NewsCardGrid from '@/components/NewsCardGrid'
 import ScrollRail from '@/components/ScrollRail'
 import OnSaleMosaic, { type OnSaleMosaicTile } from '@/components/OnSaleMosaic'
-import { dropNonUkNews } from '@/lib/newsFiltering'
 import { pickOnSaleMosaic } from '@/lib/onSaleMosaic'
 import { londonDayWithYear } from '@/lib/cityBrief'
 import { eventImageUrl, artistPhotoUrl } from '@/lib/eventImages'
@@ -280,46 +276,6 @@ async function OnSaleMosaicSection() {
   return <OnSaleMosaic tiles={tiles} total={allGroups.length} />
 }
 
-async function NationalNews() {
-  const supabase = createPublicClient()
-
-  // General UK entertainment news, not tied to any city or to a specific
-  // on-sale/presale date — the "big stories from all over" feed. Reuses the
-  // same city_news table and NewsCardGrid component as every city page,
-  // just reading the NATIONAL_SLUG rows the sync writes for this feed
-  // (src/lib/cityNews.ts).
-  const { data } = await supabase
-    .from('city_news')
-    .select('*')
-    .eq('city_slug', NATIONAL_SLUG)
-    .order('published_at', { ascending: false })
-    .limit(6) as unknown as { data: CityNews[] | null }
-
-  // See rankCityNewsForDisplay (newsPublishing.ts) / the equivalent comment
-  // on the city page — same ranking contract, same reason.
-  const items = rankCityNewsForDisplay(dropNonUkNews(data ?? []), 6)
-  if (!items.length) return null
-
-  return (
-    <section className="bg-[#1A1A2E] py-10 sm:py-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-end justify-between mb-6">
-          <div>
-            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
-              From around the UK
-            </p>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Entertainment News</h2>
-          </div>
-          <Link href="/news" className="text-sm font-semibold whitespace-nowrap text-white/60 hover:text-white transition-colors">
-            See all news →
-          </Link>
-        </div>
-        <NewsCardGrid items={items} context="homepage" scroll />
-      </div>
-    </section>
-  )
-}
-
 async function PresalesOpenNow() {
   const supabase = createPublicClient()
 
@@ -547,11 +503,6 @@ export default function HomePage() {
 
       {/* ── LOCAL SPOTLIGHT (only renders once a city is detected) ─ */}
       <LocalSpotlight />
-
-      {/* ── ENTERTAINMENT NEWS (national, not city-scoped) ────────── */}
-      <Suspense fallback={<HomeSectionSkeleton />}>
-        <NationalNews />
-      </Suspense>
 
       {/* ── PRESALES OPEN NOW ─────────────────────── */}
       <Suspense fallback={<HomeSectionSkeleton />}>
