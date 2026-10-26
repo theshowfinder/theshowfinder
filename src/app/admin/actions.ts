@@ -420,6 +420,22 @@ export async function deleteLocalBusinessAction(id: string, city: string) {
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(city))
 }
+// Paid listings (migration 091): set live / pause / cancel, and switch package.
+export async function setLocalBusinessStatusAction(id: string, city: string, status: 'active' | 'paused' | 'cancelled') {
+  await checkAuth()
+  const db = createAdminClient()
+  await db.from('local_businesses').update({ status, updated_at: new Date().toISOString() } as never).eq('id', id)
+  revalidatePath('/admin/local-businesses')
+  revalidatePath('/cities/' + encodeURIComponent(city))
+}
+
+export async function setLocalBusinessPackageAction(id: string, city: string, pkg: 'standard' | 'featured') {
+  await checkAuth()
+  const db = createAdminClient()
+  await db.from('local_businesses').update({ package: pkg, is_sponsored: pkg === 'featured', updated_at: new Date().toISOString() } as never).eq('id', id)
+  revalidatePath('/admin/local-businesses')
+  revalidatePath('/cities/' + encodeURIComponent(city))
+}
 // ── News candidates (News Intelligence Inbox) ───────────────────────────────
 // Phase 1: manual editorial queue for presale/tour-announcement/ticket news
 // the RSS pipeline (src/lib/cityNews.ts) hasn't picked up yet, single-city

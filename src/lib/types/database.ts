@@ -1,4 +1,5 @@
 export type EventCategory = 'concert' | 'theatre' | 'comedy' | 'sports' | 'family' | 'local'
+export type LocalBusinessCategory = 'restaurant' | 'bar' | 'cafe' | 'hotel' | 'transport' | 'parking' | 'beauty' | 'shop' | 'attraction' | 'other'
 export type EventStatus = 'upcoming' | 'on_sale' | 'sold_out' | 'cancelled' | 'postponed'
 
 // News Intelligence Inbox (Phase 1) — see supabase/migration_026_news_candidates.sql
@@ -429,30 +430,43 @@ export interface Database {
           id: string
           city: string
           name: string
-          category: 'restaurant' | 'bar' | 'hotel' | 'transport' | 'beauty' | 'other'
+          category: LocalBusinessCategory
           description: string | null
           website_url: string | null
           is_sponsored: boolean
           is_lusso_client: boolean
           display_order: number
           created_at: string
+          package: 'standard' | 'featured'
+          status: 'pending' | 'active' | 'paused' | 'cancelled'
+          logo_url: string | null
+          address: string | null
+          postcode: string | null
+          active_until: string | null
+          updated_at: string
         }
         Insert: {
           id?: string
           city: string
           name: string
-          category: 'restaurant' | 'bar' | 'hotel' | 'transport' | 'beauty' | 'other'
+          category: LocalBusinessCategory
           description?: string | null
           website_url?: string | null
           is_sponsored?: boolean
           is_lusso_client?: boolean
           display_order?: number
           created_at?: string
+          package?: 'standard' | 'featured'
+          status?: 'pending' | 'active' | 'paused' | 'cancelled'
+          logo_url?: string | null
+          address?: string | null
+          postcode?: string | null
+          active_until?: string | null
         }
         Update: {
           city?: string
           name?: string
-          category?: 'restaurant' | 'bar' | 'hotel' | 'transport' | 'beauty' | 'other'
+          category?: LocalBusinessCategory
           description?: string | null
           website_url?: string | null
           is_sponsored?: boolean
