@@ -77,15 +77,15 @@ function EventCard({ event }: { event: MockEvent }) {
 function BusinessCard({ business }: { business: MockBusiness }) {
   const featured = business.featured === true
   return (
-    <article className={`group relative overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${featured ? 'border-4 border-rose-500 ring-4 ring-rose-100 shadow-lg' : 'border-slate-200'}`}>
+    <article className={`group relative overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${featured ? 'border-slate-300 shadow-xl' : 'border-slate-200'}`}>
       <div className={`flex items-center justify-between p-5 ${featured ? 'min-h-36 bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950' : 'min-h-28 bg-gradient-to-br from-slate-100 to-slate-200'}`}>
-        <span className={`flex h-14 w-14 items-center justify-center rounded-2xl font-extrabold ${featured ? 'bg-white text-rose-600 text-xl' : 'bg-white text-slate-700'}`}>{business.initials}</span>
+        <span className={`flex h-14 w-14 items-center justify-center rounded-2xl font-extrabold ${featured ? 'bg-amber-300 text-slate-950 text-xl' : 'bg-white text-slate-700'}`}>{business.initials}</span>
         <span className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider ${featured ? 'bg-white text-rose-600' : 'bg-white/90 text-slate-600'}`}>
           {featured ? 'Featured partner' : 'Local listing'}
         </span>
       </div>
       <div className={featured ? 'min-h-[250px] p-6' : 'min-h-[205px] p-5'}>
-        <p className={`mb-2 text-xs font-bold uppercase tracking-widest ${featured ? 'text-rose-600' : 'text-slate-400'}`}>{business.category}</p>
+        <p className={`mb-2 text-xs font-bold uppercase tracking-widest ${featured ? 'text-amber-700' : 'text-slate-400'}`}>{business.category}</p>
         <h3 className="mb-1 text-lg font-extrabold leading-snug text-slate-900 group-hover:text-rose-600">{business.name}</h3>
         <p className="line-clamp-3 text-sm leading-relaxed text-slate-500">{business.description}</p>
         <p className="mt-4 text-sm font-bold text-rose-600">Visit website <span aria-hidden="true">→</span></p>
