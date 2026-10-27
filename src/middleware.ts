@@ -11,6 +11,16 @@ import { CITIES } from '@/lib/cities'
 // for "someone visiting from Derby sees a Derby link" without pulling in a
 // geo-distance dependency for a first version.
 export function middleware(request: NextRequest) {
+  // Old city pagination URLs are no longer part of the city-hub layout.
+  // Redirect them to the canonical city URL instead of rendering the hub
+  // under a misleading query string (which Search Console can classify as a
+  // soft 404 when the old page number is empty).
+  if (request.nextUrl.pathname.match(/^\/cities\/[^/]+$/) && request.nextUrl.searchParams.has('page')) {
+    const canonical = request.nextUrl.clone()
+    canonical.search = ''
+    return NextResponse.redirect(canonical, 308)
+  }
+
   const response = NextResponse.next()
 
   const rawCity = request.headers.get('x-vercel-ip-city')
