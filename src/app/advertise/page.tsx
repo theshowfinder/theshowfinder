@@ -24,7 +24,7 @@ const featuredBenefits = [
   'Maximum three Featured placements per city',
 ]
 
-function PackageCard({ name, monthly, annual, benefits, featured = false }: {
+function PackageCard({ name, monthly, annual, benefits, featured = false, href }: {
   name: string
   monthly: string
   annual: string
