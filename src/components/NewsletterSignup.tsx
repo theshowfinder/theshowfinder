@@ -38,67 +38,52 @@ export default function NewsletterSignup() {
   }
 
   return (
-    // scroll-mt-20 keeps this section clear of the sticky header (h-16 /
-    // 64px) when visitors land here via the header's "Get Ticket Alerts"
-    // CTA (href="/#newsletter") rather than scrolling down manually.
-    <section id="newsletter" className="w-full py-20 px-4 scroll-mt-20" style={{ backgroundColor: '#E8003D' }}>
-      <div className="max-w-2xl mx-auto text-center">
-
-        <h2 className="text-4xl sm:text-5xl font-extrabold text-white mb-4 leading-tight tracking-tight">
-          Never Miss a Show
-        </h2>
-
-        <p className="text-white/80 text-lg mb-5 max-w-xl mx-auto leading-relaxed">
-          Get the latest presales, onsales, tour announcements and local event picks in your inbox.
-        </p>
-
-        <div className="flex flex-wrap justify-center gap-2 mb-9 text-xs font-bold text-white/90">
-          <span className="rounded-full bg-white/15 px-3 py-1.5">New announcements</span>
-          <span className="rounded-full bg-white/15 px-3 py-1.5">Presale alerts</span>
-          <span className="rounded-full bg-white/15 px-3 py-1.5">Local events</span>
+    <section id="newsletter" className="w-full px-4 py-8 sm:py-10 scroll-mt-20" style={{ backgroundColor: '#E8003D' }}>
+      <div className="max-w-6xl mx-auto flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <div className="max-w-xl text-center lg:text-left">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight tracking-tight">
+            Never Miss a Show
+          </h2>
+          <p className="text-white/80 text-sm sm:text-base mt-2 leading-relaxed">
+            Get new show announcements, ticket alerts and local event picks in your inbox.
+          </p>
         </div>
 
-        {success ? (
-          <div className="inline-flex flex-col items-center gap-2 bg-white/20 text-white px-8 py-6 rounded-2xl text-center max-w-sm mx-auto">
-            <span className="text-3xl">🎉</span>
-            <p className="font-extrabold text-lg">{successCopy(success).heading}</p>
-            <p className="text-white/80 text-sm">{successCopy(success).body}</p>
-          </div>
-        ) : (
-          <>
-            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 justify-center max-w-lg mx-auto">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={e => { setEmail(e.target.value); setError(null) }}
-                placeholder="Enter your email address"
-                className="flex-1 px-5 py-4 rounded-xl bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 text-base min-h-[56px]"
-                style={{ '--tw-ring-color': '#FFD700' } as React.CSSProperties}
-              />
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-8 py-4 text-white font-extrabold rounded-xl transition-all duration-150 min-h-[56px] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap hover:opacity-90 active:scale-95"
-                style={{ backgroundColor: '#1A1A2E' }}
-              >
-                {loading ? 'Subscribing…' : 'Get Alerts Free'}
-              </button>
-            </form>
-
-            {error && (
-              <p className="mt-3 text-white/90 text-sm font-semibold">{error}</p>
-            )}
-          </>
-        )}
-
-        <p className="mt-5 flex flex-wrap items-center justify-center gap-2 text-sm">
-          <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-extrabold" style={{ backgroundColor: '#FFD84D', color: '#1A1A2E' }}>
-            <span aria-hidden="true">✓</span> Free to join
-          </span>
-          <span className="text-white/65">Just your email · no spam · unsubscribe any time · <Link href="/privacy-policy" className="underline hover:text-white">Privacy</Link></span>
-        </p>
+        <div className="w-full max-w-xl">
+          {success ? (
+            <div className="inline-flex flex-col gap-1 bg-white/20 text-white px-5 py-4 rounded-xl text-left">
+              <p className="font-extrabold">{successCopy(success).heading}</p>
+              <p className="text-white/80 text-sm">{successCopy(success).body}</p>
+            </div>
+          ) : (
+            <>
+              <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={e => { setEmail(e.target.value); setError(null) }}
+                  placeholder="Enter your email address"
+                  aria-label="Email address"
+                  className="flex-1 px-4 py-3 rounded-xl bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 text-base min-h-[48px]"
+                  style={{ '--tw-ring-color': '#FFD700' } as React.CSSProperties}
+                />
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-6 py-3 text-white font-extrabold rounded-xl transition-all duration-150 min-h-[48px] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap hover:opacity-90 active:scale-95"
+                  style={{ backgroundColor: '#1A1A2E' }}
+                >
+                  {loading ? 'Subscribing…' : 'Get Alerts Free'}
+                </button>
+              </form>
+              {error && <p className="mt-2 text-white/90 text-sm font-semibold">{error}</p>}
+            </>
+          )}
+          <p className="mt-2 text-xs text-white/65 text-center sm:text-left">
+            Free to join · no spam · unsubscribe any time · <Link href="/privacy-policy" className="underline hover:text-white">Privacy</Link>
+          </p>
+        </div>
       </div>
     </section>
-  )
-}
+  )}
