@@ -40,6 +40,23 @@ export async function fetchLatestStories(db: Db, opts: { limit: number; headline
   return orderStories((data ?? []) as unknown as NewsStory[]).slice(0, opts.limit)
 }
 
+/** Published image-backed stories linked to events in one city. */
+export async function fetchStoriesForEventIds(db: Db, eventIds: string[], limit = 5): Promise<NewsStory[]> {
+  if (!eventIds.length) return []
+  const { data, error } = await db
+    .from('news_stories')
+    .select(LIST_COLUMNS)
+    .eq('status', 'published')
+    .overlaps('event_ids', eventIds)
+    .order('published_at', { ascending: false })
+    .limit(Math.max(limit * 2, 10))
+  if (error) {
+    console.warn('[news-stories] city read failed:', error.message)
+    return []
+  }
+  return orderStories((data ?? []) as unknown as NewsStory[]).slice(0, limit)
+}
+
 export async function fetchStory(db: Db, slug: string): Promise<NewsStory | null> {
   const { data } = await db.from('news_stories').select(LIST_COLUMNS).eq('slug', slug).eq('status', 'published').maybeSingle()
   return (data as unknown as NewsStory | null) ?? null

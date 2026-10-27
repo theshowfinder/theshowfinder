@@ -46,6 +46,8 @@ import CityMorningEdition from '@/components/CityMorningEdition'
 import { fetchCityEdition } from '@/lib/cityEdition'
 import { buildEdition, editionHeadline, freshnessStamp } from '@/lib/cityBrief'
 import { excludePreviouslyShown } from '@/lib/cityDisplayRows'
+import { fetchStoriesForEventIds } from '@/lib/newsStoriesData'
+import CityNewsMosaic from '@/components/CityNewsMosaic'
 import LocalBusinessAds from '@/components/LocalBusinessAds'
 
 // No city page is built at deploy time: each is generated on first request, then
@@ -259,6 +261,8 @@ export default async function CityPage({
   // the section is neither stale nor empty (and hides if nothing is fresh at all).
   const newsPick = pickNewsForCityPage(dropNonUkNews(cityNewsResult.data ?? []), dropNonUkNews(nationalNewsResult.data ?? []), now.getTime(), { limit: 8, minLocal: 3 })
   const cityNews = newsPick.items
+  const cityStoryEventIds = [...new Set([...tonightEvents, ...eventsThisWeek, ...localEventsRaw, ...topEvents, ...recentlyAdded, ...editionData.onSaleToday, ...editionData.onSaleWeek, ...editionData.presaleOpen, ...editionData.top].map(event => event.id))]
+  const cityStories = await fetchStoriesForEventIds(supabase, cityStoryEventIds)
   const newsIsLocal = newsPick.localCount >= 3
 
   // Morning edition: image-led tiles, a factual headline and a freshness stamp that only shows when
@@ -461,48 +465,44 @@ export default async function CityPage({
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-12 space-y-10 sm:space-y-14">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-12 flex flex-col gap-10 sm:gap-14">
 
-        {/* ── LOCAL ENTERTAINMENT NEWS: latest fresh city stories near the top ── */}
-        {cityNews.length > 0 && (
-          <section id="news" className="scroll-mt-20">
+        {/* ── LOCAL ENTERTAINMENT NEWS: image-led when city stories match ── */}
+        {cityStories.length > 0 ? <CityNewsMosaic cityName={cityName} stories={cityStories} /> : cityNews.length > 0 && (
+          <section id="news" className="scroll-mt-20 order-1">
             <div className="mb-7">
-              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
-                Latest event news
-              </p>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                What&apos;s happening in {cityName}
-              </h2>
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>Latest event news</p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">What&apos;s happening in {cityName}</h2>
               <p className="text-sm text-slate-500 mt-1">Recent stories about live events in {cityName}</p>
             </div>
-            <NewsCardGrid items={cityNews} context={`city:${city}`} scroll />
+            <NewsCardGrid items={cityNews} context={'city:' + city} scroll />
           </section>
         )}
 
         {/* ── MORNING EDITION: image-led, built from today's data ── */}
-        <CityMorningEdition headline={editionHeadlineText} stamp={editionStamp} tiles={editionTiles} nav={editionNav} />
+        <div className="order-10"><CityMorningEdition headline={editionHeadlineText} stamp={editionStamp} tiles={editionTiles} nav={editionNav} /></div>
 
         {/* ── CITY GUIDE INTRO (only renders for cities with a written entry) ── */}
         {CITY_GUIDE_INTROS[cityName] && (
-          <CityIntro
+          <div className="order-10"><CityIntro
             cityName={cityName}
             emoji={cityConfig.emoji}
             intro={introText}
             totalCount={totalCount}
             venueCount={cityVenues.length}
             venues={rankedVenues.map(v => ({ name: v.name, slug: v.slug, capacity: v.capacity }))}
-          />
+          /></div>
         )}
 
         {/* ── NEWSLETTER (city-scoped) ── */}
-        <CityNewsletterForm cityName={cityName} />
+        <div className="order-2"><CityNewsletterForm cityName={cityName} /></div>
 
         {/* ── BROWSE BY TYPE ── */}
-        <CityBrowse cityName={cityName} counts={categoryCounts} />
+        <div className="order-10"><CityBrowse cityName={cityName} counts={categoryCounts} /></div>
 
         {/* ── TONIGHT (hidden completely when there are no valid events) ── */}
         {tonightEvents.length > 0 && (
-          <section id="tonight" className="scroll-mt-20">
+          <section id="tonight" className="scroll-mt-20 order-3">
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
                 Happening now
@@ -520,11 +520,11 @@ export default async function CityPage({
         )}
 
         {/* ── WEST END (London only — the best-paying ticket category) ── */}
-        {cityName === 'London' && <WestEndStrip inline />}
+        {cityName === 'London' && <div className="order-10"><WestEndStrip inline /></div>}
 
         {/* ── EVENTS THIS WEEK (ticketed shows + local events, merged) ── */}
         {weekEvents.length > 0 && (
-          <section id="this-week" className="scroll-mt-20">
+          <section id="this-week" className="scroll-mt-20 order-4">
             <div className="flex items-end justify-between mb-7">
               <div>
                 <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
@@ -552,7 +552,7 @@ export default async function CityPage({
 
         {/* ── WHAT'S ON LOCALLY: council / venue / tourist-board listings (hidden when none) ── */}
         {localEvents.length > 0 && (
-          <section id="local" className="scroll-mt-20">
+          <section id="local" className="scroll-mt-20 order-10">
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
                 Local listings
@@ -572,7 +572,7 @@ export default async function CityPage({
 
         {/* ── JUST ADDED: shows first listed in the last 7 days (hidden when fewer than 3) ── */}
         {newEvents.length >= 3 && (
-          <section>
+          <section className="order-10">
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
                 New this week
@@ -592,7 +592,7 @@ export default async function CityPage({
 
         {/* ── AROUND THE CITY: nearby towns' shows (hidden when none) ── */}
         {nearbyEvents.length > 0 && (
-          <section>
+          <section className="order-10">
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
                 Worth the trip
@@ -615,7 +615,7 @@ export default async function CityPage({
         {/* ── ON SALE THIS WEEK (omit the whole block when empty so the page
              stays focused and does not present a thin empty section to users
              or crawlers) ── */}
-        {onsaleGroups.length > 0 && <section id="on-sale" className="scroll-mt-20">
+        {onsaleGroups.length > 0 && <section id="on-sale" className="scroll-mt-20 order-5">
           <div className="flex items-end justify-between mb-7">
             <div>
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
@@ -677,7 +677,7 @@ export default async function CityPage({
 
         {/* ── TOP EVENTS (beyond this week, up to ~2 months out) ── */}
         {upcomingTopEvents.length > 0 && (
-          <section>
+          <section className="order-6">
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
                 Coming up
@@ -696,7 +696,7 @@ export default async function CityPage({
 
         {/* ── VENUES ── */}
         {cityVenues.length > 0 && (
-          <section>
+          <section className="order-10">
             <div className="flex items-end justify-between mb-7">
               <div>
                 <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
@@ -734,7 +734,7 @@ export default async function CityPage({
 
         {/* ── VENUES AROUND THE CITY (nearby towns; hidden when none) ── */}
         {nearbyVenues.length > 0 && (
-          <section>
+          <section className="order-10">
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
                 Nearby
@@ -752,14 +752,14 @@ export default async function CityPage({
         )}
 
         {/* ── HOW TICKET COMPARISON WORKS ── */}
-        <CityTicketSources cityName={cityName} />
+        <div className="order-10"><CityTicketSources cityName={cityName} /></div>
 
         {/* ── GETTING THERE & STAYING (hidden entirely if neither affiliate
              template env var is configured — see hasBookingAffiliate/
              hasTrainlineAffiliate above: an untracked placeholder link is
              never shown in its place) ── */}
         {(hasBookingAffiliate || hasTrainlineAffiliate) && (
-          <section>
+          <section className="order-10">
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
                 Plan your trip
@@ -802,7 +802,7 @@ export default async function CityPage({
         )}
 
         {/* ── LOCAL ADVERTISING (hidden until placements are added) ── */}
-        <LocalBusinessAds cityName={cityName} businesses={localBusinesses} />
+        <div className="order-10"><LocalBusinessAds cityName={cityName} businesses={localBusinesses} /></div>
 
       </div>
     </div>
