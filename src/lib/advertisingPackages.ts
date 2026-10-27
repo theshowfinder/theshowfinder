@@ -2,15 +2,15 @@
 export const PACKAGES = {
   standard: {
     name: 'Standard listing',
-    monthly: 24.95,
-    yearly: 249.95,
-    summary: 'A place in the local business guide on your city page.',
+    monthly: 29.95,
+    yearly: 299.95,
+    summary: 'A strong business listing in the local guide on your city page.',
   },
   featured: {
     name: 'Featured placement',
-    monthly: 49.95,
-    yearly: 499.95,
-    summary: 'Top of your city guide, plus a "Before the show" spot on the show pages in your city.',
+    monthly: 44.95,
+    yearly: 449.95,
+    summary: 'One of only three premium spaces: priority city placement plus a "Before the show" spot on event pages in your city.',
   },
 } as const
 

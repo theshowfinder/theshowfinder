@@ -5,9 +5,13 @@ import { selectLocalBusinessPlacements } from '@/lib/localBusinessPlacements'
 const CATEGORY_DETAILS: Record<LocalBusiness['category'], { icon: string; label: string }> = {
   restaurant: { icon: '🍽️', label: 'Restaurant' },
   bar: { icon: '🍸', label: 'Bar' },
+  cafe: { icon: '☕', label: 'Café' },
   hotel: { icon: '🛏️', label: 'Hotel' },
   transport: { icon: '🚕', label: 'Transport' },
+  parking: { icon: '🅿️', label: 'Parking' },
   beauty: { icon: '✨', label: 'Beauty & wellness' },
+  shop: { icon: '🛍️', label: 'Shop' },
+  attraction: { icon: '🎡', label: 'Attraction' },
   other: { icon: '📍', label: 'Local business' },
 }
 
