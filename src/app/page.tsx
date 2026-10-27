@@ -467,6 +467,9 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── EMAIL SIGNUP: kept close to the hero without dominating the page ── */}
+      <NewsletterSignup />
+
       {/* ── ON SALE THIS WEEK: image mosaic, straight under the hero so social-post visitors land on it ── */}
       <Suspense fallback={<HomeSectionSkeleton />}>
         <OnSaleMosaicSection />
@@ -475,8 +478,31 @@ export default function HomePage() {
       {/* ── LOCAL SPOTLIGHT (only renders once a city is detected) ─ */}
       <LocalSpotlight />
 
-      {/* ── NEWSLETTER ──────────────────────────────────────────── */}
-      <NewsletterSignup />
+      {/* ── UK CITIES ───────────────────────────────────────────── */}
+      <section className="bg-slate-900 py-10 sm:py-14">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-end justify-between mb-7">
+            <div>
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFD700' }}>
+                Browse by location
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Events near you</h2>
+            </div>
+            <Link href="/events" className="text-sm font-semibold text-white/60 hover:text-white transition-colors hidden sm:block">
+              All cities →
+            </Link>
+          </div>
+          <Suspense fallback={
+            <div className="flex gap-4 overflow-x-auto pb-2 md:grid md:grid-cols-4 md:gap-5">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex-none w-44 md:w-auto h-36 md:h-48 rounded-2xl bg-white/10 animate-pulse" />
+              ))}
+            </div>
+          }>
+            <CitiesGrid />
+          </Suspense>
+        </div>
+      </section>
 
       {/* ── WEST END (theatre is the best-paying ticket category) ── */}
       <Suspense fallback={<HomeSectionSkeleton />}>
@@ -498,35 +524,7 @@ export default function HomePage() {
       </Suspense>
 
       {/* ── FEATURED EVENTS ─────────────────────────────────────── */}
-      <section className="bg-[#F5F5F0] py-10 sm:py-14">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-end justify-between mb-7">
-            <div>
-              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
-                Don&apos;t miss out
-              </p>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Featured Shows</h2>
-            </div>
-            <Link href="/events" className="text-sm font-semibold hover:underline hidden sm:block" style={{ color: '#E8003D' }}>
-              View all →
-            </Link>
-          </div>
-
-          <Suspense fallback={
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.from({ length: 6 }).map((_, i) => <EventCardSkeleton key={i} />)}
-            </div>
-          }>
-            <FeaturedEvents />
-          </Suspense>
-
-          <div className="mt-8 text-center sm:hidden">
-            <Link href="/events" className="inline-block text-sm font-semibold hover:underline" style={{ color: '#E8003D' }}>
-              View all events →
-            </Link>
-          </div>
-        </div>
-      </section>
+      <section className="bg-[#F5F5F0] py-10 sm:py</section>
 
       {/* ── UK CITIES ───────────────────────────────────────────── */}
       <section className="bg-slate-900 py-10 sm:py-14">
