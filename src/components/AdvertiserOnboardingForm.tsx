@@ -6,8 +6,8 @@ import { CITIES } from '@/lib/cities'
 type PackageKey = 'featured' | 'standard'
 
 const PACKAGES = {
-  featured: { label: 'Featured placement', price: '£49.95 per month', detail: 'One of three premium positions in your city.' },
-  standard: { label: 'Standard listing', price: '£24.95 per month', detail: 'One of six standard positions in your city.' },
+  featured: { label: 'Featured placement', price: '£44.95 per month', detail: 'One of three premium positions, with priority city placement and event-page visibility.' },
+  standard: { label: 'Standard listing', price: '£29.95 per month', detail: 'One of six strong business listings in your city.' },
 } as const
 
 export default function AdvertiserOnboardingForm({ initialCity = '', initialPackage = 'featured' }: { initialCity?: string; initialPackage?: PackageKey }) {
