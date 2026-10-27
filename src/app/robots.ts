@@ -20,7 +20,8 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       { userAgent: TRAINING_ONLY, disallow: '/' },
-      { userAgent: '*', allow: '/', disallow: NEVER_CRAWL },
+      // Share images are the page's picture in search results and link previews, so they stay crawlable.
+      { userAgent: '*', allow: ['/', '/api/share-image/'], disallow: NEVER_CRAWL },
     ],
     sitemap: `${BASE_URL}/sitemap.xml`,
   }
