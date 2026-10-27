@@ -261,6 +261,8 @@ export default async function CityPage({
   // the section is neither stale nor empty (and hides if nothing is fresh at all).
   const newsPick = pickNewsForCityPage(dropNonUkNews(cityNewsResult.data ?? []), dropNonUkNews(nationalNewsResult.data ?? []), now.getTime(), { limit: 8, minLocal: 3 })
   const cityNews = newsPick.items
+  const cityStoryEventIds = [...new Set([...tonightEvents, ...eventsThisWeek, ...localEventsRaw, ...topEvents, ...recentlyAdded, ...editionData.onSaleToday, ...editionData.onSaleWeek, ...editionData.presaleOpen, ...editionData.top].map(event => event.id))]
+  const cityStories = await fetchStoriesForEventIds(supabase, cityStoryEventIds)
   const newsIsLocal = newsPick.localCount >= 3
 
   // Morning edition: image-led tiles, a factual headline and a freshness stamp that only shows when
