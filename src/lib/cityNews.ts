@@ -1,6 +1,7 @@
 import Parser from 'rss-parser'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
+import { cityNewsSourcesFor } from '@/lib/cityNewsSources'
 import { selectStaleCityNewsIds, selectExpiredRssNewsIds } from './newsPublishing.ts'
 import {
   type NewsItem,
@@ -97,10 +98,46 @@ async function fetchNewsForQuery(q: string): Promise<NewsItem[]> {
   return filterAndRankNewsItems(items, Date.now())
 }
 
-function fetchCityNews(cityName: string): Promise<NewsItem[]> {
+async function fetchCityNews(cityName: string): Promise<NewsItem[]> {
   const cityForQuery = cityName.replace(/\s+/g, '+')
   const q = `%22${cityForQuery}%22+(concert+OR+gig+OR+tour+OR+tickets+OR+arena+OR+festival+OR+entertainment)+${NEWS_EXCLUDE_TERMS}`
-  return fetchNewsForQuery(q)
+  const fallback = fetchNewsForQuery(q)
+
+  const sources = cityNewsSourcesFor(cityName)
+  if (!sources.length) return fallback
+
+  const parser = new Parser<Record<string, unknown>, RawItem>({ timeout: RSS_PER_ITEM_TIMEOUT_MS })
+  const sourceResults = await Promise.allSettled(sources.map(async source => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), RSS_PER_ITEM_TIMEOUT_MS)
+    try {
+      const response = await fetch(source.url, {
+        signal: controller.signal,
+        headers: {
+          'user-agent': 'Mozilla/5.0 (compatible; TheShowFinderBot/1.0; +https://www.theshowfinder.com)',
+          accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+        },
+      })
+      if (!response.ok) throw new Error(`${source.source}: HTTP ${response.status}`)
+      const parsed = await parser.parseString(await response.text())
+      return (parsed.items ?? []).map(item => ({
+        headline: (item.title ?? '').trim(),
+        url: item.link ?? '',
+        source: source.source,
+        publishedAt: item.pubDate && !Number.isNaN(Date.parse(item.pubDate)) ? new Date(item.pubDate).toISOString() : null,
+      })).filter(item => item.headline && item.url)
+    } finally {
+      clearTimeout(timer)
+    }
+  }))
+  const localItems = sourceResults.flatMap(result => result.status === 'fulfilled' ? result.value : [])
+  const sourceFailures = sourceResults.filter(result => result.status === 'rejected').length
+  if (sourceFailures > 0) {
+    console.warn(`[city-news] ${cityName}: ${sourceFailures}/${sources.length} configured local sources failed`)
+  }
+
+  const fallbackItems = await fallback
+  return filterAndRankNewsItems([...localItems, ...fallbackItems], Date.now())
 }
 
 // The homepage's general "entertainment news from all over" feed — not tied
