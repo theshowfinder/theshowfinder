@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
+import { CITIES } from '@/lib/cities'
 
 export const metadata: Metadata = {
   title: 'Advertise your local business | TheShowFinder',
@@ -28,6 +30,7 @@ function PackageCard({ name, monthly, annual, benefits, featured = false }: {
   annual: string
   benefits: string[]
   featured?: boolean
+  href: string
 }) {
   return (
     <div className={`relative rounded-3xl border bg-white p-7 shadow-sm ${featured ? 'border-rose-300 ring-2 ring-rose-100' : 'border-slate-200'}`}>
@@ -46,11 +49,17 @@ function PackageCard({ name, monthly, annual, benefits, featured = false }: {
           </li>
         ))}
       </ul>
+      <Link href={href} className={`mt-7 inline-flex rounded-xl px-5 py-3 text-sm font-extrabold ${featured ? 'bg-slate-950 text-white hover:bg-slate-800' : 'border border-slate-300 text-slate-800 hover:border-slate-500'}`}>
+        Choose {name} →
+      </Link>
     </div>
   )
 }
 
-export default function AdvertisePage() {
+export default async function AdvertisePage({ searchParams }: { searchParams: Promise<{ city?: string }> }) {
+  const params = await searchParams
+  const city = CITIES.find(item => item.name.toLowerCase() === params.city?.trim().toLowerCase())?.name
+  const onboardingUrl = (packageKey: 'standard' | 'featured') => `/advertise/onboard?${new URLSearchParams({ ...(city ? { city } : {}), package: packageKey }).toString()}`
   return (
     <main className="min-h-screen bg-[#F5F5F0]">
       <section className="bg-slate-950 text-white">
@@ -78,8 +87,8 @@ export default function AdvertisePage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <PackageCard name="Standard" monthly="£24.95" annual="£249.95" benefits={standardBenefits} />
-          <PackageCard name="Featured" monthly="£49.95" annual="£499.95" benefits={featuredBenefits} featured />
+          <PackageCard name="Standard" monthly="£24.95" annual="£249.95" benefits={standardBenefits} href={onboardingUrl('standard')} />
+          <PackageCard name="Featured" monthly="£49.95" annual="£499.95" benefits={featuredBenefits} featured href={onboardingUrl('featured')} />
         </div>
 
         <div className="mt-12 rounded-3xl bg-rose-600 p-8 text-white shadow-lg sm:flex sm:items-center sm:justify-between sm:p-10">
@@ -87,9 +96,9 @@ export default function AdvertisePage() {
             <h2 className="text-2xl font-black sm:text-3xl">Secure your city placement</h2>
             <p className="mt-2 leading-relaxed text-rose-50">Tell us your business, city and preferred package. We will confirm availability and get your placement ready.</p>
           </div>
-          <a href="mailto:hello@theshowfinder.com?subject=City%20advertising%20enquiry" className="mt-6 inline-flex shrink-0 items-center justify-center rounded-xl bg-white px-6 py-3.5 text-sm font-extrabold text-rose-600 transition-transform hover:-translate-y-0.5 sm:ml-8 sm:mt-0">
-            hello@theshowfinder.com
-          </a>
+          <Link href={onboardingUrl('featured')} className="mt-6 inline-flex shrink-0 items-center justify-center rounded-xl bg-white px-6 py-3.5 text-sm font-extrabold text-rose-600 transition-transform hover:-translate-y-0.5 sm:ml-8 sm:mt-0">
+            Start your application →
+          </Link>
         </div>
       </section>
     </main>
