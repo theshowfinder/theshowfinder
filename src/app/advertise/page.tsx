@@ -18,9 +18,9 @@ const standardBenefits = [
 
 const featuredBenefits = [
   'Always appears in the first advertising row',
-  'More prominent Featured styling',
-  'Business name, category and description',
-  'Direct link to your website',
+  'Larger, visually distinct Featured card',
+  'Logo, description and prominent website link',
+  'Featured on relevant event pages in your city',
   'Maximum three Featured placements per city',
 ]
 
@@ -82,13 +82,13 @@ export default async function AdvertisePage({ searchParams }: { searchParams: Pr
           <p className="mb-2 text-xs font-extrabold uppercase tracking-widest text-rose-600">Simple city pricing</p>
           <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Choose your position</h2>
           <p className="mt-4 leading-relaxed text-slate-600">
-            Every advertiser stays visible on the city page. Featured businesses always appear first, with only three top-row positions available in each city.
+            Every advertiser stays visible on the city page. Featured businesses always appear first, with only three premium positions available in each city.
           </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <PackageCard name="Standard" monthly="£24.95" annual="£249.95" benefits={standardBenefits} href={onboardingUrl('standard')} />
-          <PackageCard name="Featured" monthly="£49.95" annual="£499.95" benefits={featuredBenefits} featured href={onboardingUrl('featured')} />
+          <PackageCard name="Standard" monthly="£29.95" annual="£299.95" benefits={standardBenefits} href={onboardingUrl('standard')} />
+          <PackageCard name="Featured" monthly="£44.95" annual="£449.95" benefits={featuredBenefits} featured href={onboardingUrl('featured')} />
         </div>
 
         <div className="mt-12 rounded-3xl bg-rose-600 p-8 text-white shadow-lg sm:flex sm:items-center sm:justify-between sm:p-10">
