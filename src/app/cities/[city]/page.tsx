@@ -27,10 +27,9 @@ import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import { buildCityCollectionSchema, cityCanonicalUrl, cityPageDescription, cityPageTitle } from '@/lib/citySeo'
 import CityNewsletterForm from '@/components/CityNewsletterForm'
-import { fetchEventsThisWeek, fetchLocalEvents, fetchTopEvents, fetchNearbyEvents, fetchRecentlyAddedEvents, fetchCityCategoryCounts, fetchPresalesOpenNow, fetchTonightEvents, fetchOnSaleThisWeek, attachTourDateCounts } from '@/lib/eventPools'
+import { fetchEventsThisWeek, fetchLocalEvents, fetchTopEvents, fetchNearbyEvents, fetchRecentlyAddedEvents, fetchCityCategoryCounts, fetchTonightEvents, fetchOnSaleThisWeek, attachTourDateCounts } from '@/lib/eventPools'
 import { resolveCityEventCount } from '@/lib/cityEventCount'
 import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
-import PresaleGrid from '@/components/PresaleGrid'
 import NewsCardGrid from '@/components/NewsCardGrid'
 import TonightEventCard from '@/components/TonightEventCard'
 import WestEndStrip from '@/components/WestEndStrip'
@@ -130,7 +129,7 @@ export default async function CityPage({
   const now       = new Date()
   const nowISO    = now.toISOString()
 
-  // Artists fetched up front — fetchPresalesOpenNow and fetchOnSaleThisWeek
+  // Artists fetched up front — fetchOnSaleThisWeek
   // both group their pool by artist and need the list to do it, so neither
   // can run inside the Promise.all below alongside the query it groups.
   const artistsData = await fetchAllArtists(supabase)
@@ -145,7 +144,6 @@ export default async function CityPage({
     eventsThisWeek,
     localEventsRaw,
     topEvents,
-    presaleGroups,
     onsaleGroups,
     totalCountResult,
     venuesResult,
@@ -177,13 +175,6 @@ export default async function CityPage({
     // The biggest shows beyond this week, out to ~2 months — same shared
     // helper as the homepage's Top Events section.
     fetchTopEvents(supabase, { city: cityName, limit: 9 }),
-
-    // Presales open right now — presale_start already passed and presale_end
-    // (if the sync gave us one) hasn't. Distinct from "On Sale This Week"
-    // below, which tracks the public on-sale date, not the presale window —
-    // kept as two separate queries/sections on purpose so an artist in an
-    // active presale isn't shown twice.
-    fetchPresalesOpenNow(supabase, artists, { city: cityName, limit: 6 }).then(g => attachTourDateCounts(supabase, g)),
 
     // On sale this week — the genuine public on-sale date (onsale_date)
     // falling within the current Monday-Sunday UK week, never the
@@ -287,7 +278,7 @@ export default async function CityPage({
   const editionHeadlineText = editionHeadline({
     cityName,
     onSaleThisWeek: onsaleGroups.length,
-    presaleLive: presaleGroups.length,
+    presaleLive: editionData.presaleOpen.length,
   })
   const editionStamp = freshnessStamp(editionData.lastSyncedAt, now)
   // Each event card gets one placement on the city page, in visual order.
@@ -301,7 +292,6 @@ export default async function CityPage({
     tonightEvents.length > 0 && { href: '#tonight', label: 'Tonight' },
     weekEvents.length > 0 && { href: '#this-week', label: 'This week' },
     localEvents.length > 0 && { href: '#local', label: 'Local' },
-    presaleGroups.length > 0 && { href: '#presales', label: 'Presales' },
     onsaleGroups.length > 0 && { href: '#on-sale', label: 'On sale' },
     cityNews.length > 0 && { href: '#news', label: 'News' },
   ].filter((x): x is { href: string; label: string } => !!x)
@@ -473,6 +463,22 @@ export default async function CityPage({
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-12 space-y-10 sm:space-y-14">
 
+        {/* ── LOCAL ENTERTAINMENT NEWS: latest fresh city stories near the top ── */}
+        {cityNews.length > 0 && (
+          <section id="news" className="scroll-mt-20">
+            <div className="mb-7">
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+                Latest event news
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                What&apos;s happening in {cityName}
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">Recent stories about live events in {cityName}</p>
+            </div>
+            <NewsCardGrid items={cityNews} context={`city:${city}`} scroll />
+          </section>
+        )}
+
         {/* ── MORNING EDITION: image-led, built from today's data ── */}
         <CityMorningEdition headline={editionHeadlineText} stamp={editionStamp} tiles={editionTiles} nav={editionNav} />
 
@@ -603,37 +609,6 @@ export default async function CityPage({
                 <EventCard key={event.id} event={event} />
               ))}
             </ScrollRail>
-          </section>
-        )}
-
-        {/* ── LOCAL ENTERTAINMENT NEWS (hidden if no rows yet) ── */}
-        {cityNews.length > 0 && (
-          <section id="news" className="scroll-mt-20">
-            <div className="mb-7">
-              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
-                {newsIsLocal ? 'In the news' : `${cityName} + UK`}
-              </p>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                {newsIsLocal ? `${cityName} Entertainment News` : 'Latest Entertainment News'}
-              </h2>
-              <p className="text-sm text-slate-500 mt-1">Updated twice a day &middot; stories from the last week</p>
-            </div>
-            <NewsCardGrid items={cityNews} context={`city:${city}`} scroll />
-          </section>
-        )}
-
-        {/* ── PRESALES OPEN NOW ── */}
-        {presaleGroups.length > 0 && (
-          <section id="presales" className="scroll-mt-20">
-            <div className="mb-7">
-              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFB800' }}>
-                Buy before everyone else
-              </p>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                Presales Open Now in {cityName}
-              </h2>
-            </div>
-            <PresaleGrid groups={presaleGroups} scroll />
           </section>
         )}
 

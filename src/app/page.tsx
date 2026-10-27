@@ -38,11 +38,10 @@ import WestEndStrip from '@/components/WestEndStrip'
 import HeadlineNews from '@/components/HeadlineNews'
 import type { EventWithVenue } from '@/lib/types/database'
 import { saleBadgeText, groupDateCount } from '@/lib/on-sale'
-import { fetchEventsThisWeek, fetchPresalesOpenNow, fetchOnSaleThisWeek, attachTourDateCounts, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
+import { fetchEventsThisWeek, fetchOnSaleThisWeek, attachTourDateCounts, LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { listedEventsCount, dropDuplicateEvents } from '@/lib/listedEvents'
 import { CITIES } from '@/lib/cities'
 import { pickFeaturedShows } from '@/lib/featuredShows'
-import PresaleGrid from '@/components/PresaleGrid'
 import ScrollRail from '@/components/ScrollRail'
 import OnSaleMosaic, { type OnSaleMosaicTile } from '@/components/OnSaleMosaic'
 import { pickOnSaleMosaic } from '@/lib/onSaleMosaic'
@@ -276,34 +275,6 @@ async function OnSaleMosaicSection() {
   return <OnSaleMosaic tiles={tiles} total={allGroups.length} />
 }
 
-async function PresalesOpenNow() {
-  const supabase = createPublicClient()
-
-  const artistsData = await fetchAllArtists(supabase)
-  const groups = await attachTourDateCounts(supabase, await fetchPresalesOpenNow(supabase, artistsData ?? [], { limit: 6 }))
-
-  if (!groups.length) return null
-
-  return (
-    <section className="bg-white py-10 sm:py-14 border-t border-slate-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-end justify-between mb-7">
-          <div>
-            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFB800' }}>
-              Buy before everyone else
-            </p>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Presales Open Now</h2>
-          </div>
-          <Link href="/on-sale-this-week" className="text-sm font-semibold hover:underline hidden sm:block" style={{ color: '#026CDF' }}>
-            View all →
-          </Link>
-        </div>
-        <PresaleGrid groups={groups} scroll />
-      </div>
-    </section>
-  )
-}
-
 async function EventsThisWeekNational() {
   const supabase = createPublicClient()
 
@@ -503,11 +474,6 @@ export default function HomePage() {
 
       {/* ── LOCAL SPOTLIGHT (only renders once a city is detected) ─ */}
       <LocalSpotlight />
-
-      {/* ── PRESALES OPEN NOW ─────────────────────── */}
-      <Suspense fallback={<HomeSectionSkeleton />}>
-        <PresalesOpenNow />
-      </Suspense>
 
       {/* ── NEWSLETTER ──────────────────────────────────────────── */}
       <NewsletterSignup />
