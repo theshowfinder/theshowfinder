@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import { redirect } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { createPublicClient } from '@/lib/supabase/public'
 import EventCard, { type RunInfo } from '@/components/EventCard'
@@ -314,7 +314,10 @@ async function EventsList({ searchParams }: { searchParams: SearchParams }) {
   }
 
   if (!events?.length) {
-    if (page > 1) redirect(buildHref(1))
+    // An out-of-range page is a real missing resource. Returning a 404 keeps
+    // empty pagination URLs out of Google's index instead of redirecting them
+    // to a generic page that can be classified as a soft 404.
+    if (page > 1) notFound()
 
     return (
       <div className="text-center py-24">
