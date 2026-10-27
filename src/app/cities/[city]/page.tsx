@@ -47,6 +47,7 @@ import CityMorningEdition from '@/components/CityMorningEdition'
 import { fetchCityEdition } from '@/lib/cityEdition'
 import { buildEdition, editionHeadline, freshnessStamp } from '@/lib/cityBrief'
 import { excludePreviouslyShown } from '@/lib/cityDisplayRows'
+import LocalBusinessAds from '@/components/LocalBusinessAds'
 
 // No city page is built at deploy time: each is generated on first request, then
 // cached and refreshed in the background (see `revalidate`). Building all 40 cities
@@ -212,14 +213,15 @@ export default async function CityPage({
       .order('capacity', { ascending: false, nullsFirst: false })
       .limit(20) as unknown as Promise<{ data: { id: string; name: string; slug: string; capacity: number | null; address: string; image_url: string | null }[] | null }>,
 
-    // Local guide listings for this city — sponsored first
+    // Local advertising placements for this city — Featured first. The
+    // presentation layer enforces the commercial cap of 3 Featured + 6 Standard.
     supabase
       .from('local_businesses')
       .select('*')
       .ilike('city', cityName)
       .order('is_sponsored', { ascending: false })
       .order('display_order', { ascending: true })
-      .limit(24) as unknown as Promise<{ data: LocalBusiness[] | null }>,
+      .limit(100) as unknown as Promise<{ data: LocalBusiness[] | null }>,
 
     // Local entertainment news for this city (newest 30; freshness is applied below)
     supabase
@@ -824,51 +826,8 @@ export default async function CityPage({
           </section>
         )}
 
-        {/* ── LOCAL GUIDE (hidden until businesses are added) ── */}
-        {localBusinesses.length > 0 && (
-          <section>
-            <div className="mb-7">
-              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
-                Local guide
-              </p>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                Recommended in {cityName}
-              </h2>
-            </div>
-            <ScrollRail label={`Recommended in ${cityName}`}>
-              {localBusinesses.map(biz => {
-                const card = (
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-5 h-full">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
-                        {biz.category}
-                      </span>
-                      {biz.is_sponsored && (
-                        <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: '#E8003D' }}>
-                          Sponsored
-                        </span>
-                      )}
-                      {biz.is_lusso_client && (
-                        <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-blue-50 text-blue-700">
-                          Lusso Client
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="font-bold text-slate-900 text-base leading-snug mb-1">{biz.name}</h3>
-                    {biz.description && <p className="text-sm text-slate-500">{biz.description}</p>}
-                  </div>
-                )
-                return biz.website_url ? (
-                  <a key={biz.id} href={biz.website_url} target="_blank" rel="noopener noreferrer" className="block">
-                    {card}
-                  </a>
-                ) : (
-                  <div key={biz.id}>{card}</div>
-                )
-              })}
-            </ScrollRail>
-          </section>
-        )}
+        {/* ── LOCAL ADVERTISING (hidden until placements are added) ── */}
+        <LocalBusinessAds cityName={cityName} businesses={localBusinesses} />
 
       </div>
     </div>
