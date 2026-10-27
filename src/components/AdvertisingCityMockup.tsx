@@ -7,6 +7,7 @@ type MockEvent = {
   venue: string
   category: string
   tone: string
+  image: string
 }
 
 type MockBusiness = {
@@ -18,10 +19,20 @@ type MockBusiness = {
 }
 
 const EVENTS: MockEvent[] = [
-  { day: 'FRI', date: '14 NOV', title: 'Sam Fender', venue: 'AO Arena', category: 'Live music', tone: 'from-slate-950 to-indigo-900' },
-  { day: 'SAT', date: '15 NOV', title: 'The Comedy Store', venue: 'The Lowry', category: 'Comedy', tone: 'from-rose-950 to-orange-800' },
-  { day: 'SUN', date: '16 NOV', title: 'Manchester Christmas Markets', venue: 'Albert Square', category: 'Things to do', tone: 'from-emerald-950 to-teal-800' },
+  { day: 'FRI', date: '14 NOV', title: 'Sam Fender', venue: 'AO Arena', category: 'Live music', tone: 'from-slate-950 to-indigo-900', image: '/social-backgrounds/concert-city-night.png' },
+  { day: 'SAT', date: '15 NOV', title: 'The Comedy Store', venue: 'The Lowry', category: 'Comedy', tone: 'from-rose-950 to-orange-800', image: '/social-backgrounds/concert-cinematic-v2.png' },
+  { day: 'SUN', date: '16 NOV', title: 'Manchester Christmas Markets', venue: 'Albert Square', category: 'Things to do', tone: 'from-emerald-950 to-teal-800', image: '/city-heroes/manchester.png' },
 ]
+
+const CITY_IMAGES: Record<string, string> = {
+  Manchester: '/city-heroes/manchester.png',
+  Birmingham: '/city-heroes/birmingham.png',
+  Bristol: '/city-heroes/bristol.png',
+  Cardiff: '/city-heroes/cardiff.png',
+  London: '/city-heroes/london.png',
+  Edinburgh: '/city-heroes/edinburgh.png',
+}
+
 
 const ON_SALE = [
   { title: 'The 1975', detail: 'On sale this week', tone: 'from-violet-950 to-fuchsia-800' },
@@ -44,8 +55,10 @@ const BUSINESSES: MockBusiness[] = [
 function EventCard({ event }: { event: MockEvent }) {
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className={`flex h-36 items-end bg-gradient-to-br ${event.tone} p-5 text-white`}>
-        <div>
+      <div className={`relative flex h-36 items-end overflow-hidden bg-gradient-to-br ${event.tone} p-5 text-white`}>
+        <img src={event.image} alt="" className="absolute inset-0 h-full w-full object-cover opacity-55" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent" />
+        <div className="relative">
           <p className="text-xs font-extrabold uppercase tracking-widest text-white/70">{event.category}</p>
           <h3 className="mt-1 text-xl font-extrabold">{event.title}</h3>
         </div>
@@ -82,9 +95,12 @@ function BusinessCard({ business }: { business: MockBusiness }) {
 }
 
 export default function AdvertisingCityMockup({ cityName = 'Manchester' }: { cityName?: string }) {
+  const cityImage = CITY_IMAGES[cityName] ?? CITY_IMAGES.Manchester
   return (
     <main className="min-h-screen bg-[#F5F5F0] text-slate-900">
       <section className="relative overflow-hidden bg-slate-950 px-4 py-12 text-white sm:px-6 sm:py-20">
+        <img src={cityImage} alt="" className="absolute inset-0 h-full w-full object-cover opacity-35" />
+        <div className="absolute inset-0 bg-slate-950/65" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(232,0,61,0.35),_transparent_45%)]" />
         <div className="relative mx-auto max-w-7xl">
           <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.25em] text-rose-300">TheShowFinder city hub</p>
@@ -120,10 +136,14 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester' }: { cit
           </div>
           <div className="grid gap-5 md:grid-cols-3">
             {ON_SALE.map(item => (
-              <article key={item.title} className={`rounded-2xl bg-gradient-to-br ${item.tone} p-6 text-white shadow-sm`}>
+              <article key={item.title} className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${item.tone} p-6 text-white shadow-sm`}>
+                <img src="/social-backgrounds/concert-cinematic-v2.png" alt="" className="absolute inset-0 h-full w-full object-cover opacity-25" />
+                <div className="absolute inset-0 bg-slate-950/25" />
+                <div className="relative">
                 <p className="text-xs font-extrabold uppercase tracking-widest text-white/65">{item.detail}</p>
                 <h3 className="mt-10 text-2xl font-extrabold">{item.title}</h3>
                 <p className="mt-4 text-sm font-bold text-white/80">Explore tickets →</p>
+                </div>
               </article>
             ))}
           </div>
