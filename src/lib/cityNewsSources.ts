@@ -21,7 +21,7 @@ export const CITY_NEWS_SOURCES: CityNewsSource[] = [
   { city: 'Coventry', source: 'Coventry Telegraph', url: 'https://www.coventrytelegraph.net/whats-on/?service=rss', kind: 'publisher', enabled: true },
   { city: 'Stoke-on-Trent', source: 'Stoke Sentinel', url: 'https://www.stokesentinel.co.uk/?service=rss', kind: 'publisher', enabled: true },
   { city: 'Bristol', source: 'Bristol24/7', url: 'https://www.bristol247.com/feed/', kind: 'culture', enabled: true },
-  { city: 'Southampton', source: 'SUSU What's On', url: 'https://www.susu.org/feeds/whatson.xml', kind: 'culture', enabled: true },
+  { city: 'Southampton', source: "SUSU What's On", url: 'https://www.susu.org/feeds/whatson.xml', kind: 'culture', enabled: true },
   { city: 'Oxford', source: 'Oxford City Council', url: 'https://www.oxford.gov.uk/rss/news', kind: 'council', enabled: true },
   { city: 'Oxford', source: 'Oxford Mail', url: 'https://www.oxfordmail.co.uk/news/rss/', kind: 'publisher', enabled: true },
   { city: 'Edinburgh', source: 'Edinburgh News', url: 'https://edinburghnews.scotsman.com/rss', kind: 'publisher', enabled: true },
