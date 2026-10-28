@@ -47,7 +47,6 @@ async function createCheckoutSession({
   billing: BillingKey
   email: string
   city: string
-  businessName: string
   priceId: string
 }) {
   const secret = process.env.STRIPE_SECRET_KEY
