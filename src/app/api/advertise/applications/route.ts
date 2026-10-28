@@ -39,7 +39,6 @@ async function createCheckoutSession({
   billing,
   email,
   city,
-  businessName,
   priceId,
 }: {
   request: Request
@@ -163,7 +162,7 @@ export async function POST(request: Request) {
       }).eq('id', application.id)
     }
 
-    const session = await createCheckoutSession({ request, applicationId: application.id, packageKey, billing, email, city, businessName, priceId })
+    const session = await createCheckoutSession({ request, applicationId: application.id, packageKey, billing, email, city, priceId })
     await db.from('advertiser_applications').update({
       stripe_checkout_session_id: session.id,
       updated_at: new Date().toISOString(),
