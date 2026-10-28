@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { CITIES } from '@/lib/cities'
 
 type PackageKey = 'featured' | 'standard'
+type BillingKey = 'monthly' | 'yearly'
 
 const PACKAGES = {
   featured: { label: 'Featured placement', price: '£44.95 per month', detail: 'One of three premium positions, with priority city placement and event-page visibility.' },
@@ -14,6 +15,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
   const [step, setStep] = useState(1)
   const [city, setCity] = useState(initialCity)
   const [packageKey, setPackageKey] = useState<PackageKey>(initialPackage)
+  const [billing, setBilling] = useState<BillingKey>('monthly')
   const [businessName, setBusinessName] = useState('')
   const [category, setCategory] = useState('Restaurant')
   const [contactName, setContactName] = useState('')
@@ -24,7 +26,6 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [assetFiles, setAssetFiles] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
 
   const canContinue = city.length > 0
@@ -37,6 +38,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
     const form = new FormData()
     form.set('city', city)
     form.set('package', packageKey)
+    form.set('billing', billing)
     form.set('business_name', businessName.trim())
     form.set('category', category)
     form.set('contact_name', contactName.trim())
@@ -51,7 +53,11 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
       const response = await fetch('/api/advertise/applications', { method: 'POST', body: form })
       const result = await response.json().catch(() => null)
       if (!response.ok) throw new Error(result?.error || 'We could not submit the application.')
-      setSubmitted(true)
+      if (result?.checkoutUrl) {
+        window.location.assign(result.checkoutUrl)
+        return
+      }
+      throw new Error('Stripe did not return a checkout link. Please try again.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'We could not submit the application.')
     } finally {
@@ -100,6 +106,12 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
                 </button>
               ))}
             </div>
+            <label className="mt-7 block text-sm font-bold text-slate-700">Billing
+              <select value={billing} onChange={event => setBilling(event.target.value as BillingKey)} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3">
+                <option value="monthly">Monthly — renews automatically</option>
+                <option value="yearly">Annual — paid upfront</option>
+              </select>
+            </label>
             <button type="button" disabled={!canContinue} onClick={() => setStep(2)} className="mt-8 rounded-xl bg-slate-950 px-5 py-3 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-40">Continue →</button>
           </div>
         )}
@@ -123,26 +135,18 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
           </div>
         )}
 
-        {step === 3 && !submitted && (
+        {step === 3 && (
           <div>
             <h2 className="text-2xl font-extrabold text-slate-900">Review your application</h2>
-            <p className="mt-2 text-sm text-slate-500">Check the details below, then submit your application. We will contact you to confirm availability and payment.</p>
+            <p className="mt-2 text-sm text-slate-500">Check the details below, then continue to secure your placement through Stripe. Your listing will remain pending until we review and approve it.</p>
             <div className="mt-7 rounded-2xl bg-slate-50 p-5 text-sm text-slate-700">
-              <p><b>City:</b> {city}</p><p><b>Package:</b> {PACKAGES[packageKey].label} ({PACKAGES[packageKey].price})</p><p><b>Business:</b> {businessName}</p><p><b>Contact:</b> {contactName} · {email}</p><p><b>Logo:</b> {logoFile?.name ?? 'Not supplied'}</p><p><b>Marketing files:</b> {assetFiles.length || 'None'}</p>
+              <p><b>City:</b> {city}</p><p><b>Package:</b> {PACKAGES[packageKey].label} ({PACKAGES[packageKey].price})</p><p><b>Billing:</b> {billing === 'monthly' ? 'Monthly renewal' : 'Annual payment'}</p><p><b>Business:</b> {businessName}</p><p><b>Contact:</b> {contactName} · {email}</p><p><b>Logo:</b> {logoFile?.name ?? 'Not supplied'}</p><p><b>Marketing files:</b> {assetFiles.length || 'None'}</p>
             </div>
             {error && <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
-            <div className="mt-8 flex flex-wrap gap-3"><button type="button" onClick={() => setStep(2)} className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-extrabold text-slate-700">Edit details</button><button type="button" onClick={submitApplication} disabled={submitting} className="rounded-xl bg-rose-600 px-5 py-3 text-sm font-extrabold text-white hover:bg-rose-500 disabled:cursor-wait disabled:opacity-50">{submitting ? 'Submitting…' : 'Submit application →'}</button></div>
+            <div className="mt-8 flex flex-wrap gap-3"><button type="button" onClick={() => setStep(2)} className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-extrabold text-slate-700">Edit details</button><button type="button" onClick={submitApplication} disabled={submitting} className="rounded-xl bg-rose-600 px-5 py-3 text-sm font-extrabold text-white hover:bg-rose-500 disabled:cursor-wait disabled:opacity-50">{submitting ? 'Opening secure checkout…' : 'Continue to payment →'}</button></div>
           </div>
         )}
 
-        {step === 3 && submitted && (
-          <div className="py-8">
-            <p className="text-4xl">✓</p>
-            <h2 className="mt-4 text-2xl font-extrabold text-slate-900">Application received</h2>
-            <p className="mt-3 text-sm leading-relaxed text-slate-600">Thanks. We have your details and files. We will confirm the available placement and payment arrangements before anything goes live.</p>
-            <p className="mt-5 text-xs text-slate-400">Your application is pending review. No payment has been taken.</p>
-          </div>
-        )}
       </section>
     </div>
   )
