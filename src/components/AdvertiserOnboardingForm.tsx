@@ -26,7 +26,6 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [assetFiles, setAssetFiles] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
 
   const canContinue = city.length > 0
@@ -136,7 +135,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
           </div>
         )}
 
-        {step === 3 && !submitted && (
+        {step === 3 && (
           <div>
             <h2 className="text-2xl font-extrabold text-slate-900">Review your application</h2>
             <p className="mt-2 text-sm text-slate-500">Check the details below, then continue to secure your placement through Stripe. Your listing will remain pending until we review and approve it.</p>
@@ -148,14 +147,6 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
           </div>
         )}
 
-        {step === 3 && submitted && (
-          <div className="py-8">
-            <p className="text-4xl">✓</p>
-            <h2 className="mt-4 text-2xl font-extrabold text-slate-900">Application received</h2>
-            <p className="mt-3 text-sm leading-relaxed text-slate-600">Your payment has been received. We have your business details and files, and will review the application before anything goes live.</p>
-            <p className="mt-5 text-xs text-slate-400">Your application is pending review. Your placement will be published manually after approval.</p>
-          </div>
-        )}
       </section>
     </div>
   )
