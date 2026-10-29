@@ -8,6 +8,8 @@
 // event itself flags it as gone. Same modes and safeguards as the Ticketmaster sweep.
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
+import { fetchAllPages } from '@/lib/pagedFetch'
+import { sweepPlaces } from '@/lib/gigsbergSweepPlaces'
 import { getGigsbergAffiliateEvent, searchGigsbergAffiliateEvents, type GigsbergAffiliateEvent } from '@/lib/gigsbergAffiliate'
 import {
   catalogueRowChanged, fetchCityEvents, horizonIso, isUKEvent, todayIso, toCatalogueRow,
@@ -137,6 +139,18 @@ async function recordEvents(loose: Loose, events: ReturnType<typeof toCatalogueR
   }
 }
 
+/** City names, then the other towns where we list upcoming shows (alphabetical, so the lap order is stable). */
+async function lapPlaces(loose: Loose): Promise<string[]> {
+  try {
+    const rows = await fetchAllPages<{ venue_city: string | null }>((from, to) =>
+      loose.from('listed_events_with_venue').select('venue_city').gte('start_date', new Date().toISOString()).order('id').range(from, to))
+    return sweepPlaces(CITIES.map(c => c.name), rows.map(r => r.venue_city))
+  } catch (err) {
+    console.error('[gigsberg-sweep] town list failed, sweeping the 40 cities only:', err instanceof Error ? err.message : err)
+    return CITIES.map(c => c.name)
+  }
+}
+
 export async function runGigsbergSweep(opts: { deadlineMs: number; force?: boolean }): Promise<GigsbergSweepResult> {
   const t0 = Date.now()
   const loose = createAdminClient() as unknown as Loose
@@ -183,16 +197,19 @@ export async function runGigsbergSweep(opts: { deadlineMs: number; force?: boole
       }
       const from = todayIso()
       const to = horizonIso()
+      // The 40 city pages first, then every other town where we list a show (29 Oct 2026: The Fast Show's Eastbourne
+      // date was on Gigsberg but never fetched, because only the 40 cities were searched: 3,600 shows in 270 towns).
+      const places = await lapPlaces(loose)
 
-      while (cityIdx < CITIES.length) {
+      while (cityIdx < places.length) {
         if (Date.now() + STOP_MARGIN_MS > opts.deadlineMs) { detail = 'time budget reached; resumes next run'; break }
-        const group = CITIES.slice(cityIdx, cityIdx + CITY_GROUP)
-        const settled = await Promise.allSettled(group.map(c => fetchCityFast(c.name, from, to, stats)))
+        const group = places.slice(cityIdx, cityIdx + CITY_GROUP)
+        const settled = await Promise.allSettled(group.map(c => fetchCityFast(c, from, to, stats)))
         const unique = new Map<number, ReturnType<typeof toCatalogueRow>>()
         settled.forEach((r, i) => {
           if (r.status === 'rejected') {
             stats.failedCities++
-            console.error(`[gigsberg-sweep] ${group[i].name} failed: ${r.reason instanceof Error ? r.reason.message : r.reason}`)
+            console.error(`[gigsberg-sweep] ${group[i]} failed: ${r.reason instanceof Error ? r.reason.message : r.reason}`)
             return
           }
           stats.cities++
@@ -205,7 +222,7 @@ export async function runGigsbergSweep(opts: { deadlineMs: number; force?: boole
         await persist()
       }
 
-      if (cityIdx >= CITIES.length) {
+      if (cityIdx >= places.length) {
         status = 'complete'
         completedAt = new Date().toISOString()
         // A dry run touched nothing, so it must not count as a refreshed lap (removals key off this).
