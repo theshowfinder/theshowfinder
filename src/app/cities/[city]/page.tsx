@@ -45,9 +45,6 @@ import { cityFeedPath } from '@/lib/calendarFeeds'
 import { getNearbyAreas, getNeighbourCities, areasWithEvents, nearbyIntroSentence } from '@/lib/nearbyAreas'
 import CityBrowse from '@/components/CityBrowse'
 import CityTicketSources from '@/components/CityTicketSources'
-import CityMorningEdition from '@/components/CityMorningEdition'
-import { fetchCityEdition } from '@/lib/cityEdition'
-import { buildEdition, editionHeadline, freshnessStamp } from '@/lib/cityBrief'
 import { excludePreviouslyShown } from '@/lib/cityDisplayRows'
 import { fetchStoriesForEventIds } from '@/lib/newsStoriesData'
 import CityNewsMosaic from '@/components/CityNewsMosaic'
@@ -158,7 +155,6 @@ export default async function CityPage({
     nearbyEvents,
     categoryCounts,
     recentlyAdded,
-    editionData,
   ] = await Promise.all([
     // Today only, Europe/London calendar day, soonest first — see
     // src/lib/tonight.ts for the exact rules (cancelled/postponed and
@@ -246,8 +242,6 @@ export default async function CityPage({
     // Shows first listed in the last 7 days: the page's own freshness signal
     fetchRecentlyAddedEvents(supabase, { city: cityName, limit: 12 }),
 
-    // Everything the morning edition at the top of the page is built from.
-    fetchCityEdition(supabase, cityName, now),
   ])
 
   const localBusinesses = localBusinessesResult.data ?? []
@@ -264,44 +258,20 @@ export default async function CityPage({
   // the section is neither stale nor empty (and hides if nothing is fresh at all).
   const newsPick = pickNewsForCityPage(dropNonUkNews(cityNewsResult.data ?? []), dropNonUkNews(nationalNewsResult.data ?? []), now.getTime(), { limit: 8, minLocal: 3 })
   const cityNews = newsPick.items
-  const cityStoryEventIds = [...new Set([...tonightEvents, ...eventsThisWeek, ...localEventsRaw, ...topEvents, ...recentlyAdded, ...editionData.onSaleToday, ...editionData.onSaleWeek, ...editionData.presaleOpen, ...editionData.top].map(event => event.id))]
+  const cityStoryEventIds = [...new Set([...tonightEvents, ...eventsThisWeek, ...localEventsRaw, ...topEvents, ...recentlyAdded].map(event => event.id))]
   const cityStories = await fetchStoriesForEventIds(supabase, cityStoryEventIds)
   const newsIsLocal = newsPick.localCount >= 3
 
-  // Morning edition: image-led tiles, a factual headline and a freshness stamp that only shows when
-  // the city's data really was refreshed recently.
-  // Today's shows have their own prominent Tonight row. Let the edition
-  // choose other listings so its image tiles do not repeat those cards.
+  // The "morning edition" block was removed (29 Oct 2026): it repeated the On sale this week and Top events
+  // sections further down the page. Tonight's shows are not repeated in the rails below.
   const tonightIds = new Set(tonightEvents.map(event => event.id))
-  const notTonight = <T extends { id: string }>(rows: T[]) => rows.filter(row => !tonightIds.has(row.id))
-  const editionTiles = buildEdition({
-    now,
-    ...editionData,
-    onSaleToday: notTonight(editionData.onSaleToday),
-    onSaleWeek: notTonight(editionData.onSaleWeek),
-    presaleOpen: notTonight(editionData.presaleOpen),
-    top: notTonight(editionData.top),
-  })
-  const editionHeadlineText = editionHeadline({
-    cityName,
-    onSaleThisWeek: onsaleGroups.length,
-    presaleLive: editionData.presaleOpen.length,
-  })
-  const editionStamp = freshnessStamp(editionData.lastSyncedAt, now)
   // Each event card gets one placement on the city page, in visual order.
-  // The edition and Tonight take priority; lower rails do not repeat them.
-  const shownEventIds = new Set([...editionTiles.map(tile => tile.event.id), ...tonightIds])
+  // Tonight takes priority; lower rails do not repeat it.
+  const shownEventIds = new Set(tonightIds)
   const weekEvents = excludePreviouslyShown(eventsThisWeek, shownEventIds)
   const localEvents = excludePreviouslyShown(localEventsRaw, shownEventIds, 12)
   const newEvents = excludePreviouslyShown(recentlyAdded, shownEventIds)
   const upcomingTopEvents = excludePreviouslyShown(topEvents, shownEventIds)
-  const editionNav = [
-    tonightEvents.length > 0 && { href: '#tonight', label: 'Tonight' },
-    weekEvents.length > 0 && { href: '#this-week', label: 'This week' },
-    localEvents.length > 0 && { href: '#local', label: 'Local' },
-    onsaleGroups.length > 0 && { href: '#on-sale', label: 'On sale' },
-    cityNews.length > 0 && { href: '#news', label: 'News' },
-  ].filter((x): x is { href: string; label: string } => !!x)
 
   // A query error must not be presented the same way as a genuine
   // zero-event city — see cityEventCount.ts for the intermittent
@@ -482,8 +452,6 @@ export default async function CityPage({
           </section>
         )}
 
-        {/* ── MORNING EDITION: image-led, built from today's data ── */}
-        <div className="order-10"><CityMorningEdition headline={editionHeadlineText} stamp={editionStamp} tiles={editionTiles} nav={editionNav} /></div>
 
         {/* ── CITY GUIDE INTRO (only renders for cities with a written entry) ── */}
         {CITY_GUIDE_INTROS[cityName] && (
@@ -514,11 +482,20 @@ export default async function CityPage({
                 Tonight in {cityName}
               </h2>
             </div>
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm divide-y divide-slate-100">
-              {tonightEvents.map(event => (
-                <TonightEventCard key={event.id} event={event} artists={artists} />
-              ))}
+            {/* Same footprint on every city: about seven rows show, the rest scroll inside the box. */}
+            <div className="relative bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="max-h-[26rem] overflow-y-auto overscroll-contain divide-y divide-slate-100">
+                {tonightEvents.map(event => (
+                  <TonightEventCard key={event.id} event={event} artists={artists} />
+                ))}
+              </div>
+              {tonightEvents.length > 7 && (
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" />
+              )}
             </div>
+            {tonightEvents.length > 7 && (
+              <p className="mt-2 text-xs text-slate-500">{tonightEvents.length} shows tonight · scroll the list to see them all</p>
+            )}
           </section>
         )}
 
