@@ -77,12 +77,6 @@ async function sendSubscriberNotification({
       to: 'hello@theshowfinder.com',
       subject,
       text,
-      html: '<h2>' + label + '</h2>' +
-        '<p><strong>Email:</strong> ' + email + '</p>' +
-        '<p><strong>City:</strong> ' + cityLabel + '</p>' +
-        '<p><strong>Source:</strong> ' + sourceLabel + '</p>' +
-        '<p><strong>Interest:</strong> ' + interestLabel + '</p>' +
-        '<p><strong>Time:</strong> ' + timestamp + '</p>',
     })
     if (error) console.error('[newsletter] subscriber notification failed:', JSON.stringify(error))
   } catch (err) {
