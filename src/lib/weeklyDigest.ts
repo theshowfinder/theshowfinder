@@ -68,16 +68,18 @@ export function digestLink(path: string, weekKey: string, content: string): stri
 }
 
 export function digestSubject(content: DigestContent): string {
+  const prefix = content.cityName ? content.cityName + ': ' : ''
   const top = content.onSale[0]
   if (top) {
     const others = content.onSale.length - 1
     const verb = top.saleType === 'presale' ? 'presale' : 'on sale'
     return others > 0
-      ? `${top.name} ${verb} + ${others} more on sale this week`
-      : `${top.name} ${verb} this week`
+      ? `${prefix}${top.name} ${verb} + ${others} more this week`
+      : `${prefix}${top.name} ${verb} this week`
   }
-  if (content.shows[0]) return `This week: ${content.shows[0].title} and more UK shows`
-  return 'This week on TheShowFinder'
+  if (content.events[0]) return `${prefix}What's on this week`
+  if (content.shows[0]) return `${prefix}This week: ${content.shows[0].title} and more UK shows`
+  return `${prefix}This week on TheShowFinder`
 }
 
 export const MIN_DIGEST_ITEMS = 3

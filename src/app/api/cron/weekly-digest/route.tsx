@@ -28,9 +28,10 @@ export const dynamic = 'force-dynamic'
 // records a row in `newsletters` so a second run in the same week can't send
 // twice (pass ?force=1 to override, e.g. after a failed run).
 //
-// Subscribers who signed up with a city (subscribers.city) get the same email
-// with the "Happening this week" section showing THEIR city's shows and a link
-// to that city's this-weekend page; everyone else gets the national version.
+// Subscribers who signed up with a city (subscribers.city) receive a city-first
+// digest: local on-sale opportunities and events happening in that city. If a
+// city has no matching content that week, the national digest is used as a
+// graceful fallback. Subscribers without a city receive the national version.
 // Preview mode: add ?city=Manchester to preview a city's version.
 async function handleGet(request: Request) {
   const cronSecret = process.env.CRON_SECRET
@@ -97,9 +98,27 @@ async function handleGet(request: Request) {
     if (!city) return nationalContent
     const cached = cityContentCache.get(city)
     if (cached) return cached
-    const cityEvents = toItems(await fetchEventsThisWeek(supabase, { city, limit: 6 }))
-    const content = hasEnoughCityEvents(cityEvents)
-      ? limitDigestContent({ ...nationalContent, events: cityEvents, cityName: city })
+    const [cityGroups, cityRows] = await Promise.all([
+      fetchOnSaleThisWeek(supabase, artists ?? [], { city, limit: 6 }),
+      fetchEventsThisWeek(supabase, { city, limit: 6 }),
+    ])
+    const cityEvents = toItems(cityRows)
+    const cityContent = limitDigestContent({
+      onSale: cityGroups.map(g => ({
+        name: g.artistName,
+        slug: g.slug,
+        dateCount: g.events.length,
+        whenLabel: fmtOnSaleLabel(g.onsale_date),
+        saleType: g.saleType,
+      })),
+      events: cityEvents,
+      shows: [],
+      cityName: city,
+    } satisfies DigestContent)
+    // Keep the email city-relevant whenever there is anything local to say;
+    // only fall back to the national digest when the city has no content at all.
+    const content = cityContent.onSale.length + cityContent.events.length > 0
+      ? cityContent
       : nationalContent
     cityContentCache.set(city, content)
     return content
@@ -144,7 +163,7 @@ async function handleGet(request: Request) {
       const messages = batch.map(email => ({
         from: FROM_EMAIL,
         to: email,
-        subject: mode === 'preview' ? `[PREVIEW] ${subject}` : subject,
+        subject: mode === 'preview'   ? `[PREVIEW] ${digestSubject(content)}`   : digestSubject(content),
         react: <WeeklyDigestEmail content={content} weekKey={weekKey} unsubscribeUrl={buildUnsubscribeLink(email)} />,
       }))
       try {
