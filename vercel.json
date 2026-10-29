@@ -53,7 +53,7 @@
     },
     {
       "path": "/api/cron/merge-duplicates",
-      "schedule": "35 4,14 * * *"
+      "schedule": "35 14 * * *"
     },
     {
       "path": "/api/cron/import-feed-events",

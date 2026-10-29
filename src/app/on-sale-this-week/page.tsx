@@ -1,4 +1,7 @@
 export const revalidate = 3600
+// A page render that takes longer than this has hit a database problem: stop and keep serving the cached copy
+// instead of holding a function open for 5 minutes (29 Oct 2026 outage: 26,000 renders stuck for 300s each).
+export const maxDuration = 60
 
 import { fetchAllArtists } from '@/lib/allArtists'
 import type { Metadata } from 'next'

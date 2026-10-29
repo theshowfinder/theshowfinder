@@ -9,7 +9,7 @@ import { repeatPerformanceSlugs } from '@/lib/repeatPerformances'
 
 // Regenerated at most hourly (the sitemap was dynamic before; once public pages
 // stopped using cookies it became a static file frozen at build time).
-export const revalidate = 3600
+export const revalidate = 21600
 
 export const maxDuration = 60
 

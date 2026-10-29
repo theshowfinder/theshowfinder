@@ -5,7 +5,7 @@ import { CITIES } from '@/lib/cities'
 import { showFeedEvents, type FeedRow } from '@/lib/calendarFeeds'
 import { icsResponse } from '@/lib/calendarResponse'
 
-export const revalidate = 3600
+export const revalidate = 21600
 
 export async function GET(_req: Request, { params }: { params: Promise<{ city: string }> }) {
   const { city: raw } = await params

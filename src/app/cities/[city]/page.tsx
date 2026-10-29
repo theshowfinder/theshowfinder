@@ -1,4 +1,7 @@
-export const revalidate = 300
+export const revalidate = 1800
+// A page render that takes longer than this has hit a database problem: stop and keep serving the cached copy
+// instead of holding a function open for 5 minutes (29 Oct 2026 outage: 26,000 renders stuck for 300s each).
+export const maxDuration = 60
 
 // Shortened from the site's usual 1-hour ISR window specifically because
 // this page now carries two date-sensitive sections — "Tonight" and "On

@@ -4,7 +4,7 @@ import { toArtistEventRows, type ArtistEventLink } from '@/lib/artistEvents'
 import { CITIES } from '@/lib/cities'
 import { renderEmbedHtml, parseEmbedTheme, type EmbedRow } from '@/lib/embedWidget'
 
-export const revalidate = 600
+export const revalidate = 3600
 
 const BASE = 'https://www.theshowfinder.com'
 const utm = (path: string) => `${BASE}${path}?utm_source=embed&utm_medium=widget`

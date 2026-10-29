@@ -3,7 +3,7 @@
 // into the ticket comparison on each event page. Theatre tickets are the
 // best-paying category on the site, so this page gets prominent placement
 // (header nav, homepage, London page).
-export const revalidate = 600
+export const revalidate = 3600
 
 import Link from 'next/link'
 import type { Metadata } from 'next'

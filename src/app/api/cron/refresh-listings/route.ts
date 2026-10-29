@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 //   2. invalidates the cached pages whose event lists or counts depend on it,
 //      so a freshly imported (or cancelled / past) event is reflected straight
 //      away instead of waiting out the ISR window.
-// City pages additionally revalidate every 5 minutes on their own and filter
+// City pages additionally revalidate every 30 minutes on their own and filter
 // to future events at render time, so they can never keep serving past dates.
 async function handleGet(request: Request) {
   const cronSecret = process.env.CRON_SECRET

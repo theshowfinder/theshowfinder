@@ -9,7 +9,7 @@ import { eventImageUrl } from '@/lib/eventImages'
 import { formatShareWhen, cardSafeText } from '@/lib/shareText'
 import type { EventCategory } from '@/lib/types/database'
 
-export const revalidate = 3600
+export const revalidate = 86400
 
 const SITE = 'https://www.theshowfinder.com'
 const MAX_IMAGE_BYTES = 3_000_000
