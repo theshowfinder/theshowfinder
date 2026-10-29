@@ -27,7 +27,7 @@ export default function CityTicketSources({ cityName }: { cityName: string }) {
         </div>
       </div>
       <p className="text-xs text-slate-400 mt-5">
-        Every show page lists the sellers side by side. We may earn a commission if you buy through our links;
+        Every show page shows where you can buy, with official sellers listed first. We may earn a commission if you buy through our links;
         it never changes the price you pay.
       </p>
       <a

@@ -15,8 +15,8 @@ export default function WidgetsPage() {
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-3">Free upcoming-shows widget</h1>
           <p className="text-white/60 max-w-2xl">
-            Put a live list of upcoming UK shows on your own site. It updates automatically, links straight to ticket
-            comparison, and costs nothing. Built for artists, venues, promoters and local music or events blogs.
+            Put a live list of upcoming UK shows on your own site. It updates automatically, links straight to where to
+            buy tickets, and costs nothing. Built for artists, venues, promoters and local music or events blogs.
           </p>
         </div>
       </div>

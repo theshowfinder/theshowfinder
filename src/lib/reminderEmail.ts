@@ -33,7 +33,7 @@ export function buildReminderEmail(items: DueReminder[]): { subject: string; htm
       i.title,
       `On sale: ${formatShareWhen(i.onsaleISO) ?? 'soon'}`,
       ...(where(i) ? [where(i) as string] : []),
-      `Compare sellers: ${reminderEventUrl(i.slug)}`,
+      `Where to buy: ${reminderEventUrl(i.slug)}`,
       '',
     ]),
     'You are getting this one-off email because you asked us to remind you. We will not email you again about it.',
@@ -45,7 +45,7 @@ export function buildReminderEmail(items: DueReminder[]): { subject: string; htm
       <div style="font-size:18px;font-weight:800;color:#1A1A2E">${esc(i.title)}</div>
       <div style="font-size:15px;color:#E8003D;font-weight:700;margin-top:4px">On sale ${esc(formatShareWhen(i.onsaleISO) ?? 'soon')}</div>
       ${where(i) ? `<div style="font-size:14px;color:#64748b;margin-top:2px">${esc(where(i) as string)}</div>` : ''}
-      <a href="${reminderEventUrl(i.slug)}" style="display:inline-block;margin-top:10px;background:#E8003D;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:10px 18px;border-radius:8px">Compare sellers</a>
+      <a href="${reminderEventUrl(i.slug)}" style="display:inline-block;margin-top:10px;background:#E8003D;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:10px 18px;border-radius:8px">See where to buy</a>
     </td></tr>`).join('')
 
   const html = `<!doctype html><html><body style="margin:0;background:#F5F5F0;font-family:Arial,Helvetica,sans-serif">

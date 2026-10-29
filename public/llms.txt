@@ -1,6 +1,6 @@
 # TheShowFinder
 
-> TheShowFinder (theshowfinder.com) is a UK live-events discovery and ticket comparison site. It lists concerts, theatre, comedy, sports and family shows across 40 UK cities, and for each event compares ticket prices and links across primary sellers (Ticketmaster, See Tickets, Eventim, AXS, Gigantic) and the resale/secondary market (Viagogo, StubHub, Gigsberg, Vivid Seats), plus other providers (Eventbrite, Skiddle, Seat Unique). Event and pricing data is synced daily from Ticketmaster; a growing set of events also comes directly from local venues and councils that aren't on Ticketmaster.
+> TheShowFinder (theshowfinder.com) is a UK live-events discovery site. It lists concerts, theatre, comedy, sports and family shows across 40 UK cities, and for each event shows where to buy tickets, from official sellers (such as Ticketmaster and See Tickets) to resale (such as Gigsberg), with prices where the seller shares them. Event data is synced daily from Ticketmaster, See Tickets and Gigsberg; a growing set of events also comes directly from local venues and councils that aren't on Ticketmaster.
 
 ## Key pages
 
@@ -8,7 +8,7 @@
 - [All events](https://www.theshowfinder.com/events): the full searchable event listing, filterable by category (concert, theatre, comedy, sports, family, local) and city.
 - [On sale this week](https://www.theshowfinder.com/on-sale-this-week): events whose general ticket on-sale falls in the next 7 days.
 - City pages (`/cities/{city}`, e.g. [/cities/London](https://www.theshowfinder.com/cities/London)): every UK city TheShowFinder covers, each with local news, on-sale and presale events, top upcoming shows, and venues.
-- Event pages (`/events/{slug}`): one page per show, with date, venue, and a ticket comparison panel across every provider we track for that event.
+- Event pages (`/events/{slug}`): one page per show, with date, venue, and where to buy tickets for that event.
 - Artist pages (`/artists/{slug}`): one page per artist/act, listing all of their upcoming UK tour dates.
 - Venue pages (`/venues/{slug}`): one page per venue, listing its upcoming events.
 - [About](https://www.theshowfinder.com/about): what the site is and who runs it.

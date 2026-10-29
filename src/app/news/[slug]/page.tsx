@@ -188,7 +188,7 @@ export default async function NewsStoryPage({ params }: Props) {
               {status.kind === 'on-sale' && (
                 <li className="flex gap-3">
                   <span className="mt-0.5 shrink-0 self-start rounded-md px-2 py-0.5 text-xs font-extrabold text-white" style={{ backgroundColor: '#00a650' }}>ON SALE</span>
-                  <span>Tickets are on sale now. Compare official sellers and resale prices on each date below.</span>
+                  <span>Tickets are on sale now. See where to buy, from official sellers to resale, on each date below.</span>
                 </li>
               )}
               <li className="flex gap-3 text-slate-600">
