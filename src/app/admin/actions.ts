@@ -4,6 +4,8 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { geocodePostcode, newPin } from '@/lib/businessVouchers'
+import { tidyOffer } from '@/lib/businessOffers'
 import { citySlug } from '@/lib/cityNews'
 import { CITIES } from '@/lib/cities'
 import type { NewsStoryType, NewsPriority, NewsReviewStatus, EventStatus } from '@/lib/types/database'
@@ -436,6 +438,27 @@ export async function setLocalBusinessPackageAction(id: string, city: string, pk
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(city))
 }
+// Offer / booking link / postcode for a listing (migration 095). The postcode is turned into a map position for
+// "4 min walk from the venue"; a staff PIN for redeeming vouchers is created if the listing has none.
+export async function updateLocalBusinessOfferAction(id: string, city: string, formData: FormData) {
+  await checkAuth()
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  const db = createAdminClient() as any
+  const offer_text = tidyOffer(String(formData.get('offer_text') ?? ''))
+  const booking_url = String(formData.get('booking_url') ?? '').trim() || null
+  const rawPostcode = String(formData.get('postcode') ?? '').trim()
+  const place = rawPostcode ? await geocodePostcode(rawPostcode) : null
+  await db.from('local_businesses').update({
+    offer_text, booking_url, updated_at: new Date().toISOString(),
+    ...(rawPostcode ? { postcode: place?.postcode ?? rawPostcode, lat: place?.lat ?? null, lng: place?.lng ?? null } : { postcode: null, lat: null, lng: null }),
+  }).eq('id', id)
+  const { data: acc } = await db.from('local_business_accounts').select('redeem_pin').eq('business_id', id).maybeSingle()
+  if (acc && !acc.redeem_pin) await db.from('local_business_accounts').update({ redeem_pin: newPin() }).eq('business_id', id)
+  if (!acc) await db.from('local_business_accounts').insert({ business_id: id, contact_email: 'hello@theshowfinder.com', redeem_pin: newPin(), notes: 'Added from admin; no advertiser contact yet' })
+  revalidatePath('/admin/local-businesses')
+  revalidatePath('/cities/' + encodeURIComponent(city))
+}
+
 // ── News candidates (News Intelligence Inbox) ───────────────────────────────
 // Phase 1: manual editorial queue for presale/tour-announcement/ticket news
 // the RSS pipeline (src/lib/cityNews.ts) hasn't picked up yet, single-city

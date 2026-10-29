@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { LocalBusiness } from '@/lib/types/database'
 import { selectLocalBusinessPlacements } from '@/lib/localBusinessPlacements'
+import { safeWebsite } from '@/lib/localPlacements'
 
 const CATEGORY_DETAILS: Record<LocalBusiness['category'], { icon: string; label: string }> = {
   restaurant: { icon: '🍽️', label: 'Restaurant' },
@@ -29,13 +30,22 @@ function BusinessCard({ business, featured }: { business: LocalBusiness; feature
         <p className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">{category.label}</p>
         <h3 className="mb-1 text-lg font-extrabold leading-snug text-slate-900 group-hover:text-rose-600">{business.name}</h3>
         {business.description && <p className="line-clamp-3 text-sm leading-relaxed text-slate-500">{business.description}</p>}
-        {business.website_url && <p className="mt-4 text-sm font-bold text-rose-600">Visit website <span aria-hidden="true">→</span></p>}
+        {business.offer_text && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900">🎟️ {business.offer_text}</p>}
+        <div className="mt-4 flex flex-wrap gap-2 text-sm font-bold">
+          {business.offer_text && (
+            <form method="post" action={`/offer/${business.id}`}>
+              <button className="rounded-lg bg-rose-600 px-3 py-2 text-white hover:bg-rose-700">Get voucher</button>
+            </form>
+          )}
+          {safeWebsite(business.booking_url) && <a href={`/out/biz/${business.id}?k=booking`} target="_blank" rel="sponsored noopener" className="rounded-lg border border-slate-300 px-3 py-2 text-slate-800 hover:border-slate-500">Book a table</a>}
+          {safeWebsite(business.website_url) && <a href={`/out/biz/${business.id}?k=website`} target="_blank" rel="sponsored noopener" className="px-1 py-2 text-rose-600 hover:underline">Visit website <span aria-hidden="true">→</span></a>}
+        </div>
       </div>
     </article>
   )
-
-  if (!business.website_url) return content
-  return <a href={business.website_url} target="_blank" rel="sponsored noopener noreferrer" className="block h-full">{content}</a>
+  // Links and the voucher button sit inside the card (tracked via /out/biz for the advertiser's report),
+  // so the card itself is no longer one big link.
+  return content
 }
 
 export default function LocalBusinessAds({ cityName, businesses }: { cityName: string; businesses: LocalBusiness[] }) {

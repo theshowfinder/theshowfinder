@@ -7,8 +7,8 @@ type PackageKey = 'featured' | 'standard'
 type BillingKey = 'monthly' | 'yearly'
 
 const PACKAGES = {
-  featured: { label: 'Featured placement', price: '£44.95 per month', detail: 'One of three premium positions, with priority city placement and event-page visibility.' },
-  standard: { label: 'Standard listing', price: '£29.95 per month', detail: 'One of six strong business listings in your city.' },
+  featured: { label: 'Featured placement', price: '£44.95 per month', detail: 'On every show page in your city, right under the ticket buttons, plus the top of your city page. Includes a QR voucher offer and a monthly report of clicks and vouchers used.' },
+  standard: { label: 'Standard listing', price: '£29.95 per month', detail: 'A listing in the local guide on your city page, with your offer, booking link and a monthly report.' },
 } as const
 
 export default function AdvertiserOnboardingForm({ initialCity = '', initialPackage = 'featured' }: { initialCity?: string; initialPackage?: PackageKey }) {
@@ -23,6 +23,9 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
   const [phone, setPhone] = useState('')
   const [website, setWebsite] = useState('')
   const [description, setDescription] = useState('')
+  const [postcode, setPostcode] = useState('')
+  const [bookingUrl, setBookingUrl] = useState('')
+  const [offer, setOffer] = useState('')
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [assetFiles, setAssetFiles] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -46,6 +49,9 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
     form.set('phone', phone.trim())
     form.set('website_url', website.trim())
     form.set('description', description.trim())
+    form.set('postcode', postcode.trim())
+    form.set('booking_url', bookingUrl.trim())
+    form.set('offer_text', offer.trim())
     if (logoFile) form.set('logo', logoFile)
     assetFiles.forEach(file => form.append('assets', file))
 
@@ -127,6 +133,14 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
               <label className="text-sm font-bold text-slate-700">Email address<input type="email" value={email} onChange={event => setEmail(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="you@business.com" /></label>
               <label className="text-sm font-bold text-slate-700">Phone number<input value={phone} onChange={event => setPhone(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Optional" /></label>
               <label className="text-sm font-bold text-slate-700">Website<input value={website} onChange={event => setWebsite(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="https://..." /></label>
+              <label className="text-sm font-bold text-slate-700">Postcode<input value={postcode} onChange={event => setPostcode(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="DE1 2AB" /><span className="mt-1 block text-xs font-normal text-slate-400">Shows visitors how far you are from their venue (&ldquo;4 min walk&rdquo;).</span></label>
+              <label className="text-sm font-bold text-slate-700">Booking link<input value={bookingUrl} onChange={event => setBookingUrl(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Optional: OpenTable, ResDiary, your booking page" /></label>
+              <div className="sm:col-span-2">
+                <label className="text-sm font-bold text-slate-700">Your offer for show-goers<input value={offer} maxLength={90} onChange={event => setOffer(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="e.g. 10% off food with your show ticket" /></label>
+                <p className="mt-1 text-xs text-slate-500">Optional, but listings with an offer get far more visits. Visitors claim it as a one-off QR voucher; your staff scan it and enter your PIN to apply it, and you see how many were used. Ideas:{' '}
+                  {['10% off food with your show ticket', 'Free drink with any main before the show', 'Pre-theatre 2 courses £22'].map(idea => <button type="button" key={idea} onClick={() => setOffer(idea)} className="mr-2 underline">{idea}</button>)}
+                </p>
+              </div>
               <label className="text-sm font-bold text-slate-700 sm:col-span-2">Short description<textarea value={description} onChange={event => setDescription(event.target.value)} rows={4} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="What should visitors know about your business?" /></label>
               <label className="text-sm font-bold text-slate-700">Logo<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => setLogoFile(event.target.files?.[0] ?? null)} className="mt-2 block w-full text-sm text-slate-500" /><span className="mt-1 block text-xs font-normal text-slate-400">PNG, JPG or WebP, up to 5MB.</span></label>
               <label className="text-sm font-bold text-slate-700">Marketing files<input type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf" onChange={event => setAssetFiles(Array.from(event.target.files ?? []))} className="mt-2 block w-full text-sm text-slate-500" /><span className="mt-1 block text-xs font-normal text-slate-400">Up to five images or PDFs, 5MB each.</span></label>
@@ -140,7 +154,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
             <h2 className="text-2xl font-extrabold text-slate-900">Review your application</h2>
             <p className="mt-2 text-sm text-slate-500">Check the details below, then continue to secure your placement through Stripe. Your listing will remain pending until we review and approve it.</p>
             <div className="mt-7 rounded-2xl bg-slate-50 p-5 text-sm text-slate-700">
-              <p><b>City:</b> {city}</p><p><b>Package:</b> {PACKAGES[packageKey].label} ({PACKAGES[packageKey].price})</p><p><b>Billing:</b> {billing === 'monthly' ? 'Monthly renewal' : 'Annual payment'}</p><p><b>Business:</b> {businessName}</p><p><b>Contact:</b> {contactName} · {email}</p><p><b>Logo:</b> {logoFile?.name ?? 'Not supplied'}</p><p><b>Marketing files:</b> {assetFiles.length || 'None'}</p>
+              <p><b>City:</b> {city}</p><p><b>Package:</b> {PACKAGES[packageKey].label} ({PACKAGES[packageKey].price})</p><p><b>Billing:</b> {billing === 'monthly' ? 'Monthly renewal' : 'Annual payment'}</p><p><b>Business:</b> {businessName}</p><p><b>Contact:</b> {contactName} · {email}</p><p><b>Postcode:</b> {postcode || 'Not supplied'}</p><p><b>Offer:</b> {offer || 'None'}</p><p><b>Logo:</b> {logoFile?.name ?? 'Not supplied'}</p><p><b>Marketing files:</b> {assetFiles.length || 'None'}</p>
             </div>
             {error && <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
             <div className="mt-8 flex flex-wrap gap-3"><button type="button" onClick={() => setStep(2)} className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-extrabold text-slate-700">Edit details</button><button type="button" onClick={submitApplication} disabled={submitting} className="rounded-xl bg-rose-600 px-5 py-3 text-sm font-extrabold text-white hover:bg-rose-500 disabled:cursor-wait disabled:opacity-50">{submitting ? 'Opening secure checkout…' : 'Continue to payment →'}</button></div>

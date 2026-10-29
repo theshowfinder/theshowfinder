@@ -126,6 +126,10 @@
     {
       "path": "/api/cron/health-check",
       "schedule": "10 7,13,19 * * *"
+    },
+    {
+      "path": "/api/cron/advertiser-reports",
+      "schedule": "5 9 1 * *"
     }
   ]
 }

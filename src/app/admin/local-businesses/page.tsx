@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { deleteLocalBusinessAction, setLocalBusinessPackageAction, setLocalBusinessStatusAction } from '../actions'
+import { deleteLocalBusinessAction, setLocalBusinessPackageAction, setLocalBusinessStatusAction, updateLocalBusinessOfferAction } from '../actions'
 import type { LocalBusiness } from '@/lib/types/database'
 
 export default async function LocalBusinessesAdminPage() {
@@ -15,8 +15,18 @@ export default async function LocalBusinessesAdminPage() {
     .select('*')
     .order('city', { ascending: true })
     .order('display_order', { ascending: true }) as unknown as { data: LocalBusiness[] | null }
-  const { data: accounts } = await db.from('local_business_accounts').select('business_id, contact_name, contact_email, phone, billing') as unknown as
-    { data: Array<{ business_id: string; contact_name: string | null; contact_email: string; phone: string | null; billing: string | null }> | null }
+  const { data: accounts } = await db.from('local_business_accounts').select('business_id, contact_name, contact_email, phone, billing, redeem_pin') as unknown as
+    { data: Array<{ business_id: string; contact_name: string | null; contact_email: string; phone: string | null; billing: string | null; redeem_pin: string | null }> | null }
+  // This month's vouchers per business (claimed / used), so the numbers are visible before the monthly report goes out.
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()
+  const { data: vouchers } = await (db as unknown as { from: (t: string) => { select: (c: string) => { gte: (c: string, v: string) => Promise<{ data: { business_id: string; redeemed_at: string | null }[] | null }> } } })
+    .from('business_vouchers').select('business_id, redeemed_at').gte('created_at', monthStart)
+  const voucherCount = new Map<string, { claimed: number; used: number }>()
+  for (const v of vouchers ?? []) {
+    const c = voucherCount.get(v.business_id) ?? { claimed: 0, used: 0 }
+    c.claimed++; if (v.redeemed_at) c.used++
+    voucherCount.set(v.business_id, c)
+  }
   const accountFor = new Map((accounts ?? []).map(a => [a.business_id, a]))
   const STATUS_STYLE: Record<string, string> = { pending: 'bg-amber-100 text-amber-800', active: 'bg-green-100 text-green-800', paused: 'bg-slate-100 text-slate-600', cancelled: 'bg-red-50 text-red-700' }
 
@@ -67,6 +77,17 @@ export default async function LocalBusinessesAdminPage() {
                     <td className="px-4 py-3">
                       <p className="font-bold text-slate-900">{biz.name}</p>
                       {biz.website_url && <p className="text-slate-400 text-xs truncate max-w-xs">{biz.website_url}</p>}
+                      {biz.offer_text && <p className="text-amber-800 text-xs mt-1 font-semibold">🎟️ {biz.offer_text}{voucherCount.get(biz.id) ? ` · this month ${voucherCount.get(biz.id)!.claimed} claimed, ${voucherCount.get(biz.id)!.used} used` : ''}</p>}
+                      <details className="mt-1 text-xs">
+                        <summary className="cursor-pointer text-blue-700 font-semibold">Offer, booking link, postcode{accountFor.get(biz.id)?.redeem_pin ? ` · staff PIN ${accountFor.get(biz.id)?.redeem_pin}` : ''}</summary>
+                        <form action={updateLocalBusinessOfferAction.bind(null, biz.id, biz.city)} className="mt-2 space-y-2 max-w-sm">
+                          <input name="offer_text" defaultValue={biz.offer_text ?? ''} maxLength={90} placeholder="Offer, e.g. 10% off food with your show ticket" className="w-full rounded border border-slate-300 px-2 py-1.5" />
+                          <input name="booking_url" defaultValue={biz.booking_url ?? ''} placeholder="Booking link (optional)" className="w-full rounded border border-slate-300 px-2 py-1.5" />
+                          <input name="postcode" defaultValue={biz.postcode ?? ''} placeholder="Postcode (for walking distance)" className="w-full rounded border border-slate-300 px-2 py-1.5" />
+                          <p className="text-slate-400">{biz.lat != null ? 'Location found from postcode.' : 'No location yet: add a postcode to show walking distance.'} A staff PIN is created automatically if there isn&apos;t one.</p>
+                          <button className="rounded bg-slate-900 px-3 py-1.5 font-bold text-white">Save</button>
+                        </form>
+                      </details>
                       {accountFor.get(biz.id) && <p className="text-slate-500 text-xs mt-1">{accountFor.get(biz.id)?.contact_name} · {accountFor.get(biz.id)?.contact_email}{accountFor.get(biz.id)?.phone ? ` · ${accountFor.get(biz.id)?.phone}` : ''}{accountFor.get(biz.id)?.billing ? ` · pays ${accountFor.get(biz.id)?.billing}` : ''}</p>}
                     </td>
                     <td className="px-4 py-3 text-slate-600">{biz.city}</td>

@@ -8,6 +8,9 @@ import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { listingCategory } from '@/lib/advertiserCategory'
+import { geocodePostcode, newPin } from '@/lib/businessVouchers'
+import { tidyOffer } from '@/lib/businessOffers'
+import { sendAdvertiserWelcome } from '@/lib/advertiserEmails'
 
 const LOGO_BUCKET = 'business-logos'   // public (migration 094); advertiser-assets stays private
 
@@ -29,6 +32,7 @@ export async function approveApplicationAction(applicationId: string) {
   if (error || !app) throw new Error(`application not found: ${error?.message ?? applicationId}`)
 
   const logo_url = await publicLogoUrl(db, app.id, app.logo_path)
+  const place = await geocodePostcode(app.postcode)
   const listing = {
     city: app.city,
     name: app.business_name,
@@ -38,8 +42,11 @@ export async function approveApplicationAction(applicationId: string) {
     package: app.package === 'featured' ? 'featured' : 'standard',
     is_sponsored: app.package === 'featured',
     status: 'active',
+    offer_text: tidyOffer(app.offer_text),
+    booking_url: app.booking_url ?? null,
     updated_at: new Date().toISOString(),
     ...(logo_url ? { logo_url } : {}),
+    ...(place ? { postcode: place.postcode, lat: place.lat, lng: place.lng } : {}),
   }
 
   let businessId: string | null = app.business_id ?? null
@@ -52,7 +59,11 @@ export async function approveApplicationAction(applicationId: string) {
     businessId = created.id as string
   }
 
+  // The staff PIN for redeeming vouchers: made once, kept if the listing is approved again.
+  const { data: existingAcc } = await db.from('local_business_accounts').select('redeem_pin').eq('business_id', businessId).maybeSingle()
+  const pin = existingAcc?.redeem_pin ?? newPin()
   const { error: accErr } = await db.from('local_business_accounts').upsert({
+    redeem_pin: pin,
     business_id: businessId,
     contact_name: app.contact_name,
     contact_email: app.email,
@@ -62,6 +73,13 @@ export async function approveApplicationAction(applicationId: string) {
     stripe_subscription_id: app.stripe_subscription_id,
   }, { onConflict: 'business_id' })
   if (accErr) throw new Error(`save contact details: ${accErr.message}`)
+
+  // Welcome email: live link, staff PIN and how vouchers work. A failed email never undoes the approval.
+  try {
+    await sendAdvertiserWelcome({ to: app.email, contactName: app.contact_name, businessName: app.business_name, city: app.city, featured: app.package === 'featured', offer: listing.offer_text, pin })
+  } catch (err) {
+    console.error('[advertiser-approve] welcome email failed', err)
+  }
 
   await db.from('advertiser_applications').update({ status: 'approved', business_id: businessId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', app.id)
 

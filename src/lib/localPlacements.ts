@@ -13,9 +13,14 @@ export interface Placement {
   address: string | null
   postcode: string | null
   package: 'standard' | 'featured'
+  /** The advertiser's offer ("10% off with your show ticket"); claimed as a QR voucher (migration 095). */
+  offer_text: string | null
+  booking_url: string | null
+  lat: number | null
+  lng: number | null
 }
 
-export const PLACEMENT_COLUMNS = 'id, city, name, category, description, website_url, logo_url, address, postcode, package'
+export const PLACEMENT_COLUMNS = 'id, city, name, category, description, website_url, logo_url, address, postcode, package, offer_text, booking_url, lat, lng'
 
 /** How many featured businesses one show page shows. */
 export const PER_PAGE = 3

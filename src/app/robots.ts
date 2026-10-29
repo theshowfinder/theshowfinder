@@ -4,7 +4,7 @@ const BASE_URL = 'https://www.theshowfinder.com'
 
 // Pages that are never worth crawling: admin, affiliate hops, embeds, per-event calendar files
 // (10k+ bot hits a day on 22 Oct 2026), API routes and share images.
-const NEVER_CRAWL = ['/admin', '/admin/', '/embed/', '/out/', '/go/', '/api/', '/events/*/calendar.ics', '/saved']
+const NEVER_CRAWL = ['/admin', '/admin/', '/embed/', '/out/', '/go/', '/api/', '/events/*/calendar.ics', '/saved', '/offer/', '/voucher/', '/redeem/']
 
 // Crawlers that only collect training data and never send visitors. Together they made about a third of
 // all requests (22 Oct 2026: Meta 31k/day, ClaudeBot 12k, ShapBot 4k, Exa 4k, Amazonbot 4k, PetalBot 1k),

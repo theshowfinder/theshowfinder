@@ -444,6 +444,10 @@ export interface Database {
           postcode: string | null
           active_until: string | null
           updated_at: string
+          offer_text: string | null
+          booking_url: string | null
+          lat: number | null
+          lng: number | null
         }
         Insert: {
           id?: string

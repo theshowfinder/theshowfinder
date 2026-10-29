@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { CITIES } from '@/lib/cities'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { listingCategory } from '@/lib/advertiserCategory'
+import { tidyOffer, tidyPostcode } from '@/lib/businessOffers'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -88,6 +89,9 @@ export async function POST(request: Request) {
     const phone = text(form.get('phone'))
     const websiteUrl = text(form.get('website_url'))
     const description = text(form.get('description'))
+    const postcode = tidyPostcode(text(form.get('postcode')))
+    const bookingUrl = text(form.get('booking_url'))
+    const offerText = tidyOffer(text(form.get('offer_text')))
     const logo = form.get('logo')
     const assets = form.getAll('assets').filter(value => value instanceof File) as File[]
 
@@ -122,6 +126,9 @@ export async function POST(request: Request) {
         phone: phone || null,
         website_url: websiteUrl || null,
         description: description || null,
+        postcode,
+        booking_url: bookingUrl || null,
+        offer_text: offerText,
       })
       .select('id')
       .single()

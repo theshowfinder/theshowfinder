@@ -100,6 +100,7 @@ interface EventDetail {
   tags: string[] | null
   venue: {
     id: string; name: string; slug: string | null; address: string; city: string; postcode: string; website: string | null
+    lat?: number | null; lng?: number | null
     details: VenueDetails | null
   } | null
   artists: ArtistRow[]
@@ -113,7 +114,7 @@ const eventSelect = (withDetails: boolean) => `
       image_url, price_from, price_to, currency,
       tickets_url, own_ticket_url, source, viagogo_url, stubhub_url, gigsberg_url, gigsberg_affiliate_url, see_tickets_affiliate_url,
       gigsberg_highlighted, gigsberg_highlight_until, gigsberg_inventory_status, status, tags,
-      venue:venues(id, name, slug, address, city, postcode, website${withDetails ? ', details' : ''}),
+      venue:venues(id, name, slug, address, city, postcode, website, lat, lng${withDetails ? ', details' : ''}),
       artists:event_artists(
         is_headliner, order,
         artist:artists(id, name, slug, genre, image_url)
@@ -873,8 +874,6 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               </div>
             )}
 
-            {venue?.city && <BeforeTheShow businesses={placements} city={venue.city} />}
-
             {faq.length > 0 && (
               <div>
                 <h2 className="text-xl font-extrabold text-slate-900 mb-4">Good to know</h2>
@@ -1143,6 +1142,16 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 })}
               </div>
             </div>
+            )}
+
+            {/* Featured local partners right under the ticket buttons: the moment people plan the rest of the night. */}
+            {venue?.city && (
+              <BeforeTheShow
+                businesses={placements}
+                city={venue.city}
+                eventId={event.id}
+                venue={{ name: venue.name, lat: venue.lat ?? null, lng: venue.lng ?? null }}
+              />
             )}
 
             {event.tags && event.tags.length > 0 && (
