@@ -14,7 +14,7 @@ const standardBenefits = [
   'A listing in the local guide on your city page',
   'Business name, category, description and website link',
   'Your offer as a QR voucher, plus a "Book a table" button',
-  'Monthly report: clicks to your website and booking page, vouchers claimed and used',
+  'A monthly check-in from us, and a mention on our social channels',
   'Maximum six Standard placements per city',
 ]
 
@@ -22,8 +22,8 @@ const featuredBenefits = (showPages: string) => [
   `On ${showPages}, right under the ticket buttons, in a "Make a night of it" box`,
   'Top of the local guide on your city page, with your logo',
   '"4 min walk from the venue" shown on every show page, so you\'re the obvious choice',
-  'Your offer as a QR voucher: we count every one used in your venue',
-  'Monthly report: show pages you appeared on, clicks, vouchers claimed and used',
+  'Your offer as a QR voucher, plus a "Book a table" button',
+  'Regular promotion on our social channels, and a monthly check-in from us',
   'Only three Featured places per city',
 ]
 
@@ -91,12 +91,12 @@ export default async function AdvertisePage({ searchParams }: { searchParams: Pr
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="mb-14">
           <p className="mb-2 text-xs font-extrabold uppercase tracking-widest text-rose-600">How it brings you customers</p>
-          <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Seen at the right moment. Used at your door. Counted.</h2>
+          <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Seen at the right moment. A reason to choose you. Promoted by us.</h2>
           <div className="mt-8 grid gap-5 md:grid-cols-3">
             {[
               ['1. Seen when they plan the night', `Featured partners sit right under the ticket buttons on ${showPages}, with how far you are from the venue. That is the moment people decide where to go before and after the show.`],
               ['2. A reason to choose you', 'Add an offer such as "10% off food with your show ticket". Visitors tap Get voucher and get a one-off QR code on their phone, valid on the day of their show.'],
-              ['3. Proof it works', 'Your staff scan the QR with any phone and enter your PIN to apply it. Each voucher works once, and your monthly report shows vouchers claimed and used, plus clicks to your website and booking page.'],
+              ['3. Easy for you, and we promote you', 'Your staff scan the QR with any phone and enter your PIN to apply it; each voucher works once. We feature our partners on our social channels and check in with you every month.'],
             ].map(([title, body]) => (
               <div key={title} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <p className="text-lg font-extrabold text-slate-950">{title}</p>

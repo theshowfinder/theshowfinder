@@ -1,4 +1,4 @@
-// Emails to advertisers: the welcome when a listing goes live (with the staff PIN for vouchers) and the monthly report.
+// Emails to advertisers: the welcome when a listing goes live (with the staff PIN for vouchers) and a monthly report (sent only when Chris chooses).
 import { resend, FROM_EMAIL } from '@/lib/resend'
 
 const SITE = 'https://www.theshowfinder.com'
@@ -19,9 +19,9 @@ export async function sendAdvertiserWelcome(a: { to: string; contactName: string
         '2. At your till, scan the QR with any phone camera. It opens a TheShowFinder page saying whether the voucher is valid.',
         `3. Enter your staff PIN: ${a.pin}  and press "Mark as used". Then apply the offer.`,
         'Each voucher works once. Show-page vouchers are valid on the day of the show; city-page vouchers for 7 days.',
-        'Keep the PIN with your staff only. Every voucher used appears in your monthly report.',
+        'Keep the PIN with your staff only.',
       ]
-    : ['Add an offer any time (for example "10% off food with your show ticket"): reply to this email. Listings with an offer get far more visits, and every voucher used is counted in your monthly report.']
+    : ['Add an offer any time (for example "10% off food with your show ticket"): reply to this email. Listings with an offer give people a reason to choose you.']
   const text = [
     `Hi ${a.contactName},`,
     '',
@@ -30,7 +30,7 @@ export async function sendAdvertiserWelcome(a: { to: string; contactName: string
     '',
     ...offerLines,
     '',
-    'On the 1st of each month we email you a report: how many show pages you appeared on, clicks to your website and booking page, and vouchers claimed and used.',
+    'We will feature you on our social channels and check in with you each month.',
     '',
     'Any changes, just reply to this email.',
     '',

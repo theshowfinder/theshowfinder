@@ -7,8 +7,8 @@ type PackageKey = 'featured' | 'standard'
 type BillingKey = 'monthly' | 'yearly'
 
 const PACKAGES = {
-  featured: { label: 'Featured placement', price: '£44.95 per month', detail: 'On every show page in your city, right under the ticket buttons, plus the top of your city page. Includes a QR voucher offer and a monthly report of clicks and vouchers used.' },
-  standard: { label: 'Standard listing', price: '£29.95 per month', detail: 'A listing in the local guide on your city page, with your offer, booking link and a monthly report.' },
+  featured: { label: 'Featured placement', price: '£44.95 per month', detail: 'On every show page in your city, right under the ticket buttons, plus the top of your city page. Includes a QR voucher offer and promotion on our social channels.' },
+  standard: { label: 'Standard listing', price: '£29.95 per month', detail: 'A listing in the local guide on your city page, with your offer and booking link.' },
 } as const
 
 export default function AdvertiserOnboardingForm({ initialCity = '', initialPackage = 'featured' }: { initialCity?: string; initialPackage?: PackageKey }) {
@@ -137,7 +137,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
               <label className="text-sm font-bold text-slate-700">Booking link<input value={bookingUrl} onChange={event => setBookingUrl(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Optional: OpenTable, ResDiary, your booking page" /></label>
               <div className="sm:col-span-2">
                 <label className="text-sm font-bold text-slate-700">Your offer for show-goers<input value={offer} maxLength={90} onChange={event => setOffer(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="e.g. 10% off food with your show ticket" /></label>
-                <p className="mt-1 text-xs text-slate-500">Optional, but listings with an offer get far more visits. Visitors claim it as a one-off QR voucher; your staff scan it and enter your PIN to apply it, and you see how many were used. Ideas:{' '}
+                <p className="mt-1 text-xs text-slate-500">Optional, but listings with an offer get far more visits. Visitors claim it as a one-off QR voucher; your staff scan it and enter your PIN to apply it. Ideas:{' '}
                   {['10% off food with your show ticket', 'Free drink with any main before the show', 'Pre-theatre 2 courses £22'].map(idea => <button type="button" key={idea} onClick={() => setOffer(idea)} className="mr-2 underline">{idea}</button>)}
                 </p>
               </div>

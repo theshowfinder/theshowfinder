@@ -47,6 +47,7 @@ import { displayTitle, londonTimeSuffix, londonTimeOrNull, venueLabel } from '@/
 import { buildEventFaq, cleanBoxOffice, cleanVenueNote, type EventDetails, type VenueDetails } from '@/lib/eventDetails'
 import ShowDatesList from '@/components/ShowDatesList'
 import BeforeTheShow from '@/components/BeforeTheShow'
+import { monetisedOwnLink } from '@/lib/ownLinkAffiliate'
 import { PLACEMENT_COLUMNS, pickForPage, type Placement } from '@/lib/localPlacements'
 import type { ShowDate } from '@/lib/showDates'
 import { toArtistEventRows, type ArtistEventLink, type ArtistEventRow } from '@/lib/artistEvents'
@@ -990,7 +991,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 </h3>
                 <p className="text-xs text-slate-400 mb-4">We hold tickets for this event</p>
                 <TrackedTicketLink
-                  href={ownTicketUrl}
+                  href={monetisedOwnLink(ownTicketUrl, `evt-${event.slug}`) ?? ownTicketUrl}
                   provider="TheShowFinder Direct"
                   section="buy_direct"
                   context={event.slug}
@@ -1101,7 +1102,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">Event details &amp; booking</h3>
                 <p className="text-xs text-slate-400 mb-4">Listed by {localListingHost}. Times, prices and how to book are on their page.</p>
                 <TrackedTicketLink
-                  href={localListingUrl}
+                  href={monetisedOwnLink(localListingUrl, `evt-${event.slug}`) ?? localListingUrl}
                   provider={`Local listing (${localListingHost})`}
                   section="also_available"
                   context={event.slug}

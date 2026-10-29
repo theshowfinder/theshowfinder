@@ -6,6 +6,8 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { geocodePostcode, newPin } from '@/lib/businessVouchers'
 import { tidyOffer } from '@/lib/businessOffers'
+import { businessMonthStats } from '@/lib/advertiserReports'
+import { sendMonthlyReport } from '@/lib/advertiserEmails'
 import { citySlug } from '@/lib/cityNews'
 import { CITIES } from '@/lib/cities'
 import type { NewsStoryType, NewsPriority, NewsReviewStatus, EventStatus } from '@/lib/types/database'
@@ -457,6 +459,19 @@ export async function updateLocalBusinessOfferAction(id: string, city: string, f
   if (!acc) await db.from('local_business_accounts').insert({ business_id: id, contact_email: 'hello@theshowfinder.com', redeem_pin: newPin(), notes: 'Added from admin; no advertiser contact yet' })
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(city))
+}
+
+// Sends an advertiser their numbers for last month (only when Chris chooses to: see advertiserReports.ts).
+export async function sendAdvertiserReportAction(id: string) {
+  await checkAuth()
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  const db = createAdminClient() as any
+  const { data: b } = await db.from('local_businesses').select('id, name, city, package, offer_text').eq('id', id).single()
+  const { data: acc } = await db.from('local_business_accounts').select('contact_email').eq('business_id', id).maybeSingle()
+  if (!b || !acc?.contact_email || acc.contact_email === 'hello@theshowfinder.com') redirect('/admin/local-businesses?report=no-email')
+  await sendMonthlyReport(acc.contact_email, await businessMonthStats(b))
+  await db.from('local_business_accounts').update({ last_report_at: new Date().toISOString() }).eq('business_id', id)
+  redirect('/admin/local-businesses?report=sent')
 }
 
 // ── News candidates (News Intelligence Inbox) ───────────────────────────────

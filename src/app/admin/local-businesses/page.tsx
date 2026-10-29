@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { deleteLocalBusinessAction, setLocalBusinessPackageAction, setLocalBusinessStatusAction, updateLocalBusinessOfferAction } from '../actions'
+import { deleteLocalBusinessAction, setLocalBusinessPackageAction, setLocalBusinessStatusAction, updateLocalBusinessOfferAction, sendAdvertiserReportAction } from '../actions'
 import type { LocalBusiness } from '@/lib/types/database'
 
 export default async function LocalBusinessesAdminPage() {
@@ -48,7 +48,7 @@ export default async function LocalBusinessesAdminPage() {
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
         <p className="text-sm text-slate-500 mb-6">
-          Only <b>Live</b> listings show on the site. Standard = the city page&apos;s local guide. Featured = top of the guide plus the &ldquo;Before the show&rdquo; box on every show page in that city. Paid sign-ups from /advertise arrive on <a href="/admin/advertiser-applications" className="text-rose-600 hover:underline">Advertiser applications</a>; approving one adds it here as Live.
+          Reports are never sent automatically: on the 1st you get everyone&apos;s numbers by email, and you choose who to send a report to (button under each business). Only <b>Live</b> listings show on the site. Standard = the city page&apos;s local guide. Featured = top of the guide plus the &ldquo;Before the show&rdquo; box on every show page in that city. Paid sign-ups from /advertise arrive on <a href="/admin/advertiser-applications" className="text-rose-600 hover:underline">Advertiser applications</a>; approving one adds it here as Live.
         </p>
 
         {(!businesses || businesses.length === 0) ? (
@@ -88,6 +88,9 @@ export default async function LocalBusinessesAdminPage() {
                           <button className="rounded bg-slate-900 px-3 py-1.5 font-bold text-white">Save</button>
                         </form>
                       </details>
+                      {accountFor.get(biz.id) && accountFor.get(biz.id)?.contact_email !== 'hello@theshowfinder.com' && (
+                        <form action={sendAdvertiserReportAction.bind(null, biz.id)} className="mt-1"><button className="text-xs font-semibold text-blue-700 hover:underline">Send last month&apos;s report to advertiser</button></form>
+                      )}
                       {accountFor.get(biz.id) && <p className="text-slate-500 text-xs mt-1">{accountFor.get(biz.id)?.contact_name} · {accountFor.get(biz.id)?.contact_email}{accountFor.get(biz.id)?.phone ? ` · ${accountFor.get(biz.id)?.phone}` : ''}{accountFor.get(biz.id)?.billing ? ` · pays ${accountFor.get(biz.id)?.billing}` : ''}</p>}
                     </td>
                     <td className="px-4 py-3 text-slate-600">{biz.city}</td>
