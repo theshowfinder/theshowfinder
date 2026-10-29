@@ -48,6 +48,47 @@ export interface SubscribeResult {
 // Vercel's logs to see *why* sendWelcomeEmail returned false — search
 // for "[resend] RESEND_API_KEY is not set" or "[newsletter] resend"),
 // but callers can now at least tell *whether* it happened.
+async function sendSubscriberNotification({
+  email,
+  city,
+  source,
+  interest,
+  resubscribed = false,
+}: {
+  email: string
+  city: string | null
+  source: string | null
+  interest: string | null
+  resubscribed?: boolean
+}): Promise<void> {
+  try {
+    const label = resubscribed ? 'Subscriber rejoined' : 'New subscriber'
+    const cityLabel = city ?? 'No city selected'
+    const sourceLabel = source ?? 'Not provided'
+    const interestLabel = interest ?? 'Not provided'
+    const subject = \`[TheShowFinder] \${label}: \${email}\`
+    const timestamp = new Date().toISOString()
+    const text = [
+      label,
+      \`Email: \${email}\`,
+      \`City: \${cityLabel}\`,
+      \`Source: \${sourceLabel}\`,
+      \`Interest: \${interestLabel}\`,
+      \`Time: \${timestamp}\`,
+    ].join('\\n')
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: 'hello@theshowfinder.com',
+      subject,
+      text,
+      html: \`<h2>\${label}</h2><p><strong>Email:</strong> \${email}</p><p><strong>City:</strong> \${cityLabel}</p><p><strong>Source:</strong> \${sourceLabel}</p><p><strong>Interest:</strong> \${interestLabel}</p><p><strong>Time:</strong> \${timestamp}</p>\`,
+    })
+    if (error) console.error('[newsletter] subscriber notification failed:', JSON.stringify(error))
+  } catch (err) {
+    console.error('[newsletter] subscriber notification threw:', err)
+  }
+}
+
 async function sendWelcomeEmail(trimmed: string): Promise<boolean> {
   try {
     const apiKey = process.env.RESEND_API_KEY
@@ -127,6 +168,7 @@ export async function subscribeNewsletter(email: string, city?: string, meta?: S
 
       if (resubscribedRows && resubscribedRows.length > 0) {
         const emailDelivered = await sendWelcomeEmail(trimmed)
+        await sendSubscriberNotification({ email: trimmed, city: cityTag, source, interest, resubscribed: true })
         return { resubscribed: true, emailDelivered }
       }
 
@@ -140,6 +182,7 @@ export async function subscribeNewsletter(email: string, city?: string, meta?: S
   }
 
   const emailDelivered = await sendWelcomeEmail(trimmed)
+  await sendSubscriberNotification({ email: trimmed, city: cityTag, source, interest })
   return { emailDelivered }
 }
 
