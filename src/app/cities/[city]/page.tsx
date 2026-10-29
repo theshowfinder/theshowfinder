@@ -46,6 +46,8 @@ import { getNearbyAreas, getNeighbourCities, areasWithEvents, nearbyIntroSentenc
 import CityBrowse from '@/components/CityBrowse'
 import CityTicketSources from '@/components/CityTicketSources'
 import { excludePreviouslyShown } from '@/lib/cityDisplayRows'
+import CityMorningEdition from '@/components/CityMorningEdition'
+import { buildEdition } from '@/lib/cityBrief'
 import { fetchStoriesForEventIds } from '@/lib/newsStoriesData'
 import CityNewsMosaic from '@/components/CityNewsMosaic'
 import LocalBusinessAds from '@/components/LocalBusinessAds'
@@ -175,7 +177,7 @@ export default async function CityPage({
 
     // The biggest shows beyond this week, out to ~2 months — same shared
     // helper as the homepage's Top Events section.
-    fetchTopEvents(supabase, { city: cityName, limit: 9 }),
+    fetchTopEvents(supabase, { city: cityName, limit: 14 }),
 
     // On sale this week — the genuine public on-sale date (onsale_date)
     // falling within the current Monday-Sunday UK week, never the
@@ -666,11 +668,9 @@ export default async function CityPage({
                 Top Events in {cityName}
               </h2>
             </div>
-            <ScrollRail label={`Top events in ${cityName}`}>
-              {upcomingTopEvents.map(event => (
-                <EventCard key={event.id} event={event} />
-              ))}
-            </ScrollRail>
+            {/* The big-and-small image tiles (the old "morning edition" layout), now showing only the top events,
+                so nothing repeats the On sale this week section. */}
+            <CityMorningEdition headline="" stamp={null} nav={[]} tiles={buildEdition({ now, onSaleToday: [], onSaleWeek: [], presaleOpen: [], top: upcomingTopEvents })} />
           </section>
         )}
 

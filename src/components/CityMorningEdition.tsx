@@ -25,16 +25,16 @@ export default function CityMorningEdition({
 }) {
   if (tiles.length === 0) return null
   return (
-    <section aria-label={headline}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-4">
+    <section aria-label={headline || 'Top events'}>
+      {(headline || stamp) && <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-4">
         {stamp && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold px-2.5 py-1">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
             {stamp}
           </span>
         )}
-        <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-tight">{headline}</h2>
-      </div>
+        {headline && <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-tight">{headline}</h2>}
+      </div>}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 auto-rows-[11rem] md:auto-rows-[12rem]">
         {tiles.map((tile, i) => {
