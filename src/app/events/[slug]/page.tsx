@@ -85,6 +85,11 @@ interface EventDetail {
   image_url: string | null
   price_from: number | null
   price_to: number | null
+  // Migration 097: where the price came from (See Tickets feed, or typed in admin) and the Gigsberg resale floor.
+  price_source?: string | null
+  price_checked_at?: string | null
+  resale_from?: number | null
+  resale_source?: string | null
   currency: string
   tickets_url: string | null
   own_ticket_url: string | null
@@ -112,7 +117,7 @@ interface EventDetail {
 const eventSelect = (withDetails: boolean) => `
       id, title, slug, description, category,
       start_date, end_date, onsale_date, presale_start, public_onsale_start, doors_time,${withDetails ? ' details, merged_into, info_links,' : ''}
-      image_url, price_from, price_to, currency,
+      image_url, price_from, price_to, currency, price_source, price_checked_at, resale_from, resale_source,
       tickets_url, own_ticket_url, source, viagogo_url, stubhub_url, gigsberg_url, gigsberg_affiliate_url, see_tickets_affiliate_url,
       gigsberg_highlighted, gigsberg_highlight_until, gigsberg_inventory_status, status, tags,
       venue:venues(id, name, slug, address, city, postcode, website, lat, lng${withDetails ? ', details' : ''}),
@@ -244,17 +249,18 @@ const getRelatedEvents = cache(async (event: EventDetail, headlinerId: string | 
 
 // ── Ticket providers ────────────────────────────────────────────────────────
 
-function buildProviders(event: Pick<EventDetail, 'slug' | 'presale_start' | 'public_onsale_start' | 'onsale_date' | 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>) {
+function buildProviders(event: Pick<EventDetail, 'slug' | 'price_from' | 'price_source' | 'resale_from' | 'presale_start' | 'public_onsale_start' | 'onsale_date' | 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>) {
   const mainPrimary = event.tickets_url
     ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: ticketmasterOutLink(event.tickets_url, `evt-${event.slug}`) }]
     : event.gigsberg_affiliate_url
-      ? [{ name: 'Gigsberg', tagline: event.gigsberg_inventory_status === 'available' ? 'Secondary-market tickets via Gigsberg' : 'Check availability on Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_affiliate_url) }]
+      ? [{ name: 'Gigsberg', tagline: event.gigsberg_inventory_status === 'available' ? `Secondary-market tickets via Gigsberg${event.resale_from ? ` · from ${money(event.resale_from, '£')}` : ''}` : 'Check availability on Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_affiliate_url) }]
     : []
   // See Tickets is an official booking agent (primary, not resale), and it is
   // the only affiliate partner for West End runs — list it with the primary
   // sellers so those pages lead with it.
+  const stPrice = event.price_source === 'See Tickets' && event.price_from ? ` · from ${money(event.price_from, '£')}` : ''
   const seeTickets = event.see_tickets_affiliate_url
-    ? [{ name: 'See Tickets', tagline: isSeeTicketsRunPage(event.see_tickets_affiliate_url) ? 'Official booking agent · pick your date on their page' : 'Official booking agent', bg: '#E4022D', href: outLink('st', event.see_tickets_affiliate_url, `evt-${event.slug}`) }]
+    ? [{ name: 'See Tickets', tagline: (isSeeTicketsRunPage(event.see_tickets_affiliate_url) ? 'Official booking agent · pick your date on their page' : 'Official booking agent') + stPrice, bg: '#E4022D', href: outLink('st', event.see_tickets_affiliate_url, `evt-${event.slug}`) }]
     : []
   // Ticketmaster pays no commission during presale and the first 24 hours of
   // general on-sale. In that window, when See Tickets (the official booking agent,
@@ -264,7 +270,7 @@ function buildProviders(event: Pick<EventDetail, 'slug' | 'presale_start' | 'pub
     ? [...seeTickets, ...mainPrimary]
     : [...mainPrimary, ...seeTickets]
   const resale = [
-    ...(event.tickets_url && event.gigsberg_affiliate_url ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_affiliate_url) }] : []),
+    ...(event.tickets_url && event.gigsberg_affiliate_url ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_affiliate_url), price: event.resale_from ? `from ${money(event.resale_from, '£')}` : undefined }] : []),
     ...(!event.tickets_url && !event.gigsberg_affiliate_url && event.gigsberg_url && !isBareProviderHomepage(event.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_url) }] : []),
     ...(event.viagogo_url && !isBareProviderHomepage(event.viagogo_url) ? [{ name: 'Viagogo', bg: '#00a650', href: outLink('vg', event.viagogo_url) }] : []),
     ...(event.stubhub_url && !isBareProviderHomepage(event.stubhub_url) ? [{ name: 'StubHub', bg: '#400078', href: outLink('sh', event.stubhub_url) }] : []),
@@ -294,10 +300,11 @@ function fmtDate(iso: string) {
 function fmtTime(iso: string): string | null {
   return londonTimeOrNull(iso)
 }
+const money = (n: number, sym: string) => `${sym}${Number.isInteger(Number(n)) ? Number(n) : Number(n).toFixed(2)}`
 function fmtPrice(from: number | null, to: number | null, currency: string) {
   if (!from) return null
-  const sym = currency === 'GBP' ? '£' : currency
-  return to && to !== from ? `${sym}${from} – ${sym}${to}` : `From ${sym}${from}`
+  const sym = currency === 'GBP' || !currency ? '£' : currency
+  return to && to !== from ? `${money(from, sym)} – ${money(to, sym)}` : `From ${money(from, sym)}`
 }
 
 // ── Metadata ────────────────────────────────────────────────────────────────
@@ -642,7 +649,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 text-white/80 text-sm mb-8">
             <span className="flex items-center gap-2">📅 <span>{fmtDate(event.start_date)}</span></span>
             {event.venue && <span className="flex items-center gap-2">📍 <span>{venueLabel(event.venue.name, event.venue.city)}</span></span>}
-            {priceLabel && <span className="flex items-center gap-2">💷 <span className="font-bold text-white">{priceLabel}</span></span>}
+            {priceLabel && <span className="flex items-center gap-2">💷 <span className="font-bold text-white">{priceLabel}</span>{event.price_source && <span className="text-white/60 text-xs">{event.price_source} price{event.tickets_url && event.price_source === 'See Tickets' ? ' guide' : ''}</span>}</span>}
           </div>
 
           {/* Primary CTA — ONE element: a button in the hero on desktop, and the same
@@ -1065,6 +1072,11 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                     </div>
                   ))}
                 </div>
+                {(event.price_source || event.resale_from) && (
+                  <p className="text-xs text-slate-400 mt-3 leading-relaxed">
+                    Prices shown come from {[event.price_source, event.resale_from ? event.resale_source ?? 'Gigsberg' : null].filter(Boolean).join(' and ')}{event.price_checked_at ? `, checked ${new Date(event.price_checked_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' })}` : ''}. Prices can change; the seller shows the final price before you pay.
+                  </p>
+                )}
               </div>
             )}
 
@@ -1076,17 +1088,18 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">More Ticket Options</h3>
               <p className="text-xs text-slate-400 mb-4">Other ticket marketplaces</p>
               <div className="grid grid-cols-2 gap-3">
-                {moreOptions.map(({ name, bg, href }) => (
+                {moreOptions.map(({ name, bg, href, price }: { name: string; bg: string; href: string; price?: string }) => (
                   <TrackedTicketLink
                     key={name}
                     href={href}
                     provider={name}
                     section="more_options"
                     context={event.slug}
-                    className="flex items-center justify-center font-bold text-sm text-white rounded-xl py-3.5 hover:opacity-90 transition-opacity min-h-[48px]"
+                    className="flex flex-col items-center justify-center font-bold text-sm text-white rounded-xl py-3 hover:opacity-90 transition-opacity min-h-[48px]"
                     style={{ backgroundColor: bg }}
                   >
-                    {name}
+                    <span>{name}</span>
+                    {price && <span className="text-[11px] font-semibold opacity-80">{price}</span>}
                   </TrackedTicketLink>
                 ))}
               </div>

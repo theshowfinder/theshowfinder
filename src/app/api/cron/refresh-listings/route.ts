@@ -32,6 +32,11 @@ async function handleGet(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // Prices from the sellers that share them (migration 097): See Tickets face value, Gigsberg resale.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: prices, error: priceError } = await (admin as any).rpc('refresh_event_prices') as { data: unknown; error: { message: string } | null }
+  if (priceError) console.error('[refresh-listings] refresh_event_prices failed', priceError.message)
+
   // Every city page (all 40, plus their this-week / this-weekend views),
   // the homepage, the browse page, venues and the sitemap.
   revalidatePath('/cities/[city]', 'page')
@@ -46,6 +51,7 @@ async function handleGet(request: Request) {
   return NextResponse.json({
     changedRows: data ?? 0,
     cityPagesRevalidated: CITIES.length,
+    prices: priceError ? { error: priceError.message } : prices,
     ms: Date.now() - started,
   })
 }
