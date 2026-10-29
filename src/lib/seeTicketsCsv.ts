@@ -19,7 +19,7 @@ export type SeeTicketsRow = {
   raw: Record<string, string>
 }
 
-function parseCsv(input: string) {
+export function parseCsv(input: string) {
   const firstLine = input.split(/\r?\n/, 1)[0] ?? ''
   const delimiter = firstLine.includes('\t') ? '\t' : firstLine.includes('|') ? '|' : ','
   const rows: string[][] = []
