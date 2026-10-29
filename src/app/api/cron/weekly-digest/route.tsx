@@ -163,7 +163,7 @@ async function handleGet(request: Request) {
       const messages = batch.map(email => ({
         from: FROM_EMAIL,
         to: email,
-        subject: mode === 'preview' ? `[PREVIEW] ${subject}` : subject,
+        subject: mode === 'preview'   ? `[PREVIEW] ${digestSubject(content)}`   : digestSubject(content),
         react: <WeeklyDigestEmail content={content} weekKey={weekKey} unsubscribeUrl={buildUnsubscribeLink(email)} />,
       }))
       try {
