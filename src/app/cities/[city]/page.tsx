@@ -30,7 +30,7 @@ import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import { buildCityCollectionSchema, cityCanonicalUrl, cityPageDescription, cityPageTitle } from '@/lib/citySeo'
 import CityNewsletterForm from '@/components/CityNewsletterForm'
-import { fetchEventsThisWeek, fetchLocalEvents, fetchTopEvents, fetchNearbyEvents, fetchRecentlyAddedEvents, fetchCityCategoryCounts, fetchTonightEvents, fetchOnSaleThisWeek, attachTourDateCounts } from '@/lib/eventPools'
+import { fetchEventsThisWeek, fetchLocalEvents, fetchTopEvents, fetchNearbyEvents, fetchCityCategoryCounts, fetchTonightEvents, fetchOnSaleThisWeek, attachTourDateCounts } from '@/lib/eventPools'
 import { resolveCityEventCount } from '@/lib/cityEventCount'
 import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
 import NewsCardGrid from '@/components/NewsCardGrid'
@@ -156,7 +156,6 @@ export default async function CityPage({
     nationalNewsResult,
     nearbyEvents,
     categoryCounts,
-    recentlyAdded,
   ] = await Promise.all([
     // Today only, Europe/London calendar day, soonest first — see
     // src/lib/tonight.ts for the exact rules (cancelled/postponed and
@@ -241,9 +240,6 @@ export default async function CityPage({
     // Per-type counts for the "browse by type" chips
     fetchCityCategoryCounts(supabase, cityName),
 
-    // Shows first listed in the last 7 days: the page's own freshness signal
-    fetchRecentlyAddedEvents(supabase, { city: cityName, limit: 12 }),
-
   ])
 
   const localBusinesses = localBusinessesResult.data ?? []
@@ -260,7 +256,7 @@ export default async function CityPage({
   // the section is neither stale nor empty (and hides if nothing is fresh at all).
   const newsPick = pickNewsForCityPage(dropNonUkNews(cityNewsResult.data ?? []), dropNonUkNews(nationalNewsResult.data ?? []), now.getTime(), { limit: 8, minLocal: 3 })
   const cityNews = newsPick.items
-  const cityStoryEventIds = [...new Set([...tonightEvents, ...eventsThisWeek, ...localEventsRaw, ...topEvents, ...recentlyAdded].map(event => event.id))]
+  const cityStoryEventIds = [...new Set([...tonightEvents, ...eventsThisWeek, ...localEventsRaw, ...topEvents].map(event => event.id))]
   const cityStories = await fetchStoriesForEventIds(supabase, cityStoryEventIds)
   const newsIsLocal = newsPick.localCount >= 3
 
@@ -272,7 +268,6 @@ export default async function CityPage({
   const shownEventIds = new Set(tonightIds)
   const weekEvents = excludePreviouslyShown(eventsThisWeek, shownEventIds)
   const localEvents = excludePreviouslyShown(localEventsRaw, shownEventIds, 12)
-  const newEvents = excludePreviouslyShown(recentlyAdded, shownEventIds)
   const upcomingTopEvents = excludePreviouslyShown(topEvents, shownEventIds)
 
   // A query error must not be presented the same way as a genuine
@@ -546,26 +541,6 @@ export default async function CityPage({
             </div>
             <ScrollRail label={`What's on locally in ${cityName}`}>
               {localEvents.map(event => (
-                <EventCard key={event.id} event={event} />
-              ))}
-            </ScrollRail>
-          </section>
-        )}
-
-        {/* ── JUST ADDED: shows first listed in the last 7 days (hidden when fewer than 3) ── */}
-        {newEvents.length >= 3 && (
-          <section className="order-10">
-            <div className="mb-7">
-              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
-                New this week
-              </p>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                Just Added in {cityName}
-              </h2>
-              <p className="text-sm text-slate-500 mt-1">Shows listed for the first time in the last 7 days</p>
-            </div>
-            <ScrollRail label={`Just added in ${cityName}`}>
-              {newEvents.map(event => (
                 <EventCard key={event.id} event={event} />
               ))}
             </ScrollRail>
