@@ -482,12 +482,16 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   // A sold_out show still shows all three; a cancelled/postponed one
   // shows none of them.
   const isCancelledOrPostponed = event.status === 'cancelled' || event.status === 'postponed'
-  const priceLabel = fmtPrice(event.price_from, event.price_to, event.currency)
+  // Lowest face-value price we know (See Tickets feed, or Theatre Tickets Direct for London theatre).
+  const ttdCheaper = event.ttd_price != null && (event.price_from == null || Number(event.ttd_price) < Number(event.price_from))
+  const priceLabel = ttdCheaper ? fmtPrice(Number(event.ttd_price), null, event.currency) : fmtPrice(event.price_from, event.price_to, event.currency)
+  const priceSourceLabel = ttdCheaper ? 'Theatre Tickets Direct' : event.price_source ?? null
   const imageUrl = eventImageUrl(event.image_url, event.category, event.title)
   const { primary, resale } = buildProviders(event)
   // Sold out at Ticketmaster but Gigsberg has it: that is where we send people (and earn).
   const soldOutGigsberg = event.status === 'sold_out' ? resale.find(r => r.name === 'Gigsberg') ?? null : null
   const moreOptions = soldOutGigsberg ? resale.filter(r => r.name !== 'Gigsberg') : resale
+  const sellerCount = primary.length + resale.length
   const grouping = await getCanonicalInfo(event.id, event)
   // Local events (council / tourism-board listings: Visit Bristol, Visit Leicester...) keep their listing page in
   // own_ticket_url. That is the organiser's information page, not tickets we hold, so it is never shown as
@@ -656,7 +660,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 text-white/80 text-sm mb-8">
             <span className="flex items-center gap-2">📅 <span>{fmtDate(event.start_date)}</span></span>
             {event.venue && <span className="flex items-center gap-2">📍 <span>{venueLabel(event.venue.name, event.venue.city)}</span></span>}
-            {priceLabel && <span className="flex items-center gap-2">💷 <span className="font-bold text-white">{priceLabel}</span>{event.price_source && <span className="text-white/60 text-xs">{event.price_source} price{event.tickets_url && event.price_source === 'See Tickets' ? ' guide' : ''}</span>}</span>}
+            {priceLabel && <span className="flex items-center gap-2">💷 <span className="font-bold text-white">{priceLabel}</span>{priceSourceLabel && <span className="text-white/60 text-xs">{priceSourceLabel} price{event.tickets_url && priceSourceLabel !== 'Ticketmaster' ? ' guide' : ''}</span>}</span>}
           </div>
 
           {/* Primary CTA — ONE element: a button in the hero on desktop, and the same
@@ -667,11 +671,13 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               className="fixed bottom-0 inset-x-0 z-50 bg-white border-t-2 px-4 py-3 flex items-center gap-3 shadow-2xl md:static md:inset-auto md:z-auto md:bg-transparent md:border-0 md:p-0 md:shadow-none md:block"
               style={{ borderColor: '#E8003D' }}
             >
-              {priceLabel && (
-                <div className="flex-1 min-w-0 md:hidden">
-                  <p className="text-xs text-slate-500 leading-none mb-0.5">Tickets from</p>
-                  <p className="text-base font-extrabold text-slate-900 truncate">{priceLabel}</p>
-                </div>
+              {/* Phones: the price and a jump to every seller (the ticket list sits right under the hero on phones). */}
+              {(priceLabel || sellerCount > 1) && (
+                <a href="#tickets" className="flex-1 min-w-0 md:hidden">
+                  {priceLabel && <p className="text-xs text-slate-500 leading-none mb-0.5">Tickets from</p>}
+                  {priceLabel && <p className="text-base font-extrabold text-slate-900 truncate">{priceLabel}</p>}
+                  {sellerCount > 1 && <p className="text-xs font-bold truncate" style={{ color: '#E8003D' }}>See all {sellerCount} sellers ↓</p>}
+                </a>
               )}
               {primary[0] ? (
                 <TrackedTicketLink
@@ -982,7 +988,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           </div>
 
           {/* Right: tickets ─────────────────────────────────────── */}
-          <div id="tickets" className="space-y-5 lg:sticky lg:top-24 self-start">
+          <div id="tickets" className="order-first lg:order-none space-y-5 lg:sticky lg:top-24 self-start scroll-mt-20">
             {remindable && (
               <EventReminder
                 slug={event.slug}
@@ -1092,22 +1098,42 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 as clearly separated alternatives. */}
             {!isCancelledOrPostponed && moreOptions.length > 0 && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">More Ticket Options</h3>
-              <p className="text-xs text-slate-400 mb-4">Other ticket marketplaces</p>
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">Resale &amp; more options</h3>
+              <p className="text-xs text-slate-400 mb-4">Fan-to-fan resale and other ticket sites</p>
               <div className="grid grid-cols-2 gap-3">
                 {moreOptions.map(({ name, bg, href, price }: { name: string; bg: string; href: string; price?: string }) => (
-                  <TrackedTicketLink
-                    key={name}
-                    href={href}
-                    provider={name}
-                    section="more_options"
-                    context={event.slug}
-                    className="flex flex-col items-center justify-center font-bold text-sm text-white rounded-xl py-3 hover:opacity-90 transition-opacity min-h-[48px]"
-                    style={{ backgroundColor: bg }}
-                  >
-                    <span>{name}</span>
-                    {price && <span className="text-[11px] font-semibold opacity-80">{price}</span>}
-                  </TrackedTicketLink>
+                  name === 'Gigsberg' ? (
+                    // Gigsberg gets a full-width priced row like the official sellers: often the only place left, and
+                    // the best-paying seller for the site.
+                    <TrackedTicketLink
+                      key={name}
+                      href={href}
+                      provider={name}
+                      section="more_options"
+                      context={event.slug}
+                      className="col-span-2 flex items-center justify-between text-white rounded-xl px-5 py-4 hover:opacity-90 transition-opacity min-h-[60px]"
+                      style={{ backgroundColor: bg }}
+                    >
+                      <div>
+                        <p className="font-extrabold text-base leading-none">Gigsberg</p>
+                        <p className="text-xs mt-0.5 opacity-80">Resale{price ? ` · ${price}` : ''}{event.gigsberg_inventory_status === 'available' ? ' · tickets listed now' : ''}</p>
+                      </div>
+                      <span className="text-xl ml-3">→</span>
+                    </TrackedTicketLink>
+                  ) : (
+                    <TrackedTicketLink
+                      key={name}
+                      href={href}
+                      provider={name}
+                      section="more_options"
+                      context={event.slug}
+                      className="flex flex-col items-center justify-center font-bold text-sm text-white rounded-xl py-3 hover:opacity-90 transition-opacity min-h-[48px]"
+                      style={{ backgroundColor: bg }}
+                    >
+                      <span>{name}</span>
+                      {price && <span className="text-[11px] font-semibold opacity-80">{price}</span>}
+                    </TrackedTicketLink>
+                  )
                 ))}
               </div>
               <p className="text-xs text-slate-400 mt-4 leading-relaxed">
