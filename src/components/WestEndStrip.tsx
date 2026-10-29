@@ -6,7 +6,7 @@ import { getWestEndShows } from '@/lib/showPool'
 // A compact "West End" section for the homepage and the London page: the
 // longest-running shows, one card each, linking into /west-end. Renders
 // nothing if there are no shows (e.g. while the data is being refreshed).
-export default async function WestEndStrip({ limit = 4, inline = false }: { limit?: number; inline?: boolean }) {
+export default async function WestEndStrip({ limit = 12, inline = false }: { limit?: number; inline?: boolean }) {
   const shows = (await getWestEndShows()).slice(0, limit)
   if (shows.length === 0) return null
 
