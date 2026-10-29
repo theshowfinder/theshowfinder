@@ -36,6 +36,10 @@ async function handleGet(request: Request) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: prices, error: priceError } = await (admin as any).rpc('refresh_event_prices') as { data: unknown; error: { message: string } | null }
   if (priceError) console.error('[refresh-listings] refresh_event_prices failed', priceError.message)
+  // Theatre Tickets Direct links on London theatre shows (migration 100).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: ttd, error: ttdError } = await (admin as any).rpc('refresh_ttd_links') as { data: unknown; error: { message: string } | null }
+  if (ttdError) console.error('[refresh-listings] refresh_ttd_links failed', ttdError.message)
 
   // Every city page (all 40, plus their this-week / this-weekend views),
   // the homepage, the browse page, venues and the sitemap.
@@ -52,6 +56,7 @@ async function handleGet(request: Request) {
     changedRows: data ?? 0,
     cityPagesRevalidated: CITIES.length,
     prices: priceError ? { error: priceError.message } : prices,
+    theatreTicketsDirect: ttdError ? { error: ttdError.message } : ttd,
     ms: Date.now() - started,
   })
 }

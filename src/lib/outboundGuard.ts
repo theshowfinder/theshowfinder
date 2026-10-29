@@ -16,7 +16,7 @@
 
 import {
   getTicketmasterAffiliateLink, getSeeTicketsAffiliateLink, getGigsbergAffiliateLink, getViagogoAffiliateLink,
-  getStubHubAffiliateLink, getVividSeatsAffiliateLink, getEventimAffiliateLink,
+  getStubHubAffiliateLink, getVividSeatsAffiliateLink, getEventimAffiliateLink, getTheatreTicketsDirectAffiliateLink,
 } from './affiliate.ts'
 
 // Words that appear in the user-agent of crawlers, scrapers, HTTP libraries,
@@ -64,8 +64,8 @@ export function automatedRequestReason(req: OutboundRequestLike): string | null 
 // data (checked 21 Oct 2026); a host missing here gives a 400 (a dead button) and
 // shows as outcome 'invalid' in the out_<provider> logs.
 
-export type OutProvider = 'tm' | 'st' | 'gb' | 'vg' | 'sh' | 'vs' | 'ev'
-export const OUT_PROVIDERS: readonly OutProvider[] = ['tm', 'st', 'gb', 'vg', 'sh', 'vs', 'ev']
+export type OutProvider = 'tm' | 'st' | 'gb' | 'vg' | 'sh' | 'vs' | 'ev' | 'td'
+export const OUT_PROVIDERS: readonly OutProvider[] = ['tm', 'st', 'gb', 'vg', 'sh', 'vs', 'ev', 'td']
 export function isOutProvider(value: string): value is OutProvider {
   return (OUT_PROVIDERS as readonly string[]).includes(value)
 }
@@ -84,6 +84,7 @@ const HOSTS: Record<Exclude<OutProvider, 'tm' | 'st'>, string[]> = {
   sh: ['stubhub.co.uk', 'stubhub.com'],
   vs: ['vividseats.com'],
   ev: ['eventim.co.uk', 'eventim.com'],
+  td: ['theatreticketsdirect.co.uk'],   // Theatre Tickets Direct (Awin 1936): plain show pages, wrapped at the hop
 }
 const AWIN_PUBLISHER_ID = '2896631'
 const SEE_TICKETS_MERCHANT_ID = '7816'
@@ -142,6 +143,7 @@ function trackedLink(provider: OutProvider, dest: string, tag?: string): string 
     case 'sh': return getStubHubAffiliateLink(dest)
     case 'vs': return getVividSeatsAffiliateLink(dest)
     case 'ev': return getEventimAffiliateLink(dest)
+    case 'td': return getTheatreTicketsDirectAffiliateLink(dest, tag)
   }
 }
 

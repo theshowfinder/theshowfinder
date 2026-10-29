@@ -90,6 +90,9 @@ interface EventDetail {
   price_checked_at?: string | null
   resale_from?: number | null
   resale_source?: string | null
+  // Migration 100: Theatre Tickets Direct show page and its from-price (London theatre).
+  ttd_url?: string | null
+  ttd_price?: number | null
   currency: string
   tickets_url: string | null
   own_ticket_url: string | null
@@ -117,7 +120,7 @@ interface EventDetail {
 const eventSelect = (withDetails: boolean) => `
       id, title, slug, description, category,
       start_date, end_date, onsale_date, presale_start, public_onsale_start, doors_time,${withDetails ? ' details, merged_into, info_links,' : ''}
-      image_url, price_from, price_to, currency, price_source, price_checked_at, resale_from, resale_source,
+      image_url, price_from, price_to, currency, price_source, price_checked_at, resale_from, resale_source, ttd_url, ttd_price,
       tickets_url, own_ticket_url, source, viagogo_url, stubhub_url, gigsberg_url, gigsberg_affiliate_url, see_tickets_affiliate_url,
       gigsberg_highlighted, gigsberg_highlight_until, gigsberg_inventory_status, status, tags,
       venue:venues(id, name, slug, address, city, postcode, website, lat, lng${withDetails ? ', details' : ''}),
@@ -249,7 +252,7 @@ const getRelatedEvents = cache(async (event: EventDetail, headlinerId: string | 
 
 // ── Ticket providers ────────────────────────────────────────────────────────
 
-function buildProviders(event: Pick<EventDetail, 'slug' | 'price_from' | 'price_source' | 'resale_from' | 'presale_start' | 'public_onsale_start' | 'onsale_date' | 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>) {
+function buildProviders(event: Pick<EventDetail, 'slug' | 'ttd_url' | 'ttd_price' | 'price_from' | 'price_source' | 'resale_from' | 'presale_start' | 'public_onsale_start' | 'onsale_date' | 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>) {
   const mainPrimary = event.tickets_url
     ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: ticketmasterOutLink(event.tickets_url, `evt-${event.slug}`) }]
     : event.gigsberg_affiliate_url
@@ -266,9 +269,13 @@ function buildProviders(event: Pick<EventDetail, 'slug' | 'price_from' | 'price_
   // general on-sale. In that window, when See Tickets (the official booking agent,
   // which does pay) also has this show, list it first. Ticketmaster stays right
   // there as the second option, so fans can still get presale access.
+  // Theatre Tickets Direct: official London theatre agent (STAR member), from-price from its feed.
+  const theatreTicketsDirect = event.ttd_url
+    ? [{ name: 'Theatre Tickets Direct', tagline: `Official theatre agent${event.ttd_price ? ` · from ${money(event.ttd_price, '£')}` : ''}`, bg: '#7b1e3a', href: outLink('td', event.ttd_url, `evt-${event.slug}`) }]
+    : []
   const primary = !isTicketmasterCommissionEligible(event) && seeTickets.length
-    ? [...seeTickets, ...mainPrimary]
-    : [...mainPrimary, ...seeTickets]
+    ? [...seeTickets, ...mainPrimary, ...theatreTicketsDirect]
+    : [...mainPrimary, ...seeTickets, ...theatreTicketsDirect]
   const resale = [
     ...(event.tickets_url && event.gigsberg_affiliate_url ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_affiliate_url), price: event.resale_from ? `from ${money(event.resale_from, '£')}` : undefined }] : []),
     ...(!event.tickets_url && !event.gigsberg_affiliate_url && event.gigsberg_url && !isBareProviderHomepage(event.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_url) }] : []),

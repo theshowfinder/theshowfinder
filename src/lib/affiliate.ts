@@ -21,7 +21,7 @@ export function getTicketmasterAffiliateLink(destinationUrl: string, subId?: str
 // else goes to the plain page). Providers: tm Ticketmaster, st See Tickets, gb
 // Gigsberg, vg Viagogo, sh StubHub, vs Vivid Seats, ev Eventim. Use `absolute` where
 // the link leaves the site (share buttons); on-page buttons use the relative path.
-export function outLink(provider: 'tm' | 'st' | 'gb' | 'vg' | 'sh' | 'vs' | 'ev', destinationUrl: string, subId?: string, absolute = false): string {
+export function outLink(provider: 'tm' | 'st' | 'gb' | 'vg' | 'sh' | 'vs' | 'ev' | 'td', destinationUrl: string, subId?: string, absolute = false): string {
   const sub = cleanSubId(subId)
   const path = `/out/${provider}?u=${encodeURIComponent(destinationUrl)}${sub ? `&s=${sub}` : ''}`
   // v=s marks a link handed to a person (share button, email): see decideProviderOutbound.
@@ -116,6 +116,14 @@ export function wrapWithEnvTemplate(directUrl: string, envVar: string): string {
 // Vercel. viagogo's programme is confirmed on Partnerize, not Awin (Awin's
 // viagogo programme was never joined on this account). Returns the plain
 // link unchanged until the env var is set.
+// Theatre Tickets Direct (Awin advertiser 1936, joined 12 Oct 2026): a plain theatreticketsdirect.co.uk show page
+// wrapped in our Awin tracking link, the same shape as See Tickets.
+const THEATRE_TICKETS_DIRECT_MERCHANT_ID = '1936'
+export function getTheatreTicketsDirectAffiliateLink(destinationUrl: string, subId?: string): string {
+  const sub = cleanSubId(subId)
+  return `https://www.awin1.com/cread.php?awinmid=${THEATRE_TICKETS_DIRECT_MERCHANT_ID}&awinaffid=${AWIN_PUBLISHER_ID}&ued=${encodeURIComponent(destinationUrl)}${sub ? `&clickref=${sub}` : ''}`
+}
+
 export function getViagogoAffiliateLink(destinationUrl: string): string {
   return wrapWithEnvTemplate(destinationUrl, 'VIAGOGO_AFFILIATE_TEMPLATE')
 }
