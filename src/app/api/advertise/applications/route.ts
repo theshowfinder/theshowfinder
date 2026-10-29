@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { CITIES } from '@/lib/cities'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { listingCategory } from '@/lib/advertiserCategory'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -20,9 +21,6 @@ function safeFileName(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(-80) || 'upload'
 }
 
-function normaliseCategory(value: string) {
-  return value.toLowerCase().replace(' or pub', '').replace(' or b&b', '').replace('é', 'e').replace(/s+/g, '_')
-}
 
 function priceIdFor(packageKey: PackageKey, billing: BillingKey) {
   const key = packageKey === 'featured'
@@ -84,7 +82,7 @@ export async function POST(request: Request) {
     const packageKey = text(form.get('package')) as PackageKey
     const billing = text(form.get('billing')) as BillingKey
     const businessName = text(form.get('business_name'))
-    const category = normaliseCategory(text(form.get('category')))
+    const category = listingCategory(text(form.get('category')))
     const contactName = text(form.get('contact_name'))
     const email = text(form.get('email')).toLowerCase()
     const phone = text(form.get('phone'))

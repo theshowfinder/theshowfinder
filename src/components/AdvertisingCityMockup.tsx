@@ -155,8 +155,8 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester' }: { cit
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">Put your business in front of people planning a night out.</h2>
             <p className="mt-4 text-base leading-relaxed text-white/70">Choose a standard listing or one of the three featured placements in your city. The layout stays limited, clear and easy to understand.</p>
             <div className="mt-7 flex flex-wrap gap-3">
-              <Link href={`/advertise/join?city=${encodeURIComponent(cityName)}&package=featured`} className="rounded-xl bg-rose-500 px-5 py-3 text-sm font-extrabold text-white hover:bg-rose-400">Ask about featured placement</Link>
-              <Link href={`/advertise/join?city=${encodeURIComponent(cityName)}&package=standard`} className="rounded-xl bg-white/10 px-5 py-3 text-sm font-extrabold text-white hover:bg-white/20">Choose standard listing</Link>
+              <Link href={`/advertise/onboard?city=${encodeURIComponent(cityName)}&package=featured`} className="rounded-xl bg-rose-500 px-5 py-3 text-sm font-extrabold text-white hover:bg-rose-400">Ask about featured placement</Link>
+              <Link href={`/advertise/onboard?city=${encodeURIComponent(cityName)}&package=standard`} className="rounded-xl bg-white/10 px-5 py-3 text-sm font-extrabold text-white hover:bg-white/20">Choose standard listing</Link>
             </div>
           </div>
         </section>

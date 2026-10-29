@@ -38,7 +38,7 @@ export default async function LocalBusinessesAdminPage() {
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
         <p className="text-sm text-slate-500 mb-6">
-          Only <b>Live</b> listings show on the site. Standard = the city page&apos;s local guide. Featured = top of the guide plus the &ldquo;Before the show&rdquo; box on every show page in that city. Sign-ups from /advertise/join arrive here as <b>Pending</b>: set them live once payment is arranged.
+          Only <b>Live</b> listings show on the site. Standard = the city page&apos;s local guide. Featured = top of the guide plus the &ldquo;Before the show&rdquo; box on every show page in that city. Paid sign-ups from /advertise arrive on <a href="/admin/advertiser-applications" className="text-rose-600 hover:underline">Advertiser applications</a>; approving one adds it here as Live.
         </p>
 
         {(!businesses || businesses.length === 0) ? (

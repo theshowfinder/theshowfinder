@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resend, FROM_EMAIL } from '@/lib/resend'
 
@@ -79,7 +80,12 @@ export async function POST(request: Request) {
   } else if (event.type === 'invoice.payment_failed') {
     await db.from('advertiser_applications').update({ payment_status: 'pending', updated_at: new Date().toISOString() }).eq('id', applicationId)
   } else if (event.type === 'customer.subscription.deleted') {
-    await db.from('advertiser_applications').update({ payment_status: 'pending', updated_at: new Date().toISOString() }).eq('id', applicationId)
+    const { data: app } = await db.from('advertiser_applications').update({ payment_status: 'pending', updated_at: new Date().toISOString() }).eq('id', applicationId).select('business_id, city').maybeSingle() as unknown as { data: { business_id: string | null; city: string } | null }
+    // Subscription ended: take the live listing down (it can be set live again on /admin/local-businesses).
+    if (app?.business_id) {
+      await db.from('local_businesses').update({ status: 'cancelled', updated_at: new Date().toISOString() } as never).eq('id', app.business_id)
+      revalidatePath('/cities/' + encodeURIComponent(app.city))
+    }
   }
   return NextResponse.json({ received: true })
 }
