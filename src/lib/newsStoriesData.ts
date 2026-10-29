@@ -40,6 +40,26 @@ export async function fetchLatestStories(db: Db, opts: { limit: number; headline
   return orderStories((data ?? []) as unknown as NewsStory[]).slice(0, opts.limit)
 }
 
+/**
+ * The news strip on a city page: our own stories about shows in that city (city_story_ids, migration 098), newest
+ * first, topped up with the latest UK-wide headline stories so the strip is never empty or stale.
+ */
+export async function fetchCityStories(db: Db, city: string, limit = 5): Promise<NewsStory[]> {
+  let local: NewsStory[] = []
+  const { data: ids, error } = await (db as unknown as { rpc: (f: string, a: Record<string, unknown>) => Promise<{ data: { id: string }[] | null; error: { message: string } | null }> })
+    .rpc('city_story_ids', { p_city: city, p_days: 60, p_limit: limit * 2 })
+  if (error) console.warn('[news-stories] city ids failed:', error.message)
+  if (ids?.length) {
+    const { data } = await db.from('news_stories').select(LIST_COLUMNS).in('id', ids.map(r => r.id))
+    const order = new Map(ids.map((r, i) => [r.id, i]))
+    local = ((data ?? []) as unknown as NewsStory[]).sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)).slice(0, limit)
+  }
+  if (local.length >= limit) return local
+  const seen = new Set(local.map(s => s.id))
+  const national = (await fetchLatestStories(db, { limit: limit * 2, headlineOnly: true })).filter(s => !seen.has(s.id))
+  return [...local, ...national].slice(0, limit)
+}
+
 /** Published image-backed stories linked to events in one city. */
 export async function fetchStoriesForEventIds(db: Db, eventIds: string[], limit = 5): Promise<NewsStory[]> {
   if (!eventIds.length) return []

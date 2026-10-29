@@ -48,7 +48,7 @@ import CityTicketSources from '@/components/CityTicketSources'
 import { excludePreviouslyShown } from '@/lib/cityDisplayRows'
 import CityMorningEdition from '@/components/CityMorningEdition'
 import { buildEdition } from '@/lib/cityBrief'
-import { fetchStoriesForEventIds } from '@/lib/newsStoriesData'
+import { fetchCityStories } from '@/lib/newsStoriesData'
 import CityNewsMosaic from '@/components/CityNewsMosaic'
 import LocalBusinessAds from '@/components/LocalBusinessAds'
 
@@ -256,8 +256,8 @@ export default async function CityPage({
   // the section is neither stale nor empty (and hides if nothing is fresh at all).
   const newsPick = pickNewsForCityPage(dropNonUkNews(cityNewsResult.data ?? []), dropNonUkNews(nationalNewsResult.data ?? []), now.getTime(), { limit: 8, minLocal: 3 })
   const cityNews = newsPick.items
-  const cityStoryEventIds = [...new Set([...tonightEvents, ...eventsThisWeek, ...localEventsRaw, ...topEvents].map(event => event.id))]
-  const cityStories = await fetchStoriesForEventIds(supabase, cityStoryEventIds)
+  // Our own image-led stories about shows in this city, topped up with UK-wide headlines (newsStoriesData.ts).
+  const cityStories = await fetchCityStories(supabase, cityName, 5)
   const newsIsLocal = newsPick.localCount >= 3
 
   // The "morning edition" block was removed (29 Oct 2026): it repeated the On sale this week and Top events
@@ -438,12 +438,12 @@ export default async function CityPage({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-12 flex flex-col gap-10 sm:gap-14">
 
         {/* ── LOCAL ENTERTAINMENT NEWS: image-led when city stories match ── */}
-        {cityStories.length > 0 ? <CityNewsMosaic cityName={cityName} stories={cityStories} /> : cityNews.length > 0 && (
-          <section id="news" className="scroll-mt-20 order-1">
-            <div className="mb-7">
-              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>Latest event news</p>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">What&apos;s happening in {cityName}</h2>
-              <p className="text-sm text-slate-500 mt-1">Recent stories about live events in {cityName}</p>
+        <CityNewsMosaic cityName={cityName} stories={cityStories} />
+        {cityNews.length > 0 && (
+          <section id={cityStories.length > 0 ? 'local-headlines' : 'news'} className="scroll-mt-20 order-1">
+            <div className="mb-5">
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>{cityStories.length > 0 ? 'From the local press' : 'Latest event news'}</p>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900">{cityStories.length > 0 ? `More ${cityName} headlines` : `What's happening in ${cityName}`}</h2>
             </div>
             <NewsCardGrid items={cityNews} context={'city:' + city} scroll />
           </section>
