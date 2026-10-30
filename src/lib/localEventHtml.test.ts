@@ -103,3 +103,15 @@ test('no title or no date: not an event page', () => {
   assert.equal(eventFromHtml('cardiff', '<h1>Tours</h1>', 'https://x/', 'Cardiff', NOW), null)
   assert.ok(isHtmlParser('newmind') && !isHtmlParser('jsonld') && !isHtmlParser(null))
 })
+
+test("one site's map pin never leaks into the next site's events", () => {
+  // A Visit Bath page with coordinates but no address block used to write them onto the shared blank location.
+  const bath = `<h1>Bath Show</h1><table class="dates"><span class="date">(14 Nov 2026)</span></table>"latitude": 51.38133, "longitude": -2.35981`
+  const b = eventFromHtml('newmind', bath, 'https://www.visitbath.co.uk/whats-on/x-p1', 'Bath', NOW)!
+  assert.equal(b.lat, 51.38133)
+  const g = eventFromHtml('glasgow', '<h1>SWG3 Gig</h1>', 'https://www.visitglasgow.com/events/gig-14112026-1/', 'Glasgow', NOW)!
+  assert.equal(g.lat, null)
+  assert.equal(g.lng, null)
+  const l = eventFromHtml('leeds', `<h1>Tour</h1><div class="date">30th October 2026</div><div class="attraction"><a href="/x">Leeds Grand Theatre</a></div>`, 'https://www.visitleeds.co.uk/x/', 'Leeds', NOW)!
+  assert.equal(l.lat, null)
+})

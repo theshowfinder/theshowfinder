@@ -89,10 +89,23 @@ export function fallbackEventImage(category: EventCategory, title = ''): string 
   return FALLBACKS[inferEventCategory(title, category)] ?? FALLBACKS.concert
 }
 
+// Sites that refuse an image when the browser says it was asked for by another site (hotlink protection): the
+// Stephen Joseph Theatre answers 403 to any request with our Referer. These go through our own image optimiser,
+// which fetches them server-side (no Referer) and caches the result. The host must also be in next.config images.
+const HOTLINK_BLOCKED_HOSTS = new Set(['sjt.uk.com'])
+
+/** The URL a browser should load for a stored image: as-is, or via /_next/image when its host blocks hotlinking. */
+export function displayImageUrl(url: string): string {
+  try {
+    if (HOTLINK_BLOCKED_HOSTS.has(new URL(url).hostname)) return `/_next/image?url=${encodeURIComponent(url)}&w=1080&q=75`
+  } catch { /* not an absolute URL: leave it */ }
+  return url
+}
+
 export function eventImageUrl(imageUrl: string | null | undefined, category: EventCategory, title = ''): string {
   const team = teamFixtureImage(title)
   if (team) return team
-  if (imageUrl && imageUrl !== GENERIC_IMAGE && !imageUrl.endsWith('/og-image.png')) return imageUrl
+  if (imageUrl && imageUrl !== GENERIC_IMAGE && !imageUrl.endsWith('/og-image.png')) return displayImageUrl(imageUrl)
   return fallbackEventImage(category, title)
 }
 

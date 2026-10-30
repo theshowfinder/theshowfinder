@@ -12,6 +12,8 @@ const nextConfig: NextConfig = {
       // Gigsberg performer photos, used on shows imported from the Gigsberg catalogue (event page hero).
       { protocol: 'https', hostname: 'www.gigsberg.com'          },
       { protocol: 'https', hostname: 'gigsberg.com'              },
+      // Stephen Joseph Theatre (Scarborough) blocks hotlinked images, so ours are served through /_next/image.
+      { protocol: 'https', hostname: 'sjt.uk.com'                },
     ],
   },
   // Keep /venues/<slug> free of searchParams so it can be CDN-cached. The

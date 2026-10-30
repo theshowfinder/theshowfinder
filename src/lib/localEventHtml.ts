@@ -127,12 +127,14 @@ function textOf(fragment: string | null): string | null {
 const POSTCODE_RE = /\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i
 
 interface Where { venueName: string | null; address: string | null; city: string | null; postcode: string | null; lat: number | null; lng: number | null }
-const NOWHERE: Where = { venueName: null, address: null, city: null, postcode: null, lat: null, lng: null }
+// Frozen: readers fill in coordinates on the object they get back, so a shared blank must never be handed out to be
+// written on (it once was, and one site's map pin leaked into every later site's events in the same run).
+const NOWHERE: Readonly<Where> = Object.freeze({ venueName: null, address: null, city: null, postcode: null, lat: null, lng: null })
 
 /** "Venue, 1 Street, Town, County, AB1 2CD" (or its lines) -> parts. */
 function whereFromLines(lines: string[], townHint: string | null = null): Where {
   const parts = lines.map(l => cleanText(l)).filter((l): l is string => !!l)
-  if (!parts.length) return NOWHERE
+  if (!parts.length) return { ...NOWHERE }
   const joined = parts.join(', ')
   const postcode = joined.match(POSTCODE_RE)?.[1]?.toUpperCase() ?? null
   const parsed = parseAddressString(joined)
@@ -229,7 +231,7 @@ function readGlasgow(html: string, pageUrl: string, fallbackCity: string, now: n
     if (u) sessions = [{ start: [Number(u[3]), Number(u[2]), Number(u[1])], end: null, time: null }]
   }
   const whereText = textOf(first(html, /page-header__meta-label">\s*Where\s*<\/div>\s*<div class="page-header__meta-value">([\s\S]*?)<\/div>/i))
-  const where = whereText ? whereFromLines(whereText.split(/,/)) : NOWHERE
+  const where = whereText ? whereFromLines(whereText.split(/,/)) : { ...NOWHERE }
   return build(html, pageUrl, fallbackCity, titleFrom(html), nextSession(sessions, now), { ...where })
 }
 
@@ -245,7 +247,7 @@ function readCardiff(html: string, pageUrl: string, fallbackCity: string, now: n
   const block = (label: string) => textOf(first(html, new RegExp(`<h2 class="eventdetail-top">\\s*${label}\\s*</h2>\\s*<p class="eventdetail-text">([\\s\\S]*?)</p>`, 'i')))
   const sessions = sessionFromText(block('Date\\(s\\)'), block('Times'))
   const venueText = block('Venue')
-  const where = venueText ? whereFromLines(venueText.split(',')) : NOWHERE
+  const where = venueText ? whereFromLines(venueText.split(',')) : { ...NOWHERE }
   return build(html, pageUrl, fallbackCity, titleFrom(html), nextSession(sessions, now), { ...where })
 }
 
@@ -254,7 +256,7 @@ function readCambridge(html: string, pageUrl: string, fallbackCity: string, now:
   const periods = [...html.matchAll(/<li class="period">\s*<span>([\s\S]*?)<\/span>/gi)].map(m => textOf(m[1]) ?? '')
   const dateText = periods.find(p => parseDateText(p)) ?? null
   const timeText = periods.find(p => p !== dateText && parseClock(p)) ?? null
-  return build(html, pageUrl, fallbackCity, titleFrom(html), nextSession(sessionFromText(dateText, timeText), now), NOWHERE)
+  return build(html, pageUrl, fallbackCity, titleFrom(html), nextSession(sessionFromText(dateText, timeText), now), { ...NOWHERE })
 }
 
 /** welcometosheffield.co.uk: <span class="nobreak">06 Dec 2026</span> … <span class="nobreak">19:00</span>. */
@@ -262,7 +264,7 @@ function readSheffield(html: string, pageUrl: string, fallbackCity: string, now:
   const spans = [...html.matchAll(/<span class="nobreak">([^<]*)<\/span>/gi)].map(m => m[1])
   const dateText = spans.find(s => parseDateText(s)) ?? null
   const timeText = spans.find(s => /^\s*\d{1,2}[:.]\d{2}\s*$/.test(s) || /\d\s*(am|pm)\b/i.test(s)) ?? null
-  return build(html, pageUrl, fallbackCity, titleFrom(html), nextSession(sessionFromText(dateText, timeText), now), NOWHERE)
+  return build(html, pageUrl, fallbackCity, titleFrom(html), nextSession(sessionFromText(dateText, timeText), now), { ...NOWHERE })
 }
 
 /** bournemouth.co.uk: "Start:" date and time blocks; venue name and coordinates from the Google Maps link. */

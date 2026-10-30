@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { readCityCookie, subscribeNoop, getServerCitySnapshot } from '@/lib/cityCookie'
+import { displayImageUrl } from '@/lib/eventImages'
 
 interface SpotlightEvent {
   slug: string
@@ -101,7 +102,7 @@ export default function LocalSpotlight() {
                 {event.image_url ? (
                   <div
                     className="absolute inset-0 bg-cover bg-center transition-transform duration-300 group-hover:scale-105"
-                    style={{ backgroundImage: `url("${event.image_url}")` }}
+                    style={{ backgroundImage: `url("${displayImageUrl(event.image_url)}")` }}
                   />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-3xl bg-slate-50">
