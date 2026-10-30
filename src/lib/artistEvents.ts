@@ -22,6 +22,10 @@ export interface ArtistEventRow {
   category?: string | null
   /** Earliest known on-sale moment (presale, public sale or listed on-sale), ISO, or null. */
   onSaleDate?: string | null
+  /** Face-value from-price, and Gigsberg resale link / from-price when it has tickets listed. */
+  priceFrom?: number | null
+  resaleFrom?: number | null
+  gigsbergUrl?: string | null
 }
 
 // Shape of one `event_artists` row as returned by PostgREST for
@@ -38,6 +42,10 @@ export interface ArtistEventLink {
         presale_start?: string | null
         public_onsale_start?: string | null
         onsale_date?: string | null
+        price_from?: number | null
+        resale_from?: number | null
+        gigsberg_affiliate_url?: string | null
+        gigsberg_inventory_status?: string | null
         venue: { name: string; city: string } | null
       }
     | null
@@ -63,6 +71,9 @@ export function toArtistEventRows(links: ArtistEventLink[] | null | undefined): 
       venueCity: e.venue?.city ?? null,
       category: e.category ?? null,
       onSaleDate: [e.presale_start, e.public_onsale_start, e.onsale_date].filter((d): d is string => !!d).sort()[0] ?? null,
+      priceFrom: e.price_from ?? null,
+      resaleFrom: e.resale_from ?? null,
+      gigsbergUrl: e.gigsberg_inventory_status === 'available' ? e.gigsberg_affiliate_url ?? null : null,
     })
   }
   return rows.sort((a, b) => a.startDate.localeCompare(b.startDate))

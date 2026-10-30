@@ -52,7 +52,7 @@ const getArtistUpcomingEvents = cache(async (artistId: string): Promise<ArtistEv
   const supabase = createPublicClient()
   const { data } = await supabase
     .from('event_artists')
-    .select('events!inner(id, slug, title, start_date, status, category, presale_start, public_onsale_start, onsale_date, venue:venues(name, city))')
+    .select('events!inner(id, slug, title, start_date, status, category, presale_start, public_onsale_start, onsale_date, price_from, resale_from, gigsberg_affiliate_url, gigsberg_inventory_status, venue:venues(name, city))')
     .eq('artist_id', artistId)
     .gte('events.start_date', new Date().toISOString())
     .in('events.status', LIVE_EVENT_STATUSES)
@@ -397,11 +397,12 @@ export default async function ArtistPage({ params }: PageProps) {
               <div className="space-y-3">
                 {eventRows.map(e => {
                   const dt = new Date(e.startDate)
+                  const pounds = (n: number) => `£${Number(n).toFixed(Number(n) % 1 ? 2 : 0)}`
                   return (
+                    <div key={e.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:border-slate-400 transition-colors">
                     <Link
-                      key={e.id}
                       href={`/events/${e.slug}`}
-                      className="bg-white rounded-2xl border border-slate-200 shadow-sm px-4 sm:px-6 py-4 flex items-center gap-4 sm:gap-6 hover:border-slate-400 transition-colors"
+                      className="px-4 sm:px-6 py-4 flex items-center gap-4 sm:gap-6"
                     >
                       <div className="text-center w-14 shrink-0">
                         <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -424,8 +425,23 @@ export default async function ArtistPage({ params }: PageProps) {
                         {e.status === 'sold_out'
                           ? <span className="text-xs font-semibold text-orange-600">Sold out · resale</span>
                           : <span className="text-sm font-bold" style={{ color: '#E8003D' }}>Tickets →</span>}
+                        {e.priceFrom && e.status !== 'sold_out' ? <p className="text-xs text-slate-500 mt-0.5">from {pounds(e.priceFrom)}</p> : null}
                       </div>
                     </Link>
+                    {e.gigsbergUrl && (
+                      <TrackedTicketLink
+                        href={outLink('gb', e.gigsbergUrl)}
+                        provider="Gigsberg"
+                        section="artist_dates"
+                        context={e.slug}
+                        className="flex items-center justify-between text-white text-sm font-bold px-4 sm:px-6 py-2.5 hover:opacity-90"
+                        style={{ backgroundColor: '#1a1f6e' }}
+                      >
+                        <span>Resale on Gigsberg{e.resaleFrom ? ` · from ${pounds(e.resaleFrom)}` : ' · tickets listed'}</span>
+                        <span aria-hidden>→</span>
+                      </TrackedTicketLink>
+                    )}
+                    </div>
                   )
                 })}
               </div>

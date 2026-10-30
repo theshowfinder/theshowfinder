@@ -37,3 +37,6 @@ alter table public.advertiser_applications enable row level security;
 
 create index if not exists advertiser_applications_payment_idx
   on public.advertiser_applications (payment_status, created_at desc);
+
+-- Grant recorded 30 Oct 2026 (already in place on the live database).
+grant select, insert, update, delete on public.advertiser_applications to service_role;

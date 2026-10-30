@@ -252,7 +252,7 @@ const getRelatedEvents = cache(async (event: EventDetail, headlinerId: string | 
 
 // ── Ticket providers ────────────────────────────────────────────────────────
 
-function buildProviders(event: Pick<EventDetail, 'slug' | 'ttd_url' | 'ttd_price' | 'price_from' | 'price_source' | 'resale_from' | 'presale_start' | 'public_onsale_start' | 'onsale_date' | 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>) {
+function buildProviders(event: Pick<EventDetail, 'slug' | 'title' | 'status' | 'ttd_url' | 'ttd_price' | 'price_from' | 'price_source' | 'resale_from' | 'presale_start' | 'public_onsale_start' | 'onsale_date' | 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>) {
   const mainPrimary = event.tickets_url
     ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: ticketmasterOutLink(event.tickets_url, `evt-${event.slug}`) }]
     : event.gigsberg_affiliate_url
@@ -273,15 +273,33 @@ function buildProviders(event: Pick<EventDetail, 'slug' | 'ttd_url' | 'ttd_price
   const theatreTicketsDirect = event.ttd_url
     ? [{ name: 'Theatre Tickets Direct', tagline: `Official theatre agent${event.ttd_price ? ` · from ${money(event.ttd_price, '£')}` : ''}`, bg: '#7b1e3a', href: outLink('td', event.ttd_url, `evt-${event.slug}`) }]
     : []
-  const primary = !isTicketmasterCommissionEligible(event) && seeTickets.length
-    ? [...seeTickets, ...mainPrimary, ...theatreTicketsDirect]
-    : [...mainPrimary, ...seeTickets, ...theatreTicketsDirect]
+  // Same window, no See Tickets, and Gigsberg has tickets listed: Gigsberg (which pays) goes first, Ticketmaster
+  // stays right under it for presale access.
+  const gigsbergLeads = !!event.tickets_url && !isTicketmasterCommissionEligible(event) && !seeTickets.length
+    && !!event.gigsberg_affiliate_url && event.gigsberg_inventory_status === 'available'
+  const gigsbergLead = gigsbergLeads
+    ? [{ name: 'Gigsberg', tagline: `Resale · tickets listed now${event.resale_from ? ` · from ${money(event.resale_from, '£')}` : ''}`, bg: '#1a1f6e', href: outLink('gb', event.gigsberg_affiliate_url!) }]
+    : []
+  const primary = gigsbergLeads
+    ? [...gigsbergLead, ...mainPrimary, ...theatreTicketsDirect]
+    : !isTicketmasterCommissionEligible(event) && seeTickets.length
+      ? [...seeTickets, ...mainPrimary, ...theatreTicketsDirect]
+      : [...mainPrimary, ...seeTickets, ...theatreTicketsDirect]
   const resale = [
-    ...(event.tickets_url && event.gigsberg_affiliate_url ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_affiliate_url), price: event.resale_from ? `from ${money(event.resale_from, '£')}` : undefined }] : []),
+    ...(event.tickets_url && event.gigsberg_affiliate_url && !gigsbergLeads ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_affiliate_url), price: event.resale_from ? `from ${money(event.resale_from, '£')}` : undefined }] : []),
     ...(!event.tickets_url && !event.gigsberg_affiliate_url && event.gigsberg_url && !isBareProviderHomepage(event.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_url) }] : []),
     ...(event.viagogo_url && !isBareProviderHomepage(event.viagogo_url) ? [{ name: 'Viagogo', bg: '#00a650', href: outLink('vg', event.viagogo_url) }] : []),
     ...(event.stubhub_url && !isBareProviderHomepage(event.stubhub_url) ? [{ name: 'StubHub', bg: '#400078', href: outLink('sh', event.stubhub_url) }] : []),
   ]
+  // Sold out with no resale seller linked: never a dead end. Search the two big resale sites for the show
+  // (their affiliate templates wrap these once approved; until then they are plain links).
+  if (event.status === 'sold_out' && resale.length === 0) {
+    const q = encodeURIComponent(event.title.replace(/\s+[-–|:].*$/, '').trim() || event.title)
+    resale.push(
+      { name: 'Viagogo', bg: '#00a650', href: outLink('vg', `https://www.viagogo.co.uk/search?q=${q}`), price: 'Search resale' },
+      { name: 'StubHub', bg: '#400078', href: outLink('sh', `https://www.stubhub.com/search?q=${q}`), price: 'Search resale' },
+    )
+  }
   return { primary, resale }
 }
 

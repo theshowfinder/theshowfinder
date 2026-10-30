@@ -736,6 +736,9 @@ export interface Database {
           venue_id: string
           venue_name: string
           venue_slug: string | null
+          /** Gigsberg resale from-price and stock (migration 104); optional so older fixtures still type-check. */
+          resale_from?: number | null
+          gigsberg_inventory_status?: string | null
           venue_city: string
           venue_postcode: string
           venue_capacity: number | null
@@ -771,6 +774,9 @@ export interface Database {
           venue_id: string
           venue_name: string
           venue_slug: string | null
+          /** Gigsberg resale from-price and stock (migration 104); optional so older fixtures still type-check. */
+          resale_from?: number | null
+          gigsberg_inventory_status?: string | null
           venue_city: string
           venue_postcode: string
           venue_capacity: number | null

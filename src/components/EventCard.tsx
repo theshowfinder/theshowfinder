@@ -138,6 +138,13 @@ export default function EventCard({ event, run }: Props) {
           )}
         </div>
 
+        {/* Gigsberg has tickets listed: say so on the card, so a sold-out or not-yet-on-sale show still has a way in. */}
+        {event.gigsberg_inventory_status === 'available' && (
+          <span className="self-start text-xs font-bold px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: '#1a1f6e' }}>
+            Resale{event.resale_from ? ` from £${Number(event.resale_from).toFixed(Number(event.resale_from) % 1 ? 2 : 0)}` : ' tickets listed'}
+          </span>
+        )}
+
         {formatPrice(event.price_from, event.price_to, event.currency) && (
           <div className="flex items-center justify-between pt-2 border-t border-slate-100 mt-auto">
             <span className="text-sm font-bold text-slate-800">

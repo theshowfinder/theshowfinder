@@ -83,6 +83,7 @@ export type TicketClickSection =
   | 'more_options'
   | 'also_available'
   | 'secondary_market'
+  | 'artist_dates'
 
 export interface TicketClickParams {
   provider: string

@@ -37,3 +37,6 @@ values (
   array['image/png', 'image/jpeg', 'image/webp', 'application/pdf']::text[]
 )
 on conflict (id) do nothing;
+
+-- Grant recorded 30 Oct 2026 (already in place on the live database).
+grant select, insert, update, delete on public.advertiser_applications to service_role;
