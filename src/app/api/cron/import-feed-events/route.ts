@@ -11,7 +11,8 @@ async function runOnce() {
   try {
     const result = await importFeedEvents({ deadlineMs: Date.now() + 240_000 })
     if (result.mode === 'live' && (result.gigsberg.imported > 0 || result.see_tickets.imported > 0)) {
-      revalidatePath('/events', 'layout')
+      // New shows have no cached page yet; existing pages whose links changed are rebuilt by refresh-listings
+      // (src/lib/changedPages.ts). Only the city lists need refreshing now.
       revalidatePath('/cities', 'layout')
     }
     return NextResponse.json({ success: result.gigsberg.errors + result.see_tickets.errors === 0 || result.gigsberg.imported + result.see_tickets.imported > 0 || result.mode !== 'live', ...result })

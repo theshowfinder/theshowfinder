@@ -8,6 +8,7 @@ import { fetchAllPages, fetchAllPagesParallel } from '@/lib/pagedFetch'
 import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
 import { ukToday } from '@/lib/ukTime'
 import { logoutAction, createSocialPackForStoryAction } from './actions'
+import PendingButton from '@/components/admin/PendingButton'
 
 // The admin home: the morning check, and the only page needed each day. Did every step of the overnight run work, how many shows carry 3 / 2 / 1 seller links,
 // and how many decisions are waiting. The steps run in this order (vercel.json): fetch -> match -> merge -> create ->
@@ -125,7 +126,7 @@ export default async function AdminTodayPage({ searchParams }: { searchParams: P
                       <div className="mt-2">
                         {pack
                           ? <Link href={`/admin/social/${pack}`} className="inline-block text-xs font-bold rounded-full px-3 py-1.5 bg-blue-100 text-blue-800">Open social post</Link>
-                          : <form action={createSocialPackForStoryAction.bind(null, s.id)}><button type="submit" className="text-xs font-bold rounded-full px-3 py-1.5 bg-slate-900 text-white">Make social post</button></form>}
+                          : <form action={createSocialPackForStoryAction.bind(null, s.id)}><PendingButton pendingLabel="Making post…" className="text-xs font-bold rounded-full px-3 py-1.5 bg-slate-900 text-white">Make social post</PendingButton></form>}
                       </div>
                     </div>
                   </li>

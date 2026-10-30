@@ -18,7 +18,6 @@ async function handleGet(request: Request) {
     const result = await mergeVenueFamilyDuplicates({ dryRun })
     if (!dryRun && (result.merged || result.extrasMerged)) {
       revalidatePath('/cities/[city]', 'page')
-      revalidatePath('/venues/[slug]', 'page')
       revalidatePath('/events')
       revalidatePath('/')
       revalidatePath('/sitemap.xml')

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { mergeEventsInto } from '@/lib/venueFamilyMerge'
+import { revalidateEventPages } from '@/lib/changedPages'
 
 async function checkAuth() {
   const store = await cookies()
@@ -26,7 +27,9 @@ export async function mergeGroupAction(formData: FormData) {
   let message = ''
   let ok = true
   try {
-    const { merged, clashes } = await mergeEventsInto(keepId, (review.event_ids as string[]).filter(id => id !== keepId))
+    // The listing grouping (refresh_event_canonical) catches up on the next refresh-listings run; running it here
+    // made every click wait for a whole-table rebuild.
+    const { merged, clashes } = await mergeEventsInto(keepId, (review.event_ids as string[]).filter(id => id !== keepId), { refreshCanonical: false })
     await db.from('event_merge_reviews').update({ status: 'merged', decided_at: new Date().toISOString(), suggested_keep_id: keepId }).eq('id', reviewId)
     message = `Merged ${merged} listing${merged === 1 ? '' : 's'} into the one you kept.${clashes.length ? ` Note: ${clashes.join('; ')}` : ''}`
   } catch (e) {
@@ -34,7 +37,7 @@ export async function mergeGroupAction(formData: FormData) {
     message = `Could not merge: ${e instanceof Error ? e.message : String(e)}`
   }
   revalidatePath('/admin/decisions')
-  revalidatePath('/events', 'layout')
+  await revalidateEventPages(db, (review?.event_ids as string[] | undefined) ?? [])
   back(message, ok, page)
 }
 

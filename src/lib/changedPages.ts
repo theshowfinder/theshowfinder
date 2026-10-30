@@ -22,3 +22,11 @@ export async function revalidateChangedShowPages(admin: Loose): Promise<{ events
   for (const s of venues) revalidatePath(`/venues/${s}`, 'layout')   // includes its /p/<n> pages
   return { events: events.size, artists: artists.size, venues: venues.size }
 }
+
+/** Rebuild just these shows' pages straight away (admin actions), instead of every event page on the site. */
+export async function revalidateEventPages(admin: Loose, ids: Array<string | null | undefined>): Promise<void> {
+  const list = [...new Set(ids.filter((id): id is string => !!id))]
+  if (!list.length) return
+  const { data } = await admin.from('events').select('slug').in('id', list) as { data: Array<{ slug: string | null }> | null }
+  for (const r of data ?? []) if (r.slug) revalidatePath(`/events/${r.slug}`)
+}

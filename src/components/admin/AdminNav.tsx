@@ -28,7 +28,7 @@ export default function AdminNav() {
   const tab = activeTab(path)
   const page = [...tab.pages].sort((a, b) => b[0].length - a[0].length).find(([href]) => under(path, href))?.[0]
   return (
-    <nav className="bg-slate-900 text-white sticky top-0 z-40">
+    <nav className="bg-slate-900 text-white">
       <div className="max-w-6xl mx-auto px-3 flex items-center gap-1 overflow-x-auto">
         <Link href="/admin" className="font-extrabold text-sm pr-3 py-3 shrink-0">Admin</Link>
         {TABS.map(t => (

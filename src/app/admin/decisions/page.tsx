@@ -5,6 +5,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ukToday } from '@/lib/ukTime'
 import { mergeGroupAction, notSameAction } from './actions'
+import PendingButton from '@/components/admin/PendingButton'
 
 // Decisions: everything the automatic jobs could not decide, in one place.
 //   Possible duplicates  -> on this page (event_merge_reviews), Merge or Not the same show
@@ -68,7 +69,7 @@ export default async function DecisionsPage({ searchParams }: { searchParams: Pr
             return (
               <div key={r.id} className={card}>
                 <p className="text-xs font-semibold text-amber-700 mb-2">{isExtra ? 'An extra (hotel bundle, parking, VIP…) with no clear main show' : 'Why it needs you'}: {r.reasons.join('; ')}</p>
-                {events.length < (isExtra ? 1 : 2) && <p className="text-sm text-slate-500">Already resolved (a listing has passed or been merged). <form action={notSameAction} className="inline"><input type="hidden" name="review_id" value={r.id} /><input type="hidden" name="page" value={String(page)} /><button className="underline font-semibold">Clear it</button></form></p>}
+                {events.length < (isExtra ? 1 : 2) && <p className="text-sm text-slate-500">Already resolved (a listing has passed or been merged). <form action={notSameAction} className="inline"><input type="hidden" name="review_id" value={r.id} /><input type="hidden" name="page" value={String(page)} /><PendingButton pendingLabel="Clearing…" className="underline font-semibold">Clear it</PendingButton></form></p>}
                 <div className="divide-y divide-slate-100">
                   {events.map(e => (
                     <div key={e.id} className="py-2 flex flex-wrap items-center justify-between gap-3">
@@ -78,12 +79,12 @@ export default async function DecisionsPage({ searchParams }: { searchParams: Pr
                       </div>
                       <div className="flex items-center gap-3">
                         <Link href={`/events/${liveById.get(e.id)?.slug ?? e.slug ?? ''}`} target="_blank" className="text-sm text-blue-600 font-semibold">Open →</Link>
-                        {!isExtra && <form action={mergeGroupAction}><input type="hidden" name="review_id" value={r.id} /><input type="hidden" name="keep_id" value={e.id} /><input type="hidden" name="page" value={String(page)} /><button className="rounded-lg bg-green-700 text-white font-bold text-sm px-3 py-1.5">Keep this one</button></form>}
+                        {!isExtra && <form action={mergeGroupAction}><input type="hidden" name="review_id" value={r.id} /><input type="hidden" name="keep_id" value={e.id} /><input type="hidden" name="page" value={String(page)} /><PendingButton pendingLabel="Merging…" className="rounded-lg bg-green-700 text-white font-bold text-sm px-3 py-1.5">Keep this one</PendingButton></form>}
                       </div>
                     </div>
                   ))}
                 </div>
-                {events.length >= (isExtra ? 1 : 2) && <form action={notSameAction} className="mt-2"><input type="hidden" name="review_id" value={r.id} /><input type="hidden" name="page" value={String(page)} /><button className="rounded-lg border border-slate-300 text-slate-700 font-bold text-sm px-3 py-1.5">{isExtra ? 'Leave it listed' : 'Not the same show'}</button></form>}
+                {events.length >= (isExtra ? 1 : 2) && <form action={notSameAction} className="mt-2"><input type="hidden" name="review_id" value={r.id} /><input type="hidden" name="page" value={String(page)} /><PendingButton pendingLabel="Saving…" className="rounded-lg border border-slate-300 text-slate-700 font-bold text-sm px-3 py-1.5">{isExtra ? 'Leave it listed' : 'Not the same show'}</PendingButton></form>}
               </div>
             )
           })}

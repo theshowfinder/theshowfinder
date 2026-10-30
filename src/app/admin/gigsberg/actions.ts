@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import { revalidateEventPages } from '@/lib/changedPages'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncGigsbergCatalogue } from '@/lib/gigsbergCatalogue'
@@ -121,7 +122,7 @@ export async function approveExistingGigsbergMatchAction(formData: FormData) {
   if (error) throw new Error(error.message)
 
   revalidatePath('/admin/gigsberg/matches')
-  revalidatePath('/events', 'layout')
+  await revalidateEventPages(db, [eventId])
   const returnTo = String(formData.get('return_to') ?? '')
   if (returnTo.startsWith('/admin/')) {
     redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}approved=existing`)
@@ -230,7 +231,7 @@ export async function linkGigsbergToExistingEventAction(formData: FormData) {
   revalidatePath('/admin/gigsberg/matches')
   revalidatePath('/admin/gigsberg/link')
   revalidatePath('/admin/gigsberg/coverage')
-  revalidatePath('/events', 'layout')
+  await revalidateEventPages(db, [eventId])
   const returnTo = String(formData.get('return_to') ?? '')
   if (returnTo.startsWith('/admin/')) redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}linked=1`)
   redirect(`/admin/gigsberg/coverage?city=${encodeURIComponent(row.city ?? '')}&linked=1`)
@@ -262,7 +263,7 @@ export async function linkSeeTicketsToExistingEventAction(formData: FormData) {
   if (catalogueUpdateError) throw new Error(catalogueUpdateError.message)
 
   revalidatePath('/admin/see-tickets')
-  revalidatePath('/events', 'layout')
+  await revalidateEventPages(db, [eventId])
   const returnTo = String(formData.get('return_to') ?? '')
   if (returnTo.startsWith('/admin/')) redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}linked=1`)
   redirect('/admin/see-tickets?linked=1')
@@ -297,7 +298,7 @@ export async function createSeeTicketsEventAction(formData: FormData) {
   }
   const { error: updateError } = await db.from('see_tickets_catalogue_events').update({ matched_event_id: event.id, match_status: 'approved_new', match_reason: 'New Showfinder page created by admin', match_checked_at: new Date().toISOString() }).eq('id', catalogueId)
   if (updateError) throw new Error(updateError.message)
-  revalidatePath('/admin/see-tickets'); revalidatePath('/events', 'layout'); revalidatePath('/cities', 'layout')
+  revalidatePath('/admin/see-tickets'); await revalidateEventPages(db, [event.id]); revalidatePath('/cities', 'layout')
   const returnTo = String(formData.get('return_to') ?? '')
   if (returnTo.startsWith('/admin/')) redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}created=1`)
   redirect('/admin/see-tickets?created=1')
@@ -387,7 +388,7 @@ export async function createGigsbergEventAction(formData: FormData) {
   if (error) throw new Error(error.message)
 
   revalidatePath('/admin/gigsberg/matches')
-  revalidatePath('/events', 'layout')
+  await revalidateEventPages(db, [event.id])
   revalidatePath('/cities', 'layout')
   const returnTo = String(formData.get('return_to') ?? '')
   if (returnTo.startsWith('/admin/')) redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}created=1`)

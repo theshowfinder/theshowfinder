@@ -224,7 +224,7 @@ export async function mergeVenueFamilyDuplicates(opts: { dryRun?: boolean; limit
  * A person's decision from the admin Decisions page: merge `dupIds` into `keepId`, exactly as the nightly job would
  * (seller links, acts, saved events and news move; each copy redirects to the kept event; nothing is deleted).
  */
-export async function mergeEventsInto(keepId: string, dupIds: string[]): Promise<{ merged: number; clashes: string[] }> {
+export async function mergeEventsInto(keepId: string, dupIds: string[], opts: { refreshCanonical?: boolean } = {}): Promise<{ merged: number; clashes: string[] }> {
   const db: Db = createAdminClient()
   const ids = [keepId, ...dupIds.filter(id => id && id !== keepId)]
   const [{ data, error }, { data: srcs }] = await Promise.all([
@@ -247,7 +247,7 @@ export async function mergeEventsInto(keepId: string, dupIds: string[]): Promise
     clashes.push(...r.clashes)
     merged++
   }
-  if (merged) {
+  if (merged && opts.refreshCanonical !== false) {
     const { error: refreshError } = await db.rpc('refresh_event_canonical')
     if (refreshError) throw new Error(`refresh_event_canonical: ${refreshError.message}`)
   }
