@@ -132,7 +132,7 @@ export default async function SocialPackDetailPage({ params, searchParams }: Pag
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
           <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Status</h2>
           <p className="text-sm text-slate-500 mb-4">
-            {pack.city_name ?? 'National'} · {pack.source_type === 'news_candidate' ? 'From a published news story' : 'From an event'} ·
+            {pack.city_name ?? 'National'} · {pack.source_type === 'news_candidate' ? 'From a published news story' : pack.source_type === 'news_story' ? 'From our news page' : 'From an event'} ·
             Draft → Ready for review → Approved → Posted, one step at a time. Posted only means you confirmed, by hand,
             that you posted it yourself — nothing here ever posts for you.
           </p>

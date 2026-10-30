@@ -1360,6 +1360,48 @@ export async function createSocialPackForEventAction(eventId: string) {
   redirect('/admin/social/' + packId)
 }
 
+// "Make social post" on the admin home page: one national Social Pack from one of our own news stories
+// (news_stories, the auto-built tour announcements), opened straight in the editor with captions, hashtags,
+// tracked links and the branded image ready to copy. Clicking it again opens the pack already made.
+export async function createSocialPackForStoryAction(storyId: string) {
+  await checkAuth()
+  const db = createAdminClient()
+  let packId: string
+  try {
+    const { data: existing } = await db.from('social_packs').select('id').eq('source_type', 'news_story').eq('source_id', storyId).limit(1).maybeSingle()
+    if (existing) {
+      packId = existing.id
+    } else {
+      const { data: story, error: fetchError } = await db
+        .from('news_stories')
+        .select('id, slug, headline, standfirst, artist_name, story_type, image_url')
+        .eq('id', storyId)
+        .single() as unknown as { data: { id: string; slug: string; headline: string; standfirst: string; artist_name: string; story_type: string; image_url: string | null } | null; error: { message: string } | null }
+      if (fetchError || !story) throw new Error(fetchError?.message || 'Story not found.')
+      const draft = buildSocialPackDraft({
+        sourceType: 'news_story',
+        sourceId: story.id,
+        cityName: null,
+        headline: story.headline,
+        context: story.standfirst || story.headline,
+        destinationPath: `/news/${story.slug}`,
+        hashtagSeed: [story.artist_name, 'UK tour', 'live music'],
+        kind: resolveSocialImageKindFromStoryType(story.story_type === 'new_dates' ? 'new_dates' : 'tour_announcement'),
+        imageUrl: story.image_url,
+      })
+      const { data: pack, error } = await db.from('social_packs').insert(draft).select('id').single()
+      if (error) throw new Error(/source_type/.test(error.message) ? 'Social posts from news stories need the database update (migration 102) first.' : error.message)
+      packId = pack.id
+    }
+    revalidatePath('/admin/social')
+    revalidatePath('/admin')
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Something went wrong while preparing the social post.'
+    redirect('/admin?error=' + encodeURIComponent(message))
+  }
+  redirect('/admin/social/' + packId)
+}
+
 // Edits the three platform drafts, hashtags and headline/context by hand
 // before approval — the same "editable text before approval" requirement
 // the existing Share Kit already meets for news copy, just persisted
@@ -1541,7 +1583,7 @@ export async function regenerateSocialPackImageAction(id: string, formData: Form
         // never unverified.
         venueVerified = true
       }
-    } else {
+    } else if (pack.source_type === 'news_candidate') {
       const { data: candidate } = await db
         .from('news_candidates')
         .select('story_type, artist_name')
