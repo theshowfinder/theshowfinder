@@ -163,7 +163,7 @@ export async function fetchAttractionShows(supabase: SupabaseClient, horizonDays
 //     query). A failed fetch throws, so an error is never cached as "empty".
 //  2. If a fetch still fails, the last good list held in memory is served
 //     instead of an empty page.
-const SHOW_CACHE_SECONDS = 900
+const SHOW_CACHE_SECONDS = 10_800
 const lastGood: { westEnd: Show[] | null; attractions: Show[] | null } = { westEnd: null, attractions: null }
 
 const cachedWestEnd = unstable_cache(

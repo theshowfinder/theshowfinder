@@ -14,6 +14,8 @@ const NEVER_CRAWL = ['/admin', '/admin/', '/embed/', '/out/', '/go/', '/api/', '
 const TRAINING_ONLY = [
   'meta-externalagent', 'ClaudeBot', 'GPTBot', 'CCBot', 'Bytespider', 'Amazonbot',
   'ShapBot', 'PetalBot', 'ExaBot', 'exasearchbot', 'Diffbot', 'ImagesiftBot', 'omgili', 'Timpibot',
+  // SEO-data sellers (30 Oct 2026): they crawl every page and send no visitors.
+  'AhrefsBot', 'SemrushBot', 'MJ12bot', 'DotBot', 'BLEXBot', 'DataForSeoBot', 'SeekportBot', 'serpstatbot', 'barkrowler',
 ]
 
 export default function robots(): MetadataRoute.Robots {

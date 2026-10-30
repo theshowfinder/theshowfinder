@@ -4,7 +4,7 @@ import { citiesPhrase } from '@/lib/tourHub'
 import { shortUkDate } from '@/lib/newShows'
 import { buildRssFeed, rssResponse } from '@/lib/rss'
 
-export const revalidate = 21600
+export const revalidate = 86400
 
 const BASE = 'https://www.theshowfinder.com'
 

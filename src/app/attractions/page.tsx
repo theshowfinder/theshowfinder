@@ -1,7 +1,7 @@
 // Attractions & experiences hub — timed-entry tickets (London Eye, Madame
 // Tussauds, Sea Life, Twist Museum, ...) in one place instead of flooding the
 // "Tonight" / "This Week" show listings. One card per attraction.
-export const revalidate = 3600
+export const revalidate = 10800
 
 import Link from 'next/link'
 import type { Metadata } from 'next'

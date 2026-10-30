@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
 import { withJobRun } from '@/lib/jobRuns'
+import { revalidateChangedShowPages } from '@/lib/changedPages'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -41,12 +42,12 @@ async function handleGet(request: Request) {
   const { data: ttd, error: ttdError } = await (admin as any).rpc('refresh_ttd_links') as { data: unknown; error: { message: string } | null }
   if (ttdError) console.error('[refresh-listings] refresh_ttd_links failed', ttdError.message)
 
-  // Every city page (all 40, plus their this-week / this-weekend views),
-  // the homepage, the browse page, venues and the sitemap.
+  // Every city page (all 40, plus their this-week / this-weekend views), the homepage, the browse page and the
+  // sitemap. Event, artist and venue pages are rebuilt only where something on them changed.
   revalidatePath('/cities/[city]', 'page')
   revalidatePath('/cities/[city]/this-week', 'page')
   revalidatePath('/cities/[city]/this-weekend', 'page')
-  revalidatePath('/venues/[slug]', 'page')
+  const changedPages = await revalidateChangedShowPages(admin)
   revalidatePath('/events')
   revalidatePath('/')
   revalidatePath('/on-sale-this-week')
@@ -55,6 +56,7 @@ async function handleGet(request: Request) {
   return NextResponse.json({
     changedRows: data ?? 0,
     cityPagesRevalidated: CITIES.length,
+    changedPages,
     prices: priceError ? { error: priceError.message } : prices,
     theatreTicketsDirect: ttdError ? { error: ttdError.message } : ttd,
     ms: Date.now() - started,

@@ -2,7 +2,7 @@
 import { createPublicClient } from '@/lib/supabase/public'
 import { buildIcs } from '@/lib/ics'
 
-export const revalidate = 21600
+export const revalidate = 86400
 
 export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params

@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 }
 
 // Counts move slowly; six hours keeps the page fresh without hammering the database.
-export const revalidate = 21600
+export const revalidate = 86400
 
 export default async function InsightsPage() {
   const now = new Date()

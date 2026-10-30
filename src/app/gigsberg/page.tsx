@@ -1,7 +1,7 @@
 // Every upcoming show with Gigsberg tickets currently available. The homepage "Featured
 // Gigsberg events" strip links here. Inventory is checked per show (the admin Gigsberg
 // tools / sync), so the list only contains shows that were recently seen as available.
-export const revalidate = 1800
+export const revalidate = 10800
 
 import Link from 'next/link'
 import type { Metadata } from 'next'

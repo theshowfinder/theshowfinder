@@ -6,7 +6,7 @@ import { shortUkDate, isNewsworthyArtistName } from '@/lib/newShows'
 import { isAttraction } from '@/lib/eventMix'
 import { buildRssFeed, rssResponse } from '@/lib/rss'
 
-export const revalidate = 21600
+export const revalidate = 86400
 
 const BASE = 'https://www.theshowfinder.com'
 

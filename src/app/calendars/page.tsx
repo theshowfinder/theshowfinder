@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   alternates: { canonical: 'https://www.theshowfinder.com/calendars' },
 }
 
-export const revalidate = 3600
+export const revalidate = 10800
 
 export default function CalendarsPage() {
   const cities = [...CITIES].sort((a, b) => a.name.localeCompare(b.name))

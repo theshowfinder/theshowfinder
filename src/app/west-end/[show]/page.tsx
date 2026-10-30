@@ -1,7 +1,7 @@
 // One page per West End show (title + theatre): every upcoming performance,
 // grouped by month, each linking to the event page and its ticket comparison.
 // Targets "{show} tickets" searches.
-export const revalidate = 3600
+export const revalidate = 10800
 
 // Opt this dynamic route into on-demand static generation: no pages are built
 // ahead of time, but each page is generated on first request, then cached on

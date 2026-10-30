@@ -2,7 +2,7 @@
 import { loadInsights } from '@/lib/insightsData'
 import { insightsCsv } from '@/lib/insights'
 
-export const revalidate = 21600
+export const revalidate = 86400
 
 export async function GET() {
   const csv = insightsCsv(await loadInsights())

@@ -2,7 +2,7 @@
 // per-day mix as the This Week page. Weekend intent ("things to do in X this
 // weekend") is one of the most-searched event queries and was not targeted by
 // any page. Rolls over after midnight, so revalidate is short.
-export const revalidate = 1800
+export const revalidate = 10800
 // A page render that takes longer than this has hit a database problem: stop and keep serving the cached copy
 // instead of holding a function open for 5 minutes (29 Oct 2026 outage: 26,000 renders stuck for 300s each).
 export const maxDuration = 60

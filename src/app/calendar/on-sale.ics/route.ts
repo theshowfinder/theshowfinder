@@ -5,7 +5,7 @@ import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { onSaleFeedEvents, type FeedRow } from '@/lib/calendarFeeds'
 import { icsResponse } from '@/lib/calendarResponse'
 
-export const revalidate = 3600
+export const revalidate = 10800
 
 const COLS = 'slug, title, start_date, venue_name, venue_city, public_onsale_start, presale_start, presale_name'
 

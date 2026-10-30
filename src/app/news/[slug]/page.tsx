@@ -1,4 +1,4 @@
-export const revalidate = 1800
+export const revalidate = 86400
 
 import type { Metadata } from 'next'
 import Link from 'next/link'

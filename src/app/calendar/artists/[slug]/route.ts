@@ -4,7 +4,7 @@ import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { showFeedEvents, type FeedRow } from '@/lib/calendarFeeds'
 import { icsResponse } from '@/lib/calendarResponse'
 
-export const revalidate = 21600
+export const revalidate = 86400
 
 interface Link {
   events: {

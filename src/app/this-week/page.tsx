@@ -2,7 +2,7 @@
 // this-week page. The homepage "Events This Week" strip links here. Same data and mixing
 // rules as the city versions (fetchEventsThisWeek with no city), so counts and filters agree.
 // The window starts tomorrow, so it must roll over promptly after midnight.
-export const revalidate = 1800
+export const revalidate = 10800
 // A page render that takes longer than this has hit a database problem: stop and keep serving the cached copy
 // instead of holding a function open for 5 minutes (29 Oct 2026 outage: 26,000 renders stuck for 300s each).
 export const maxDuration = 60
