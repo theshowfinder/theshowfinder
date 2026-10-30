@@ -39,3 +39,17 @@ Two AI assistants work on this repo, sometimes at the same time: Claude (Cowork,
 
 ## Before committing
 - Run `npm test` and `npm run lint`. Both must pass.
+
+## Build for the target size (Chris, 30 Oct 2026)
+The plan is every UK event 12 months ahead (40,000+ shows), then Europe and the US, with search engines and bots
+crawling every page. Build for that from the start, never for what is in the database today. Before handing over:
+1. **Never rebuild or invalidate the whole site.** No `revalidatePath('/events', 'layout')`, `'/venues/[slug]'`
+   or similar. Rebuild only the pages a change touches (`revalidateEventPages` / `revalidateChangedShowPages` in
+   `src/lib/changedPages.ts`). Event, artist and venue pages are cached for a week and rebuilt when their show changes.
+2. **Cost per visit.** Assume every page is crawled daily. A change must not make a page rebuild on a timer shorter
+   than its data changes, or run database work per visit that could run once a night. Vercel must stay under $50/month.
+3. **Admin buttons answer in seconds** and show they are working (`src/components/admin/PendingButton.tsx`).
+   Whole-table work (refresh_event_canonical, sweeps) belongs in the scheduled jobs, never behind a button.
+4. **Test at 50,000 shows**: queries filtered and limited, no loading whole tables into a page.
+5. **Phone first**: check every page change at phone width before it ships.
+6. **One place for each job**: look for existing code that does it and change that, so a fix lands everywhere.
