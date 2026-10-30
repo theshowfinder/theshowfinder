@@ -252,7 +252,7 @@ const getRelatedEvents = cache(async (event: EventDetail, headlinerId: string | 
 
 // ── Ticket providers ────────────────────────────────────────────────────────
 
-function buildProviders(event: Pick<EventDetail, 'slug' | 'title' | 'status' | 'ttd_url' | 'ttd_price' | 'price_from' | 'price_source' | 'resale_from' | 'presale_start' | 'public_onsale_start' | 'onsale_date' | 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>) {
+function buildProviders(event: Pick<EventDetail, 'slug' | 'title' | 'status' | 'category' | 'source' | 'ttd_url' | 'ttd_price' | 'price_from' | 'price_source' | 'resale_from' | 'presale_start' | 'public_onsale_start' | 'onsale_date' | 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>) {
   const mainPrimary = event.tickets_url
     ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: ticketmasterOutLink(event.tickets_url, `evt-${event.slug}`) }]
     : event.gigsberg_affiliate_url
@@ -291,15 +291,17 @@ function buildProviders(event: Pick<EventDetail, 'slug' | 'title' | 'status' | '
     ...(event.viagogo_url && !isBareProviderHomepage(event.viagogo_url) ? [{ name: 'Viagogo', bg: '#00a650', href: outLink('vg', event.viagogo_url) }] : []),
     ...(event.stubhub_url && !isBareProviderHomepage(event.stubhub_url) ? [{ name: 'StubHub', bg: '#400078', href: outLink('sh', event.stubhub_url) }] : []),
   ]
-  // Sold out with no resale seller linked: never a dead end. Search the two big resale sites for the show
-  // (their affiliate templates wrap these once approved; until then they are plain links).
-  if (event.status === 'sold_out' && resale.length === 0) {
-    const q = encodeURIComponent(event.title.replace(/\s+[-–|:].*$/, '').trim() || event.title)
-    resale.push(
-      { name: 'Viagogo', bg: '#00a650', href: outLink('vg', `https://www.viagogo.co.uk/search?q=${q}`), price: 'Search resale' },
-      { name: 'StubHub', bg: '#400078', href: outLink('sh', `https://www.stubhub.com/search?q=${q}`), price: 'Search resale' },
-    )
-  }
+  // Viagogo, StubHub and Vivid Seats on every show: a search for this show on each, in its own colours, so fans can
+  // compare resale. Plain links until those affiliate programmes approve us; the /out hop then wraps them with the
+  // tracking template (VIAGOGO_ / STUBHUB_ / VIVIDSEATS_AFFILIATE_TEMPLATE) with no page change needed.
+  // Not on local council / tourism listings (village fetes, workshops): resale sites never carry those.
+  const isLocal = event.category === 'local' || /_council$/.test(event.source ?? '')
+  const q = encodeURIComponent(event.title.replace(/\s+[-–|:].*$/, '').trim() || event.title)
+  const has = (name: string) => resale.some(r => r.name === name)
+  if (isLocal) return { primary, resale }
+  if (!has('Viagogo')) resale.push({ name: 'Viagogo', bg: '#00a650', href: outLink('vg', `https://www.viagogo.co.uk/search?q=${q}`), price: 'Search resale' })
+  if (!has('StubHub')) resale.push({ name: 'StubHub', bg: '#400078', href: outLink('sh', `https://www.stubhub.com/search?q=${q}`), price: 'Search resale' })
+  resale.push({ name: 'Vivid Seats', bg: '#02044a', href: outLink('vs', `https://www.vividseats.com/search?searchTerm=${q}`), price: 'Search resale' })
   return { primary, resale }
 }
 
@@ -509,7 +511,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   // Sold out at Ticketmaster but Gigsberg has it: that is where we send people (and earn).
   const soldOutGigsberg = event.status === 'sold_out' ? resale.find(r => r.name === 'Gigsberg') ?? null : null
   const moreOptions = soldOutGigsberg ? resale.filter(r => r.name !== 'Gigsberg') : resale
-  const sellerCount = primary.length + resale.length
+  // Search buttons (Viagogo / StubHub / Vivid Seats searches) are not sellers that hold this show.
+  const sellerResale = resale.filter(r => r.price !== 'Search resale')
+  const sellerCount = primary.length + sellerResale.length
   const grouping = await getCanonicalInfo(event.id, event)
   // Local events (council / tourism-board listings: Visit Bristol, Visit Leicester...) keep their listing page in
   // own_ticket_url. That is the organiser's information page, not tickets we hold, so it is never shown as
@@ -518,7 +522,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const ownLink = event.own_ticket_url && !isGigsbergUrl(event.own_ticket_url) ? event.own_ticket_url : null
   const ownTicketUrl = isLocalListing ? null : ownLink
   // A merged council / tourism copy's page is kept in info_links: offered only when no seller sells this show.
-  const infoLink = !primary.length && !resale.length && !ownTicketUrl ? (event.info_links ?? []).find(l => /^https?:\/\//.test(l.url))?.url ?? null : null
+  const infoLink = !primary.length && !sellerResale.length && !ownTicketUrl ? (event.info_links ?? []).find(l => /^https?:\/\//.test(l.url))?.url ?? null : null
   const localListingUrl = isLocalListing ? ownLink ?? infoLink : infoLink
   const localListingHost = localListingUrl ? (() => { try { return new URL(localListingUrl).hostname.replace(/^www\./, '') } catch { return 'the organiser' } })() : null
   const highlightActive = event.gigsberg_highlighted && event.gigsberg_inventory_status === 'available' && (!event.gigsberg_highlight_until || new Date(event.gigsberg_highlight_until) > new Date())
