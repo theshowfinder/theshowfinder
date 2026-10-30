@@ -19,6 +19,7 @@ import { eventImageUrl } from '@/lib/eventImages'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { outLink } from '@/lib/affiliate'
 import { seeTicketsUrlForShow } from '@/lib/seeTicketsWestEnd'
+import { createPublicClient } from '@/lib/supabase/public'
 import NewsletterInline from '@/components/NewsletterInline'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import type { ShowDate } from '@/lib/shows'
@@ -75,6 +76,11 @@ export default async function WestEndShowPage({ params }: { params: Promise<{ sh
   const sym = show.currency === 'GBP' ? '£' : show.currency
   const dates = show.dates.slice(0, MAX_DATES_SHOWN)
   const seeTicketsUrl = show.status !== 'sold_out' ? seeTicketsUrlForShow(show.title, show.venueName) : null
+  // Theatre Tickets Direct (migration 100): the show's page and from-price, read from the next performance.
+  const { data: ttd } = await createPublicClient().from('events').select('ttd_url, ttd_price').eq('slug', show.nextEventSlug).maybeSingle() as unknown as { data: { ttd_url: string | null; ttd_price: number | null } | null }
+  const ttdUrl = show.status !== 'sold_out' ? ttd?.ttd_url ?? null : null
+  const money = (n: number) => `${sym}${Number.isInteger(Number(n)) ? Number(n) : Number(n).toFixed(2)}`
+  const fromPrice = show.priceFrom ?? (ttd?.ttd_price != null ? Number(ttd.ttd_price) : null)
 
   const byMonth = new Map<string, ShowDate[]>()
   for (const d of dates) {
@@ -126,7 +132,7 @@ export default async function WestEndShowPage({ params }: { params: Promise<{ sh
           </p>
           <p className="text-white/70 text-sm mb-6">
             🎟️ {show.dateCount} upcoming {show.dateCount === 1 ? 'performance' : 'performances'} · next on {fmtDay(show.nextDate)}, {fmtTime(show.nextDate)}
-            {show.priceFrom ? ` · from ${sym}${show.priceFrom}` : ''}
+            {fromPrice ? ` · from ${money(fromPrice)}` : ''}
           </p>
           {show.status !== 'sold_out' && (
             <div className="flex flex-col sm:flex-row gap-3">
@@ -141,6 +147,19 @@ export default async function WestEndShowPage({ params }: { params: Promise<{ sh
                   style={{ backgroundColor: '#E4022D' }}
                 >
                   Book {show.title} with See Tickets ↗
+                </TrackedTicketLink>
+              )}
+              {ttdUrl && (
+                <TrackedTicketLink
+                  href={outLink('td', ttdUrl, `west-end-${show.slug}`)}
+                  provider="Theatre Tickets Direct"
+                  section="hero_cta"
+                  context={`west-end-show:${show.slug}`}
+                  rel="sponsored noopener noreferrer"
+                  className="inline-flex items-center justify-center text-white font-bold px-6 py-3 rounded-xl min-h-[48px] hover:opacity-90"
+                  style={{ backgroundColor: '#7b1e3a' }}
+                >
+                  Theatre Tickets Direct{ttd?.ttd_price ? ` · from ${money(Number(ttd.ttd_price))}` : ''} ↗
                 </TrackedTicketLink>
               )}
               <Link
@@ -189,7 +208,7 @@ export default async function WestEndShowPage({ params }: { params: Promise<{ sh
                       <li key={d.id} className="flex items-center justify-between gap-3 px-4 py-3">
                         <div className="min-w-0">
                           <p className="font-semibold text-slate-900 text-sm">{fmtDay(d.start_date)}</p>
-                          <p className="text-xs text-slate-500">{fmtTime(d.start_date)}{d.price_from ? ` · from ${sym}${d.price_from}` : ''}</p>
+                          <p className="text-xs text-slate-500">{fmtTime(d.start_date)}{d.price_from ? ` · from ${money(Number(d.price_from))}` : fromPrice ? ` · from ${money(fromPrice)}` : ''}</p>
                         </div>
                         {off ? (
                           <span className="text-xs font-bold px-3 py-2 rounded-lg bg-slate-200 text-slate-500">Sold out</span>
