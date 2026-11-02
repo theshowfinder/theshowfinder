@@ -42,20 +42,29 @@ async function handleGet(request: Request) {
   const { data: ttd, error: ttdError } = await (admin as any).rpc('refresh_ttd_links') as { data: unknown; error: { message: string } | null }
   if (ttdError) console.error('[refresh-listings] refresh_ttd_links failed', ttdError.message)
 
-  // Every city page (all 40, plus their this-week / this-weekend views), the homepage, the browse page and the
-  // sitemap. Event, artist and venue pages are rebuilt only where something on them changed.
-  revalidatePath('/cities/[city]', 'page')
-  revalidatePath('/cities/[city]/this-week', 'page')
-  revalidatePath('/cities/[city]/this-weekend', 'page')
+  // Event, artist and venue pages are rebuilt only where something on them changed.
   const changedPages = await revalidateChangedShowPages(admin)
-  revalidatePath('/events')
-  revalidatePath('/')
-  revalidatePath('/on-sale-this-week')
-  revalidatePath('/sitemap.xml')
+
+  // The list pages (all 40 cities plus their this-week / this-weekend views, the homepage, the browse page, on-sale and
+  // the sitemap) already refresh themselves every 3 hours, so a forced rebuild of ~125 pages is only worth paying for
+  // when something actually changed. If the changed-pages lookup failed we can't tell, so we refresh to be safe.
+  const somethingChanged =
+    (data ?? 0) > 0 ||
+    'error' in changedPages ||
+    changedPages.events + changedPages.artists + changedPages.venues > 0
+  if (somethingChanged) {
+    revalidatePath('/cities/[city]', 'page')
+    revalidatePath('/cities/[city]/this-week', 'page')
+    revalidatePath('/cities/[city]/this-weekend', 'page')
+    revalidatePath('/events')
+    revalidatePath('/')
+    revalidatePath('/on-sale-this-week')
+    revalidatePath('/sitemap.xml')
+  }
 
   return NextResponse.json({
     changedRows: data ?? 0,
-    cityPagesRevalidated: CITIES.length,
+    cityPagesRevalidated: somethingChanged ? CITIES.length : 0,
     changedPages,
     prices: priceError ? { error: priceError.message } : prices,
     theatreTicketsDirect: ttdError ? { error: ttdError.message } : ttd,

@@ -3,12 +3,12 @@ import type { EventCategory } from '@/lib/types/database'
 const GENERIC_IMAGE = 'https://www.theshowfinder.com/og-image.png'
 
 const FALLBACKS: Record<EventCategory, string> = {
-  concert: '/event-fallbacks/concert.png',
-  theatre: '/event-fallbacks/theatre.png',
-  comedy: '/event-fallbacks/comedy.png',
-  sports: '/event-fallbacks/sports.png',
-  family: '/event-fallbacks/family.png',
-  local: '/event-fallbacks/family.png',
+  concert: '/event-fallbacks/concert.webp',
+  theatre: '/event-fallbacks/theatre.webp',
+  comedy: '/event-fallbacks/comedy.webp',
+  sports: '/event-fallbacks/sports.webp',
+  family: '/event-fallbacks/family.webp',
+  local: '/event-fallbacks/family.webp',
 }
 
 const SPORTS_TERMS = /\b(football|soccer|fc|vs\.?|versus|match|fixture|united|rovers?|wanderers?|rangers?|hotspur|derby county|stoke city|arsenal|chelsea|liverpool|leeds|cricket|rugby|boxing|wrestling|tennis|golf|darts|snooker|sport|race|racing|grand prix|motorsport|ice hockey|hockey)\b/i

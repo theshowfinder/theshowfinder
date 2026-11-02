@@ -97,5 +97,5 @@ export function saleStatus(f: StoryFacts, now = Date.now()): SaleStatus {
 }
 
 export function storyImage(s: Pick<NewsStory, 'image_url' | 'image_url_large'>, large = false): string {
-  return (large ? s.image_url_large ?? s.image_url : s.image_url ?? s.image_url_large) ?? '/event-fallbacks/concert.png'
+  return (large ? s.image_url_large ?? s.image_url : s.image_url ?? s.image_url_large) ?? '/event-fallbacks/concert.webp'
 }

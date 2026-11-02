@@ -43,6 +43,14 @@ const nextConfig: NextConfig = {
       })),
     ]
   },
+  async redirects() {
+    // Old PNG paths (still stored on some events / cached externally) now point at the compressed WebP files.
+    return [
+      { source: '/event-fallbacks/:name(concert|theatre|comedy|sports|family).png', destination: '/event-fallbacks/:name.webp', permanent: true },
+      { source: '/city-heroes/:name.png', destination: '/city-heroes/:name.webp', permanent: true },
+      { source: '/heroshowfinder.png', destination: '/heroshowfinder.webp', permanent: true },
+    ]
+  },
   async rewrites() {
     return [
       {
