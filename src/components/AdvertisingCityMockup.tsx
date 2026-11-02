@@ -68,27 +68,40 @@ function EventCard({ event }: { event: MockEvent }) {
 function BusinessCard({ business }: { business: MockBusiness }) {
   const featured = business.featured === true
   return (
-    <article className={`group overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${featured ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200'}`}>
-      <div className={`relative overflow-hidden ${featured ? 'min-h-44' : 'min-h-32'}`}>
-        <img src={business.image} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
-        <div className={`absolute inset-0 ${featured ? 'bg-gradient-to-br from-slate-950/75 via-slate-900/35 to-rose-950/80' : 'bg-gradient-to-br from-slate-950/55 to-slate-900/15'}`} />
+    <article className={`group overflow-hidden rounded-2xl bg-white transition-all duration-200 hover:-translate-y-1 ${featured
+      ? 'border-2 border-slate-950 shadow-xl ring-4 ring-amber-200/80'
+      : 'border border-slate-200 shadow-sm'}`}>
+      {featured && (
+        <div className="flex items-center justify-between bg-slate-950 px-5 py-2.5 text-[11px] font-extrabold uppercase tracking-[0.16em] text-amber-200">
+          <span>Featured placement</span>
+          <span>Premium visibility</span>
+        </div>
+      )}
+      <div className={`relative overflow-hidden ${featured ? 'min-h-56' : 'min-h-28'}`}>
+        <img src={business.image} alt="" aria-hidden="true" className={`absolute inset-0 h-full w-full object-cover ${featured ? 'scale-105' : ''}`} />
+        <div className={`absolute inset-0 ${featured
+          ? 'bg-gradient-to-br from-slate-950/80 via-slate-900/30 to-amber-950/75'
+          : 'bg-gradient-to-br from-slate-950/60 to-slate-900/15'}`} />
         <div className="relative flex h-full min-h-[inherit] items-center justify-between p-5">
-          <span className={`flex h-14 w-14 items-center justify-center rounded-2xl font-extrabold ${featured ? 'bg-white text-rose-600 text-xl' : 'bg-white text-slate-700'}`}>{business.initials}</span>
-          <span className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider ${featured ? 'bg-white text-rose-600' : 'bg-white/90 text-slate-600'}`}>
+          <span className={`flex items-center justify-center rounded-2xl font-extrabold shadow-lg ${featured
+            ? 'h-20 w-20 bg-white text-2xl text-slate-950'
+            : 'h-12 w-12 bg-white text-slate-700'}`}>{business.initials}</span>
+          <span className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider ${featured
+            ? 'bg-amber-200 text-slate-950'
+            : 'bg-white/90 text-slate-600'}`}>
             {featured ? 'Featured partner' : 'Local listing'}
           </span>
         </div>
       </div>
-      <div className={featured ? 'p-6' : 'p-5'}>
-        <p className={`mb-2 text-xs font-bold uppercase tracking-widest ${featured ? 'text-rose-600' : 'text-slate-400'}`}>{business.category}</p>
-        <h3 className="mb-1 text-lg font-extrabold leading-snug text-slate-900 group-hover:text-rose-600">{business.name}</h3>
-        <p className="line-clamp-3 text-sm leading-relaxed text-slate-500">{business.description}</p>
-        <p className="mt-4 text-sm font-bold text-rose-600">Visit website <span aria-hidden="true">→</span></p>
+      <div className={featured ? 'p-7' : 'p-4'}>
+        <p className={`mb-2 text-xs font-bold uppercase tracking-widest ${featured ? 'text-amber-700' : 'text-slate-400'}`}>{business.category}</p>
+        <h3 className={`mb-1 font-extrabold leading-snug text-slate-900 group-hover:text-rose-600 ${featured ? 'text-xl' : 'text-base'}`}>{business.name}</h3>
+        <p className={`leading-relaxed text-slate-500 ${featured ? 'text-sm' : 'line-clamp-2 text-xs'}`}>{business.description}</p>
+        <p className={`font-bold text-rose-600 ${featured ? 'mt-5 text-sm' : 'mt-3 text-xs'}`}>Visit website <span aria-hidden="true">→</span></p>
       </div>
     </article>
   )
 }
-
 export default function AdvertisingCityMockup({ cityName = 'Manchester' }: { cityName?: string }) {
   return (
     <main className="min-h-screen bg-[#F5F5F0] text-slate-900">
