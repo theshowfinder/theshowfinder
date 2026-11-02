@@ -7,6 +7,7 @@ type MockEvent = {
   venue: string
   category: string
   tone: string
+  image: string
 }
 
 type MockBusiness = {
@@ -14,39 +15,42 @@ type MockBusiness = {
   category: string
   description: string
   initials: string
+  image: string
   featured?: boolean
 }
 
 const EVENTS: MockEvent[] = [
-  { day: 'FRI', date: '14 NOV', title: 'Sam Fender', venue: 'AO Arena', category: 'Live music', tone: 'from-slate-950 to-indigo-900' },
-  { day: 'SAT', date: '15 NOV', title: 'The Comedy Store', venue: 'The Lowry', category: 'Comedy', tone: 'from-rose-950 to-orange-800' },
-  { day: 'SUN', date: '16 NOV', title: 'Manchester Christmas Markets', venue: 'Albert Square', category: 'Things to do', tone: 'from-emerald-950 to-teal-800' },
+  { day: 'FRI', date: '14 NOV', title: 'Sam Fender', venue: 'AO Arena', category: 'Live music', tone: 'from-slate-950 to-indigo-900', image: '/event-fallbacks/concert.png' },
+  { day: 'SAT', date: '15 NOV', title: 'The Comedy Store', venue: 'The Lowry', category: 'Comedy', tone: 'from-rose-950 to-orange-800', image: '/event-fallbacks/comedy.png' },
+  { day: 'SUN', date: '16 NOV', title: 'Manchester Christmas Markets', venue: 'Albert Square', category: 'Things to do', tone: 'from-emerald-950 to-teal-800', image: '/event-fallbacks/family.png' },
 ]
 
 const ON_SALE = [
-  { title: 'The 1975', detail: 'On sale this week', tone: 'from-violet-950 to-fuchsia-800' },
-  { title: 'Dua Lipa', detail: 'Tickets released Friday', tone: 'from-blue-950 to-cyan-800' },
-  { title: 'Manchester Jazz Festival', detail: 'Early tickets available', tone: 'from-amber-950 to-orange-700' },
+  { title: 'The 1975', detail: 'On sale this week', tone: 'from-violet-950 to-fuchsia-800', image: '/event-fallbacks/concert.png' },
+  { title: 'Dua Lipa', detail: 'Tickets released Friday', tone: 'from-blue-950 to-cyan-800', image: '/event-fallbacks/concert.png' },
+  { title: 'Manchester Jazz Festival', detail: 'Early tickets available', tone: 'from-amber-950 to-orange-700', image: '/event-fallbacks/theatre.png' },
 ]
 
 const BUSINESSES: MockBusiness[] = [
-  { name: 'Northern Quarter Kitchen', category: 'Restaurant', description: 'A relaxed pre-show dining spot in the heart of the Northern Quarter.', initials: 'NQ', featured: true },
-  { name: 'The Grand Hotel Manchester', category: 'Hotel', description: 'A comfortable city-centre base for nights out and weekends away.', initials: 'GH', featured: true },
-  { name: 'Cloud 9 Rooftop Bar', category: 'Bar', description: 'Cocktails, skyline views and a great place to continue the night.', initials: 'C9', featured: true },
-  { name: 'The Breakfast Club', category: 'Café', description: 'Coffee, brunch and a quick bite before the show.', initials: 'BC' },
-  { name: 'City Centre Cars', category: 'Transport', description: 'Pre-booked journeys to and from Manchester venues.', initials: 'CC' },
-  { name: 'The Printworks', category: 'Things to do', description: 'Food, entertainment and late-night options under one roof.', initials: 'PW' },
-  { name: 'Northern Quarter Parking', category: 'Parking', description: 'Convenient parking close to Manchester’s main venues.', initials: 'NQ' },
-  { name: 'The Style Room', category: 'Beauty', description: 'Hair and beauty appointments before a big night out.', initials: 'SR' },
-  { name: 'The Music Shop', category: 'Local business', description: 'Independent records, gifts and music culture in the city.', initials: 'MS' },
+  { name: 'Northern Quarter Kitchen', category: 'Restaurant', description: 'A relaxed pre-show dining spot in the heart of the Northern Quarter.', initials: 'NQ', image: '/event-fallbacks/family.png', featured: true },
+  { name: 'The Grand Hotel Manchester', category: 'Hotel', description: 'A comfortable city-centre base for nights out and weekends away.', initials: 'GH', image: '/city-heroes/manchester.png', featured: true },
+  { name: 'Cloud 9 Rooftop Bar', category: 'Bar', description: 'Cocktails, skyline views and a great place to continue the night.', initials: 'C9', image: '/social-backgrounds/concert-city-night.png', featured: true },
+  { name: 'The Breakfast Club', category: 'Café', description: 'Coffee, brunch and a quick bite before the show.', initials: 'BC', image: '/event-fallbacks/family.png' },
+  { name: 'City Centre Cars', category: 'Transport', description: 'Pre-booked journeys to and from Manchester venues.', initials: 'CC', image: '/city-heroes/manchester.png' },
+  { name: 'The Printworks', category: 'Things to do', description: 'Food, entertainment and late-night options under one roof.', initials: 'PW', image: '/event-fallbacks/comedy.png' },
+  { name: 'Northern Quarter Parking', category: 'Parking', description: 'Convenient parking close to Manchester’s main venues.', initials: 'NQ', image: '/city-heroes/manchester.png' },
+  { name: 'The Style Room', category: 'Beauty', description: 'Hair and beauty appointments before a big night out.', initials: 'SR', image: '/event-fallbacks/theatre.png' },
+  { name: 'The Music Shop', category: 'Local business', description: 'Independent records, gifts and music culture in the city.', initials: 'MS', image: '/social-backgrounds/concert-cinematic-v2.png' },
 ]
 
 function EventCard({ event }: { event: MockEvent }) {
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className={`flex h-36 items-end bg-gradient-to-br ${event.tone} p-5 text-white`}>
-        <div>
-          <p className="text-xs font-extrabold uppercase tracking-widest text-white/70">{event.category}</p>
+      <div className={`relative flex h-44 items-end overflow-hidden bg-gradient-to-br ${event.tone} p-5 text-white`}>
+        <img src={event.image} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-75 mix-blend-screen" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent" />
+        <div className="relative">
+          <p className="text-xs font-extrabold uppercase tracking-widest text-white/75">{event.category}</p>
           <h3 className="mt-1 text-xl font-extrabold">{event.title}</h3>
         </div>
       </div>
@@ -65,11 +69,15 @@ function BusinessCard({ business }: { business: MockBusiness }) {
   const featured = business.featured === true
   return (
     <article className={`group overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${featured ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200'}`}>
-      <div className={`flex items-center justify-between p-5 ${featured ? 'min-h-36 bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950' : 'min-h-28 bg-gradient-to-br from-slate-100 to-slate-200'}`}>
-        <span className={`flex h-14 w-14 items-center justify-center rounded-2xl font-extrabold ${featured ? 'bg-white text-rose-600 text-xl' : 'bg-white text-slate-700'}`}>{business.initials}</span>
-        <span className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider ${featured ? 'bg-white text-rose-600' : 'bg-white/90 text-slate-600'}`}>
-          {featured ? 'Featured partner' : 'Local listing'}
-        </span>
+      <div className={`relative overflow-hidden ${featured ? 'min-h-44' : 'min-h-32'}`}>
+        <img src={business.image} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
+        <div className={`absolute inset-0 ${featured ? 'bg-gradient-to-br from-slate-950/75 via-slate-900/35 to-rose-950/80' : 'bg-gradient-to-br from-slate-950/55 to-slate-900/15'}`} />
+        <div className="relative flex h-full min-h-[inherit] items-center justify-between p-5">
+          <span className={`flex h-14 w-14 items-center justify-center rounded-2xl font-extrabold ${featured ? 'bg-white text-rose-600 text-xl' : 'bg-white text-slate-700'}`}>{business.initials}</span>
+          <span className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider ${featured ? 'bg-white text-rose-600' : 'bg-white/90 text-slate-600'}`}>
+            {featured ? 'Featured partner' : 'Local listing'}
+          </span>
+        </div>
       </div>
       <div className={featured ? 'p-6' : 'p-5'}>
         <p className={`mb-2 text-xs font-bold uppercase tracking-widest ${featured ? 'text-rose-600' : 'text-slate-400'}`}>{business.category}</p>
@@ -85,7 +93,8 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester' }: { cit
   return (
     <main className="min-h-screen bg-[#F5F5F0] text-slate-900">
       <section className="relative overflow-hidden bg-slate-950 px-4 py-12 text-white sm:px-6 sm:py-20">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(232,0,61,0.35),_transparent_45%)]" />
+        <img src="/city-heroes/manchester.png" alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-45" />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/75 to-rose-950/35" />
         <div className="relative mx-auto max-w-7xl">
           <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.25em] text-rose-300">TheShowFinder city hub</p>
           <h1 className="max-w-3xl text-4xl font-extrabold tracking-tight sm:text-6xl">Everything happening in {cityName}</h1>
@@ -120,10 +129,14 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester' }: { cit
           </div>
           <div className="grid gap-5 md:grid-cols-3">
             {ON_SALE.map(item => (
-              <article key={item.title} className={`rounded-2xl bg-gradient-to-br ${item.tone} p-6 text-white shadow-sm`}>
-                <p className="text-xs font-extrabold uppercase tracking-widest text-white/65">{item.detail}</p>
-                <h3 className="mt-10 text-2xl font-extrabold">{item.title}</h3>
-                <p className="mt-4 text-sm font-bold text-white/80">Explore tickets →</p>
+              <article key={item.title} className={`relative min-h-48 overflow-hidden rounded-2xl bg-gradient-to-br ${item.tone} p-6 text-white shadow-sm`}>
+                <img src={item.image} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-45 mix-blend-screen" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent" />
+                <div className="relative">
+                  <p className="text-xs font-extrabold uppercase tracking-widest text-white/70">{item.detail}</p>
+                  <h3 className="mt-16 text-2xl font-extrabold">{item.title}</h3>
+                  <p className="mt-4 text-sm font-bold text-white/85">Explore tickets →</p>
+                </div>
               </article>
             ))}
           </div>
