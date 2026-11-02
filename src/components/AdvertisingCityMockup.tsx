@@ -180,10 +180,21 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester' }: { cit
             <p className="text-xs font-extrabold uppercase tracking-widest text-rose-300">For local businesses</p>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">Put your business in front of people planning a night out.</h2>
             <p className="mt-4 text-base leading-relaxed text-white/70">Choose a standard listing or one of the three featured placements in your city. The layout stays limited, clear and easy to understand.</p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <Link href={`/advertise/onboard?city=${encodeURIComponent(cityName)}&package=featured`} className="rounded-xl bg-rose-500 px-5 py-3 text-sm font-extrabold text-white hover:bg-rose-400">Ask about featured placement</Link>
-              <Link href={`/advertise/onboard?city=${encodeURIComponent(cityName)}&package=standard`} className="rounded-xl bg-white/10 px-5 py-3 text-sm font-extrabold text-white hover:bg-white/20">Choose standard listing</Link>
+            <div className="mt-7 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-white/15 bg-white/10 p-5">
+              <p className="text-xs font-extrabold uppercase tracking-widest text-rose-300">Featured placement</p>
+              <p className="mt-2 text-2xl font-black">£44.95<span className="text-sm font-bold text-white/60">/month</span></p>
+              <p className="mt-1 text-xs text-white/60">£449.95 annually · introductory city rate</p>
+              <Link href={`/advertise/onboard?city=${encodeURIComponent(cityName)}&package=featured`} className="mt-4 inline-flex rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-rose-400">Secure featured placement →</Link>
             </div>
+            <div className="rounded-2xl border border-white/15 bg-white/5 p-5">
+              <p className="text-xs font-extrabold uppercase tracking-widest text-white/60">Standard listing</p>
+              <p className="mt-2 text-2xl font-black">£29.95<span className="text-sm font-bold text-white/60">/month</span></p>
+              <p className="mt-1 text-xs text-white/60">£299.95 annually · introductory city rate</p>
+              <Link href={`/advertise/onboard?city=${encodeURIComponent(cityName)}&package=standard`} className="mt-4 inline-flex rounded-xl bg-white/10 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-white/20">Secure standard listing →</Link>
+            </div>
+          </div>
+          <p className="mt-5 text-xs font-semibold text-white/60">Only nine positions are available in this city. The displayed introductory rate is subject to availability and will be reviewed after the launch allocation is filled.</p>
           </div>
         </section>
       </div>
