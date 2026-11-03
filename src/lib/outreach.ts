@@ -36,34 +36,38 @@ export const unsubscribeUrl = (p: Pick<Prospect, 'unsubscribe_token'>) => `${SIT
 
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
 
-/** What people would come to this kind of business for, in the email's one line about the audience. */
-function visitWord(category: string): string {
+/** What people come to this kind of business for, in "…where to <eat before the show>". */
+function visitPhrase(category: string): string {
   const c = category.toLowerCase()
-  if (/hotel|stay|b&b|inn/.test(c)) return 'stay'
-  if (/bar|pub|club|cocktail/.test(c)) return 'drink'
-  if (/restaurant|cafe|café|kitchen|food|grill/.test(c)) return 'eat'
+  if (/hotel|stay|b&b|inn/.test(c)) return 'stay the night'
+  if (/bar|pub|club|cocktail/.test(c)) return 'grab a drink before the show'
+  if (/restaurant|cafe|café|kitchen|food|grill/.test(c)) return 'eat before the show'
   return 'eat, drink or stay'
 }
 
 /**
- * One template for everyone, filled in from the business's own details (name, city, type, nearest venue). Short:
- * what we are, where they would appear, the limited places and price, one link to see themselves on the page.
+ * One warm, local template for everyone, filled in from the business's own details (name, city, type). Praise stays
+ * general so it is true for every business it goes to; no invented facts, no numbers, no guarantees.
  */
 export function buildOutreachEmail(p: Prospect, kind: 'first' | 'follow_up'): { subject: string; text: string; html: string } {
   const hi = p.contact_name?.trim() ? `Hi ${p.contact_name.trim().split(/\s+/)[0]},` : `Hi there,`
-  const venue = p.near_venue?.trim()
-  const subject = `${kind === 'follow_up' ? 'Re: ' : ''}Featuring ${p.business_name} on TheShowFinder ${p.city}`
+  const b = p.business_name
+  const firstSubject = `We'd love to feature ${b} on TheShowFinder ${p.city}`
+  const subject = kind === 'follow_up' ? `Re: ${firstSubject}` : firstSubject
+  const button = `See ${b} on our ${p.city} page`
   const lines = kind === 'first'
     ? [
         hi,
         '',
-        `TheShowFinder lists the concerts, shows, comedy and sport on in ${p.city}${venue ? `, including everything at ${venue}` : ''}, with tickets from the main sellers.`,
+        `Places like ${b} are what make a night out in ${p.city}, and that's exactly who we want to work with.`,
         '',
-        `We feature a small number of local businesses right under the ticket buttons, at the moment people decide where to ${visitWord(p.category)} before and after the show. Your listing can include an offer they claim on their phone and use at your door.`,
+        `TheShowFinder helps people find every concert, show, comedy night and match in ${p.city}, and plan the night around it. We're all about local businesses, so we feature a handful of local places right next to the tickets, at the moment people decide where to ${visitPhrase(p.category)}.`,
         '',
-        `There are only nine places in ${p.city}, three of them Featured. Introductory rates start at £29.95 a month.`,
+        'Your listing can include an offer of your choice (say, 10% off with a show ticket) that they claim on their phone and use at your door.',
         '',
-        `See how ${p.business_name} would look and sign up in a few minutes: ${offerUrl(p)}`,
+        `We only take nine businesses in ${p.city}, and we'd genuinely love ${b} to be one of them. Introductory rates start at £29.95 a month.`,
+        '',
+        `${button}: ${offerUrl(p)}`,
         '',
         'Chris',
         'TheShowFinder',
@@ -71,18 +75,20 @@ export function buildOutreachEmail(p: Prospect, kind: 'first' | 'follow_up'): { 
     : [
         hi,
         '',
-        `A quick follow-up: the ${p.city} places are limited to nine, with three Featured. You can see ${p.business_name} on the page and choose a package here: ${offerUrl(p)}`,
+        `Just checking this reached you. We'd still love to have ${b} on our ${p.city} page. There are only nine places, and here's how yours would look:`,
+        '',
+        `${button}: ${offerUrl(p)}`,
         '',
         'Chris',
         'TheShowFinder',
       ]
   const footer = `Not for you? Unsubscribe: ${unsubscribeUrl(p)}`
   const text = [...lines, '', footer].join('\n')
-  const linkHtml = `<a href="${offerUrl(p)}" style="display:inline-block;background:#E8003D;color:#ffffff;text-decoration:none;font-weight:bold;padding:10px 16px;border-radius:8px">See ${esc(p.business_name)} on the page</a>`
+  const linkHtml = `<a href="${offerUrl(p)}" style="display:inline-block;background:#E8003D;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:8px">${esc(button)} &rarr;</a>`
   const html = [
     ...lines.map(l => {
       if (!l) return ''
-      if (l.includes(offerUrl(p))) return `<p style="margin:0 0 6px">${esc(l.replace(offerUrl(p), '').replace(/[:\s]+$/, ''))}:</p><p style="margin:0 0 14px">${linkHtml}</p>`
+      if (l.includes(offerUrl(p))) return `<p style="margin:4px 0 16px">${linkHtml}</p>`
       return `<p style="margin:0 0 10px">${esc(l)}</p>`
     }),
     `<p style="margin:24px 0 0;font-size:12px;color:#888">Not for you? <a href="${unsubscribeUrl(p)}" style="color:#888">Unsubscribe</a></p>`,
