@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { eventImageUrl, teamImageFor, teamFixtureImage, artistPhotoUrl } from './eventImages.ts'
+import { eventImageUrl, teamImageFor, teamFixtureImage, artistPhotoUrl, cardImageUrl } from './eventImages.ts'
 
 const DERBY = '/event-fallbacks/teams/derby-county.jpg'
 
@@ -31,4 +31,12 @@ describe('club artwork', () => {
     assert.equal(teamImageFor('Burnley Blues Band'), null)
     assert.equal(teamImageFor('Stoke City'), null)
   })
+})
+
+test('list cards use the smaller Ticketmaster size, other pictures unchanged', () => {
+  const base = 'https://s1.ticketm.net/dam/a/005/e2998160-f37f-4117-977e-0715157b0005'
+  assert.equal(cardImageUrl(`${base}_TABLET_LANDSCAPE_16_9.jpg`), `${base}_RETINA_PORTRAIT_16_9.jpg`)
+  assert.equal(cardImageUrl(`${base}_TABLET_LANDSCAPE_LARGE_16_9.jpg`), `${base}_RETINA_PORTRAIT_16_9.jpg`)
+  assert.equal(cardImageUrl(`${base}_CUSTOM.jpg`), `${base}_CUSTOM.jpg`)
+  assert.equal(cardImageUrl('/event-fallbacks/concert.webp'), '/event-fallbacks/concert.webp')
 })

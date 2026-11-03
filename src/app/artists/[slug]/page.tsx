@@ -1,4 +1,5 @@
 import { dropDuplicateEvents } from '@/lib/listedEvents'
+import { artistPageTitle } from '@/lib/artistTitle'
 import { cache } from 'react'
 import { notFound, redirect } from 'next/navigation'
 import { after } from 'next/server'
@@ -81,11 +82,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!artist) return { title: 'Artist Not Found' }
 
-  const title       = `${artist.name} UK Tour Dates & Tickets`
   const [upcomingEvents, tourDateCount] = await Promise.all([
     getArtistUpcomingEvents(artist.id),
     getArtistTourDateCount(artist.id),
   ])
+  const title       = artistPageTitle(artist.name, upcomingEvents.map(e => e.startDate))
   const description = artistMetaDescription(artist.name, upcomingEvents)
   // Artists with nothing upcoming have an empty page — keep it out of the index
   // until there is something on it.

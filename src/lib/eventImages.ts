@@ -112,3 +112,13 @@ export function eventImageUrl(imageUrl: string | null | undefined, category: Eve
 export function isGenericEventImage(imageUrl: string | null | undefined): boolean {
   return !imageUrl || imageUrl === GENERIC_IMAGE || imageUrl.endsWith('/og-image.png')
 }
+
+// Ticketmaster stores each picture in several sizes under the same name. Most of ours are the
+// 1024px "TABLET_LANDSCAPE" (or 2048px "_LARGE") file; the 640px "RETINA_PORTRAIT" one is about
+// half the download and still sharp in a list card. Only for the short landscape list cards:
+// tall picture tiles and event-page heroes keep the big file.
+const TM_BIG_16_9 = /^(https:\/\/s1\.ticketm\.net\/dam\/[a-z]\/[0-9a-f]{3}\/[0-9a-f-]{36})_TABLET_LANDSCAPE(?:_LARGE)?_16_9\.jpg$/
+export function cardImageUrl(url: string): string {
+  const m = TM_BIG_16_9.exec(url)
+  return m ? `${m[1]}_RETINA_PORTRAIT_16_9.jpg` : url
+}

@@ -29,9 +29,10 @@ import type { LocalBusiness, CityNews } from '@/lib/types/database'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import { buildCityCollectionSchema, cityCanonicalUrl, cityPageDescription, cityPageTitle } from '@/lib/citySeo'
 import CityNewsletterForm from '@/components/CityNewsletterForm'
-import { fetchEventsThisWeek, fetchLocalEvents, fetchTopEvents, fetchNearbyEvents, fetchCityCategoryCounts, fetchTonightEvents, fetchOnSaleThisWeek, attachTourDateCounts } from '@/lib/eventPools'
+import { fetchEventsThisWeek, fetchEventsThisWeekend, fetchLocalEvents, fetchTopEvents, fetchNearbyEvents, fetchCityCategoryCounts, fetchTonightEvents, fetchOnSaleThisWeek, attachTourDateCounts } from '@/lib/eventPools'
 import { resolveCityEventCount } from '@/lib/cityEventCount'
 import { CITY_GUIDE_INTROS } from '@/lib/cityGuides'
+import { cityAutoIntro } from '@/lib/cityAutoIntro'
 import NewsCardGrid from '@/components/NewsCardGrid'
 import TonightEventCard from '@/components/TonightEventCard'
 import WestEndStrip from '@/components/WestEndStrip'
@@ -158,6 +159,7 @@ export default async function CityPage({
     nationalNewsResult,
     nearbyEvents,
     categoryCounts,
+    weekendEventsRaw,
   ] = await Promise.all([
     // Today only, Europe/London calendar day, soonest first — see
     // src/lib/tonight.ts for the exact rules (cancelled/postponed and
@@ -242,6 +244,8 @@ export default async function CityPage({
     // Per-type counts for the "browse by type" chips
     fetchCityCategoryCounts(supabase, cityName),
 
+    // Friday–Sunday this week (the "This weekend" section): the most searched "what's on" window.
+    fetchEventsThisWeekend(supabase, { city: cityName, limit: 12 }),
   ])
 
   const localBusinesses = localBusinessesResult.data ?? []
@@ -268,7 +272,12 @@ export default async function CityPage({
   // Each event card gets one placement on the city page, in visual order.
   // Tonight takes priority; lower rails do not repeat it.
   const shownEventIds = new Set(tonightIds)
-  const weekEvents = excludePreviouslyShown(eventsThisWeek, shownEventIds)
+  const weekendEvents = excludePreviouslyShown(weekendEventsRaw, shownEventIds, 10)
+  const weekendIds = new Set(weekendEvents.map(e => e.id))
+  const weekAll = excludePreviouslyShown(eventsThisWeek, shownEventIds)
+  // This week skips what the weekend section already shows, unless that would leave it nearly empty.
+  const weekWithoutWeekend = weekAll.filter(e => !weekendIds.has(e.id))
+  const weekEvents = weekWithoutWeekend.length >= 3 ? weekWithoutWeekend : weekAll
   const localEvents = excludePreviouslyShown(localEventsRaw, shownEventIds, 12)
   const upcomingTopEvents = excludePreviouslyShown(topEvents, shownEventIds)
 
@@ -317,6 +326,10 @@ export default async function CityPage({
     nearbyAreas.length > 0 ? fetchNearbyRankedVenues(supabase, nearbyAreas) : Promise.resolve([]),
   ])
   const rankedVenues = rankVenues(cityVenues, countByVenue, venueRows)
+  const autoIntro = introText ? null : cityAutoIntro({
+    cityName, totalCount, venues: rankedVenues, categoryCounts,
+    tonightCount: tonightEvents.length, weekendCount: weekendEvents.length,
+  })
   const { popular: popularVenues, more: moreVenues } = splitPopular(rankedVenues)
 
   // Booking.com/Trainline cards (Getting There & Staying, below) are
@@ -437,12 +450,44 @@ export default async function CityPage({
         </div>
       </div>
 
+      {/* ── JUMP CHIPS: one tap to each part of the page (sticky under the site header) ── */}
+      <nav aria-label={`Jump to a part of the ${cityName} page`} className="sticky top-16 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-2 overflow-x-auto py-2.5" style={{ scrollbarWidth: 'none' }}>
+          {([
+            ['#tonight', 'Tonight', tonightEvents.length > 0],
+            ['#this-weekend', 'This weekend', weekendEvents.length > 0],
+            ['#this-week', 'This week', weekEvents.length > 0],
+            ['#on-sale', 'On sale', onsaleGroups.length > 0],
+            ['#venues', 'Venues', cityVenues.length > 0],
+            ['#local', 'Local', localEvents.length > 0],
+          ] as Array<[string, string, boolean]>).filter(([, , show]) => show).map(([href, label]) => (
+            <a key={href} href={href} className="shrink-0 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm font-semibold text-slate-700 hover:border-slate-400 hover:text-slate-900">{label}</a>
+          ))}
+        </div>
+      </nav>
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-12 flex flex-col gap-10 sm:gap-14">
 
-        {/* ── LOCAL ENTERTAINMENT NEWS: image-led when city stories match ── */}
-        <CityNewsMosaic cityName={cityName} stories={cityStories} />
+        {/* ── MAIN VENUES: the biggest six, one tap to their what's-on pages ── */}
+        {rankedVenues.length > 0 && (
+          <section aria-label={`Main venues in ${cityName}`} className="order-1 -mb-4 sm:-mb-6">
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2.5">Main venues</p>
+            <ul className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+              {rankedVenues.slice(0, 6).map(v => (
+                <li key={v.slug} className="shrink-0">
+                  <Link href={`/venues/${v.slug}`} className="inline-flex items-center min-h-[40px] rounded-xl border border-slate-200 bg-white px-3.5 text-sm font-bold text-slate-800 hover:border-slate-400">
+                    {v.name}<span className="ml-1.5 font-normal text-slate-400">{countByVenue[v.id] ?? ''}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* ── LOCAL ENTERTAINMENT NEWS: image-led when city stories match (after the listings on every screen) ── */}
+        <div className="order-8"><CityNewsMosaic cityName={cityName} stories={cityStories} /></div>
         {cityNews.length > 0 && (
-          <section id={cityStories.length > 0 ? 'local-headlines' : 'news'} className="scroll-mt-20 order-1">
+          <section id={cityStories.length > 0 ? 'local-headlines' : 'news'} className="scroll-mt-28 order-9">
             <div className="mb-5">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>{cityStories.length > 0 ? 'From the local press' : 'Latest event news'}</p>
               <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900">{cityStories.length > 0 ? `More ${cityName} headlines` : `What's happening in ${cityName}`}</h2>
@@ -452,12 +497,12 @@ export default async function CityPage({
         )}
 
 
-        {/* ── CITY GUIDE INTRO (only renders for cities with a written entry) ── */}
-        {CITY_GUIDE_INTROS[cityName] && (
+        {/* ── CITY GUIDE INTRO: hand-written where we have it, otherwise built from the city's own numbers ── */}
+        {(introText || autoIntro) && (
           <div className="order-10"><CityIntro
             cityName={cityName}
             emoji={cityConfig.emoji}
-            intro={introText}
+            intro={(introText || autoIntro)!}
             totalCount={totalCount}
             venueCount={cityVenues.length}
             venues={rankedVenues.map(v => ({ name: v.name, slug: v.slug, capacity: v.capacity }))}
@@ -465,14 +510,14 @@ export default async function CityPage({
         )}
 
         {/* ── NEWSLETTER (city-scoped) ── */}
-        <div className="order-2"><CityNewsletterForm cityName={cityName} /></div>
+        <div className="order-7"><CityNewsletterForm cityName={cityName} /></div>
 
         {/* ── BROWSE BY TYPE ── */}
         <div className="order-10"><CityBrowse cityName={cityName} counts={categoryCounts} /></div>
 
         {/* ── TONIGHT (hidden completely when there are no valid events) ── */}
         {tonightEvents.length > 0 && (
-          <section id="tonight" className="scroll-mt-20 order-3">
+          <section id="tonight" className="scroll-mt-28 order-2">
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
                 Happening now
@@ -501,9 +546,25 @@ export default async function CityPage({
         {/* ── WEST END (London only — the best-paying ticket category) ── */}
         {cityName === 'London' && <div className="order-10"><WestEndStrip inline /></div>}
 
+        {/* ── THIS WEEKEND (Friday–Sunday) ── */}
+        {weekendEvents.length > 0 && (
+          <section id="this-weekend" className="scroll-mt-28 order-3">
+            <div className="flex items-end justify-between mb-7">
+              <div>
+                <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>Friday to Sunday</p>
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">This Weekend in {cityName}</h2>
+              </div>
+              <Link href={`/cities/${encodeURIComponent(cityName)}/this-weekend`} className="text-sm font-semibold whitespace-nowrap hover:underline" style={{ color: '#E8003D' }}>See all →</Link>
+            </div>
+            <ScrollRail label={`This weekend in ${cityName}`} columns={4}>
+              {weekendEvents.map(event => <EventTile key={event.id} event={event} />)}
+            </ScrollRail>
+          </section>
+        )}
+
         {/* ── EVENTS THIS WEEK (ticketed shows + local events, merged) ── */}
         {weekEvents.length > 0 && (
-          <section id="this-week" className="scroll-mt-20 order-4">
+          <section id="this-week" className="scroll-mt-28 order-4">
             <div className="flex items-end justify-between mb-7">
               <div>
                 <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
@@ -527,7 +588,7 @@ export default async function CityPage({
 
         {/* ── WHAT'S ON LOCALLY: council / venue / tourist-board listings (hidden when none) ── */}
         {localEvents.length > 0 && (
-          <section id="local" className="scroll-mt-20 order-10">
+          <section id="local" className="scroll-mt-28 order-10">
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
                 Local listings
@@ -570,7 +631,7 @@ export default async function CityPage({
         {/* ── ON SALE THIS WEEK (omit the whole block when empty so the page
              stays focused and does not present a thin empty section to users
              or crawlers) ── */}
-        {onsaleGroups.length > 0 && <section id="on-sale" className="scroll-mt-20 order-5 rounded-3xl bg-slate-950 px-4 py-7 sm:px-8 sm:py-9">
+        {onsaleGroups.length > 0 && <section id="on-sale" className="scroll-mt-28 order-5 rounded-3xl bg-slate-950 px-4 py-7 sm:px-8 sm:py-9">
           <div className="flex items-end justify-between mb-7">
             <div>
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#5aa9ff' }}>
@@ -620,7 +681,7 @@ export default async function CityPage({
 
         {/* ── VENUES ── */}
         {cityVenues.length > 0 && (
-          <section className="order-10">
+          <section id="venues" className="scroll-mt-28 order-10">
             <div className="flex items-end justify-between mb-7">
               <div>
                 <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>

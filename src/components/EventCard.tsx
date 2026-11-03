@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { displayTitle, londonTimeSuffix, venueLabel } from '@/lib/displayTitle'
 import type { EventWithVenue } from '@/lib/types/database'
 import { ticketPurchaseDisabledStatus } from '@/lib/eventPools'
-import { eventImageUrl } from '@/lib/eventImages'
+import { eventImageUrl, cardImageUrl } from '@/lib/eventImages'
 import SaveButton from '@/components/SaveButton'
 
 const categoryConfig: Record<string, { label: string; colour: string }> = {
@@ -72,7 +72,7 @@ export default function EventCard({ event, run }: Props) {
   // a postponed event's card must not look identically buyable to an
   // on-sale one.
   const isSoldOut = ticketPurchaseDisabledStatus(event.status)
-  const imageUrl   = eventImageUrl(event.image_url, event.category, event.title)
+  const imageUrl   = cardImageUrl(eventImageUrl(event.image_url, event.category, event.title))
 
   return (
     <div className="group relative flex flex-col rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200">
