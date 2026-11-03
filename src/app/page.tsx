@@ -46,6 +46,7 @@ import { CITIES } from '@/lib/cities'
 import { pickFeaturedShows } from '@/lib/featuredShows'
 import ScrollRail from '@/components/ScrollRail'
 import { WeekFeature, AnnouncedCard, ResaleCard, FeaturedGrid } from '@/components/home/HomeCards'
+import { isAttraction } from '@/lib/eventMix'
 import OnSaleMosaic, { type OnSaleMosaicTile } from '@/components/OnSaleMosaic'
 import { pickOnSaleMosaic } from '@/lib/onSaleMosaic'
 import { londonDayWithYear } from '@/lib/cityBrief'
@@ -283,9 +284,11 @@ async function EventsThisWeekNational() {
   // (src/lib/eventPools.ts), just called without a `city`.
   // Headline shows only: no council/tourism listings, and no attraction day-tickets ("Sea Life – Standard Entry").
   const DAY_TICKET = /\b(standard|general|day|family)\s+(entry|admission|ticket)\b|\bentry ticket\b|\badmission\b|\bday pass\b/i
-  const events = (await fetchEventsThisWeek(supabase, { limit: 20 }))
-    .filter(e => e.category !== 'local' && !DAY_TICKET.test(e.title))
-    .slice(0, 6)
+  const headline = (await fetchEventsThisWeek(supabase, { limit: 24 }))
+    .filter(e => e.category !== 'local' && !DAY_TICKET.test(e.title) && !/\b(experience|exhibition)\b/i.test(e.title) && !isAttraction(e))
+  // The big card is the biggest venue's show this week; the list keeps date order.
+  const lead = [...headline].sort((a, b) => (b.venue_capacity ?? 0) - (a.venue_capacity ?? 0))[0]
+  const events = lead ? [lead, ...headline.filter(e => e.id !== lead.id).slice(0, 5)] : []
 
   if (!events.length) return null
 

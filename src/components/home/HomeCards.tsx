@@ -34,13 +34,13 @@ export function PosterCard({ show }: { show: Show }) {
   const price = pounds(show.priceFrom)
   return (
     <Overlay href={`/west-end/${show.slug}`} image={eventImageUrl(show.imageUrl, 'theatre', show.title)} className="aspect-[2/3]"
-      top={show.status === 'sold_out' ? chip('Sold out', { backgroundColor: '#dc2626', color: '#fff' }) : undefined}>
-      <span className="block text-lg font-extrabold leading-tight line-clamp-2">{show.title}</span>
+      top={<>
+        {show.status === 'sold_out' && chip('Sold out', { backgroundColor: '#dc2626', color: '#fff' })}
+        {price && <span className="ml-auto text-xs font-extrabold rounded-full bg-white text-slate-900 px-2.5 py-1 shadow">From {price}</span>}
+      </>}>
+      <span className="block text-base sm:text-lg font-extrabold leading-tight line-clamp-2">{show.title}</span>
       <span className="block text-xs text-white/75 mt-1 truncate">{show.venueName}</span>
-      <span className="mt-2 flex items-center justify-between gap-2 text-xs font-bold">
-        <span className="text-white/80">Next: {dateLine(show.nextDate)}</span>
-        {price && <span className="rounded-full bg-white text-slate-900 px-2 py-0.5">From {price}</span>}
-      </span>
+      <span className="block text-xs font-bold text-white/85 mt-1.5">Next: {dateLine(show.nextDate)}</span>
     </Overlay>
   )
 }
