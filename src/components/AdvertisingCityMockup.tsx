@@ -1,14 +1,9 @@
 import Link from 'next/link'
 
-type MockEvent = {
-  day: string
-  date: string
-  title: string
-  venue: string
-  category: string
-  tone: string
-  image: string
-}
+/** A real upcoming show in the city (from the listings), for the mock-up's event rows. */
+export type MockEvent = { title: string; venue: string; category: string; startIso: string; image: string }
+/** A real show on sale this week (or just announced) in the city. */
+export type MockOnSale = { title: string; detail: string; image: string }
 
 type MockBusiness = {
   name: string
@@ -19,35 +14,31 @@ type MockBusiness = {
   featured?: boolean
 }
 
-const EVENTS: MockEvent[] = [
-  { day: 'FRI', date: '14 NOV', title: 'Sam Fender', venue: 'AO Arena', category: 'Live music', tone: 'from-slate-950 to-indigo-900', image: '/event-fallbacks/concert.png' },
-  { day: 'SAT', date: '15 NOV', title: 'The Comedy Store', venue: 'The Lowry', category: 'Comedy', tone: 'from-rose-950 to-orange-800', image: '/event-fallbacks/comedy.png' },
-  { day: 'SUN', date: '16 NOV', title: 'Manchester Christmas Markets', venue: 'Albert Square', category: 'Things to do', tone: 'from-emerald-950 to-teal-800', image: '/event-fallbacks/family.png' },
-]
+const TONES = ['from-slate-950 to-indigo-900', 'from-rose-950 to-orange-800', 'from-emerald-950 to-teal-800', 'from-violet-950 to-fuchsia-800', 'from-blue-950 to-cyan-800', 'from-amber-950 to-orange-700']
 
-const ON_SALE = [
-  { title: 'The 1975', detail: 'On sale this week', tone: 'from-violet-950 to-fuchsia-800', image: '/event-fallbacks/concert.png' },
-  { title: 'Dua Lipa', detail: 'Tickets released Friday', tone: 'from-blue-950 to-cyan-800', image: '/event-fallbacks/concert.png' },
-  { title: 'Manchester Jazz Festival', detail: 'Early tickets available', tone: 'from-amber-950 to-orange-700', image: '/event-fallbacks/theatre.png' },
-]
+// Sample partners: neutral names that read naturally in any city. The visiting business replaces the first one.
+function sampleBusinesses(city: string, hero: string): MockBusiness[] {
+  return [
+    { name: 'The Station Kitchen', category: 'Restaurant', description: 'A relaxed pre-show dining spot a short walk from the main venues.', initials: 'SK', image: '/event-fallbacks/family.webp', featured: true },
+    { name: `The ${city} Grand Hotel`, category: 'Hotel', description: 'A comfortable city-centre base for nights out and weekends away.', initials: 'GH', image: hero, featured: true },
+    { name: 'Skyline Rooftop Bar', category: 'Bar', description: 'Cocktails, skyline views and a great place to continue the night.', initials: 'SB', image: '/social-backgrounds/concert-city-night.png', featured: true },
+    { name: 'The Breakfast Club', category: 'Café', description: 'Coffee, brunch and a quick bite before the show.', initials: 'BC', image: '/event-fallbacks/family.webp' },
+    { name: 'City Centre Cars', category: 'Transport', description: `Pre-booked journeys to and from ${city} venues.`, initials: 'CC', image: hero },
+    { name: 'The Late Social', category: 'Things to do', description: 'Food, entertainment and late-night options under one roof.', initials: 'LS', image: '/event-fallbacks/comedy.webp' },
+    { name: 'Venue Side Parking', category: 'Parking', description: `Convenient parking close to ${city}’s main venues.`, initials: 'VP', image: hero },
+    { name: 'The Style Room', category: 'Beauty', description: 'Hair and beauty appointments before a big night out.', initials: 'SR', image: '/event-fallbacks/theatre.webp' },
+    { name: 'The Music Shop', category: 'Local business', description: 'Independent records, gifts and music culture in the city.', initials: 'MS', image: '/social-backgrounds/concert-cinematic-v2.png' },
+  ]
+}
 
-const BUSINESSES: MockBusiness[] = [
-  { name: 'Northern Quarter Kitchen', category: 'Restaurant', description: 'A relaxed pre-show dining spot in the heart of the Northern Quarter.', initials: 'NQ', image: '/event-fallbacks/family.png', featured: true },
-  { name: 'The Grand Hotel Manchester', category: 'Hotel', description: 'A comfortable city-centre base for nights out and weekends away.', initials: 'GH', image: '/city-heroes/manchester.png', featured: true },
-  { name: 'Cloud 9 Rooftop Bar', category: 'Bar', description: 'Cocktails, skyline views and a great place to continue the night.', initials: 'C9', image: '/social-backgrounds/concert-city-night.png', featured: true },
-  { name: 'The Breakfast Club', category: 'Café', description: 'Coffee, brunch and a quick bite before the show.', initials: 'BC', image: '/event-fallbacks/family.png' },
-  { name: 'City Centre Cars', category: 'Transport', description: 'Pre-booked journeys to and from Manchester venues.', initials: 'CC', image: '/city-heroes/manchester.png' },
-  { name: 'The Printworks', category: 'Things to do', description: 'Food, entertainment and late-night options under one roof.', initials: 'PW', image: '/event-fallbacks/comedy.png' },
-  { name: 'Northern Quarter Parking', category: 'Parking', description: 'Convenient parking close to Manchester’s main venues.', initials: 'NQ', image: '/city-heroes/manchester.png' },
-  { name: 'The Style Room', category: 'Beauty', description: 'Hair and beauty appointments before a big night out.', initials: 'SR', image: '/event-fallbacks/theatre.png' },
-  { name: 'The Music Shop', category: 'Local business', description: 'Independent records, gifts and music culture in the city.', initials: 'MS', image: '/social-backgrounds/concert-cinematic-v2.png' },
-]
-
-function EventCard({ event }: { event: MockEvent }) {
+function EventCard({ event, tone }: { event: MockEvent; tone: string }) {
+  const d = new Date(event.startIso)
+  const day = d.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'Europe/London' }).toUpperCase()
+  const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' }).toUpperCase()
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className={`relative flex h-44 items-end overflow-hidden bg-gradient-to-br ${event.tone} p-5 text-white`}>
-        <img src={event.image} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-75 mix-blend-screen" />
+      <div className={`relative flex h-44 items-end overflow-hidden bg-gradient-to-br ${tone} p-5 text-white`}>
+        <img src={event.image} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-80" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent" />
         <div className="relative">
           <p className="text-xs font-extrabold uppercase tracking-widest text-white/75">{event.category}</p>
@@ -56,7 +47,7 @@ function EventCard({ event }: { event: MockEvent }) {
       </div>
       <div className="flex items-center justify-between gap-4 p-4">
         <div>
-          <p className="text-xs font-extrabold uppercase tracking-widest text-rose-600">{event.day} · {event.date}</p>
+          <p className="text-xs font-extrabold uppercase tracking-widest text-rose-600">{day} · {date}</p>
           <p className="mt-1 text-sm font-semibold text-slate-700">{event.venue}</p>
         </div>
         <span className="text-sm font-bold text-rose-600">View →</span>
@@ -105,10 +96,11 @@ function BusinessCard({ business }: { business: MockBusiness }) {
 /** A business reached by outreach: shown in the first Featured slot so they see exactly how they would look. */
 export type MockupPreview = { name: string; category: string }
 
-export default function AdvertisingCityMockup({ cityName = 'Manchester', preview = null, refCode = '' }: { cityName?: string; preview?: MockupPreview | null; refCode?: string }) {
+export default function AdvertisingCityMockup({ cityName = 'Manchester', heroImage = '/city-heroes/manchester.webp', events = [], onSale = [], preview = null, refCode = '' }: { cityName?: string; heroImage?: string; events?: MockEvent[]; onSale?: MockOnSale[]; preview?: MockupPreview | null; refCode?: string }) {
+  const BUSINESSES = sampleBusinesses(cityName, heroImage)
   const initials = (name: string) => name.replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'YB'
   const businesses: MockBusiness[] = preview
-    ? [{ name: preview.name, category: preview.category, description: 'Your description, offer and booking link, shown right under the ticket buttons when people plan their night.', initials: initials(preview.name), image: '/social-backgrounds/concert-city-night.png', featured: true }, ...BUSINESSES.filter(b => b.featured).slice(1), ...BUSINESSES.filter(b => !b.featured)]
+    ? [{ name: preview.name, category: preview.category, description: 'Your description, offer and booking link, shown right under the ticket buttons when people plan their night.', initials: initials(preview.name), image: heroImage, featured: true }, ...BUSINESSES.filter(b => b.featured).slice(1), ...BUSINESSES.filter(b => !b.featured)]
     : BUSINESSES
   const onboard = (pkg: 'featured' | 'standard') => `/advertise/onboard?${new URLSearchParams({ city: cityName, package: pkg, ...(refCode ? { ref: refCode } : {}) }).toString()}`
   return (
@@ -122,7 +114,7 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester', preview
         </div>
       )}
       <section className="relative overflow-hidden bg-slate-950 px-4 py-12 text-white sm:px-6 sm:py-20">
-        <img src="/city-heroes/manchester.png" alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-45" />
+        <img src={heroImage} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-45" />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/75 to-rose-950/35" />
         <div className="relative mx-auto max-w-7xl">
           <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.25em] text-rose-300">TheShowFinder city hub</p>
@@ -144,11 +136,11 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester', preview
             <div>
               <p className="mb-1 text-xs font-bold uppercase tracking-widest text-rose-600">Top events</p>
               <h2 className="text-3xl font-extrabold tracking-tight">What’s on in {cityName}</h2>
-              <p className="mt-2 text-sm text-slate-500">A realistic preview of the event-led city hub.</p>
+              <p className="mt-2 text-sm text-slate-500">Real upcoming shows in {cityName}, as they appear on the site.</p>
             </div>
             <span className="hidden text-sm font-bold text-rose-600 sm:block">See all events →</span>
           </div>
-          <div className="grid gap-5 md:grid-cols-3">{EVENTS.map(event => <EventCard key={event.title} event={event} />)}</div>
+          <div className="grid gap-5 md:grid-cols-3">{events.map((event, i) => <EventCard key={event.title + event.startIso} event={event} tone={TONES[i % TONES.length]} />)}</div>
         </section>
 
         <section>
@@ -157,9 +149,9 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester', preview
             <h2 className="text-3xl font-extrabold tracking-tight">On sale this week</h2>
           </div>
           <div className="grid gap-5 md:grid-cols-3">
-            {ON_SALE.map(item => (
-              <article key={item.title} className={`relative min-h-48 overflow-hidden rounded-2xl bg-gradient-to-br ${item.tone} p-6 text-white shadow-sm`}>
-                <img src={item.image} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-45 mix-blend-screen" />
+            {onSale.map((item, i) => (
+              <article key={item.title} className={`relative min-h-48 overflow-hidden rounded-2xl bg-gradient-to-br ${TONES[(i + 3) % TONES.length]} p-6 text-white shadow-sm`}>
+                <img src={item.image} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-60" />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent" />
                 <div className="relative">
                   <p className="text-xs font-extrabold uppercase tracking-widest text-white/70">{item.detail}</p>
