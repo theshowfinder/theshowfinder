@@ -33,6 +33,22 @@ export default function AboutPage() {
             We cover <strong className="text-slate-900">40 cities</strong> across the UK with thousands
             of upcoming events updated daily.
           </p>
+          <h2 id="how-we-make-money" className="text-2xl font-extrabold text-slate-900 pt-4">How we make money</h2>
+          <p>
+            TheShowFinder is free to use. Some of the links on the site are affiliate links: when you buy tickets,
+            book a hotel or reserve parking through them, the seller may pay us a small commission. It never
+            changes the price you pay, and it never decides which sellers we show. Every show lists the sellers we
+            know about, with official sellers first and resale clearly labelled.
+          </p>
+          <p>
+            Local businesses can also pay to appear on our city and event pages. Those listings are always marked
+            as sponsored.
+          </p>
+          <h2 className="text-2xl font-extrabold text-slate-900 pt-4">Who runs it</h2>
+          <p>
+            TheShowFinder was founded by Chris Spence. You can reach him at{' '}
+            <a href="mailto:hello@theshowfinder.com" className="font-semibold underline">hello@theshowfinder.com</a>.
+          </p>
 
           <div className="flex flex-wrap gap-4 pt-2">
             <Link

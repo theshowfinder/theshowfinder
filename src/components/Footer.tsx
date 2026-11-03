@@ -1,3 +1,4 @@
+import PartnerStrip from '@/components/PartnerStrip'
 import Link from 'next/link'
 import { SOCIAL_LINKS } from '@/lib/socialLinks'
 import { DIRECTORY_LETTERS } from '@/lib/artistSearch'
@@ -87,6 +88,8 @@ export default function Footer() {
   return (
     <footer style={{ backgroundColor: '#1A1A2E' }} className="text-white/60">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-8">
+
+        <PartnerStrip />
 
         {/* Grid: logo + 4 columns */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-10 mb-14">
