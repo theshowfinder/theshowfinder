@@ -28,7 +28,7 @@ const PAGE_SIZE = 1000
 
 type VenueRow       = { id: string; slug: string }
 type ArtistRow      = { id: string; slug: string; name: string | null; is_featured: boolean | null }
-type SlugUpdatedRow = { id: string; slug: string; title: string; updated_at: string; venue_id: string | null; start_date: string }
+type SlugUpdatedRow = { id: string; slug: string; title: string; created_at: string; page_changed_at: string | null; venue_id: string | null; start_date: string; category: string; source: string | null }
 type DbClient       = ReturnType<typeof createPublicClient>
 
 async function fetchAllEvents(supabase: DbClient, nowISO: string): Promise<SlugUpdatedRow[]> {
@@ -45,7 +45,7 @@ async function fetchAllEvents(supabase: DbClient, nowISO: string): Promise<SlugU
       const from = i * PAGE_SIZE
       return supabase
         .from('events')
-        .select('id, slug, title, updated_at, venue_id, start_date')
+        .select('id, slug, title, created_at, page_changed_at, venue_id, start_date, category, source')
         .gte('start_date', nowISO)
         // Cancelled / postponed shows are not sitemap material.
         .in('status', LIVE_EVENT_STATUSES)
@@ -220,10 +220,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Long runs list one event per performance; only the soonest few are indexable.
   // Package / duplicate records are excluded: they canonical to the main event.
   const eventRows = duplicateIds ? allEventRows.filter(e => !duplicateIds.has(e.id)) : allEventRows
+  // Council / tourism-board listings (workshops, markets, village events) stay on the site and city pages but are
+  // left out of the sitemap, so Google's attention goes to shows people buy tickets for (3 Nov 2026).
+  const isLocalListing = (e: SlugUpdatedRow) => e.category === 'local' || /_council$/.test(e.source ?? '')
   const repeatSlugs = repeatPerformanceSlugs(eventRows)
-  const eventPages: MetadataRoute.Sitemap = eventRows.filter(e => !repeatSlugs.has(e.slug)).map(e => ({
+  // lastModified = when what the page shows last changed (migration 107), not when a sync last touched the row.
+  const eventPages: MetadataRoute.Sitemap = eventRows.filter(e => !repeatSlugs.has(e.slug) && !isLocalListing(e)).map(e => ({
     url:             `${BASE}/events/${e.slug}`,
-    lastModified:    new Date(e.updated_at),
+    lastModified:    new Date(e.page_changed_at ?? e.created_at),
     changeFrequency: 'weekly' as const,
     priority:        0.6,
   })).filter(e => !getEventSeoAlias(e.url.split('/').pop() ?? ''))

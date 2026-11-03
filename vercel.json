@@ -138,6 +138,10 @@
     {
       "path": "/api/cron/outreach-send",
       "schedule": "10 9-17 * * 1-5"
+    },
+    {
+      "path": "/api/cron/refresh-city-pages",
+      "schedule": "45 22 * * *"
     }
   ]
 }
