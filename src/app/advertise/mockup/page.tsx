@@ -7,7 +7,7 @@ import { eventImageUrl, isGenericEventImage } from '@/lib/eventImages'
 import type { EventCategory } from '@/lib/types/database'
 
 export const metadata: Metadata = {
-  title: 'City advertising mock-up | TheShowFinder',
+  title: 'City advertising mock-up',
   description: 'Private preview of TheShowFinder city advertising placements.',
   robots: { index: false, follow: false },
 }
