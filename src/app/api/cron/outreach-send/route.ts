@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 // day's sends are spread out and never more than DAILY_LIMIT: first emails to businesses Chris approved, then one
 // follow-up FOLLOW_UP_AFTER_DAYS later to anyone still at "sent" (not replied, interested, onboarding or opted out),
 // and "No response" NO_RESPONSE_AFTER_DAYS after the first email. ?dry=1 lists only.
-const PER_RUN = 3
+const PER_RUN = 5   // 9 weekday runs x 5 = up to 45 a day, spread out
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 const COLS = 'id, business_name, category, city, near_venue, distance_label, contact_name, email, company_type, status, ref_code, unsubscribe_token'
 
@@ -47,6 +47,8 @@ async function handleGet(request: Request) {
   ]
   for (const { p, kind } of queue) {
     if (budget <= 0) break
+    // Safety stop: several failures in one run (rejected addresses, a sending problem) and the rest wait for a person.
+    if (failed.length >= 3) break
     if (!canEmail(p)) continue
     budget--
     if (dry) { sent.push(`${kind}: ${p.business_name} <${p.email}>`); continue }

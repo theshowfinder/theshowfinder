@@ -69,13 +69,18 @@ body {
 }
 .h-rail::-webkit-scrollbar { display: none; }
 .h-rail > * { flex: 0 0 78%; min-width: 0; scroll-snap-align: start; }
+/* Widths leave part of the next card showing (2.25 / 3.35 / 4.35 across) so it is obvious the row scrolls. */
 @media (min-width: 640px) {
-  .h-rail > * { flex-basis: calc((100% - var(--rail-gap)) / 2); }
+  .h-rail > * { flex-basis: calc((100% - 2 * var(--rail-gap)) / 2.25); }
 }
 @media (min-width: 1024px) {
-  .h-rail > * { flex-basis: calc((100% - 2 * var(--rail-gap)) / 3); }
-  .h-rail-4 > * { flex-basis: calc((100% - 3 * var(--rail-gap)) / 4); }
+  .h-rail > * { flex-basis: calc((100% - 3 * var(--rail-gap)) / 3.35); }
+  .h-rail-4 > * { flex-basis: calc((100% - 4 * var(--rail-gap)) / 4.35); }
 }
+/* Tall theatre posters (homepage West End): ~2.2 on a phone, 5.4 on a wide screen. */
+.h-rail-poster > * { flex-basis: 44%; }
+@media (min-width: 640px)  { .h-rail-poster > * { flex-basis: calc((100% - 3 * var(--rail-gap)) / 3.3); } }
+@media (min-width: 1024px) { .h-rail-poster > * { flex-basis: calc((100% - 5 * var(--rail-gap)) / 5.4); } }
 @media (prefers-reduced-motion: reduce) { .h-rail { scroll-behavior: auto; } }
 
 /* Six-across variant (homepage city tiles): ~2.4 tiles on a phone, 3 on a tablet. */

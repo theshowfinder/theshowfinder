@@ -4,7 +4,7 @@
 const SITE = 'https://www.theshowfinder.com'
 export const OUTREACH_FROM = 'TheShowFinder <partners@theshowfinder.com>'
 export const OUTREACH_REPLY_TO = 'hello@theshowfinder.com'
-export const DAILY_LIMIT = 20
+export const DAILY_LIMIT = 45
 export const FOLLOW_UP_AFTER_DAYS = 4
 /** No reply this long after the first email (follow-up sent in between): marked "No response", never chased again. */
 export const NO_RESPONSE_AFTER_DAYS = 10

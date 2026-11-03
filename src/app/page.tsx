@@ -29,7 +29,6 @@ export const metadata: Metadata = {
     images:      [HOME_OG_IMAGE],
   },
 }
-import EventCard from '@/components/EventCard'
 import SearchBar from '@/components/SearchBar'
 import CitiesGrid from '@/components/CitiesGrid'
 import NewsletterSignup from '@/components/NewsletterSignup'
@@ -46,6 +45,7 @@ import { listedEventsCount, dropDuplicateEvents } from '@/lib/listedEvents'
 import { CITIES } from '@/lib/cities'
 import { pickFeaturedShows } from '@/lib/featuredShows'
 import ScrollRail from '@/components/ScrollRail'
+import { WeekFeature, AnnouncedCard, ResaleCard, FeaturedGrid } from '@/components/home/HomeCards'
 import OnSaleMosaic, { type OnSaleMosaicTile } from '@/components/OnSaleMosaic'
 import { pickOnSaleMosaic } from '@/lib/onSaleMosaic'
 import { londonDayWithYear } from '@/lib/cityBrief'
@@ -149,7 +149,7 @@ async function FeaturedEvents() {
       seen.add(event.title)
       events.push(event)
     }
-    if (events.length >= 6) break
+    if (events.length >= 5) break
   }
 
   if (!events.length) {
@@ -162,11 +162,7 @@ async function FeaturedEvents() {
   }
 
   return (
-    <ScrollRail label="Featured shows">
-      {events.map(event => (
-        <EventCard key={event.id} event={event} />
-      ))}
-    </ScrollRail>
+    <FeaturedGrid events={events} />
   )
 }
 
@@ -182,7 +178,7 @@ async function GigsbergHighlights() {
     .gte('start_date', now)
     .in('status', LIVE_EVENT_STATUSES)
     .order('start_date', { ascending: true })
-    .limit(6) as unknown as { data: (Record<string, unknown> & { id: string; venue: { id: string; name: string; slug: string | null; city: string; postcode: string; capacity: number | null } | null })[] | null }
+    .limit(10) as unknown as { data: (Record<string, unknown> & { id: string; venue: { id: string; name: string; slug: string | null; city: string; postcode: string; capacity: number | null } | null })[] | null }
 
   const events: EventWithVenue[] = await dropDuplicateEvents(supabase, (data ?? []).filter(row => row.venue).map(row => ({
     ...row,
@@ -196,20 +192,20 @@ async function GigsbergHighlights() {
 
   if (!events.length) return null
   return (
-    <section className="bg-slate-900 py-10 sm:py-14">
+    <section className="py-10 sm:py-14" style={{ backgroundColor: '#1a1f6e' }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-end justify-between gap-4 mb-7">
           <div>
-            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFD23F' }}>Tickets currently available</p>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Featured Gigsberg events</h2>
-            <p className="text-white/60 mt-2 text-sm">Live UK events with inventory checked recently.</p>
+            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#FFD23F' }}>Resale on Gigsberg</p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Sold out? Still available.</h2>
+            <p className="text-white/70 mt-2 text-sm">Fan-to-fan tickets listed right now for big UK shows.</p>
           </div>
           <Link href="/gigsberg" className="text-sm font-semibold whitespace-nowrap text-white/60 hover:text-white transition-colors">
             See all Gigsberg shows →
           </Link>
         </div>
-        <ScrollRail label="Events">
-          {events.map(event => <EventCard key={event.id} event={event} />)}
+        <ScrollRail label="Resale on Gigsberg" columns={4}>
+          {events.map(event => <ResaleCard key={event.id} event={event} />)}
         </ScrollRail>
       </div>
     </section>
@@ -285,12 +281,16 @@ async function EventsThisWeekNational() {
   // biggest events, no small local stuff" version of Events This Week that
   // belongs on the national homepage. Same shared helper city pages use
   // (src/lib/eventPools.ts), just called without a `city`.
-  const events = await fetchEventsThisWeek(supabase, { limit: 9 })
+  // Headline shows only: no council/tourism listings, and no attraction day-tickets ("Sea Life – Standard Entry").
+  const DAY_TICKET = /\b(standard|general|day|family)\s+(entry|admission|ticket)\b|\bentry ticket\b|\badmission\b|\bday pass\b/i
+  const events = (await fetchEventsThisWeek(supabase, { limit: 20 }))
+    .filter(e => e.category !== 'local' && !DAY_TICKET.test(e.title))
+    .slice(0, 6)
 
   if (!events.length) return null
 
   return (
-    <section className="bg-[#F5F5F0] py-10 sm:py-14">
+    <section className="bg-white py-10 sm:py-14">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-end justify-between mb-7">
           <div>
@@ -303,9 +303,7 @@ async function EventsThisWeekNational() {
             See everything this week →
           </Link>
         </div>
-        <ScrollRail label="Events">
-          {events.map(event => <EventCard key={event.id} event={event} />)}
-        </ScrollRail>
+        <WeekFeature events={events} />
       </div>
     </section>
   )
@@ -365,21 +363,21 @@ async function JustAnnounced() {
   if (!events.length) return null
 
   return (
-    <section className="bg-white py-10 sm:py-14 border-t border-slate-100">
+    <section className="bg-slate-950 py-10 sm:py-14">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-end justify-between mb-7">
           <div>
-            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
+            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#ff4d6d' }}>
               Hot off the press
             </p>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Just Announced</h2>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Just Announced</h2>
           </div>
-          <Link href="/new-tours" className="text-sm font-semibold whitespace-nowrap hover:underline" style={{ color: '#E8003D' }}>
+          <Link href="/new-tours" className="text-sm font-semibold whitespace-nowrap text-white/70 hover:text-white">
             See all new tours →
           </Link>
         </div>
-        <ScrollRail label="Just announced" columns={4}>
-          {events.map(event => <EventCard key={event.id} event={event} />)}
+        <ScrollRail label="Just announced">
+          {events.map(event => <AnnouncedCard key={event.id} event={event} />)}
         </ScrollRail>
       </div>
     </section>
@@ -513,6 +511,11 @@ export default function HomePage() {
         <WestEndStrip />
       </Suspense>
 
+      {/* ── RESALE ON GIGSBERG (best-paying seller; navy band) ─── */}
+      <Suspense fallback={<HomeSectionSkeleton />}>
+        <GigsbergHighlights />
+      </Suspense>
+
       {/* ── EVENTS THIS WEEK (national, biggest venues first) ───── */}
       <Suspense fallback={<HomeSectionSkeleton />}>
         <EventsThisWeekNational />
@@ -523,9 +526,6 @@ export default function HomePage() {
         <JustAnnounced />
       </Suspense>
 
-      <Suspense fallback={<HomeSectionSkeleton />}>
-        <GigsbergHighlights />
-      </Suspense>
 
       {/* ── FEATURED EVENTS ─────────────────────────────────────── */}
       <section className="bg-[#F5F5F0] py-10 sm:py-14">

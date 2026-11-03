@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import ScrollRail from '@/components/ScrollRail'
-import ShowCard from '@/components/ShowCard'
+import { PosterCard } from '@/components/home/HomeCards'
 import { getWestEndShows } from '@/lib/showPool'
 
 // A compact "West End" section for the homepage and the London page: the
@@ -23,8 +23,8 @@ export default async function WestEndStrip({ limit = 12, inline = false }: { lim
             See all shows →
           </Link>
         </div>
-        <ScrollRail label="West End shows" columns={4}>
-          {shows.map(show => <ShowCard key={show.slug} show={show} kind="west-end" />)}
+        <ScrollRail label="West End shows" columns="poster">
+          {shows.map(show => <PosterCard key={show.slug} show={show} />)}
         </ScrollRail>
     </>
   )
