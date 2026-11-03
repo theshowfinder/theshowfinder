@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { buildOutreachEmail, canEmail, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
+import { buildOutreachEmail, SENDABLE_COMPANY_TYPES, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
 import PendingButton from '@/components/admin/PendingButton'
 import { addProspectAction, approveSelectedAction, setStatusAction, setCompanyTypeAction, deleteProspectAction } from './actions'
 
@@ -56,7 +56,8 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
             {status === 'to_check' && <PendingButton pendingLabel="Approving…" className="rounded-lg bg-green-700 text-white font-bold text-sm px-4 py-2">Approve ticked for sending</PendingButton>}
             {list.map(r => {
               const email = buildOutreachEmail(r, r.status === 'sent' ? 'follow_up' : 'first')
-              const ok = canEmail(r)
+              // Tickable when the business may be emailed at all (limited company, or said yes); the status is checked by the sender.
+              const ok = (SENDABLE_COMPANY_TYPES as readonly string[]).includes(r.company_type)
               return (
                 <div key={r.id} className={card}>
                   <div className="flex items-start gap-3">
