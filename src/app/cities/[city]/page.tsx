@@ -468,12 +468,12 @@ export default async function CityPage({
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-12 flex flex-col gap-10 sm:gap-14">
 
-        {/* ── MAIN VENUES: the biggest six, one tap to their what's-on pages ── */}
+        {/* ── MAIN VENUES: the six biggest by capacity, one tap to their what's-on pages ── */}
         {rankedVenues.length > 0 && (
           <section aria-label={`Main venues in ${cityName}`} className="order-1 -mb-4 sm:-mb-6">
             <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2.5">Main venues</p>
             <ul className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-              {rankedVenues.slice(0, 6).map(v => (
+              {cityVenues.slice(0, 6).map(v => (
                 <li key={v.slug} className="shrink-0">
                   <Link href={`/venues/${v.slug}`} className="inline-flex items-center min-h-[40px] rounded-xl border border-slate-200 bg-white px-3.5 text-sm font-bold text-slate-800 hover:border-slate-400">
                     {v.name}<span className="ml-1.5 font-normal text-slate-400">{countByVenue[v.id] ?? ''}</span>
