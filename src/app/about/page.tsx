@@ -44,9 +44,9 @@ export default function AboutPage() {
             Local businesses can also pay to appear on our city and event pages. Those listings are always marked
             as sponsored.
           </p>
-          <h2 className="text-2xl font-extrabold text-slate-900 pt-4">Who runs it</h2>
+          <h2 className="text-2xl font-extrabold text-slate-900 pt-4">Get in touch</h2>
           <p>
-            TheShowFinder was founded by Chris Spence. You can reach him at{' '}
+            Questions, corrections or partnership ideas: email{' '}
             <a href="mailto:hello@theshowfinder.com" className="font-semibold underline">hello@theshowfinder.com</a>.
           </p>
 
