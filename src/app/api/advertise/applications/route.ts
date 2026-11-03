@@ -39,6 +39,7 @@ async function createCheckoutSession({
   email,
   city,
   priceId,
+  trialDays = 0,
 }: {
   request: Request
   applicationId: string
@@ -47,6 +48,7 @@ async function createCheckoutSession({
   email: string
   city: string
   priceId: string
+  trialDays?: number
 }) {
   const secret = process.env.STRIPE_SECRET_KEY
   if (!secret) throw new Error('Stripe is not configured on the server.')
@@ -66,6 +68,8 @@ async function createCheckoutSession({
   params.set('subscription_data[metadata][application_id]', applicationId)
   params.set('subscription_data[metadata][package]', packageKey)
   params.set('subscription_data[metadata][billing]', billing)
+  // Founding partners reached by outreach: first month free (card taken now, first payment after the trial).
+  if (trialDays > 0) params.set('subscription_data[trial_period_days]', String(trialDays))
   const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -92,6 +96,7 @@ export async function POST(request: Request) {
     const postcode = tidyPostcode(text(form.get('postcode')))
     const bookingUrl = text(form.get('booking_url'))
     const offerText = tidyOffer(text(form.get('offer_text')))
+    const ref = text(form.get('ref'))
     const logo = form.get('logo')
     const assets = form.getAll('assets').filter(value => value instanceof File) as File[]
 
@@ -166,7 +171,18 @@ export async function POST(request: Request) {
       }).eq('id', application.id)
     }
 
-    const session = await createCheckoutSession({ request, applicationId: application.id, packageKey, billing, email, city, priceId })
+    // An outreach link (/p/<ref>) carries the founding offer: a 30-day free trial on monthly billing. The business
+    // stops getting outreach follow-ups once it has applied.
+    let trialDays = 0
+    if (/^[a-f0-9]{6,20}$/.test(ref)) {
+      const loose = db as any // eslint-disable-line @typescript-eslint/no-explicit-any
+      const { data: prospect } = await loose.from('outreach_prospects').select('id, status').eq('ref_code', ref).maybeSingle()
+      if (prospect && prospect.status !== 'unsubscribed') {
+        if (billing === 'monthly') trialDays = 30
+        await loose.from('outreach_prospects').update({ status: 'signed_up', updated_at: new Date().toISOString() }).eq('id', prospect.id)
+      }
+    }
+    const session = await createCheckoutSession({ request, applicationId: application.id, packageKey, billing, email, city, priceId, trialDays })
     await db.from('advertiser_applications').update({
       stripe_checkout_session_id: session.id,
       updated_at: new Date().toISOString(),

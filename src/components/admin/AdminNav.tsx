@@ -10,7 +10,7 @@ const TABS: Array<{ label: string; href: string; pages: Array<[string, string]> 
   { label: 'Shows', href: '/admin/events', pages: [['/admin/events', 'Events'], ['/admin/artists', 'Artists'], ['/admin/ticket-links', 'Ticket links']] },
   { label: 'Imports', href: '/admin/feeds', pages: [['/admin/feeds', 'Feeds & matching'], ['/admin/ticketmaster', 'Ticketmaster'], ['/admin/gigsberg', 'Gigsberg'], ['/admin/see-tickets', 'See Tickets'], ['/admin/unmatched', 'Unmatched'], ['/admin/local-events', 'Local listings']] },
   { label: 'Content', href: '/admin/news', pages: [['/admin/news', 'News inbox'], ['/admin/social', 'Social posts']] },
-  { label: 'Advertisers', href: '/admin/advertiser-applications', pages: [['/admin/advertiser-applications', 'Applications'], ['/admin/local-businesses', 'Businesses']] },
+  { label: 'Advertisers', href: '/admin/advertiser-applications', pages: [['/admin/advertiser-applications', 'Applications'], ['/admin/local-businesses', 'Businesses'], ['/admin/outreach', 'Outreach']] },
   { label: 'Audience', href: '/admin/subscribers', pages: [['/admin/subscribers', 'Subscribers'], ['/admin/newsletter', 'Newsletter']] },
 ]
 

@@ -11,7 +11,7 @@ const PACKAGES = {
   standard: { label: 'Standard listing', price: '£29.95 per month', detail: 'A listing in the local guide on your city page, with your offer and booking link.' },
 } as const
 
-export default function AdvertiserOnboardingForm({ initialCity = '', initialPackage = 'featured' }: { initialCity?: string; initialPackage?: PackageKey }) {
+export default function AdvertiserOnboardingForm({ initialCity = '', initialPackage = 'featured', refCode = '' }: { initialCity?: string; initialPackage?: PackageKey; refCode?: string }) {
   const [step, setStep] = useState(1)
   const [city, setCity] = useState(initialCity)
   const [packageKey, setPackageKey] = useState<PackageKey>(initialPackage)
@@ -52,6 +52,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
     form.set('postcode', postcode.trim())
     form.set('booking_url', bookingUrl.trim())
     form.set('offer_text', offer.trim())
+    if (refCode) form.set('ref', refCode)
     if (logoFile) form.set('logo', logoFile)
     assetFiles.forEach(file => form.append('assets', file))
 

@@ -1,0 +1,62 @@
+import { NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { withJobRun } from '@/lib/jobRuns'
+import { canEmail, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, type Prospect } from '@/lib/outreach'
+import { sendOutreachEmail } from '@/lib/outreachSend'
+
+export const maxDuration = 60
+export const dynamic = 'force-dynamic'
+
+// Advertiser outreach sender (vercel.json: hourly, weekdays 09:10–17:10 UTC). Each run sends a few emails, so the
+// day's sends are spread out and never more than DAILY_LIMIT: first emails to businesses Chris approved, then one
+// follow-up FOLLOW_UP_AFTER_DAYS later to anyone who has not replied, signed up or opted out. ?dry=1 lists only.
+const PER_RUN = 3
+type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
+const COLS = 'id, business_name, category, city, near_venue, distance_label, email, company_type, status, ref_code, unsubscribe_token'
+
+async function handleGet(request: Request) {
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const dry = new URL(request.url).searchParams.get('dry') === '1'
+  const db = createAdminClient() as Loose
+  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0)
+  const [{ count: firstToday }, { count: followToday }] = await Promise.all([
+    db.from('outreach_prospects').select('id', { count: 'exact', head: true }).gte('sent_at', dayStart.toISOString()),
+    db.from('outreach_prospects').select('id', { count: 'exact', head: true }).gte('followed_up_at', dayStart.toISOString()),
+  ])
+  let budget = Math.min(PER_RUN, DAILY_LIMIT - (firstToday ?? 0) - (followToday ?? 0))
+  const sent: string[] = [], failed: string[] = []
+  if (budget <= 0) return NextResponse.json({ success: true, dry, sent, failed, note: 'daily limit reached' })
+
+  const followBefore = new Date(Date.now() - FOLLOW_UP_AFTER_DAYS * 86_400_000).toISOString()
+  const [{ data: firsts }, { data: follows }] = await Promise.all([
+    db.from('outreach_prospects').select(COLS).eq('status', 'approved').order('created_at').limit(budget),
+    db.from('outreach_prospects').select(COLS).eq('status', 'sent').lte('sent_at', followBefore).order('sent_at').limit(budget),
+  ])
+  const queue: Array<{ p: Prospect; kind: 'first' | 'follow_up' }> = [
+    ...((firsts ?? []) as Prospect[]).map(p => ({ p, kind: 'first' as const })),
+    ...((follows ?? []) as Prospect[]).map(p => ({ p, kind: 'follow_up' as const })),
+  ]
+  for (const { p, kind } of queue) {
+    if (budget <= 0) break
+    if (!canEmail(p)) continue
+    budget--
+    if (dry) { sent.push(`${kind}: ${p.business_name} <${p.email}>`); continue }
+    const r = await sendOutreachEmail(p, kind)
+    const now = new Date().toISOString()
+    if (r.ok) {
+      sent.push(`${kind}: ${p.business_name}`)
+      await db.from('outreach_prospects').update(kind === 'first'
+        ? { status: 'sent', sent_at: now, last_error: null, updated_at: now }
+        : { status: 'followed_up', followed_up_at: now, last_error: null, updated_at: now }).eq('id', p.id)
+    } else {
+      failed.push(`${p.business_name}: ${r.error}`)
+      await db.from('outreach_prospects').update({ last_error: r.error, updated_at: now }).eq('id', p.id)
+    }
+  }
+  return NextResponse.json({ success: failed.length === 0, dry, sent, failed })
+}
+
+export const GET = withJobRun('outreach-send', handleGet)
