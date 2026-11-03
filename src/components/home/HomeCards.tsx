@@ -127,3 +127,32 @@ export function FeaturedGrid({ events }: { events: EventWithVenue[] }) {
     </div>
   )
 }
+
+/** A show as a picture card with one chip (local listings, nearby towns, city rows). */
+export function EventTile({ event, chipText, chipBg = '#ffffff', chipFg = '#0f172a' }: { event: EventWithVenue; chipText?: string; chipBg?: string; chipFg?: string }) {
+  return (
+    <Overlay href={`/events/${event.slug}`} image={img(event)} className="aspect-[4/5]"
+      top={chipText ? chip(chipText, { backgroundColor: chipBg, color: chipFg }) : undefined}>
+      <span className="block text-[11px] font-bold uppercase tracking-widest text-white/75">{dateLine(event.start_date)}</span>
+      <span className="block text-base sm:text-lg font-extrabold leading-tight mt-0.5 line-clamp-2">{displayTitle(event.title)}</span>
+      <span className="block text-xs text-white/75 mt-1 truncate">{venueLabel(event.venue_name, event.venue_city)}</span>
+    </Overlay>
+  )
+}
+
+/** On sale this week: a tour as a picture card with its sale chip and date count. */
+export function OnSaleTile({ href, image, title, meta, chipText }: { href: string; image: string; title: string; meta: string; chipText: string }) {
+  return (
+    <Overlay href={href} image={image} className="aspect-[4/5]" top={chip(chipText, { backgroundColor: '#026CDF', color: '#fff' })}>
+      <span className="block text-lg sm:text-xl font-extrabold leading-tight line-clamp-2">{title}</span>
+      <span className="block text-xs font-bold text-white/80 mt-1">{meta}</span>
+    </Overlay>
+  )
+}
+
+/** Pick the biggest-venue headline show to lead a week list (never an attraction day-ticket or experience). */
+export function leadFirst(events: EventWithVenue[], isAttraction: (e: EventWithVenue) => boolean): EventWithVenue[] {
+  const ok = (e: EventWithVenue) => e.category !== 'local' && !isAttraction(e) && !/\b(experience|exhibition|admission|entry)\b/i.test(e.title)
+  const lead = [...events].filter(ok).sort((a, b) => (b.venue_capacity ?? 0) - (a.venue_capacity ?? 0))[0]
+  return lead ? [lead, ...events.filter(e => e.id !== lead.id)] : events
+}

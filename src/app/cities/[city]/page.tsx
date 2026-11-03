@@ -16,7 +16,6 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
-import EventCard from '@/components/EventCard'
 import SearchBarWrapper from '@/components/SearchBarWrapper'
 import { Suspense } from 'react'
 import { dropNonUkNews } from '@/lib/newsFiltering'
@@ -38,6 +37,9 @@ import TonightEventCard from '@/components/TonightEventCard'
 import WestEndStrip from '@/components/WestEndStrip'
 import { pickNewsForCityPage, CITY_NEWS_MAX_AGE_DAYS } from '@/lib/newsPublishing'
 import ScrollRail from '@/components/ScrollRail'
+import { WeekFeature, EventTile, OnSaleTile, leadFirst } from '@/components/home/HomeCards'
+import { isAttraction } from '@/lib/eventMix'
+import { eventImageUrl } from '@/lib/eventImages'
 import CityIntro from '@/components/CityIntro'
 import { CITY_HERO_IMAGES } from '@/lib/cityHeroImages'
 import CalendarSubscribe from '@/components/CalendarSubscribe'
@@ -519,11 +521,7 @@ export default async function CityPage({
                 See all →
               </Link>
             </div>
-            <ScrollRail label={`Events this week in ${cityName}`}>
-              {weekEvents.map(event => (
-                <EventCard key={event.id} event={event} />
-              ))}
-            </ScrollRail>
+            <WeekFeature events={leadFirst(weekEvents, isAttraction).slice(0, 6)} />
           </section>
         )}
 
@@ -539,9 +537,9 @@ export default async function CityPage({
               </h2>
               <p className="text-sm text-slate-500 mt-1">Markets, festivals, workshops and community nights from {cityName}&apos;s own event listings</p>
             </div>
-            <ScrollRail label={`What's on locally in ${cityName}`}>
+            <ScrollRail label={`What's on locally in ${cityName}`} columns={4}>
               {localEvents.map(event => (
-                <EventCard key={event.id} event={event} />
+                <EventTile key={event.id} event={event} chipText="Local" chipBg="#7c3aed" chipFg="#ffffff" />
               ))}
             </ScrollRail>
           </section>
@@ -561,9 +559,9 @@ export default async function CityPage({
                 Upcoming shows in {nearbyTowns.map(t => t.name).join(', ').replace(/, ([^,]*)$/, ' and $1')}
               </p>
             </div>
-            <ScrollRail label={`Shows around ${cityName}`}>
+            <ScrollRail label={`Shows around ${cityName}`} columns={4}>
               {nearbyEvents.map(event => (
-                <EventCard key={event.id} event={event} />
+                <EventTile key={event.id} event={event} chipText={event.venue_city ?? undefined} />
               ))}
             </ScrollRail>
           </section>
@@ -572,62 +570,33 @@ export default async function CityPage({
         {/* ── ON SALE THIS WEEK (omit the whole block when empty so the page
              stays focused and does not present a thin empty section to users
              or crawlers) ── */}
-        {onsaleGroups.length > 0 && <section id="on-sale" className="scroll-mt-20 order-5">
+        {onsaleGroups.length > 0 && <section id="on-sale" className="scroll-mt-20 order-5 rounded-3xl bg-slate-950 px-4 py-7 sm:px-8 sm:py-9">
           <div className="flex items-end justify-between mb-7">
             <div>
-              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
+              <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#5aa9ff' }}>
                 Tickets just released
               </p>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
                 On Sale This Week in {cityName}
               </h2>
             </div>
             <Link
               href="/on-sale-this-week"
-              className="text-sm font-semibold hover:underline hidden sm:block"
-              style={{ color: '#026CDF' }}
+              className="text-sm font-semibold hidden sm:block text-white/70 hover:text-white"
             >
               View all →
             </Link>
           </div>
-          <ScrollRail label={`On sale this week in ${cityName}`}>
+          <ScrollRail label={`On sale this week in ${cityName}`} columns={4}>
               {onsaleGroups.map(group => (
-                <Link
+                <OnSaleTile
                   key={group.slug}
                   href={`/on-sale-this-week/${group.slug}`}
-                  className="group block rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5"
-                >
-                  <div className="relative h-48 overflow-hidden bg-slate-900">
-                    {group.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={group.image_url} alt={group.artistName}
-                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A1A2E, #E8003D)' }}>
-                        <span className="text-5xl">🎤</span>
-                      </div>
-                    )}
-                    <div className="absolute top-3 left-3">
-                      <span className="text-xs font-bold uppercase tracking-wider text-white px-2.5 py-1 rounded-full" style={{ backgroundColor: '#026CDF' }}>
-                        On Sale This Week
-                      </span>
-                    </div>
-                  </div>
-                  <div className="p-4">
-                    <p className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
-                      {group.dbArtist?.tour_name ?? 'Live Tour'}
-                    </p>
-                    <h3 className="font-extrabold text-slate-900 text-lg leading-tight mb-2 group-hover:text-red-600 transition-colors">
-                      {group.artistName}
-                    </h3>
-                    <p className="text-sm text-slate-500 mb-3">
-                      🗓 {groupDateCount(group)} UK date{groupDateCount(group) !== 1 ? 's' : ''}
-                    </p>
-                    <div className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">
-                      🎟️ {saleBadgeText(group.saleType, group.onsale_date)}
-                    </div>
-                  </div>
-                </Link>
+                  image={eventImageUrl(group.image_url, 'concert', group.artistName)}
+                  title={group.artistName}
+                  meta={`${groupDateCount(group)} UK date${groupDateCount(group) !== 1 ? 's' : ''} · ${saleBadgeText(group.saleType, group.onsale_date)}`}
+                  chipText="On sale this week"
+                />
               ))}
           </ScrollRail>
         </section>}
