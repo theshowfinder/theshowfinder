@@ -21,7 +21,7 @@ import { createPublicClient } from '@/lib/supabase/public'
 import { isRepeatPerformance } from '@/lib/repeatPerformances'
 import { idTailPattern, slugIdTail } from '@/lib/renamedEvents'
 import type { EventCategory, EventStatus } from '@/lib/types/database'
-import { ticketmasterOutLink, isTicketmasterCommissionEligible, outLink } from '@/lib/affiliate'
+import { ticketmasterOutLink, isTicketmasterCommissionEligible, outLink, expediaHotelSearchUrl } from '@/lib/affiliate'
 import { CopyLinkButton } from '@/components/CopyLinkButton'
 import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { jsonLdScript, buildEventSchema, buildBreadcrumbSchema, earliestOnSale } from '@/lib/jsonld'
@@ -1211,6 +1211,25 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 })}
               </div>
             </div>
+            )}
+
+            {/* Staying over: an Expedia hotel search near the venue for the night of the show (Expedia Group affiliate). */}
+            {venue?.name && !isCancelledOrPostponed && new Date(event.start_date).getTime() > Date.now() && (
+              <TrackedTicketLink
+                href={outLink('ex', expediaHotelSearchUrl(venue.name, venue.city ?? null, event.start_date))}
+                provider="Expedia"
+                section="also_available"
+                context={event.slug}
+                className="flex items-center justify-between rounded-2xl px-5 py-4 text-white hover:opacity-90 transition-opacity min-h-[60px] shadow-sm"
+                style={{ backgroundColor: '#191e3b' }}
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#fddb32' }}>Staying over?</p>
+                  <p className="font-extrabold leading-snug truncate">Hotels near {venue.name}</p>
+                  <p className="text-xs opacity-80">On Expedia · the night of the show</p>
+                </div>
+                <span className="text-xl ml-3">→</span>
+              </TrackedTicketLink>
             )}
 
             {/* Featured local partners right under the ticket buttons: the moment people plan the rest of the night. */}

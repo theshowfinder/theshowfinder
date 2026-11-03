@@ -21,7 +21,7 @@ export function getTicketmasterAffiliateLink(destinationUrl: string, subId?: str
 // else goes to the plain page). Providers: tm Ticketmaster, st See Tickets, gb
 // Gigsberg, vg Viagogo, sh StubHub, vs Vivid Seats, ev Eventim. Use `absolute` where
 // the link leaves the site (share buttons); on-page buttons use the relative path.
-export function outLink(provider: 'tm' | 'st' | 'gb' | 'vg' | 'sh' | 'vs' | 'ev' | 'td', destinationUrl: string, subId?: string, absolute = false): string {
+export function outLink(provider: 'tm' | 'st' | 'gb' | 'vg' | 'sh' | 'vs' | 'ev' | 'td' | 'ex', destinationUrl: string, subId?: string, absolute = false): string {
   const sub = cleanSubId(subId)
   const path = `/out/${provider}?u=${encodeURIComponent(destinationUrl)}${sub ? `&s=${sub}` : ''}`
   // v=s marks a link handed to a person (share button, email): see decideProviderOutbound.
@@ -172,4 +172,28 @@ export function getSkiddleAffiliateLink(destinationUrl: string): string {
 }
 export function getSeatUniqueAffiliateLink(destinationUrl: string): string {
   return wrapWithEnvTemplate(destinationUrl, 'SEATUNIQUE_AFFILIATE_TEMPLATE')
+}
+
+// Expedia Group creator programme (approved 2 Nov 2026). Its link builder's long form: any expedia.co.uk page goes in
+// landingPage, the rest identifies our account. Used for "Stay near <venue>" hotel searches on event pages.
+const EXPEDIA_CAMREF = '1110lSuIA'
+const EXPEDIA_CREATIVEREF = '1011l87747'
+const EXPEDIA_ADREF = 'PZqTButl2m'
+export function getExpediaAffiliateLink(destinationUrl: string): string {
+  return `https://expedia.com/affiliate?siteid=1&landingPage=${encodeURIComponent(destinationUrl)}&camref=${EXPEDIA_CAMREF}&creativeref=${EXPEDIA_CREATIVEREF}&adref=${EXPEDIA_ADREF}`
+}
+
+/** An expedia.co.uk hotel search near a venue for the night of a show (UK date, one night, two adults). */
+export function expediaHotelSearchUrl(venueName: string, city: string | null, startIso: string): string {
+  const ukDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date(startIso))
+  const next = new Date(`${ukDay}T12:00:00Z`)
+  next.setUTCDate(next.getUTCDate() + 1)
+  const q = new URLSearchParams({
+    destination: [venueName, city].filter(Boolean).join(', '),
+    startDate: ukDay,
+    endDate: next.toISOString().slice(0, 10),
+    rooms: '1',
+    adults: '2',
+  })
+  return `https://www.expedia.co.uk/Hotel-Search?${q.toString()}`
 }
