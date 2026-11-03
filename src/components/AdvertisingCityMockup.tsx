@@ -102,9 +102,25 @@ function BusinessCard({ business }: { business: MockBusiness }) {
     </article>
   )
 }
-export default function AdvertisingCityMockup({ cityName = 'Manchester' }: { cityName?: string }) {
+/** A business reached by outreach: shown in the first Featured slot so they see exactly how they would look. */
+export type MockupPreview = { name: string; category: string }
+
+export default function AdvertisingCityMockup({ cityName = 'Manchester', preview = null, refCode = '' }: { cityName?: string; preview?: MockupPreview | null; refCode?: string }) {
+  const initials = (name: string) => name.replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'YB'
+  const businesses: MockBusiness[] = preview
+    ? [{ name: preview.name, category: preview.category, description: 'Your description, offer and booking link, shown right under the ticket buttons when people plan their night.', initials: initials(preview.name), image: '/social-backgrounds/concert-city-night.png', featured: true }, ...BUSINESSES.filter(b => b.featured).slice(1), ...BUSINESSES.filter(b => !b.featured)]
+    : BUSINESSES
+  const onboard = (pkg: 'featured' | 'standard') => `/advertise/onboard?${new URLSearchParams({ city: cityName, package: pkg, ...(refCode ? { ref: refCode } : {}) }).toString()}`
   return (
     <main className="min-h-screen bg-[#F5F5F0] text-slate-900">
+      {preview && (
+        <div className="bg-rose-600 text-white">
+          <div className="mx-auto max-w-7xl px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm font-bold">
+            <span>This is how {preview.name} would appear on TheShowFinder {cityName}.</span>
+            <a href="#packages" className="rounded-lg bg-white px-3 py-1.5 text-rose-700">Choose your placement ↓</a>
+          </div>
+        </div>
+      )}
       <section className="relative overflow-hidden bg-slate-950 px-4 py-12 text-white sm:px-6 sm:py-20">
         <img src="/city-heroes/manchester.png" alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-45" />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/75 to-rose-950/35" />
@@ -167,15 +183,15 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester' }: { cit
             </Link>
           </div>
           <div className="mb-5 grid gap-5 md:grid-cols-3">
-            {BUSINESSES.filter(business => business.featured).map(business => <BusinessCard key={business.name} business={business} />)}
+            {businesses.filter(business => business.featured).map(business => <BusinessCard key={business.name} business={business} />)}
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {BUSINESSES.filter(business => !business.featured).map(business => <BusinessCard key={business.name} business={business} />)}
+            {businesses.filter(business => !business.featured).map(business => <BusinessCard key={business.name} business={business} />)}
           </div>
           <p className="mt-4 text-xs text-slate-400">Featured partners appear first. Placements are limited to nine businesses per city.</p>
         </section>
 
-        <section className="rounded-3xl bg-slate-950 p-7 text-white sm:p-10">
+        <section id="packages" className="scroll-mt-16 rounded-3xl bg-slate-950 p-7 text-white sm:p-10">
           <div className="max-w-3xl">
             <p className="text-xs font-extrabold uppercase tracking-widest text-rose-300">For local businesses</p>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">Put your business in front of people planning a night out.</h2>
@@ -185,13 +201,13 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester' }: { cit
               <p className="text-xs font-extrabold uppercase tracking-widest text-rose-300">Featured placement</p>
               <p className="mt-2 text-2xl font-black">£44.95<span className="text-sm font-bold text-white/60">/month</span></p>
               <p className="mt-1 text-xs text-white/60">£449.95 annually · introductory city rate</p>
-              <Link href={`/advertise/onboard?city=${encodeURIComponent(cityName)}&package=featured`} className="mt-4 inline-flex rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-rose-400">Secure featured placement →</Link>
+              <Link href={onboard('featured')} className="mt-4 inline-flex rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-rose-400">Secure featured placement →</Link>
             </div>
             <div className="rounded-2xl border border-white/15 bg-white/5 p-5">
               <p className="text-xs font-extrabold uppercase tracking-widest text-white/60">Standard listing</p>
               <p className="mt-2 text-2xl font-black">£29.95<span className="text-sm font-bold text-white/60">/month</span></p>
               <p className="mt-1 text-xs text-white/60">£299.95 annually · introductory city rate</p>
-              <Link href={`/advertise/onboard?city=${encodeURIComponent(cityName)}&package=standard`} className="mt-4 inline-flex rounded-xl bg-white/10 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-white/20">Secure standard listing →</Link>
+              <Link href={onboard('standard')} className="mt-4 inline-flex rounded-xl bg-white/10 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-white/20">Secure standard listing →</Link>
             </div>
           </div>
           <p className="mt-5 text-xs font-semibold text-white/60">Only nine positions are available in this city. The displayed introductory rate is subject to availability and will be reviewed after the launch allocation is filled.</p>

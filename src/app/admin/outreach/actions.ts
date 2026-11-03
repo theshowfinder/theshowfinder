@@ -25,7 +25,7 @@ export async function addProspectAction(form: FormData) {
   if (!str(form, 'business_name') || !/^\S+@\S+\.\S+$/.test(email) || !city) back('Business name, a valid email and one of our cities are needed.', false)
   const companyType = COMPANY_TYPES.includes(str(form, 'company_type')) ? str(form, 'company_type') : 'unknown'
   const { error } = await db().from('outreach_prospects').insert({
-    business_name: str(form, 'business_name'), category: str(form, 'category') || 'Restaurant', city,
+    business_name: str(form, 'business_name'), contact_name: str(form, 'contact_name') || null, category: str(form, 'category') || 'Restaurant', city,
     near_venue: str(form, 'near_venue') || null, distance_label: str(form, 'distance_label') || null, email,
     website: str(form, 'website') || null, address: str(form, 'address') || null, company_type: companyType,
     company_number: str(form, 'company_number') || null, notes: str(form, 'notes') || null,
@@ -48,7 +48,7 @@ export async function approveSelectedAction(form: FormData) {
 
 export async function setStatusAction(id: string, status: string) {
   await checkAuth()
-  const allowed = ['to_check', 'replied', 'not_interested', 'signed_up', 'unsubscribed', 'bounced']
+  const allowed = ['to_check', 'replied', 'interested', 'onboarding', 'won', 'no_response', 'not_interested', 'unsubscribed', 'bounced']
   if (!allowed.includes(status)) back('Unknown status.', false)
   const now = new Date().toISOString()
   await db().from('outreach_prospects').update({ status, updated_at: now, ...(status === 'replied' ? { replied_at: now } : {}), ...(status === 'unsubscribed' ? { unsubscribed_at: now } : {}) }).eq('id', id)

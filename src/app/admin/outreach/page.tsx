@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { buildOutreachEmail, canEmail, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, type Prospect } from '@/lib/outreach'
+import { buildOutreachEmail, canEmail, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
 import PendingButton from '@/components/admin/PendingButton'
 import { addProspectAction, approveSelectedAction, setStatusAction, setCompanyTypeAction, deleteProspectAction } from './actions'
 
@@ -13,8 +13,9 @@ type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 type Row = Prospect & { website: string | null; address: string | null; company_number: string | null; notes: string | null; sent_at: string | null; followed_up_at: string | null; clicked_at: string | null; last_error: string | null; created_at: string }
 
 const STATUSES: Array<[string, string]> = [
-  ['to_check', 'To check'], ['approved', 'Approved, waiting to send'], ['sent', 'Sent'], ['followed_up', 'Followed up'],
-  ['replied', 'Replied'], ['signed_up', 'Signed up'], ['not_interested', 'Not interested'], ['unsubscribed', 'Unsubscribed'], ['bounced', 'Bounced'],
+  ['to_check', 'Ready to check'], ['approved', 'Approved, waiting to send'], ['sent', 'Sent'], ['followed_up', 'Followed up'],
+  ['replied', 'Replied'], ['interested', 'Interested'], ['onboarding', 'Onboarding'], ['won', 'Won (paid)'],
+  ['no_response', 'No response'], ['not_interested', 'Not a fit'], ['unsubscribed', 'Unsubscribed'], ['bounced', 'Bounced'],
 ]
 const label = (s: string) => STATUSES.find(([k]) => k === s)?.[1] ?? s
 const day = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' }) : null
@@ -40,7 +41,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-5">
         <div>
           <h1 className="text-xl font-extrabold text-slate-900">Outreach</h1>
-          <p className="text-sm text-slate-600">Nothing is emailed until you tick it. Up to {DAILY_LIMIT} emails a weekday from partners@, spread through the day; one follow-up after {FOLLOW_UP_AFTER_DAYS} days; replies go to hello@. Only limited companies can be ticked (UK rules: sole traders and partnerships need consent first). {clicks} business{clicks === 1 ? '' : 'es'} clicked through so far.</p>
+          <p className="text-sm text-slate-600">Nothing is emailed until you tick it. Up to {DAILY_LIMIT} emails a weekday from partners@, spread through the day; one follow-up after {FOLLOW_UP_AFTER_DAYS} days, then &ldquo;No response&rdquo; after {NO_RESPONSE_AFTER_DAYS}; replies go to hello@. The link opens the city mock-up with their name in it and a pre-filled sign-up. Only limited companies can be ticked (UK rules: sole traders and partnerships need consent first). {clicks} business{clicks === 1 ? '' : 'es'} clicked through so far.</p>
         </div>
         {sp.msg && <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${sp.ok === '1' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>{sp.msg}</div>}
 
@@ -92,7 +93,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
               {list.map(r => (
                 <div key={r.id} className="flex flex-wrap items-center gap-2 text-sm border-t border-slate-100 pt-2">
                   <span className="font-semibold min-w-[10rem]">{r.business_name}</span>
-                  {['replied', 'not_interested', 'signed_up'].map(s => (
+                  {['replied', 'interested', 'won', 'not_interested'].map(s => (
                     <form key={s} action={setStatusAction.bind(null, r.id, s)}><PendingButton pendingLabel="…" className="text-xs font-semibold rounded-full border border-slate-300 px-3 py-1">{label(s)}</PendingButton></form>
                   ))}
                   <form action={setCompanyTypeAction.bind(null, r.id)} className="flex items-center gap-1">
@@ -113,6 +114,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
           <h2 className="font-extrabold text-slate-900 mb-3">Add a business</h2>
           <form action={addProspectAction} className="grid sm:grid-cols-2 gap-2">
             <input name="business_name" placeholder="Business name" required className={input} />
+            <input name="contact_name" placeholder="Contact name (optional)" className={input} />
             <input name="email" type="email" placeholder="Email (from their website)" required className={input} />
             <input name="city" placeholder="City (e.g. Manchester)" required className={input} />
             <select name="category" className={input} defaultValue="Restaurant">{['Restaurant', 'Bar', 'Pub', 'Cafe', 'Hotel', 'Other'].map(c => <option key={c}>{c}</option>)}</select>

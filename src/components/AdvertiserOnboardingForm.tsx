@@ -11,15 +11,15 @@ const PACKAGES = {
   standard: { label: 'Standard listing', price: '£29.95 per month', detail: 'A listing in the local guide on your city page, with your offer and booking link.' },
 } as const
 
-export default function AdvertiserOnboardingForm({ initialCity = '', initialPackage = 'featured', refCode = '' }: { initialCity?: string; initialPackage?: PackageKey; refCode?: string }) {
+export default function AdvertiserOnboardingForm({ initialCity = '', initialPackage = 'featured', refCode = '', initialBusinessName = '', initialEmail = '', initialContactName = '', initialCategory = '' }: { initialCity?: string; initialPackage?: PackageKey; refCode?: string; initialBusinessName?: string; initialEmail?: string; initialContactName?: string; initialCategory?: string }) {
   const [step, setStep] = useState(1)
   const [city, setCity] = useState(initialCity)
   const [packageKey, setPackageKey] = useState<PackageKey>(initialPackage)
   const [billing, setBilling] = useState<BillingKey>('monthly')
-  const [businessName, setBusinessName] = useState('')
-  const [category, setCategory] = useState('Restaurant')
-  const [contactName, setContactName] = useState('')
-  const [email, setEmail] = useState('')
+  const [businessName, setBusinessName] = useState(initialBusinessName)
+  const [category, setCategory] = useState(initialCategory || 'Restaurant')
+  const [contactName, setContactName] = useState(initialContactName)
+  const [email, setEmail] = useState(initialEmail)
   const [phone, setPhone] = useState('')
   const [website, setWebsite] = useState('')
   const [description, setDescription] = useState('')

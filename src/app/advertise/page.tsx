@@ -72,16 +72,13 @@ export default async function AdvertisePage({ searchParams }: { searchParams: Pr
       if (count) showPages = `all ${count.toLocaleString('en-GB')} upcoming show pages in ${city}`
     } catch { /* keep the general wording */ }
   }
-  // Founding offer from an outreach email (/p/<ref>): carried through to sign-up, where it becomes a free first month.
+  // Outreach link code (/p/<ref>): carried through to sign-up so the form is pre-filled.
   const ref = /^[a-f0-9]{6,20}$/.test(params.ref ?? '') ? params.ref! : null
   const onboardingUrl = (packageKey: 'standard' | 'featured') => `/advertise/onboard?${new URLSearchParams({ ...(city ? { city } : {}), package: packageKey, ...(ref ? { ref } : {}) }).toString()}`
   return (
     <main className="min-h-screen bg-[#F5F5F0]">
       <section className="bg-slate-950 text-white">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
-          {ref && (
-            <p className="mb-6 inline-block rounded-full bg-emerald-500 px-4 py-2 text-sm font-extrabold text-white">Founding partner offer: first month free{city ? ` in ${city}` : ''}</p>
-          )}
           <p className="mb-4 text-sm font-extrabold uppercase tracking-[0.2em] text-rose-400">Advertise with TheShowFinder</p>
           <h1 className="max-w-4xl text-4xl font-black tracking-tight sm:text-6xl">Put your business in front of people planning a night out.</h1>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-300">

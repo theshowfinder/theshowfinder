@@ -12,15 +12,20 @@ test('first email: personal, offer link, unsubscribe, no numbers', () => {
   const e = buildOutreachEmail(p, 'first')
   assert.match(e.subject, /The Blue Door/)
   assert.match(e.text, /Co-op Live/)
-  assert.match(e.text, /first month is free/)
+  assert.match(e.text, /only nine places in Manchester/)
+  assert.match(e.text, /£29\.95 a month/)
+  assert.match(e.text, /decide where to eat/)
   assert.match(e.text, /\/p\/abc123/)
   assert.match(e.text, /\/unsubscribe\/tok/)
   assert.match(e.html, /Unsubscribe/)
   assert.doesNotMatch(e.text, /visitors|clicks|views a month/i)
 })
 
-test('follow-up says it is the last one', () => {
-  assert.match(buildOutreachEmail(p, 'follow_up').text, /won't follow up again/)
+test('follow-up is short and keeps the link', () => {
+  const f = buildOutreachEmail({ ...p, contact_name: 'Sam Jones' }, 'follow_up')
+  assert.match(f.subject, /^Re: /)
+  assert.match(f.text, /^Hi Sam,/)
+  assert.match(f.text, /\/p\/abc123/)
 })
 
 test('PECR: only limited companies or businesses that said yes', () => {
@@ -29,4 +34,5 @@ test('PECR: only limited companies or businesses that said yes', () => {
   assert.equal(canEmail({ ...p, company_type: 'unknown' }), false)
   assert.equal(canEmail({ ...p, company_type: 'consented' }), true)
   assert.equal(canEmail({ ...p, status: 'unsubscribed' }), false)
+  assert.equal(canEmail({ ...p, status: 'onboarding' }), false)
 })

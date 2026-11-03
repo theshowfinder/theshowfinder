@@ -3,8 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
 
-// The link in an outreach email: notes the first click, then opens the Advertise page for that business's city with
-// the founding offer (first month free) carried through to sign-up.
+// The link in an outreach email: notes the first click, then opens the city mock-up with the business's own name in
+// the first Featured slot; the package buttons carry the code to a pre-filled sign-up.
 export async function GET(request: Request, { params }: { params: Promise<{ ref: string }> }) {
   const { ref } = await params
   const code = /^[a-f0-9]{6,20}$/.test(ref) ? ref : null
@@ -22,5 +22,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ ref:
     }
   }
   const q = new URLSearchParams({ ...(city ? { city } : {}), ...(code ? { ref: code } : {}) })
-  return NextResponse.redirect(new URL(`/advertise?${q.toString()}`, request.url), 302)
+  return NextResponse.redirect(new URL(`/advertise/mockup?${q.toString()}`, request.url), 302)
 }

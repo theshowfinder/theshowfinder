@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { withJobRun } from '@/lib/jobRuns'
-import { canEmail, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, type Prospect } from '@/lib/outreach'
+import { canEmail, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
 import { sendOutreachEmail } from '@/lib/outreachSend'
 
 export const maxDuration = 60
@@ -9,10 +9,11 @@ export const dynamic = 'force-dynamic'
 
 // Advertiser outreach sender (vercel.json: hourly, weekdays 09:10–17:10 UTC). Each run sends a few emails, so the
 // day's sends are spread out and never more than DAILY_LIMIT: first emails to businesses Chris approved, then one
-// follow-up FOLLOW_UP_AFTER_DAYS later to anyone who has not replied, signed up or opted out. ?dry=1 lists only.
+// follow-up FOLLOW_UP_AFTER_DAYS later to anyone still at "sent" (not replied, interested, onboarding or opted out),
+// and "No response" NO_RESPONSE_AFTER_DAYS after the first email. ?dry=1 lists only.
 const PER_RUN = 3
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
-const COLS = 'id, business_name, category, city, near_venue, distance_label, email, company_type, status, ref_code, unsubscribe_token'
+const COLS = 'id, business_name, category, city, near_venue, distance_label, contact_name, email, company_type, status, ref_code, unsubscribe_token'
 
 async function handleGet(request: Request) {
   const cronSecret = process.env.CRON_SECRET
@@ -21,6 +22,11 @@ async function handleGet(request: Request) {
   }
   const dry = new URL(request.url).searchParams.get('dry') === '1'
   const db = createAdminClient() as Loose
+  // Followed up and still nothing after NO_RESPONSE_AFTER_DAYS: "No response", never chased again.
+  if (!dry) {
+    const cutoff = new Date(Date.now() - NO_RESPONSE_AFTER_DAYS * 86_400_000).toISOString()
+    await db.from('outreach_prospects').update({ status: 'no_response', updated_at: new Date().toISOString() }).eq('status', 'followed_up').lte('sent_at', cutoff)
+  }
   const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0)
   const [{ count: firstToday }, { count: followToday }] = await Promise.all([
     db.from('outreach_prospects').select('id', { count: 'exact', head: true }).gte('sent_at', dayStart.toISOString()),
