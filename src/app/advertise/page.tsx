@@ -37,13 +37,15 @@ function PackageCard({ name, monthly, annual, benefits, featured = false, href }
 }) {
   return (
     <div className={`relative rounded-3xl border bg-white p-7 shadow-sm ${featured ? 'border-rose-300 ring-2 ring-rose-100' : 'border-slate-200'}`}>
+      <span className="absolute left-5 top-5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-emerald-800">Introductory city rate</span>
       {featured && <span className="absolute right-5 top-5 rounded-full bg-rose-600 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-white">Top position</span>}
       <p className="mb-2 text-sm font-extrabold uppercase tracking-widest text-rose-600">{name}</p>
       <div className="mb-1 flex items-end gap-2">
         <span className="text-4xl font-black tracking-tight text-slate-950">{monthly}</span>
         <span className="pb-1 text-sm text-slate-500">per month</span>
       </div>
-      <p className="mb-6 text-sm font-semibold text-slate-500">or {annual} paid annually</p>
+      <p className="mb-2 text-sm font-semibold text-slate-500">or {annual} paid annually</p>
+      <p className="mb-6 text-xs font-bold text-emerald-700">Annual option saves roughly 16% · price protected while subscribed</p>
       <ul className="space-y-3">
         {benefits.map(benefit => (
           <li key={benefit} className="flex gap-3 text-sm leading-relaxed text-slate-600">
@@ -115,6 +117,10 @@ export default async function AdvertisePage({ searchParams }: { searchParams: Pr
           </p>
         </div>
 
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-950">
+          These are introductory city rates for the first available placements. Once the nine Manchester positions are filled, or the introductory period ends, pricing will be reviewed. Joining now secures the displayed rate while your subscription remains active.
+        </div>
+
         <div className="grid gap-6 lg:grid-cols-2">
           <PackageCard name="Standard" monthly="£29.95" annual="£299.95" benefits={standardBenefits} href={onboardingUrl('standard')} />
           <PackageCard name="Featured" monthly="£44.95" annual="£449.95" benefits={featuredBenefits(showPages)} featured href={onboardingUrl('featured')} />
@@ -122,11 +128,11 @@ export default async function AdvertisePage({ searchParams }: { searchParams: Pr
 
         <div className="mt-12 rounded-3xl bg-rose-600 p-8 text-white shadow-lg sm:flex sm:items-center sm:justify-between sm:p-10">
           <div className="max-w-2xl">
-            <h2 className="text-2xl font-black sm:text-3xl">Secure your city placement</h2>
+            <h2 className="text-2xl font-black sm:text-3xl">Secure your city placement at the introductory rate</h2>
             <p className="mt-2 leading-relaxed text-rose-50">Choose your city and package, add your offer and pay securely by card. We check your details and put you live, usually within one working day.</p>
           </div>
           <Link href={onboardingUrl('featured')} className="mt-6 inline-flex shrink-0 items-center justify-center rounded-xl bg-white px-6 py-3.5 text-sm font-extrabold text-rose-600 transition-transform hover:-translate-y-0.5 sm:ml-8 sm:mt-0">
-            Start your application →
+            Secure your placement →
           </Link>
         </div>
       </section>
