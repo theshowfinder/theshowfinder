@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { withJobRun } from '@/lib/jobRuns'
-import { canEmail, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
+import { canEmail, takeAcrossCities, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
 import { sendOutreachEmail } from '@/lib/outreachSend'
 
 export const maxDuration = 60
@@ -38,11 +38,11 @@ async function handleGet(request: Request) {
 
   const followBefore = new Date(Date.now() - FOLLOW_UP_AFTER_DAYS * 86_400_000).toISOString()
   const [{ data: firsts }, { data: follows }] = await Promise.all([
-    db.from('outreach_prospects').select(COLS).eq('status', 'approved').order('created_at').limit(budget),
+    db.from('outreach_prospects').select(COLS).eq('status', 'approved').order('created_at').limit(300),
     db.from('outreach_prospects').select(COLS).eq('status', 'sent').lte('sent_at', followBefore).order('sent_at').limit(budget),
   ])
   const queue: Array<{ p: Prospect; kind: 'first' | 'follow_up' }> = [
-    ...((firsts ?? []) as Prospect[]).map(p => ({ p, kind: 'first' as const })),
+    ...takeAcrossCities((firsts ?? []) as Prospect[], budget).map(p => ({ p, kind: 'first' as const })),
     ...((follows ?? []) as Prospect[]).map(p => ({ p, kind: 'follow_up' as const })),
   ]
   for (const { p, kind } of queue) {

@@ -31,6 +31,16 @@ export function canEmail(p: Pick<Prospect, 'company_type' | 'status'>): boolean 
   return (SENDABLE_COMPANY_TYPES as readonly string[]).includes(p.company_type) && ['approved', 'sent'].includes(p.status)
 }
 
+
+/** Oldest first within each city, but cities take turns, so one big batch (say, London) never crowds the rest out. */
+export function takeAcrossCities<T extends { city: string }>(rows: T[], n: number): T[] {
+  const byCity = new Map<string, T[]>()
+  for (const r of rows) byCity.set(r.city, [...(byCity.get(r.city) ?? []), r])
+  const lists = [...byCity.values()], out: T[] = []
+  for (let i = 0; out.length < n && lists.some(l => l.length > i); i++) for (const l of lists) if (l[i] && out.length < n) out.push(l[i])
+  return out
+}
+
 export const offerUrl = (p: Pick<Prospect, 'ref_code'>) => `${SITE}/p/${p.ref_code}`
 export const unsubscribeUrl = (p: Pick<Prospect, 'unsubscribe_token'>) => `${SITE}/unsubscribe/${p.unsubscribe_token}`
 

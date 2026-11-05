@@ -37,3 +37,9 @@ test('PECR: only limited companies or businesses that said yes', () => {
   assert.equal(canEmail({ ...p, status: 'unsubscribed' }), false)
   assert.equal(canEmail({ ...p, status: 'onboarding' }), false)
 })
+
+test('cities take turns in the send queue', async () => {
+  const { takeAcrossCities } = await import('./outreach.ts')
+  const rows = [{ city: 'London', n: 1 }, { city: 'London', n: 2 }, { city: 'London', n: 3 }, { city: 'Leeds', n: 4 }, { city: 'Hull', n: 5 }]
+  assert.deepEqual(takeAcrossCities(rows, 4).map(r => r.n), [1, 4, 5, 2])
+})
