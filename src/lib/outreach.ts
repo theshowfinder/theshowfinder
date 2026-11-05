@@ -8,8 +8,12 @@ export const DAILY_LIMIT = 45
 export const FOLLOW_UP_AFTER_DAYS = 4
 /** No reply this long after the first email (follow-up sent in between): marked "No response", never chased again. */
 export const NO_RESPONSE_AFTER_DAYS = 10
-/** Statuses the sender may email. company_type must also allow it (see canEmail). */
-export const SENDABLE_COMPANY_TYPES = ['ltd', 'consented'] as const
+/**
+ * Company types the sender may email (status must also be approved/sent, see canEmail). 'unconfirmed' is a business
+ * whose limited-company status we could not confirm. Chris chose (5 Nov 2026) to email every business that fits,
+ * whatever its company type, at the same daily cap, wording and instant unsubscribe; only approval gates sending.
+ */
+export const SENDABLE_COMPANY_TYPES = ['ltd', 'consented', 'unconfirmed', 'sole_trader', 'partnership', 'unknown'] as const
 
 export interface Prospect {
   id: string
@@ -26,7 +30,6 @@ export interface Prospect {
   unsubscribe_token: string
 }
 
-/** UK PECR: only limited companies / LLPs (or businesses that said yes) get unsolicited email. */
 export function canEmail(p: Pick<Prospect, 'company_type' | 'status'>): boolean {
   return (SENDABLE_COMPANY_TYPES as readonly string[]).includes(p.company_type) && ['approved', 'sent'].includes(p.status)
 }

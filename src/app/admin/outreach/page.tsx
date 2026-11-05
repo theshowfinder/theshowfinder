@@ -67,7 +67,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
                       <p className="text-sm text-slate-600 break-all">{r.email}{r.website ? <> · <a href={r.website} target="_blank" rel="noreferrer" className="text-blue-600">website</a></> : null}</p>
                       <p className="text-xs text-slate-500">{[r.distance_label ?? (r.near_venue ? `near ${r.near_venue}` : null), r.address].filter(Boolean).join(' · ')}</p>
                       <p className={`text-xs font-semibold mt-1 ${ok ? 'text-emerald-700' : 'text-amber-700'}`}>
-                        {r.company_type === 'ltd' ? `Limited company${r.company_number ? ` (${r.company_number})` : ''}` : r.company_type === 'consented' ? 'Said yes to hearing from us' : `${r.company_type.replace('_', ' ')}: cannot be emailed without consent`}
+                        {r.company_type === 'ltd' ? `Limited company${r.company_number ? ` (${r.company_number})` : ''}` : r.company_type === 'consented' ? 'Said yes to hearing from us' : `Company type: ${r.company_type.replace('_', ' ')} (not confirmed)`}
                         {' · '}{label(r.status)}{r.sent_at ? ` · sent ${day(r.sent_at)}` : ''}{r.followed_up_at ? ` · followed up ${day(r.followed_up_at)}` : ''}{r.clicked_at ? ' · clicked' : ''}
                       </p>
                       {r.last_error && <p className="text-xs text-red-700 mt-1">Last send failed: {r.last_error}</p>}
@@ -99,7 +99,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
                   ))}
                   <form action={setCompanyTypeAction.bind(null, r.id)} className="flex items-center gap-1">
                     <select name="company_type" defaultValue={r.company_type} className="text-xs border border-slate-200 rounded px-1 py-1">
-                      {['ltd', 'sole_trader', 'partnership', 'unknown', 'consented'].map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+                      {['ltd', 'unconfirmed', 'sole_trader', 'partnership', 'unknown', 'consented'].map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
                     </select>
                     <input name="company_number" defaultValue={r.company_number ?? ''} placeholder="Company no." className="text-xs border border-slate-200 rounded px-2 py-1 w-28" />
                     <PendingButton pendingLabel="…" className="text-xs font-semibold rounded-full border border-slate-300 px-3 py-1">Save</PendingButton>
@@ -123,7 +123,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
             <input name="distance_label" placeholder="e.g. a 5-minute walk from Co-op Live" className={input} />
             <input name="website" placeholder="Website" className={input} />
             <input name="address" placeholder="Address" className={input} />
-            <select name="company_type" className={input} defaultValue="unknown">{['ltd', 'sole_trader', 'partnership', 'unknown', 'consented'].map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}</select>
+            <select name="company_type" className={input} defaultValue="unknown">{['ltd', 'unconfirmed', 'sole_trader', 'partnership', 'unknown', 'consented'].map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}</select>
             <input name="company_number" placeholder="Companies House number" className={input} />
             <input name="notes" placeholder="Notes" className={`${input} sm:col-span-2`} />
             <div className="sm:col-span-2"><PendingButton pendingLabel="Adding…" className="rounded-lg bg-slate-900 text-white font-bold text-sm px-4 py-2">Add</PendingButton></div>

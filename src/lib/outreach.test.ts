@@ -29,10 +29,10 @@ test('follow-up is short and keeps the link', () => {
   assert.match(f.text, /\/p\/abc123/)
 })
 
-test('PECR: only limited companies or businesses that said yes', () => {
+test('only approved businesses that have not opted out are emailed', () => {
   assert.equal(canEmail(p), true)
-  assert.equal(canEmail({ ...p, company_type: 'sole_trader' }), false)
-  assert.equal(canEmail({ ...p, company_type: 'unknown' }), false)
+  assert.equal(canEmail({ ...p, company_type: 'sole_trader' }), true)
+  assert.equal(canEmail({ ...p, status: 'to_check' }), false)
   assert.equal(canEmail({ ...p, company_type: 'consented' }), true)
   assert.equal(canEmail({ ...p, status: 'unsubscribed' }), false)
   assert.equal(canEmail({ ...p, status: 'onboarding' }), false)

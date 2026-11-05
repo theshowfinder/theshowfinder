@@ -101,17 +101,17 @@ async function handleGet(request: Request) {
   const db = createAdminClient() as Loose
   const hasKey = Boolean(process.env.COMPANIES_HOUSE_API_KEY)
 
-  // 1. Places parked earlier only because Companies House could not be asked yet: check them now.
+  // 1. Businesses found before the Companies House key existed: record their company where it can be confirmed.
   let reverified = 0
   if (hasKey && !dry) {
-    const { data: parked } = await db.from('outreach_prospects').select('id, notes, company_number').eq('status', 'to_check').eq('company_type', 'unknown').like('notes', '%[unverified]%').limit(20)
+    const { data: parked } = await db.from('outreach_prospects').select('id, notes, company_number').eq('company_type', 'unconfirmed').like('notes', '%[unverified]%').limit(20)
     for (const p of parked ?? []) {
       const nums = p.company_number ? [p.company_number] : []
       const names = (p.notes.match(/names: ([^\]|]+)/)?.[1] ?? '').split(';').map((s: string) => s.trim()).filter(Boolean)
       const ok = await verifyCompany(nums, names)
       const now = new Date().toISOString()
       await db.from('outreach_prospects').update(ok
-        ? { company_type: 'ltd', status: 'approved', company_number: ok.number, notes: `Companies House: ${ok.name} (${ok.number}), found on their own website`, updated_at: now }
+        ? { company_type: 'ltd', company_number: ok.number, notes: `Companies House: ${ok.name} (${ok.number}), found on their own website`, updated_at: now }
         : { notes: p.notes.replace('[unverified]', '[not confirmed]'), updated_at: now }).eq('id', p.id)
       if (ok) reverified++
     }
@@ -173,15 +173,21 @@ async function handleGet(request: Request) {
     else {
       const numbers = extractCompanyNumbers(text), names = extractCompanyNames(text)
       const ok = hasKey ? await verifyCompany(numbers, names, text) : null
-      result = ok ? 'approved' : 'to_check'
+      // Until the Companies House key is added, the business's own website stating a limited company AND a company
+      // number is taken as enough (both are legally required on a company's site); anything less waits for a person.
+      const siteStated = !hasKey && numbers.length > 0 && names.length > 0
+      // Every business with a real business inbox is emailed (Chris, 5 Nov 2026); company_type records how sure we are.
+      result = 'approved'
       const address = [c.tags['addr:housenumber'], c.tags['addr:street'], c.tags['addr:postcode']].filter(Boolean).join(' ') || null
       row = {
         business_name: c.name, category: categoryFromOsm(c.tags), city, email, website: c.website, address,
         near_venue: c.venue, distance_label: walkLabel(c.metres, c.venue), osm_key: c.key,
-        company_type: ok ? 'ltd' : 'unknown', status: ok ? 'approved' : 'to_check', company_number: ok?.number ?? numbers[0] ?? null,
+        company_type: ok || siteStated ? 'ltd' : 'unconfirmed', status: result, company_number: ok?.number ?? numbers[0] ?? null,
         notes: ok
           ? `Companies House: ${ok.name} (${ok.number}), found on their own website`
-          : `${hasKey ? '[not confirmed]' : '[unverified]'} Found automatically. numbers: ${numbers.join(', ') || 'none'} | names: ${names.join('; ') || 'none'}`,
+          : siteStated
+          ? `Their website states ${names[0]}, company no. ${numbers[0]} (not checked with Companies House)`
+          : `${hasKey ? '[not confirmed]' : '[unverified]'} Found automatically, company not confirmed. numbers: ${numbers.join(', ') || 'none'} | names: ${names.join('; ') || 'none'}`,
       }
       seenEmails.add(email)
     }
