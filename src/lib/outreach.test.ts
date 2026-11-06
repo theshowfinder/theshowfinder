@@ -56,3 +56,12 @@ test('one city a weekday: Manchester, London, Birmingham…, weekends look ahead
   assert.equal(cityOfTheDay(cities, new Date('2026-11-10T10:00:00Z')), 'Glasgow')
   assert.equal(cityOfTheDay(cities, new Date('2026-11-11T10:00:00Z')), 'Manchester') // starts over
 })
+
+test('small independents only: chains, groups and the venues themselves are skipped', async () => {
+  const { looksLikeChain, looksMultiSite } = await import('./outreach.ts')
+  for (const name of ["Nando's", 'BrewDog Lothian Road', 'Hilton Garden Inn Glasgow City Centre', 'Six by Nico', 'Las Iguanas', 'Theatre Royal']) assert.equal(looksLikeChain({ name }), true, name)
+  assert.equal(looksLikeChain({ name: 'Bar 1', email: 'events@slugandlettuce.co.uk' }), true)
+  for (const name of ['The Blue Door', 'Ma Egertons', 'The 78', 'Kelvingrove Café', 'Porter & Rye']) assert.equal(looksLikeChain({ name, website: 'https://example.co.uk' }), false, name)
+  assert.equal(looksMultiSite('Our venues: Leeds, York, Bath, Bristol and Cardiff', 'Manchester'), true)
+  assert.equal(looksMultiSite('A family bar in Manchester since 1998, near the Leeds road', 'Manchester'), false)
+})

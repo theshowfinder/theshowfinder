@@ -4,7 +4,8 @@
 const SITE = 'https://www.theshowfinder.com'
 export const OUTREACH_FROM = 'TheShowFinder <partners@theshowfinder.com>'
 export const OUTREACH_REPLY_TO = 'hello@theshowfinder.com'
-export const DAILY_LIMIT = 45
+// Few, well-chosen emails (Chris, 6 Nov 2026): small independents close to busy venues, not volume.
+export const DAILY_LIMIT = 15
 export const FOLLOW_UP_AFTER_DAYS = 4
 /** No reply this long after the first email (follow-up sent in between): marked "No response", never chased again. */
 export const NO_RESPONSE_AFTER_DAYS = 10
@@ -58,6 +59,25 @@ export function cityOfTheDay(cityNames: string[], now: Date = new Date()): strin
   for (const d = new Date(start); d < day; d.setUTCDate(d.getUTCDate() + 1)) if (d.getUTCDay() % 6 !== 0) weekdays++
   // (a Saturday or Sunday has already counted Friday, so it lands on the coming Monday's city)
   return order[weekdays % order.length]
+}
+
+// ── Who we email: small independents (6 Nov 2026) ─────────────────────────────────────────────────────────────────
+// Chains and groups never buy a local listing and drag the reply rate down. A business is skipped when its name,
+// website or email belongs to a known chain/group, or its own site lists branches in several other cities.
+const CHAIN_NAME = /\b(nando'?s|brewdog|wetherspoon|las iguanas|hilton|marriott|premier inn|travelodge|ibis|holiday inn|novotel|mercure|radisson|crowne plaza|doubletree|hampton by|moxy|motel one|hotel indigo|malmaison|hotel du vin|all bar one|slug ?(and|&) ?lettuce|revolution|pizza express|zizzi|ask italian|wagamama|prezzo|bella italia|frankie (and|&) benny|harvester|toby carvery|miller (and|&) carter|cosy club|turtle bay|tgi|five guys|honest burgers|byron|gbk|gourmet burger|pret|costa|starbucks|caffe nero|greggs|mcdonald|burger king|kfc|subway|pizza hut|domino|yo! ?sushi|itsu|wasabi|tortilla|chiquito|the ivy|gaucho|hawksmoor|dishoom|six by nico|dirty martini|be at one|walkabout|o'neill'?s|yates|lloyds bar|be at one|mitchells|greene king|stonegate|nicholson'?s|young'?s|fuller'?s|brewhouse (and|&) kitchen|theatre royal|playhouse|academy|arena)\b/i
+const CHAIN_HOST = /(nandos|brewdog|jdwetherspoon|wetherspoon|iguanas|hilton|marriott|premierinn|travelodge|ihg|accor|all\.accor|radisson|malmaison|hotelduvin|allbarone|slugandlettuce|revolution-bars|revolutionbars|pizzaexpress|zizzi|askitalian|wagamama|prezzo|bellaitalia|harvester|tobycarvery|browns-restaurants|cosyclub|turtlebay|fiveguys|honestburgers|dishoom|sixbynico|greeneking|stonegate|mbplc|nicholsonspubs|youngs\.co|fullers|atgtickets|ambassadortheatre|livenation|academymusicgroup)/i
+const UK_CITIES = ['london', 'manchester', 'birmingham', 'leeds', 'liverpool', 'glasgow', 'edinburgh', 'bristol', 'cardiff', 'newcastle', 'sheffield', 'nottingham', 'leicester', 'brighton', 'southampton', 'york', 'belfast', 'aberdeen', 'oxford', 'cambridge', 'bath', 'norwich', 'exeter', 'plymouth', 'derby', 'coventry']
+
+export function looksLikeChain(x: { name?: string | null; website?: string | null; email?: string | null }): boolean {
+  if (x.name && CHAIN_NAME.test(x.name)) return true
+  const hosts = [x.website ?? '', (x.email ?? '').split('@')[1] ?? ''].join(' ')
+  return CHAIN_HOST.test(hosts)
+}
+
+/** A site that names four or more other UK cities is a group with branches ("our venues: Leeds, York, Bath…"). */
+export function looksMultiSite(pageText: string, city: string): boolean {
+  const t = pageText.toLowerCase()
+  return UK_CITIES.filter(c => c !== city.toLowerCase() && new RegExp(`\\b${c}\\b`).test(t)).length >= 4
 }
 
 export const offerUrl = (p: Pick<Prospect, 'ref_code'>) => `${SITE}/p/${p.ref_code}`

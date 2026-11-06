@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { withJobRun } from '@/lib/jobRuns'
 import { CITIES } from '@/lib/cities'
-import { cityOfTheDay } from '@/lib/outreach'
+import { cityOfTheDay, looksLikeChain, looksMultiSite } from '@/lib/outreach'
 import {
   extractEmails, pickEmail, extractCompanyNumbers, extractCompanyNames, normCompanyName, isEmailableCompany,
   categoryFromOsm, walkLabel, metresBetween, usefulLinks,
@@ -92,7 +92,7 @@ async function anchorVenues(db: Loose, city: string) {
   const { data: evs } = await db.from('events').select('venue_id').in('venue_id', venues.map((v: Loose) => v.id)).gte('start_date', new Date().toISOString()).limit(8000)
   const count = new Map<string, number>()
   for (const e of evs ?? []) count.set(e.venue_id, (count.get(e.venue_id) ?? 0) + 1)
-  return venues.filter((v: Loose) => count.get(v.id)).sort((a: Loose, b: Loose) => (count.get(b.id) ?? 0) - (count.get(a.id) ?? 0)).slice(0, 3) as Array<{ name: string; lat: number; lng: number }>
+  return venues.filter((v: Loose) => count.get(v.id)).sort((a: Loose, b: Loose) => (count.get(b.id) ?? 0) - (count.get(a.id) ?? 0)).slice(0, 6) as Array<{ name: string; lat: number; lng: number }>
 }
 
 async function handleGet(request: Request) {
@@ -127,7 +127,7 @@ async function handleGet(request: Request) {
   if (!anchors.length) return NextResponse.json({ success: true, city, note: 'no venues with map positions', reverified })
 
   const q = `[out:json][timeout:30];(${anchors.map(a =>
-    `nwr(around:700,${a.lat},${a.lng})[amenity~"^(bar|pub|restaurant|cafe)$"][~"^(website|contact:website)$"~"."];nwr(around:1000,${a.lat},${a.lng})[tourism=hotel][~"^(website|contact:website)$"~"."];`).join('')});out center tags 400;`
+    `nwr(around:600,${a.lat},${a.lng})[amenity~"^(bar|pub|restaurant|cafe)$"][!brand][~"^(website|contact:website)$"~"."];nwr(around:800,${a.lat},${a.lng})[tourism~"^(hotel|guest_house)$"][!brand][~"^(website|contact:website)$"~"."];`).join('')});out center tags 400;`
   const elements = await overpass(q)
   // Only count the city as looked at when the map search actually answered; otherwise the next run tries again.
   if (!elements.length) return NextResponse.json({ success: false, city, note: 'map search (Overpass) returned nothing: will retry next run', reverified }, { status: 503 })
@@ -153,6 +153,7 @@ async function handleGet(request: Request) {
     if (tags.brand || tags['brand:wikidata'] || tags.operator && /hilton|marriott|premier inn|travelodge|ibis|holiday inn|novotel|mercure|nando|brewdog|wetherspoon|las iguanas|greene king|mitchells|stonegate|all bar one|slug and lettuce|revolution|pizza express|zizzi|ask italian|wagamama/i.test(tags.operator)) continue
     if (!/^https?:\/\//i.test(website)) website = `https://${website}`
     const h = host(website)
+    if (looksLikeChain({ name: tags.name, website })) continue
     if (!h || seenHosts.has(h) || /facebook|instagram|google|tripadvisor|booking\.com|opentable|wetherspoon|nandos|brewdog|hilton|marriott|premierinn|travelodge|ihg|accor|lasiguanas|greeneking|stonegate|allbarone|pizzaexpress|zizzi|wagamama|atgtickets|ambassadortheatre/.test(h)) continue
     const nearest = anchors.map(a => ({ a, d: metresBetween({ lat, lng }, a) })).sort((x, y) => x.d - y.d)[0]
     candidates.push({ key, name: tags.name, tags, lat, lng, website, venue: nearest.a.name, metres: nearest.d })
@@ -178,6 +179,8 @@ async function handleGet(request: Request) {
     if (!home && !email) result = 'fetch_failed'
     else if (!email) result = 'no_email'
     else if (seenEmails.has(email)) result = 'duplicate'
+    // Small independents only: chains and groups with branches in other cities are skipped.
+    else if (looksLikeChain({ name: c.name, website: c.website, email }) || looksMultiSite(textOf(home ?? ''), city)) result = 'chain'
     else {
       const numbers = extractCompanyNumbers(text), names = extractCompanyNames(text)
       const ok = hasKey ? await verifyCompany(numbers, names, text) : null

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { withJobRun } from '@/lib/jobRuns'
-import { canEmail, takeAcrossCities, cityOfTheDay, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
+import { canEmail, looksLikeChain, takeAcrossCities, cityOfTheDay, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
 import { sendOutreachEmail } from '@/lib/outreachSend'
 import { CITIES } from '@/lib/cities'
 
@@ -58,6 +58,8 @@ async function handleGet(request: Request) {
     // Safety stop: several failures in one run (rejected addresses, a sending problem) and the rest wait for a person.
     if (failed.length >= 3) break
     if (!canEmail(p)) continue
+    // Queued before the small-independents rule (6 Nov 2026): chains are never emailed.
+    if (kind === 'first' && looksLikeChain({ name: p.business_name, email: p.email })) continue
     budget--
     if (dry) { sent.push(`${kind}: ${p.business_name} <${p.email}>`); continue }
     const r = await sendOutreachEmail(p, kind)
