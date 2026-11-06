@@ -423,6 +423,8 @@ export async function deleteLocalBusinessAction(id: string, city: string) {
   await db.from('local_businesses').delete().eq('id', id)
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(city))
+  revalidatePath('/venues/[slug]', 'page')   // venue pages show nearby Featured partners
+  revalidatePath('/events/[slug]', 'page')   // show pages show nearby Featured partners: no stale listing after a change
 }
 // Paid listings (migration 091): set live / pause / cancel, and switch package.
 export async function setLocalBusinessStatusAction(id: string, city: string, status: 'active' | 'paused' | 'cancelled') {
@@ -431,6 +433,7 @@ export async function setLocalBusinessStatusAction(id: string, city: string, sta
   await db.from('local_businesses').update({ status, updated_at: new Date().toISOString() } as never).eq('id', id)
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(city))
+  revalidatePath('/events/[slug]', 'page')   // show pages show nearby Featured partners: no stale listing after a change
   revalidatePath('/venues/[slug]', 'page')   // venue pages show nearby Featured partners
 }
 
@@ -440,6 +443,7 @@ export async function setLocalBusinessPackageAction(id: string, city: string, pk
   await db.from('local_businesses').update({ package: pkg, is_sponsored: pkg === 'featured', updated_at: new Date().toISOString() } as never).eq('id', id)
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(city))
+  revalidatePath('/events/[slug]', 'page')   // show pages show nearby Featured partners: no stale listing after a change
   revalidatePath('/venues/[slug]', 'page')   // venue pages show nearby Featured partners
 }
 // Offer / booking link / postcode for a listing (migration 095). The postcode is turned into a map position for
@@ -463,6 +467,7 @@ export async function updateLocalBusinessOfferAction(id: string, city: string, f
   if (!acc) await db.from('local_business_accounts').insert({ business_id: id, contact_email: 'hello@theshowfinder.com', redeem_pin: newPin(), notes: 'Added from admin; no advertiser contact yet' })
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(city))
+  revalidatePath('/events/[slug]', 'page')   // show pages show nearby Featured partners: no stale listing after a change
   revalidatePath('/venues/[slug]', 'page')   // venue pages show nearby Featured partners
 }
 
