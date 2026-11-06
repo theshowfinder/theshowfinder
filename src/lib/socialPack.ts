@@ -138,17 +138,39 @@ export function resolveStoredImageKind(stored: unknown): SocialImageKind {
 
 export interface SocialImageTheme {
   badgeLabel:   string
+  // The sticker top-right of the graphic (and the accent bar above the headline).
+  badgeBg:      string
+  badgeFg:      string
+  // Background when no approved artist/event photo is available.
   gradientFrom: string
   gradientTo:   string
   accent:       string
 }
 
+// Brand red, used for the logo, the ticket-stub footer and Just Announced.
+export const SOCIAL_BRAND_RED = '#E8003D'
+
 export const SOCIAL_IMAGE_THEMES: Record<SocialImageKind, SocialImageTheme> = {
-  tour_announcement: { badgeLabel: 'TOUR ANNOUNCEMENT', gradientFrom: '#7c3aed', gradientTo: '#ec4899', accent: '#fde047' },
-  onsale:             { badgeLabel: 'ON SALE NOW',       gradientFrom: '#ef4444', gradientTo: '#f97316', accent: '#fef08a' },
-  presale:            { badgeLabel: 'PRESALE ACCESS',    gradientFrom: '#06b6d4', gradientTo: '#4f46e5', accent: '#99f6e4' },
-  city_event:         { badgeLabel: 'LIVE IN THE UK',    gradientFrom: '#071a3d', gradientTo: '#0b1024', accent: '#fbbf24' },
-  tonight:            { badgeLabel: 'TONIGHT',           gradientFrom: '#7c2d12', gradientTo: '#e11d48', accent: '#fef08a' },
+  tour_announcement: { badgeLabel: 'JUST ANNOUNCED', badgeBg: SOCIAL_BRAND_RED, badgeFg: '#ffffff', gradientFrom: '#3b0764', gradientTo: '#E8003D', accent: '#ffffff' },
+  onsale:            { badgeLabel: 'ON SALE NOW',    badgeBg: '#FFD400',        badgeFg: '#111111', gradientFrom: '#7c2d12', gradientTo: '#E8003D', accent: '#FFD400' },
+  presale:           { badgeLabel: 'PRESALE',        badgeBg: '#7C3AED',        badgeFg: '#ffffff', gradientFrom: '#1e1b4b', gradientTo: '#7C3AED', accent: '#c4b5fd' },
+  city_event:        { badgeLabel: 'LIVE THIS MONTH', badgeBg: '#00B3A4',       badgeFg: '#ffffff', gradientFrom: '#0B0B14', gradientTo: '#0f3d3a', accent: '#5eead4' },
+  tonight:           { badgeLabel: 'TONIGHT',        badgeBg: '#FF6A00',        badgeFg: '#ffffff', gradientFrom: '#0B0B14', gradientTo: '#9a3412', accent: '#fdba74' },
+}
+
+// "CHVRCHES adds 2 new UK dates: tickets on sale now" -> big name "CHVRCHES" + line "Adds 2 new UK dates · Tickets on sale
+// now". The graphic shows the act in huge type and the news underneath; a headline with no recognisable verb is shown whole.
+const HEADLINE_VERB = /\s+(adds|add|announces|announce|confirms|confirm|returns|return|extends|extend|brings|bring|reveals|reveal|unveils|unveil|heads|head|plays|play|is|are|will|to)\s+/i
+export function splitSocialHeadline(headline: string): { title: string; detail: string | null } {
+  const text = headline.trim()
+  const m = HEADLINE_VERB.exec(text)
+  if (!m || m.index < 2 || m.index > 60) return { title: text, detail: null }
+  const title = text.slice(0, m.index).trim()
+  let detail = text.slice(m.index).trim().replace(/\s*:\s*/g, ' · ')
+  if (/^(adds|add|announces|announce)\s/i.test(detail)) detail = detail.replace(/^\S+\s+/, '')
+  detail = detail.charAt(0).toUpperCase() + detail.slice(1)
+  detail = detail.replace(/ · (\w)/g, (_, c: string) => ` · ${c.toUpperCase()}`)
+  return { title, detail }
 }
 
 // A news story's existing editorial classification maps onto one of the

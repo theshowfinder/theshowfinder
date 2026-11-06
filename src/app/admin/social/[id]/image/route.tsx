@@ -1,24 +1,20 @@
-// Branded social-image route (Phase 7, requirement 10) — renders an
-// on-demand graphic with next/og's ImageResponse. The route reads one local,
-// approved cinematic background into memory and embeds it in the response;
-// no user-uploaded media or remote photo host is involved.
+// Branded social-image route: renders a post graphic on demand with next/og's ImageResponse.
 //
-// Five vibrant, distinct templates (src/lib/socialPack.ts's
-// SOCIAL_IMAGE_KINDS/SOCIAL_IMAGE_THEMES) replace the single flat dark
-// design this route used to render for every pack — tour announcements,
-// onsales, presales, city-wide roundups and "tonight" posts each get
-// their own gradient + accent + badge. The local cinematic background is
-// the reliable visual foundation for every pack, and the design never
-// scrapes or copies third-party article imagery.
+// Design (6 Nov 2026, replaces the generic-background template): the act's own photo full-bleed at the top, the act's
+// name in huge condensed type, the news in one line under it, a coloured sticker per post type (Just Announced red,
+// On Sale yellow, Presale purple, Tonight orange, city round-ups teal), our logo top-left and a brand-red ticket-stub
+// footer with the web address, because Facebook posts cannot carry links.
 //
-// ?format=square  → 1080x1080  (Facebook / Instagram feed)
-// ?format=vertical → 1080x1920 (Instagram Story / TikTok)
-// Defaults to square when the param is missing or unrecognised.
+// The only photo it can ever use is the pack's stored imageUrl, and only when it passes resolveApprovedImageUrl (our
+// licensed Ticketmaster / Live Nation ingestion hosts). It is fetched server-side and embedded as data; the design
+// never scrapes or copies third-party article imagery. With no approved photo (or if the fetch fails) it falls back to
+// the local concert background, and below that a branded gradient.
 //
-// Auth is checked inline (not via requireAdmin, which calls next/navigation's
-// redirect() — meant for pages/actions, not Route Handlers serving an
-// <img src>) so an unauthenticated request gets a plain 401 rather than a
-// redirect to an HTML login page, which would just render as a broken image.
+// ?format=square   -> 1080x1080 (Facebook / Instagram feed)
+// ?format=vertical -> 1080x1920 (Instagram Story / TikTok)
+// ?platform=facebook -> footer says "SEARCH THESHOWFINDER" instead of "LINK IN BIO" (Facebook has no bio link).
+//
+// Auth is checked inline (not via requireAdmin, which redirects) so an unauthenticated request gets a plain 401.
 
 import { ImageResponse } from 'next/og'
 import { cookies } from 'next/headers'
@@ -27,8 +23,11 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
+  SOCIAL_BRAND_RED,
   SOCIAL_IMAGE_THEMES,
+  resolveApprovedImageUrl,
   resolveStoredImageKind,
+  splitSocialHeadline,
 } from '@/lib/socialPack'
 
 export const dynamic = 'force-dynamic'
@@ -53,6 +52,39 @@ async function readConcertBackground(): Promise<string | null> {
   }
 }
 
+// The act's photo, embedded as data so the renderer never fetches it itself. Approved hosts only (checked by the caller).
+async function readApprovedPhoto(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 5000)
+    const res = await fetch(url, { signal: controller.signal })
+    clearTimeout(timer)
+    const type = res.headers.get('content-type') ?? ''
+    if (!res.ok || !/^image\/(jpeg|png|webp)/.test(type)) return null
+    return `data:${type.split(';')[0]};base64,${Buffer.from(await res.arrayBuffer()).toString('base64')}`
+  } catch {
+    return null
+  }
+}
+
+async function readFonts() {
+  // Literal paths so the deployment bundles the font files with this function.
+  try {
+    const [anton, inter800, inter900] = await Promise.all([
+      readFile(path.join(process.cwd(), 'public/fonts/social/anton-latin-400-normal.woff')),
+      readFile(path.join(process.cwd(), 'public/fonts/social/inter-latin-800-normal.woff')),
+      readFile(path.join(process.cwd(), 'public/fonts/social/inter-latin-900-normal.woff')),
+    ])
+    return [
+      { name: 'Anton', data: anton, weight: 400 as const, style: 'normal' as const },
+      { name: 'Inter', data: inter800, weight: 800 as const, style: 'normal' as const },
+      { name: 'Inter', data: inter900, weight: 900 as const, style: 'normal' as const },
+    ]
+  } catch {
+    return undefined
+  }
+}
+
 export async function GET(request: NextRequest, { params }: RouteParams) {
   if (!(await isAdminAuthed())) {
     return new Response('Unauthorized', { status: 401 })
@@ -60,6 +92,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   const { id } = await params
   const format = request.nextUrl.searchParams.get('format') === 'vertical' ? 'vertical' : 'square'
+  const platform = request.nextUrl.searchParams.get('platform') === 'facebook' ? 'facebook' : 'instagram'
   const width = 1080
   const height = format === 'vertical' ? 1920 : 1080
 
@@ -76,10 +109,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   const storedParams = pack.image_params ?? {}
 
-  // Safe fallbacks for every field: a pack prepared before this template
-  // system existed has no `kind`/`imageUrl` in its stored params at all,
-  // and even headline/city/dateLabel are defended here rather than
-  // trusted blindly, since image_params is an untyped jsonb column.
   const headline = typeof storedParams.headline === 'string' && storedParams.headline.trim()
     ? storedParams.headline
     : 'TheShowFinder'
@@ -87,9 +116,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   const dateLabel = typeof storedParams.dateLabel === 'string' && storedParams.dateLabel.trim() ? storedParams.dateLabel : null
   const kind = resolveStoredImageKind(storedParams.kind)
   const theme = SOCIAL_IMAGE_THEMES[kind]
-  const cityLabel = city ? city.toUpperCase() : 'UK LIVE EVENTS'
-  const ctaLabel = kind === 'presale' ? 'Find presale details' : kind === 'tonight' ? 'Find something tonight' : 'Find your next show'
-  const concertBackground = await readConcertBackground()
+  const approvedPhoto = resolveApprovedImageUrl(storedParams.imageUrl)
+
+  const [photo, concertBackground, fonts] = await Promise.all([
+    approvedPhoto ? readApprovedPhoto(approvedPhoto) : Promise.resolve(null),
+    readConcertBackground(),
+    readFonts(),
+  ])
+  const background = photo ?? concertBackground
+
+  const { title, detail } = splitSocialHeadline(headline)
+  const titleSize = title.length <= 10 ? 170 : title.length <= 16 ? 130 : title.length <= 24 ? 100 : title.length <= 40 ? 78 : 62
+  const photoHeight = format === 'vertical' ? 1450 : 640
+  const chips = [city, dateLabel].filter((c): c is string => Boolean(c))
+  const footerCta = platform === 'facebook' ? 'SEARCH THESHOWFINDER' : 'LINK IN BIO ›'
+  const perforation = Array.from({ length: 27 }, (_, i) => i)
 
   return new ImageResponse(
     (
@@ -98,190 +139,71 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           width: '100%',
           height: '100%',
           display: 'flex',
+          flexDirection: 'column',
           position: 'relative',
-          backgroundColor: theme.gradientFrom,
-            backgroundImage: `radial-gradient(circle at 88% 12%, ${theme.accent}66 0%, transparent 30%), radial-gradient(circle at 8% 86%, #ffffff22 0%, transparent 26%), linear-gradient(135deg, ${theme.gradientFrom} 0%, ${theme.gradientTo} 100%)`,
-          fontFamily: 'sans-serif',
+          backgroundColor: '#0B0B14',
+          backgroundImage: `linear-gradient(135deg, ${theme.gradientFrom} 0%, ${theme.gradientTo} 100%)`,
+          fontFamily: 'Inter',
         }}
       >
-        {concertBackground && (
-          // The background is embedded as data, so the renderer never has to
-          // fetch a public or third-party URL while creating the PNG.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={concertBackground}
-            alt=""
-            width={width}
-            height={height}
-            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'flex' }}
-          />
-        )}
-
-        {/* A branded gradient remains underneath as a safe fallback if the
-            local background asset is unavailable. */}
-        <div
-          style={{
-            position: 'absolute', top: 0, left: 0,
-            width: '100%', height: '100%',
-            display: 'flex',
-            backgroundImage: `radial-gradient(ellipse at 50% 82%, ${theme.accent}55 0%, transparent 28%), radial-gradient(ellipse at 12% 18%, #ffffff33 0%, transparent 20%), radial-gradient(ellipse at 88% 22%, ${theme.accent}44 0%, transparent 24%), linear-gradient(180deg, #05081655 0%, #050816aa 58%, #02030bcc 100%)`,
-          }}
-        />
-
-        {/* Self-contained concert atmosphere. It deliberately uses only
-            ImageResponse primitives so the graphic still renders when a
-            remote or public image host is unavailable. */}
-        <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '23%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-          <div style={{ width: '7%', height: '42%', backgroundColor: '#050505cc', borderRadius: '50% 50% 0 0' }} />
-          <div style={{ width: '9%', height: '62%', backgroundColor: '#050505cc', borderRadius: '50% 50% 0 0', marginLeft: 18 }} />
-          <div style={{ width: '8%', height: '52%', backgroundColor: '#050505cc', borderRadius: '50% 50% 0 0', marginLeft: 18 }} />
-          <div style={{ width: '10%', height: '72%', backgroundColor: '#050505cc', borderRadius: '50% 50% 0 0', marginLeft: 18 }} />
-          <div style={{ width: '7%', height: '48%', backgroundColor: '#050505cc', borderRadius: '50% 50% 0 0', marginLeft: 18 }} />
+        {/* The photo (or the local concert background), fading into the dark text panel. */}
+        <div style={{ position: 'absolute', top: 0, left: 0, width, height: photoHeight, display: 'flex' }}>
+          {background && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={background} alt="" width={width} height={photoHeight} style={{ width, height: photoHeight, objectFit: 'cover', objectPosition: 'center 25%' }} />
+          )}
+          <div style={{ position: 'absolute', top: 0, left: 0, width, height: photoHeight, display: 'flex', backgroundImage: 'linear-gradient(180deg, rgba(11,11,20,0.55) 0%, rgba(11,11,20,0) 22%, rgba(11,11,20,0) 55%, rgba(11,11,20,1) 100%)' }} />
         </div>
-        <div style={{ position: 'absolute', top: '16%', left: '9%', width: '18%', height: '64%', backgroundColor: '#ffffff1c', transform: 'rotate(18deg)', clipPath: 'polygon(42% 0, 58% 0, 100% 100%, 0 100%)', display: 'flex' }} />
-        <div style={{ position: 'absolute', top: '13%', right: '8%', width: '20%', height: '67%', backgroundColor: `${theme.accent}22`, transform: 'rotate(-19deg)', clipPath: 'polygon(42% 0, 58% 0, 100% 100%, 0 100%)', display: 'flex' }} />
+        <div style={{ position: 'absolute', top: photoHeight, left: 0, width, height: height - photoHeight, display: 'flex', backgroundColor: '#0B0B14' }} />
 
-        {/* Bright visual anchors keep the card recognisable in a fast feed,
-            even when a source photo is unavailable. */}
-        <div style={{ position: 'absolute', top: -170, right: -130, width: 520, height: 520, borderRadius: 999, backgroundColor: `${theme.accent}33`, display: 'flex', transform: 'rotate(18deg)' }} />
-        <div style={{ position: 'absolute', top: 250, right: -240, width: 760, height: 70, backgroundColor: `${theme.accent}cc`, display: 'flex', transform: 'rotate(-24deg)' }} />
-        <div style={{ position: 'absolute', bottom: 210, left: -260, width: 760, height: 54, backgroundColor: '#ffffff22', display: 'flex', transform: 'rotate(-24deg)' }} />
-        <div
-          style={{
-            position: 'absolute',
-            top: format === 'vertical' ? 250 : 170,
-            right: -24,
-            display: 'flex',
-            color: `${theme.accent}55`,
-            fontSize: format === 'vertical' ? 260 : 190,
-            fontWeight: 900,
-            letterSpacing: -12,
-            transform: 'rotate(-8deg)',
-          }}
-        >
-          SHOW
-        </div>
-
-        <div
-          style={{
-            position: 'absolute',
-            top: format === 'vertical' ? 170 : 110,
-            left: 54,
-            display: 'flex',
-            color: '#ffffff22',
-            fontSize: format === 'vertical' ? 150 : 116,
-            fontWeight: 900,
-            letterSpacing: -5,
-            lineHeight: 0.9,
-          }}
-        >
-          {cityLabel}
-        </div>
-
-        <div
-          style={{
-            position: 'relative',
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            padding: 64,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <span style={{ color: '#ffffff', fontSize: 30, fontWeight: 800, letterSpacing: 2 }}>THE</span>
-            <span style={{ color: theme.accent, fontSize: 30, fontWeight: 800, letterSpacing: 2 }}>SHOWFINDER</span>
+        {/* Logo and the post-type sticker. */}
+        <div style={{ position: 'absolute', top: 44, left: 48, right: 48, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 14, padding: '12px 20px', boxShadow: '0 6px 20px rgba(0,0,0,0.35)' }}>
+            <span style={{ fontFamily: 'Anton', fontSize: 40, color: '#0B0B14', letterSpacing: 1 }}>THE</span>
+            <span style={{ fontFamily: 'Anton', fontSize: 40, color: SOCIAL_BRAND_RED, letterSpacing: 1 }}>SHOWFINDER</span>
           </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 'auto' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignSelf: 'flex-start',
-                backgroundColor: theme.accent,
-                color: '#111111',
-                fontSize: 24,
-                fontWeight: 800,
-                letterSpacing: 3,
-                textTransform: 'uppercase',
-                padding: '10px 22px',
-                borderRadius: 999,
-              }}
-            >
-              {theme.badgeLabel}
-            </div>
-
-            {city && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignSelf: 'flex-start',
-                  backgroundColor: theme.accent,
-                  color: '#171717',
-                  fontSize: 24,
-                  fontWeight: 900,
-                  letterSpacing: 2,
-                  textTransform: 'uppercase',
-                  padding: '8px 20px',
-                  borderRadius: 999,
-                }}
-              >
-                {city}
-              </div>
-            )}
-
-            <div
-              style={{
-                display: 'flex',
-                color: '#ffffff',
-                fontSize: headline.length > 60 ? 58 : 94,
-                fontWeight: 800,
-                lineHeight: 1.04,
-                maxWidth: 920,
-                textShadow: '0 4px 18px rgba(0,0,0,0.35)',
-                borderLeft: `14px solid ${theme.accent}`,
-                paddingLeft: 26,
-              }}
-            >
-              {headline}
-            </div>
-
-            {dateLabel && (
-              <div style={{ display: 'flex', color: '#ffffff', fontSize: 34, fontWeight: 600, opacity: 0.85 }}>
-                {dateLabel}
-              </div>
-            )}
-
-            <div
-              style={{
-                display: 'flex',
-                alignSelf: 'flex-start',
-                marginTop: 18,
-                backgroundColor: theme.accent,
-                color: '#171717',
-                fontSize: 25,
-                fontWeight: 900,
-                padding: '14px 24px',
-                borderRadius: 999,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.28)',
-              }}
-            >
-              {ctaLabel}  ›
-            </div>
-
+          <div style={{ display: 'flex', backgroundColor: theme.badgeBg, color: theme.badgeFg, fontWeight: 900, fontSize: 30, letterSpacing: 3, padding: '14px 26px', borderRadius: 12, transform: 'rotate(3deg)', boxShadow: '0 6px 20px rgba(0,0,0,0.35)' }}>
+            {theme.badgeLabel}
           </div>
+        </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, marginTop: 40 }}>
-            <span style={{ display: 'flex', color: '#ffffff', fontSize: 24, fontWeight: 600, opacity: 0.78 }}>
-              theshowfinder.com
-            </span>
-            <span style={{ display: 'flex', backgroundColor: theme.accent, color: '#101010', fontSize: 21, fontWeight: 900, letterSpacing: 1.2, padding: '10px 16px', borderRadius: 999 }}>
-              FOLLOW THESHOWFINDER
-            </span>
+        {/* The act in huge type, the news underneath, then city / date chips. */}
+        <div style={{ position: 'absolute', left: 56, right: 56, bottom: 170, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', width: 120, height: 12, backgroundColor: theme.badgeBg, marginBottom: 22 }} />
+          <div style={{ display: 'flex', flexWrap: 'wrap', fontFamily: 'Anton', fontSize: titleSize, lineHeight: 1.02, color: '#ffffff', textTransform: 'uppercase', letterSpacing: 1 }}>
+            {title}
+          </div>
+          {detail && (
+            <div style={{ display: 'flex', fontWeight: 900, fontSize: 40, color: '#ffffff', marginTop: 18, lineHeight: 1.2 }}>
+              {detail}
+            </div>
+          )}
+          {chips.length > 0 && (
+            <div style={{ display: 'flex', marginTop: 24 }}>
+              {chips.map(chip => (
+                <div key={chip} style={{ display: 'flex', border: '3px solid rgba(255,255,255,0.85)', color: '#ffffff', fontWeight: 800, fontSize: 28, padding: '8px 18px', borderRadius: 999, marginRight: 14 }}>
+                  {chip}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Ticket-stub footer: the web address does the work a link would. */}
+        <div style={{ position: 'absolute', left: 0, bottom: 0, width, height: 130, backgroundColor: SOCIAL_BRAND_RED, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 56px' }}>
+          <div style={{ position: 'absolute', top: -9, left: 12, right: 12, display: 'flex', justifyContent: 'space-between' }}>
+            {perforation.map(i => <div key={i} style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#0B0B14', display: 'flex' }} />)}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontWeight: 900, fontSize: 22, letterSpacing: 4, color: '#FFE3EA' }}>COMPARE TICKETS AT</span>
+            <span style={{ fontFamily: 'Anton', fontSize: 52, color: '#ffffff', letterSpacing: 1 }}>THESHOWFINDER.COM</span>
+          </div>
+          <div style={{ display: 'flex', backgroundColor: '#ffffff', color: SOCIAL_BRAND_RED, fontWeight: 900, fontSize: 26, padding: '14px 22px', borderRadius: 999 }}>
+            {footerCta}
           </div>
         </div>
       </div>
     ),
-    { width, height },
+    { width, height, fonts },
   )
 }

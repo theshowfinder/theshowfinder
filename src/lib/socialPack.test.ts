@@ -204,11 +204,11 @@ describe('SOCIAL_IMAGE_THEMES — vibrant, distinct templates', () => {
     }
   })
 
-  test('no two templates share the same gradient — each kind is visually distinct, not a relabelled copy', () => {
+  test('no two templates share the same sticker colour — each kind is visually distinct', () => {
     const seen = new Set<string>()
     for (const kind of kinds) {
-      const key = `${SOCIAL_IMAGE_THEMES[kind].gradientFrom}-${SOCIAL_IMAGE_THEMES[kind].gradientTo}`
-      assert.ok(!seen.has(key), `duplicate gradient for ${kind}`)
+      const key = SOCIAL_IMAGE_THEMES[kind].badgeBg
+      assert.ok(!seen.has(key), `duplicate sticker colour for ${kind}`)
       seen.add(key)
     }
   })

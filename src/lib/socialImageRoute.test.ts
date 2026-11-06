@@ -1,99 +1,75 @@
-// Regression guard for the Social Pack imagery rebuild (3 Oct 2026) —
-// the branded-image route (src/app/admin/social/[id]/image/route.tsx)
-// is a Next.js Route Handler returning a next/og ImageResponse; there's
-// no React/Satori-rendering test setup in this runner (same reasoning
-// as publicEventStatusFilters.test.ts/contactEmails.test.ts), so this
-// reads the route's source from disk and asserts the specific
-// requirements that can't otherwise be exercised: both image formats
-// exist with the right dimensions, the vibrant per-kind templates are
-// actually used (not a single flat design), a stored pack's kind/image
-// are defended rather than trusted blindly, and no copyrighted/scraped
-// image or generic marketplace search URL is ever built here.
+// Regression guard for the branded social-image route (src/app/admin/social/[id]/image/route.tsx). There is no
+// Satori rendering in this test runner, so this reads the route's source and asserts what can't otherwise be exercised:
+// both formats and their sizes, the per-kind themes, the brand frame (logo, web address, Facebook wording), and that
+// the only photo it can use is an approved one (resolveApprovedImageUrl), never a scraped or constructed URL.
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { splitSocialHeadline } from './socialPack.ts'
 
 const ROUTE_PATH = 'src/app/admin/social/[id]/image/route.tsx'
+const readRoute = () => readFileSync(join(process.cwd(), ROUTE_PATH), 'utf-8')
 
-function readRoute(): string {
-  return readFileSync(join(process.cwd(), ROUTE_PATH), 'utf-8')
-}
-
-describe('branded social-image route — both formats', () => {
+describe('branded social-image route — formats', () => {
   const content = readRoute()
-
-  test('defaults to the square format when ?format is missing or unrecognised', () => {
+  test('defaults to square when ?format is missing or unrecognised', () => {
     assert.ok(content.includes("searchParams.get('format') === 'vertical' ? 'vertical' : 'square'"))
   })
-
-  test('square is 1080x1080 (Facebook / Instagram feed)', () => {
+  test('square 1080x1080, vertical 1080x1920, both passed to ImageResponse', () => {
     assert.ok(content.includes('const width = 1080'))
     assert.ok(/height = format === 'vertical' \? 1920 : 1080/.test(content))
-  })
-
-  test('both dimensions are actually passed to ImageResponse', () => {
-    assert.ok(content.includes('{ width, height }'))
+    assert.ok(content.includes('{ width, height, fonts }'))
   })
 })
 
-describe('branded social-image route — vibrant, distinct templates', () => {
+describe('branded social-image route — brand frame and themes', () => {
   const content = readRoute()
-
-  test('uses the shared SOCIAL_IMAGE_THEMES recipe rather than one hand-rolled design', () => {
+  test('uses the shared per-kind themes (sticker colours and label)', () => {
     assert.ok(content.includes("from '@/lib/socialPack'"))
-    assert.ok(content.includes('SOCIAL_IMAGE_THEMES'))
-    assert.ok(content.includes('theme.gradientFrom'))
-    assert.ok(content.includes('theme.gradientTo'))
+    assert.ok(content.includes('theme.badgeBg'))
+    assert.ok(content.includes('theme.badgeFg'))
     assert.ok(content.includes('theme.badgeLabel'))
+    assert.ok(content.includes('theme.gradientFrom'))
   })
-
-  test('still carries TheShowFinder wordmark branding, headline, city and date', () => {
+  test('logo, web address, city/date chips and the Facebook wording', () => {
     assert.ok(content.includes('SHOWFINDER'))
-    assert.ok(content.includes('{headline}'))
-    assert.ok(content.includes('{city}'))
-    assert.ok(content.includes('{dateLabel}'))
-    assert.ok(content.includes('theshowfinder.com'))
+    assert.ok(content.includes('THESHOWFINDER.COM'))
+    assert.ok(content.includes('[city, dateLabel]'))
+    assert.ok(content.includes("'SEARCH THESHOWFINDER'"))
+    assert.ok(content.includes("'LINK IN BIO ›'"))
   })
-})
-
-describe('branded social-image route — safe fallback behaviour', () => {
-  const content = readRoute()
-
-  test('a missing/invalid stored kind resolves through resolveStoredImageKind, not a direct unchecked read', () => {
-    assert.ok(content.includes('resolveStoredImageKind(storedParams.kind)'))
-    assert.ok(!content.includes('storedParams.kind as'), 'should not blindly cast the stored kind')
-  })
-
-  test('uses the self-contained concert background and keeps the gradient fallback', () => {
-    assert.ok(content.includes('readConcertBackground()'))
-    assert.ok(content.includes('concert-cinematic-v2.png'))
-    assert.ok(content.includes('linear-gradient(135deg'))
-  })
-
-  test('falls back to a safe default headline when the stored one is missing/blank', () => {
+  test('falls back to a safe default headline', () => {
     assert.ok(content.includes("'TheShowFinder'"))
   })
+})
 
-  test('does not scrape or copy third-party article imagery', () => {
-    assert.ok(content.toLowerCase().includes('never') || content.toLowerCase().includes('never\n'))
-    assert.ok(content.toLowerCase().includes('third-party article imagery'))
+describe('branded social-image route — approved photos only', () => {
+  const content = readRoute()
+  test('the stored kind and image are defended, not trusted', () => {
+    assert.ok(content.includes('resolveStoredImageKind(storedParams.kind)'))
+    assert.ok(content.includes('resolveApprovedImageUrl(storedParams.imageUrl)'))
+    assert.ok(!content.includes('storedParams.kind as'))
+    assert.ok(!content.includes('storedParams.imageUrl as'))
+  })
+  test('falls back to the local concert background', () => {
+    assert.ok(content.includes("'public/social-backgrounds/concert-cinematic-v2.png'"))
+    assert.ok(content.includes('photo ?? concertBackground'))
+  })
+  test('never builds a search URL or uses any other image source', () => {
+    assert.ok(!content.includes('encodeURIComponent'))
+    const srcs = [...content.matchAll(/<img\s+src=\{([^}]+)\}/g)].map(m => m[1].trim())
+    assert.deepEqual(srcs, ['background'])
+    assert.ok(content.toLowerCase().includes('never scrapes or copies third-party article imagery'))
   })
 })
 
-describe('branded social-image route — no scraped or constructed marketplace links', () => {
-  const content = readRoute()
-
-  test('never builds a generic encodeURIComponent-based search URL for an image background', () => {
-    assert.ok(!content.includes('encodeURIComponent'))
+describe('splitSocialHeadline', () => {
+  test('act name and the news', () => {
+    assert.deepEqual(splitSocialHeadline('CHVRCHES adds 2 new UK dates: tickets on sale now'), { title: 'CHVRCHES', detail: '2 new UK dates · Tickets on sale now' })
+    assert.deepEqual(splitSocialHeadline('S Club announces UK arena tour: presale opens Wed 4 Nov'), { title: 'S Club', detail: 'UK arena tour · Presale opens Wed 4 Nov' })
   })
-
-  test('images use only the embedded local concert background', () => {
-    const imgSrcMatches = [...content.matchAll(/<img\s+src=\{([^}]+)\}/g)].map(m => m[1].trim())
-    assert.ok(imgSrcMatches.length > 0, 'expected at least one <img> tag')
-    for (const src of imgSrcMatches) {
-      assert.equal(src, 'concertBackground')
-    }
-    assert.ok(content.includes("'public/social-backgrounds/concert-cinematic-v2.png'"))
+  test('no recognisable verb: the whole headline', () => {
+    assert.deepEqual(splitSocialHeadline('Isle of Wight Festival on sale + 5 more on sale this week'), { title: 'Isle of Wight Festival on sale + 5 more on sale this week', detail: null })
   })
 })

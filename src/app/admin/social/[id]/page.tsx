@@ -179,11 +179,19 @@ export default async function SocialPackDetailPage({ params, searchParams }: Pag
           </p>
           <div className="flex flex-wrap gap-6">
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Square (Facebook / Instagram)</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Square (Instagram)</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/admin/social/${pack.id}/image?format=square&v=${imageVersion}`} alt="Square social graphic" className="w-56 h-56 rounded-xl border border-slate-200 object-cover" />
               <a href={`/admin/social/${pack.id}/image?format=square&v=${imageVersion}`} download={`social-${pack.id}-square.png`} className="block text-xs font-semibold text-blue-600 hover:underline">
                 Download square
+              </a>
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Square (Facebook)</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/admin/social/${pack.id}/image?format=square&platform=facebook&v=${imageVersion}`} alt="Facebook social graphic" className="w-56 h-56 rounded-xl border border-slate-200 object-cover" />
+              <a href={`/admin/social/${pack.id}/image?format=square&platform=facebook&v=${imageVersion}`} download={`social-${pack.id}-facebook.png`} className="block text-xs font-semibold text-blue-600 hover:underline">
+                Download Facebook
               </a>
             </div>
             <div className="space-y-2">
