@@ -21,4 +21,13 @@ export const BUSINESS_CATEGORIES = [
   ['shop', 'Shop'], ['attraction', 'Things to do'], ['other', 'Other'],
 ] as const
 
+// Every package is a 12-month subscription (Chris, 6 Nov 2026): paid monthly or upfront, then renews for a further
+// 12 months unless cancelled at least 30 days before the end of the term. Shown on /advertise, the sign-up form,
+// Stripe checkout, the welcome email and /terms (section 12).
+export const TERM_MONTHS = 12
+export const TERM_SUMMARY = '12-month subscription, paid monthly or upfront. Renews for a further 12 months unless cancelled at least 30 days before the end of the term.'
+
 export const gbp = (n: number) => `£${n.toFixed(2)}`
+
+/** What paying for the year upfront saves against 12 monthly payments (Featured £89.45, Standard £59.45). */
+export const yearlySaving = (key: PackageKey) => Math.round((PACKAGES[key].monthly * TERM_MONTHS - PACKAGES[key].yearly) * 100) / 100

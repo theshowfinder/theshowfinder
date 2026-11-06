@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { CITIES } from '@/lib/cities'
 import { createPublicClient } from '@/lib/supabase/public'
 import { listedEventsCount } from '@/lib/listedEvents'
+import { gbp, yearlySaving } from '@/lib/advertisingPackages'
 
 export const metadata: Metadata = {
   title: 'Advertise your local business | TheShowFinder',
@@ -27,10 +28,11 @@ const featuredBenefits = (showPages: string) => [
   'Only three Featured places per city',
 ]
 
-function PackageCard({ name, monthly, annual, benefits, featured = false, href }: {
+function PackageCard({ name, monthly, annual, saving, benefits, featured = false, href }: {
   name: string
   monthly: string
   annual: string
+  saving: string
   benefits: string[]
   featured?: boolean
   href: string
@@ -44,8 +46,9 @@ function PackageCard({ name, monthly, annual, benefits, featured = false, href }
         <span className="text-4xl font-black tracking-tight text-slate-950">{monthly}</span>
         <span className="pb-1 text-sm text-slate-500">per month</span>
       </div>
-      <p className="mb-2 text-sm font-semibold text-slate-500">or {annual} paid annually</p>
-      <p className="mb-6 text-xs font-bold text-emerald-700">Annual option saves roughly 16% · price protected while subscribed</p>
+      <p className="mb-1 text-sm font-extrabold text-slate-800">12-month subscription</p>
+      <p className="mb-2 text-sm font-semibold text-slate-500">or {annual} paid upfront for the year</p>
+      <p className="mb-6 text-sm font-extrabold text-emerald-700">Save {saving} by paying for the year upfront · price protected while subscribed</p>
       <ul className="space-y-3">
         {benefits.map(benefit => (
           <li key={benefit} className="flex gap-3 text-sm leading-relaxed text-slate-600">
@@ -120,12 +123,12 @@ export default async function AdvertisePage({ searchParams }: { searchParams: Pr
         </div>
 
         <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-950">
-          These are introductory city rates for the first available placements. Once the nine Manchester positions are filled, or the introductory period ends, pricing will be reviewed. Joining now secures the displayed rate while your subscription remains active.
+          These are introductory city rates for the first available placements. Once the nine Manchester positions are filled, or the introductory period ends, pricing will be reviewed. Joining now secures the displayed rate while your subscription remains active. All placements are a 12-month subscription, paid monthly or upfront.
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <PackageCard name="Standard" monthly="£29.95" annual="£299.95" benefits={standardBenefits} href={onboardingUrl('standard')} />
-          <PackageCard name="Featured" monthly="£44.95" annual="£449.95" benefits={featuredBenefits(showPages)} featured href={onboardingUrl('featured')} />
+          <PackageCard name="Standard" monthly="£29.95" annual="£299.95" saving={gbp(yearlySaving('standard'))} benefits={standardBenefits} href={onboardingUrl('standard')} />
+          <PackageCard name="Featured" monthly="£44.95" annual="£449.95" saving={gbp(yearlySaving('featured'))} benefits={featuredBenefits(showPages)} featured href={onboardingUrl('featured')} />
         </div>
 
         <div className="mt-12 rounded-3xl bg-rose-600 p-8 text-white shadow-lg sm:flex sm:items-center sm:justify-between sm:p-10">

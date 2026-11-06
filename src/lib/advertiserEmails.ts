@@ -32,6 +32,8 @@ export async function sendAdvertiserWelcome(a: { to: string; contactName: string
     '',
     'We will feature you on our social channels and check in with you each month.',
     '',
+    'Your placement is a 12-month subscription. It renews for a further 12 months unless you cancel at least 30 days before the end of the term: just reply to this email.',
+    '',
     'Any changes, just reply to this email.',
     '',
     'TheShowFinder',

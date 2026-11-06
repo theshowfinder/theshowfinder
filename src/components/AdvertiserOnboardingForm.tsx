@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import { CITIES } from '@/lib/cities'
+import { PACKAGES as PACKAGE_PRICES, gbp, yearlySaving } from '@/lib/advertisingPackages'
 
 type PackageKey = 'featured' | 'standard'
 type BillingKey = 'monthly' | 'yearly'
 
 const PACKAGES = {
-  featured: { label: 'Featured placement', price: '£44.95 per month', detail: 'On every show page in your city, right under the ticket buttons, plus the top of your city page. Includes a QR voucher offer and promotion on our social channels.' },
-  standard: { label: 'Standard listing', price: '£29.95 per month', detail: 'A listing in the local guide on your city page, with your offer and booking link.' },
+  featured: { label: 'Featured placement', price: '£44.95 per month · 12-month subscription', detail: 'On every show page in your city, right under the ticket buttons, plus the top of your city page. Includes a QR voucher offer and promotion on our social channels.' },
+  standard: { label: 'Standard listing', price: '£29.95 per month · 12-month subscription', detail: 'A listing in the local guide on your city page, with your offer and booking link.' },
 } as const
 
 export default function AdvertiserOnboardingForm({ initialCity = '', initialPackage = 'featured', refCode = '', initialBusinessName = '', initialEmail = '', initialContactName = '', initialCategory = '' }: { initialCity?: string; initialPackage?: PackageKey; refCode?: string; initialBusinessName?: string; initialEmail?: string; initialContactName?: string; initialCategory?: string }) {
@@ -30,18 +31,21 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
   const [assetFiles, setAssetFiles] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [agreedTerm, setAgreedTerm] = useState(false)
 
   const canContinue = city.length > 0
   const canSubmit = businessName.trim().length > 1 && contactName.trim().length > 1 && email.includes('@')
 
   async function submitApplication() {
     if (!canSubmit || submitting) return
+    if (!agreedTerm) { setError('Please confirm the 12-month subscription to continue.'); return }
     setSubmitting(true)
     setError('')
     const form = new FormData()
     form.set('city', city)
     form.set('package', packageKey)
     form.set('billing', billing)
+    form.set('term_agreed', 'yes')
     form.set('business_name', businessName.trim())
     form.set('category', category)
     form.set('contact_name', contactName.trim())
@@ -115,8 +119,8 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
             </div>
             <label className="mt-7 block text-sm font-bold text-slate-700">Billing
               <select value={billing} onChange={event => setBilling(event.target.value as BillingKey)} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3">
-                <option value="monthly">Monthly — renews automatically</option>
-                <option value="yearly">Annual — paid upfront</option>
+                <option value="monthly">Monthly — 12 payments of {gbp(PACKAGE_PRICES[packageKey].monthly)}</option>
+                <option value="yearly">Annual — {gbp(PACKAGE_PRICES[packageKey].yearly)} paid upfront, save {gbp(yearlySaving(packageKey))}</option>
               </select>
             </label>
             <button type="button" disabled={!canContinue} onClick={() => setStep(2)} className="mt-8 rounded-xl bg-slate-950 px-5 py-3 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-40">Continue →</button>
@@ -155,10 +159,14 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
             <h2 className="text-2xl font-extrabold text-slate-900">Review your application</h2>
             <p className="mt-2 text-sm text-slate-500">Check the details below, then continue to secure your placement through Stripe. Your listing will remain pending until we review and approve it.</p>
             <div className="mt-7 rounded-2xl bg-slate-50 p-5 text-sm text-slate-700">
-              <p><b>City:</b> {city}</p><p><b>Package:</b> {PACKAGES[packageKey].label} ({PACKAGES[packageKey].price})</p><p><b>Billing:</b> {billing === 'monthly' ? 'Monthly renewal' : 'Annual payment'}</p><p><b>Business:</b> {businessName}</p><p><b>Contact:</b> {contactName} · {email}</p><p><b>Postcode:</b> {postcode || 'Not supplied'}</p><p><b>Offer:</b> {offer || 'None'}</p><p><b>Logo:</b> {logoFile?.name ?? 'Not supplied'}</p><p><b>Marketing files:</b> {assetFiles.length || 'None'}</p>
+              <p><b>City:</b> {city}</p><p><b>Package:</b> {PACKAGES[packageKey].label} ({PACKAGES[packageKey].price})</p><p><b>Billing:</b> {billing === 'monthly' ? `12 monthly payments of ${gbp(PACKAGE_PRICES[packageKey].monthly)}` : `${gbp(PACKAGE_PRICES[packageKey].yearly)} paid upfront for 12 months (you save ${gbp(yearlySaving(packageKey))})`}</p><p><b>Term:</b> 12-month subscription</p><p><b>Business:</b> {businessName}</p><p><b>Contact:</b> {contactName} · {email}</p><p><b>Postcode:</b> {postcode || 'Not supplied'}</p><p><b>Offer:</b> {offer || 'None'}</p><p><b>Logo:</b> {logoFile?.name ?? 'Not supplied'}</p><p><b>Marketing files:</b> {assetFiles.length || 'None'}</p>
             </div>
+            <label className="mt-6 flex items-start gap-3 text-sm text-slate-700">
+              <input type="checkbox" checked={agreedTerm} onChange={event => { setAgreedTerm(event.target.checked); if (event.target.checked) setError('') }} className="mt-1 h-4 w-4 shrink-0" />
+              <span>I agree to a <b>12-month subscription</b>{billing === 'monthly' ? ' (12 monthly payments)' : ''}. It renews for a further 12 months unless cancelled at least 30 days before the end of the term. See the <a href="/terms#advertising" target="_blank" className="font-semibold text-rose-600 underline">advertising terms</a>.</span>
+            </label>
             {error && <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
-            <div className="mt-8 flex flex-wrap gap-3"><button type="button" onClick={() => setStep(2)} className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-extrabold text-slate-700">Edit details</button><button type="button" onClick={submitApplication} disabled={submitting} className="rounded-xl bg-rose-600 px-5 py-3 text-sm font-extrabold text-white hover:bg-rose-500 disabled:cursor-wait disabled:opacity-50">{submitting ? 'Opening secure checkout…' : 'Continue to payment →'}</button></div>
+            <div className="mt-8 flex flex-wrap gap-3"><button type="button" onClick={() => setStep(2)} className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-extrabold text-slate-700">Edit details</button><button type="button" onClick={submitApplication} disabled={submitting || !agreedTerm} className="rounded-xl bg-rose-600 px-5 py-3 text-sm font-extrabold text-white hover:bg-rose-500 disabled:cursor-wait disabled:opacity-50">{submitting ? 'Opening secure checkout…' : 'Continue to payment →'}</button></div>
           </div>
         )}
 

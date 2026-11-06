@@ -14,6 +14,9 @@
 - Be straight about what we can't count: people who walk in without a voucher. Suggest staff ask "did you find us on TheShowFinder?".
 - Spaces are limited per city. The aim is about two paying businesses per city (about 80 across 40 cities).
 
+## Term (6 Nov 2026)
+- Every package is a 12-month subscription: 12 monthly payments or paid upfront. Renews for a further 12 months unless cancelled at least 30 days before the end of the term. Early cancellation on monthly: remaining payments for the term are still due. Shown on /advertise, the sign-up form (required checkbox), Stripe checkout (custom text + metadata term/term_agreed_at), the welcome email and /terms#advertising (section 12).
+
 ## Packages (prices: Stripe price IDs in Vercel env; shown in src/app/advertise/page.tsx, src/components/AdvertiserOnboardingForm.tsx, src/lib/advertisingPackages.ts)
 - Standard listing: £29.95/month or £299.95/year. Local guide on the city page, offer + voucher, booking button, monthly check-in, a social mention. Max 6 per city.
 - Featured placement: £44.95/month or £449.95/year. Everything in Standard, plus the "Make a night of it" box on every show page in the city (src/components/BeforeTheShow.tsx, up to 3 per page, rotating fairly), top of the city guide with logo, walking distance. Max 3 per city.

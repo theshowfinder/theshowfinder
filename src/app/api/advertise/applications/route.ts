@@ -66,6 +66,15 @@ async function createCheckoutSession({
   params.set('subscription_data[metadata][application_id]', applicationId)
   params.set('subscription_data[metadata][package]', packageKey)
   params.set('subscription_data[metadata][billing]', billing)
+  // The 12-month term: recorded on the subscription (with when it was agreed) and shown above the Pay button.
+  const agreedAt = new Date().toISOString()
+  params.set('metadata[term]', '12 months')
+  params.set('metadata[term_agreed_at]', agreedAt)
+  params.set('subscription_data[metadata][term]', '12 months')
+  params.set('subscription_data[metadata][term_agreed_at]', agreedAt)
+  params.set('custom_text[submit][message]', billing === 'monthly'
+    ? '12-month subscription: 12 monthly payments. Renews for a further 12 months unless cancelled at least 30 days before the end of the term. theshowfinder.com/terms#advertising'
+    : '12-month subscription paid upfront. Renews for a further 12 months unless cancelled at least 30 days before the end of the term. theshowfinder.com/terms#advertising')
   const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -93,12 +102,14 @@ export async function POST(request: Request) {
     const bookingUrl = text(form.get('booking_url'))
     const offerText = tidyOffer(text(form.get('offer_text')))
     const ref = text(form.get('ref'))
+    const termAgreed = text(form.get('term_agreed')) === 'yes'
     const logo = form.get('logo')
     const assets = form.getAll('assets').filter(value => value instanceof File) as File[]
 
     if (!CITIES.some(item => item.name === city)) return NextResponse.json({ error: 'Please choose a valid city.' }, { status: 400 })
     if (packageKey !== 'featured' && packageKey !== 'standard') return NextResponse.json({ error: 'Please choose a valid package.' }, { status: 400 })
     if (billing !== 'monthly' && billing !== 'yearly') return NextResponse.json({ error: 'Please choose a valid billing option.' }, { status: 400 })
+    if (!termAgreed) return NextResponse.json({ error: 'Please confirm the 12-month subscription to continue.' }, { status: 400 })
     if (businessName.length < 2 || contactName.length < 2 || !/^\S+@\S+\.\S+$/.test(email)) {
       return NextResponse.json({ error: 'Please provide a business name, contact name and valid email address.' }, { status: 400 })
     }

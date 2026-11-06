@@ -13,7 +13,7 @@ export default function TermsPage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
 
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-2">Terms of Service</h1>
-        <p className="text-slate-500 text-sm mb-10">Last updated: 15 May 2026</p>
+        <p className="text-slate-500 text-sm mb-10">Last updated: 6 November 2026</p>
 
         <div className="prose prose-slate max-w-none space-y-10">
 
@@ -163,8 +163,21 @@ export default function TermsPage() {
             </p>
           </section>
 
+          <section id="advertising">
+            <h2 className="text-xl font-extrabold text-slate-900 mb-3">12. Advertising for local businesses</h2>
+            <div className="space-y-3 text-slate-600 leading-relaxed">
+              <p>These terms apply to businesses that buy a Standard listing or Featured placement through theshowfinder.com/advertise.</p>
+              <p><b>Term.</b> Every placement is a 12-month subscription, paid either in 12 monthly payments or upfront for the year. The term starts on the date of your first payment.</p>
+              <p><b>Renewal.</b> At the end of the 12 months your subscription renews for a further 12 months at the price you are paying, unless you tell us at least 30 days before the end of the term that you want to cancel. Email hello@theshowfinder.com to cancel.</p>
+              <p><b>Cancelling early.</b> You can ask us to take your listing down at any time, but on the monthly option the remaining payments for the current 12-month term are still due. Payments already made are not refunded, except where the law requires it.</p>
+              <p><b>Your listing.</b> We check every listing before it goes live, usually within one working day. We may decline or remove a listing that is misleading, unlawful or unsuitable; if we remove one for a reason that is not your fault, we refund the unused part of your payments.</p>
+              <p><b>Offers.</b> Any offer you add (for example a discount with a show ticket) is yours to honour. Vouchers are claimed with a QR code and confirmed by your staff with your PIN.</p>
+              <p><b>Reports.</b> We count clicks, booking-link taps and vouchers on your listing and share them with you each month. These are our best measure and may differ from your own figures.</p>
+            </div>
+          </section>
+
           <section>
-            <h2 className="text-xl font-extrabold text-slate-900 mb-3">12. Contact</h2>
+            <h2 className="text-xl font-extrabold text-slate-900 mb-3">13. Contact</h2>
             <p className="text-slate-600 leading-relaxed">
               For any questions about these terms, contact us at{' '}
               <a href="mailto:hello@theshowfinder.com" className="font-semibold hover:underline" style={{ color: '#E8003D' }}>
