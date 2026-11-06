@@ -101,6 +101,9 @@ export async function matchSeeTicketsCatalogue(fullRescan = false, options: { li
     if (bucket) bucket.push(event); else eventsByDate.set(key, [event])
   }
   const hasMore = Boolean(limit && catalogue.length > limit)
+  // Nightly runs stop at a row cap / time limit, so work the most overdue rows first (never checked, then oldest
+  // check) instead of id order; otherwise rows late in id order are re-checked days late and miss new listings.
+  if (!limit && !options.afterId) catalogue.sort((x, y) => (x.match_checked_at ? Date.parse(x.match_checked_at) : 0) - (y.match_checked_at ? Date.parse(y.match_checked_at) : 0))
   const rowsToProcess = limit ? catalogue.slice(0, limit) : catalogue
   const result: SeeTicketsMatchResult = {
     checked: 0, skippedUnchanged: 0, autoMatched: 0, review: 0, noMatch: 0, moved: 0, errors: 0, dryRun, hasMore,
