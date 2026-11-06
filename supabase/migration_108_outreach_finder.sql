@@ -9,4 +9,5 @@ create table if not exists outreach_scanned (
 );
 create index if not exists outreach_scanned_city_idx on outreach_scanned (city, checked_at desc);
 alter table outreach_scanned enable row level security;   -- service role only
+grant select, insert, update, delete on public.outreach_scanned to service_role;   -- Supabase Data API: new tables need explicit grants (30 Oct 2026)
 alter table outreach_prospects add column if not exists osm_key text;
