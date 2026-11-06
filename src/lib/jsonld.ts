@@ -29,6 +29,16 @@ interface EventSchemaInput {
 /** Site-wide share image, used only when an event has no picture of its own. */
 export const SITE_IMAGE_URL = `${BASE_URL}/og-image.png`
 
+/** Schema.org needs an absolute image URL: unwrap our image proxy and prefix site-relative paths. */
+function absoluteImage(url: string | null | undefined): string {
+  if (!url) return SITE_IMAGE_URL
+  if (url.startsWith('/_next/image?')) {
+    const raw = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('url')
+    if (raw) return raw.startsWith('/') ? `${BASE_URL}${raw}` : raw
+  }
+  return url.startsWith('/') ? `${BASE_URL}${url}` : url
+}
+
 /** "Saturday 6 February 2027", UK time. Empty string for an unparseable date. */
 function longUkDate(iso: string): string {
   const d = new Date(iso)
@@ -88,7 +98,7 @@ export function buildEventSchema(input: EventSchemaInput) {
     description:   input.description?.trim()
       ? input.description.trim()
       : fallbackEventDescription({ name: input.name, startDate: input.startDate, venueName: input.venue?.name, city: input.venue?.city }),
-    image:         [input.image || SITE_IMAGE_URL],
+    image:         [absoluteImage(input.image)],
     eventStatus:   EVENT_STATUS_MAP[input.status] ?? 'https://schema.org/EventScheduled',
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location: input.venue
@@ -224,7 +234,7 @@ export function buildNewsArticleSchema(input: {
     description: input.description,
     mainEntityOfPage: { '@type': 'WebPage', '@id': input.url },
     url: input.url,
-    image: [input.image ?? SITE_IMAGE_URL],
+    image: [absoluteImage(input.image)],
     datePublished: input.datePublished,
     dateModified: input.dateModified,
     author: { '@type': 'Organization', name: 'TheShowFinder', url: BASE_URL },

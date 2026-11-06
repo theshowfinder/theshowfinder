@@ -647,7 +647,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
       <section className="relative text-white overflow-hidden" style={{ backgroundColor: '#1A1A2E' }}>
         {imageUrl && (
           <>
-            <Image src={imageUrl} alt={event.title} fill className="object-cover opacity-20" priority />
+            <Image src={imageUrl} alt={event.title} fill className="object-cover opacity-20" priority unoptimized={imageUrl.startsWith('/_next/image')} />
             <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, #1A1A2E 40%, transparent)' }} />
           </>
         )}
