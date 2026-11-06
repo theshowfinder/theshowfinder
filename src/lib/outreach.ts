@@ -44,6 +44,22 @@ export function takeAcrossCities<T extends { city: string }>(rows: T[], n: numbe
   return out
 }
 
+/**
+ * One city a weekday, from 5 Nov 2026: Manchester first, then London and the rest of the site's city list in order,
+ * starting over after the last. Weekends roll on to the next Monday's city. The finder fills that city all day and
+ * the sender emails it first.
+ */
+export const OUTREACH_START = '2026-11-05'
+export function cityOfTheDay(cityNames: string[], now: Date = new Date()): string {
+  const order = ['Manchester', ...cityNames.filter(c => c !== 'Manchester')]
+  const start = new Date(`${OUTREACH_START}T00:00:00Z`)
+  const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  let weekdays = 0
+  for (const d = new Date(start); d < day; d.setUTCDate(d.getUTCDate() + 1)) if (d.getUTCDay() % 6 !== 0) weekdays++
+  // (a Saturday or Sunday has already counted Friday, so it lands on the coming Monday's city)
+  return order[weekdays % order.length]
+}
+
 export const offerUrl = (p: Pick<Prospect, 'ref_code'>) => `${SITE}/p/${p.ref_code}`
 export const unsubscribeUrl = (p: Pick<Prospect, 'unsubscribe_token'>) => `${SITE}/unsubscribe/${p.unsubscribe_token}`
 
@@ -78,7 +94,9 @@ export function buildOutreachEmail(p: Prospect, kind: 'first' | 'follow_up'): { 
         '',
         'Your listing can include an offer of your choice (say, 10% off with a show ticket) that they claim on their phone and use at your door.',
         '',
-        `We only take nine businesses in ${p.city}, and we'd genuinely love ${b} to be one of them. Introductory rates start at £29.95 a month.`,
+        p.near_venue
+          ? `${p.distance_label ? `You're ${p.distance_label}, so you'd` : 'You would'} be shown on every show there and at the venues around it. We only take three Featured partners around each venue, and we'd genuinely love ${b} to be one of them. Introductory rates start at £29.95 a month.`
+          : `We only take three Featured partners around each venue in ${p.city}, and we'd genuinely love ${b} to be one of them. Introductory rates start at £29.95 a month.`,
         '',
         `${button}: ${offerUrl(p)}`,
         '',
@@ -88,7 +106,7 @@ export function buildOutreachEmail(p: Prospect, kind: 'first' | 'follow_up'): { 
     : [
         hi,
         '',
-        `Just checking this reached you. We'd still love to have ${b} on our ${p.city} page. There are only nine places, and here's how yours would look:`,
+        `Just checking this reached you. We'd still love to have ${b} on our ${p.city} page${p.near_venue ? ` and on the shows at ${p.near_venue}` : ''}. There are only three Featured places around each venue, and here's how yours would look:`,
         '',
         `${button}: ${offerUrl(p)}`,
         '',

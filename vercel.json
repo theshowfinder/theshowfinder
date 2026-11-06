@@ -137,7 +137,7 @@
     },
     {
       "path": "/api/cron/outreach-find",
-      "schedule": "35 */3 * * *"
+      "schedule": "35 6,8,10,12,14,16 * * 1-5"
     },
     {
       "path": "/api/cron/outreach-send",

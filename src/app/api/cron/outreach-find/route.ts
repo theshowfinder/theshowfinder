@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { withJobRun } from '@/lib/jobRuns'
 import { CITIES } from '@/lib/cities'
+import { cityOfTheDay } from '@/lib/outreach'
 import {
   extractEmails, pickEmail, extractCompanyNumbers, extractCompanyNames, normCompanyName, isEmailableCompany,
   categoryFromOsm, walkLabel, metresBetween, usefulLinks,
@@ -10,13 +11,14 @@ import {
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
-// Automatic advertiser prospecting (vercel.json: every 3 hours). Each run takes the city scanned longest ago, finds
+// Automatic advertiser prospecting (vercel.json: six runs each weekday morning-to-afternoon). Every run works on the
+// city of the day (cityOfTheDay: one city a weekday, Manchester first), finds
 // bars, pubs, restaurants, cafes and hotels near its three busiest venues on OpenStreetMap, and reads each one's own
 // website (home, contact, privacy, terms) for a general inbox and its company number or registered name. Companies
 // House must confirm an ACTIVE company before a business is approved for email (UK PECR: we only cold-email
 // companies); anything we cannot confirm is parked as "to check" for a person. Places already looked at are recorded
 // in outreach_scanned and never fetched again. ?dry=1 reports without writing. ?city=Leeds picks the city.
-const PER_RUN = 30          // websites read per run (about 4 pages each, a few seconds per site)
+const PER_RUN = 40          // websites read per run (about 4 pages each, a few seconds per site)
 const CONCURRENCY = 6
 const UA = 'TheShowFinderBot/1.0 (+https://www.theshowfinder.com/advertise; partners@theshowfinder.com)'
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -65,21 +67,23 @@ async function verifyCompany(numbers: string[], names: string[], siteText?: stri
 }
 
 async function overpass(query: string): Promise<Loose[]> {
-  for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
-    try {
-      const r = await fetch(url, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query), signal: AbortSignal.timeout(40_000) })
-      if (r.ok) return (await r.json()).elements ?? []
-    } catch { /* try the next server */ }
+  // Overpass servers are often busy (half the runs on 5-6 Nov found nothing): try three servers, twice round.
+  const servers = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter']
+  for (let round = 0; round < 2; round++) {
+    for (const url of servers) {
+      try {
+        const r = await fetch(url, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query), signal: AbortSignal.timeout(35_000) })
+        if (r.ok) { const els = (await r.json()).elements ?? []; if (els.length) return els }
+      } catch { /* try the next server */ }
+    }
+    await new Promise(res => setTimeout(res, 5000))
   }
   return []
 }
 
-async function pickCity(db: Loose, forced: string | null): Promise<string> {
+function pickCity(forced: string | null): string {
   if (forced) return CITIES.find(c => c.name.toLowerCase() === forced.toLowerCase())?.name ?? forced
-  const { data } = await db.from('outreach_scanned').select('city, checked_at').like('key', 'run:%')
-  const last = new Map<string, string>((data ?? []).map((r: Loose) => [r.city, r.checked_at]))
-  // never scanned first (in the site's city order), then the one scanned longest ago
-  return [...CITIES].map(c => c.name).sort((a, b) => (last.get(a) ?? '').localeCompare(last.get(b) ?? ''))[0]
+  return cityOfTheDay(CITIES.map(c => c.name))
 }
 
 async function anchorVenues(db: Loose, city: string) {
@@ -118,14 +122,16 @@ async function handleGet(request: Request) {
   }
 
   // 2. The next city: candidates near its busiest venues that nobody has looked at yet.
-  const city = await pickCity(db, params.get('city'))
+  const city = pickCity(params.get('city'))
   const anchors = await anchorVenues(db, city)
-  if (!dry) await db.from('outreach_scanned').upsert({ key: `run:${city}`, city, result: 'run', checked_at: new Date().toISOString() })
   if (!anchors.length) return NextResponse.json({ success: true, city, note: 'no venues with map positions', reverified })
 
   const q = `[out:json][timeout:30];(${anchors.map(a =>
     `nwr(around:700,${a.lat},${a.lng})[amenity~"^(bar|pub|restaurant|cafe)$"][~"^(website|contact:website)$"~"."];nwr(around:1000,${a.lat},${a.lng})[tourism=hotel][~"^(website|contact:website)$"~"."];`).join('')});out center tags 400;`
   const elements = await overpass(q)
+  // Only count the city as looked at when the map search actually answered; otherwise the next run tries again.
+  if (!elements.length) return NextResponse.json({ success: false, city, note: 'map search (Overpass) returned nothing: will retry next run', reverified }, { status: 503 })
+  if (!dry) await db.from('outreach_scanned').upsert({ key: `run:${city}`, city, result: 'run', checked_at: new Date().toISOString() })
 
   const [{ data: scanned }, { data: existing }] = await Promise.all([
     db.from('outreach_scanned').select('key, website_host').eq('city', city).limit(5000),
@@ -143,9 +149,11 @@ async function handleGet(request: Request) {
     const lat = el.lat ?? el.center?.lat, lng = el.lon ?? el.center?.lon
     let website = (tags.website ?? tags['contact:website'] ?? '').trim()
     if (!tags.name || !website || lat == null || seenKeys.has(key)) continue
+    // Chains (OpenStreetMap tags them with a brand: Nando's, BrewDog, Hilton…) never buy a local listing.
+    if (tags.brand || tags['brand:wikidata'] || tags.operator && /hilton|marriott|premier inn|travelodge|ibis|holiday inn|novotel|mercure|nando|brewdog|wetherspoon|las iguanas|greene king|mitchells|stonegate|all bar one|slug and lettuce|revolution|pizza express|zizzi|ask italian|wagamama/i.test(tags.operator)) continue
     if (!/^https?:\/\//i.test(website)) website = `https://${website}`
     const h = host(website)
-    if (!h || seenHosts.has(h) || /facebook|instagram|google|tripadvisor|booking\.com|opentable|wetherspoon/.test(h)) continue
+    if (!h || seenHosts.has(h) || /facebook|instagram|google|tripadvisor|booking\.com|opentable|wetherspoon|nandos|brewdog|hilton|marriott|premierinn|travelodge|ihg|accor|lasiguanas|greeneking|stonegate|allbarone|pizzaexpress|zizzi|wagamama|atgtickets|ambassadortheatre/.test(h)) continue
     const nearest = anchors.map(a => ({ a, d: metresBetween({ lat, lng }, a) })).sort((x, y) => x.d - y.d)[0]
     candidates.push({ key, name: tags.name, tags, lat, lng, website, venue: nearest.a.name, metres: nearest.d })
     seenHosts.add(h)

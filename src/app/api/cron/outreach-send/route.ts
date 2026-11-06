@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { withJobRun } from '@/lib/jobRuns'
-import { canEmail, takeAcrossCities, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
+import { canEmail, takeAcrossCities, cityOfTheDay, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
 import { sendOutreachEmail } from '@/lib/outreachSend'
+import { CITIES } from '@/lib/cities'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -14,6 +15,13 @@ export const dynamic = 'force-dynamic'
 const PER_RUN = 5   // 9 weekday runs x 5 = up to 45 a day, spread out
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 const COLS = 'id, business_name, category, city, near_venue, distance_label, contact_name, email, company_type, status, ref_code, unsubscribe_token'
+
+/** Today's city first (see cityOfTheDay), then anything left from earlier cities, taking turns. */
+function firstsInOrder(rows: Prospect[], n: number): Prospect[] {
+  const today = cityOfTheDay(CITIES.map(c => c.name))
+  const mine = rows.filter(r => r.city === today)
+  return [...mine, ...takeAcrossCities(rows.filter(r => r.city !== today), n)].slice(0, n)
+}
 
 async function handleGet(request: Request) {
   const cronSecret = process.env.CRON_SECRET
@@ -42,7 +50,7 @@ async function handleGet(request: Request) {
     db.from('outreach_prospects').select(COLS).eq('status', 'sent').lte('sent_at', followBefore).order('sent_at').limit(budget),
   ])
   const queue: Array<{ p: Prospect; kind: 'first' | 'follow_up' }> = [
-    ...takeAcrossCities((firsts ?? []) as Prospect[], budget).map(p => ({ p, kind: 'first' as const })),
+    ...firstsInOrder((firsts ?? []) as Prospect[], budget).map(p => ({ p, kind: 'first' as const })),
     ...((follows ?? []) as Prospect[]).map(p => ({ p, kind: 'follow_up' as const })),
   ]
   for (const { p, kind } of queue) {

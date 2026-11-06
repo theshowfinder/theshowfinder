@@ -11,7 +11,9 @@ const p: Prospect = {
 test('first email: personal, offer link, unsubscribe, no numbers', () => {
   const e = buildOutreachEmail(p, 'first')
   assert.match(e.subject, /The Blue Door/)
-  assert.match(e.text, /only take nine businesses in Manchester/)
+  assert.match(e.text, /You're a 6-minute walk from Co-op Live, so you'd be shown on every show there/)
+  assert.match(e.text, /only take three Featured partners around each venue/)
+  assert.doesNotMatch(e.text, /nine/)
   assert.match(e.text, /£29\.95 a month/)
   assert.match(e.text, /decide where to eat before the show/)
   assert.match(e.subject, /We'd love to feature The Blue Door on TheShowFinder Manchester/)
@@ -42,4 +44,15 @@ test('cities take turns in the send queue', async () => {
   const { takeAcrossCities } = await import('./outreach.ts')
   const rows = [{ city: 'London', n: 1 }, { city: 'London', n: 2 }, { city: 'London', n: 3 }, { city: 'Leeds', n: 4 }, { city: 'Hull', n: 5 }]
   assert.deepEqual(takeAcrossCities(rows, 4).map(r => r.n), [1, 4, 5, 2])
+})
+
+test('one city a weekday: Manchester, London, Birmingham…, weekends look ahead to Monday', async () => {
+  const { cityOfTheDay } = await import('./outreach.ts')
+  const cities = ['London', 'Manchester', 'Birmingham', 'Glasgow']
+  assert.equal(cityOfTheDay(cities, new Date('2026-11-05T10:00:00Z')), 'Manchester') // Thu
+  assert.equal(cityOfTheDay(cities, new Date('2026-11-06T10:00:00Z')), 'London')     // Fri
+  assert.equal(cityOfTheDay(cities, new Date('2026-11-07T10:00:00Z')), 'Birmingham') // Sat → Monday's city
+  assert.equal(cityOfTheDay(cities, new Date('2026-11-09T10:00:00Z')), 'Birmingham') // Mon
+  assert.equal(cityOfTheDay(cities, new Date('2026-11-10T10:00:00Z')), 'Glasgow')
+  assert.equal(cityOfTheDay(cities, new Date('2026-11-11T10:00:00Z')), 'Manchester') // starts over
 })
