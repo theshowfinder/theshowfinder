@@ -431,6 +431,7 @@ export async function setLocalBusinessStatusAction(id: string, city: string, sta
   await db.from('local_businesses').update({ status, updated_at: new Date().toISOString() } as never).eq('id', id)
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(city))
+  revalidatePath('/venues/[slug]', 'page')   // venue pages show nearby Featured partners
 }
 
 export async function setLocalBusinessPackageAction(id: string, city: string, pkg: 'standard' | 'featured') {
@@ -439,6 +440,7 @@ export async function setLocalBusinessPackageAction(id: string, city: string, pk
   await db.from('local_businesses').update({ package: pkg, is_sponsored: pkg === 'featured', updated_at: new Date().toISOString() } as never).eq('id', id)
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(city))
+  revalidatePath('/venues/[slug]', 'page')   // venue pages show nearby Featured partners
 }
 // Offer / booking link / postcode for a listing (migration 095). The postcode is turned into a map position for
 // "4 min walk from the venue"; a staff PIN for redeeming vouchers is created if the listing has none.
@@ -459,6 +461,7 @@ export async function updateLocalBusinessOfferAction(id: string, city: string, f
   if (!acc) await db.from('local_business_accounts').insert({ business_id: id, contact_email: 'hello@theshowfinder.com', redeem_pin: newPin(), notes: 'Added from admin; no advertiser contact yet' })
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(city))
+  revalidatePath('/venues/[slug]', 'page')   // venue pages show nearby Featured partners
 }
 
 // Sends an advertiser their numbers for last month (only when Chris chooses to: see advertiserReports.ts).
