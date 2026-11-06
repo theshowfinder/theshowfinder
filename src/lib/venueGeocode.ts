@@ -77,7 +77,7 @@ export async function geocodeVenues(opts: { deadlineMs: number; maxSearches?: nu
     all.push(...(data ?? []))
     if ((data ?? []).length < 1000) break
   }
-  const missing = all.filter(v => v.lat == null || v.lng == null)
+  const missing = all.filter(v => v.lat == null || v.lng == null || (v.lat === 0 && v.lng === 0))   // (0, 0) = placeholder
   res.missing = missing.length
   if (!missing.length) return res
 
@@ -113,7 +113,7 @@ export async function geocodeVenues(opts: { deadlineMs: number; maxSearches?: nu
 
   // 3: the same venue, already positioned, in the same city.
   const positioned = new Map<string, Point>()
-  for (const v of all) if (v.lat != null && v.lng != null) positioned.set(`${(v.city ?? '').toLowerCase()}|${venueKey(v.name, v.city)}`, { lat: v.lat, lng: v.lng })
+  for (const v of all) if (v.lat != null && v.lng != null && !(v.lat === 0 && v.lng === 0)) positioned.set(`${(v.city ?? '').toLowerCase()}|${venueKey(v.name, v.city)}`, { lat: v.lat, lng: v.lng })
   for (const v of missing) {
     if (found.has(v.id)) continue
     const p = positioned.get(`${(v.city ?? '').toLowerCase()}|${venueKey(v.name, v.city)}`)
@@ -123,7 +123,7 @@ export async function geocodeVenues(opts: { deadlineMs: number; maxSearches?: nu
   // 4: OpenStreetMap search for the busiest of the rest, kept only if within 40 km of the city's other venues.
   const cityCentre = new Map<string, Point>()
   const byCity = new Map<string, Point[]>()
-  for (const v of all) if (v.lat != null && v.lng != null && v.city) { const k = v.city.toLowerCase(); const l = byCity.get(k) ?? []; l.push({ lat: v.lat, lng: v.lng }); byCity.set(k, l) }
+  for (const v of all) if (v.lat != null && v.lng != null && !(v.lat === 0 && v.lng === 0) && v.city) { const k = v.city.toLowerCase(); const l = byCity.get(k) ?? []; l.push({ lat: v.lat, lng: v.lng }); byCity.set(k, l) }
   for (const [k, list] of byCity) {
     const lats = list.map(p => p.lat).sort((a, b) => a - b), lngs = list.map(p => p.lng).sort((a, b) => a - b)
     cityCentre.set(k, { lat: lats[Math.floor(lats.length / 2)], lng: lngs[Math.floor(lngs.length / 2)] })
@@ -145,7 +145,7 @@ export async function geocodeVenues(opts: { deadlineMs: number; maxSearches?: nu
   if (!dryRun) {
     for (const [id, p] of found) {
       if (Date.now() > opts.deadlineMs) break
-      await db.from('venues').update({ lat: p.lat, lng: p.lng, ...(p.postcode ? { postcode: p.postcode } : {}) }).eq('id', id).is('lat', null)
+      await db.from('venues').update({ lat: p.lat, lng: p.lng, ...(p.postcode ? { postcode: p.postcode } : {}) }).eq('id', id).or('lat.is.null,and(lat.eq.0,lng.eq.0)')
     }
   }
   res.stillMissing = missing.length - found.size

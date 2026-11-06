@@ -75,7 +75,8 @@ const TRAVEL_CATEGORIES = new Set(['hotel', 'parking', 'transport'])
 export const reachFor = (category: string | null | undefined) => (category && TRAVEL_CATEGORIES.has(category) ? TRAVEL_RADIUS_M : AREA_RADIUS_M)
 
 interface Point { lat: number | null; lng: number | null }
-const hasPoint = (p: Point): p is { lat: number; lng: number } => typeof p.lat === 'number' && typeof p.lng === 'number'
+// (0, 0) is a placeholder some imports write for "no position", not a real place in the UK.
+const hasPoint = (p: Point): p is { lat: number; lng: number } => typeof p.lat === 'number' && typeof p.lng === 'number' && !(p.lat === 0 && p.lng === 0)
 
 /** Straight-line distance in metres (haversine). */
 export function metresApart(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
