@@ -66,13 +66,13 @@ async function verifyCompany(numbers: string[], names: string[], siteText?: stri
   return null
 }
 
-async function overpass(query: string): Promise<Loose[]> {
+async function overpass(query: string, rounds = 2): Promise<Loose[]> {
   // Overpass servers are often busy (half the runs on 5-6 Nov found nothing): try three servers, twice round.
   const servers = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter']
-  for (let round = 0; round < 2; round++) {
+  for (let round = 0; round < rounds; round++) {
     for (const url of servers) {
       try {
-        const r = await fetch(url, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query), signal: AbortSignal.timeout(35_000) })
+        const r = await fetch(url, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query), signal: AbortSignal.timeout(25_000) })
         if (r.ok) { const els = (await r.json()).elements ?? []; if (els.length) return els }
       } catch { /* try the next server */ }
     }
@@ -127,9 +127,19 @@ async function handleGet(request: Request) {
   const anchors = await anchorVenues(db, city)
   if (!anchors.length) return NextResponse.json({ success: true, city, note: 'no venues with map positions', reverified })
 
-  const q = `[out:json][timeout:30];(${anchors.map(a =>
-    `nwr(around:600,${a.lat},${a.lng})[amenity~"^(bar|pub|restaurant|cafe)$"][~"^(website|contact:website)$"~"."];nwr(around:800,${a.lat},${a.lng})[tourism~"^(hotel|guest_house)$"][~"^(website|contact:website)$"~"."];`).join('')});out center tags 400;`
-  const elements = await overpass(q)
+  // One small query per venue (a single combined query with a regex-key website filter often timed out on the busy
+  // public servers, so whole runs came back empty). Places without a website are dropped below.
+  const elements: Loose[] = []
+  const seenEl = new Set<string>()
+  const mapStarted = Date.now()
+  for (const a of anchors) {
+    if (Date.now() - mapStarted > 120_000) break   // leave time to read the websites
+    const q = `[out:json][timeout:60];(nwr(around:600,${a.lat},${a.lng})[amenity~"^(bar|pub|restaurant|cafe)$"];nwr(around:800,${a.lat},${a.lng})[tourism~"^(hotel|guest_house)$"];);out center tags 300;`
+    for (const el of await overpass(q, 1)) {
+      const k = `${el.type}/${el.id}`
+      if (!seenEl.has(k)) { seenEl.add(k); elements.push(el) }
+    }
+  }
   // Only count the city as looked at when the map search actually answered; otherwise the next run tries again.
   if (!elements.length) return NextResponse.json({ success: false, city, note: 'map search (Overpass) returned nothing: will retry next run', reverified }, { status: 503 })
   if (!dry) await db.from('outreach_scanned').upsert({ key: `run:${city}`, city, result: 'run', checked_at: new Date().toISOString() })
