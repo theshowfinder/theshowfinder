@@ -65,3 +65,12 @@ test('small independents only: chains, groups and the venues themselves are skip
   assert.equal(looksMultiSite('Our venues: Leeds, York, Bath, Bristol and Cardiff', 'Manchester'), true)
   assert.equal(looksMultiSite('A family bar in Manchester since 1998, near the Leeds road', 'Manchester'), false)
 })
+
+test('accented chain names and placeholder venues', async () => {
+  const { looksLikeChain } = await import('./outreach.ts')
+  assert.equal(looksLikeChain({ name: 'Caffè Nero' }), true)
+  assert.equal(looksLikeChain({ name: 'YO! Sushi' }), true)
+  const e = buildOutreachEmail({ ...p, city: 'Liverpool', near_venue: 'Liverpool', distance_label: '1 min walk from Liverpool' }, 'first')
+  assert.doesNotMatch(e.text, /walk from Liverpool/)
+  assert.match(e.text, /three Featured partners around each venue in Liverpool/)
+})

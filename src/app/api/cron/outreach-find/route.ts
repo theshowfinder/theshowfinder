@@ -92,7 +92,8 @@ async function anchorVenues(db: Loose, city: string) {
   const { data: evs } = await db.from('events').select('venue_id').in('venue_id', venues.map((v: Loose) => v.id)).gte('start_date', new Date().toISOString()).limit(8000)
   const count = new Map<string, number>()
   for (const e of evs ?? []) count.set(e.venue_id, (count.get(e.venue_id) ?? 0) + 1)
-  return venues.filter((v: Loose) => count.get(v.id)).sort((a: Loose, b: Loose) => (count.get(b.id) ?? 0) - (count.get(a.id) ?? 0)).slice(0, 6) as Array<{ name: string; lat: number; lng: number }>
+  // A venue named just after the city ("Liverpool") is a placeholder, not a place anyone walks to.
+  return venues.filter((v: Loose) => count.get(v.id) && String(v.name).trim().toLowerCase() !== city.toLowerCase()).sort((a: Loose, b: Loose) => (count.get(b.id) ?? 0) - (count.get(a.id) ?? 0)).slice(0, 6) as Array<{ name: string; lat: number; lng: number }>
 }
 
 async function handleGet(request: Request) {

@@ -69,7 +69,7 @@ const CHAIN_HOST = /(nandos|brewdog|jdwetherspoon|wetherspoon|iguanas|hilton|mar
 const UK_CITIES = ['london', 'manchester', 'birmingham', 'leeds', 'liverpool', 'glasgow', 'edinburgh', 'bristol', 'cardiff', 'newcastle', 'sheffield', 'nottingham', 'leicester', 'brighton', 'southampton', 'york', 'belfast', 'aberdeen', 'oxford', 'cambridge', 'bath', 'norwich', 'exeter', 'plymouth', 'derby', 'coventry']
 
 export function looksLikeChain(x: { name?: string | null; website?: string | null; email?: string | null }): boolean {
-  if (x.name && CHAIN_NAME.test(x.name)) return true
+  if (x.name && CHAIN_NAME.test(x.name.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))) return true
   const hosts = [x.website ?? '', (x.email ?? '').split('@')[1] ?? ''].join(' ')
   return CHAIN_HOST.test(hosts)
 }
@@ -114,7 +114,7 @@ export function buildOutreachEmail(p: Prospect, kind: 'first' | 'follow_up'): { 
         '',
         'Your listing can include an offer of your choice (say, 10% off with a show ticket) that they claim on their phone and use at your door.',
         '',
-        p.near_venue
+        p.near_venue && p.near_venue.toLowerCase() !== p.city.toLowerCase()
           ? `${p.distance_label ? `You're ${p.distance_label}, so you'd` : 'You would'} be shown on every show there and at the venues around it. We only take three Featured partners around each venue, and we'd genuinely love ${b} to be one of them. Introductory rates start at £29.95 a month.`
           : `We only take three Featured partners around each venue in ${p.city}, and we'd genuinely love ${b} to be one of them. Introductory rates start at £29.95 a month.`,
         '',
@@ -126,7 +126,7 @@ export function buildOutreachEmail(p: Prospect, kind: 'first' | 'follow_up'): { 
     : [
         hi,
         '',
-        `Just checking this reached you. We'd still love to have ${b} on our ${p.city} page${p.near_venue ? ` and on the shows at ${p.near_venue}` : ''}. There are only three Featured places around each venue, and here's how yours would look:`,
+        `Just checking this reached you. We'd still love to have ${b} on our ${p.city} page${p.near_venue && p.near_venue.toLowerCase() !== p.city.toLowerCase() ? ` and on the shows at ${p.near_venue}` : ''}. There are only three Featured places around each venue, and here's how yours would look:`,
         '',
         `${button}: ${offerUrl(p)}`,
         '',
