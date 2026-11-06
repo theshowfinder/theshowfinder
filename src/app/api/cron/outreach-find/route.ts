@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { withJobRun } from '@/lib/jobRuns'
 import { CITIES } from '@/lib/cities'
-import { cityOfTheDay, looksLikeChain, looksMultiSite } from '@/lib/outreach'
+import { cityOfTheDay, isVenueName, looksLikeChain, looksMultiSite } from '@/lib/outreach'
 import {
   extractEmails, pickEmail, extractCompanyNumbers, extractCompanyNames, normCompanyName, isEmailableCompany,
   categoryFromOsm, walkLabel, metresBetween, usefulLinks,
@@ -23,7 +23,7 @@ const CONCURRENCY = 6
 const UA = 'TheShowFinderBot/1.0 (+https://www.theshowfinder.com/advertise; partners@theshowfinder.com)'
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 
-interface Candidate { key: string; name: string; tags: Record<string, string>; lat: number; lng: number; website: string; venue: string; metres: number }
+interface Candidate { key: string; name: string; tags: Record<string, string>; lat: number; lng: number; website: string; venue: string; metres: number; chain: boolean }
 
 async function fetchText(url: string, ms = 8000): Promise<string | null> {
   try {
@@ -128,7 +128,7 @@ async function handleGet(request: Request) {
   if (!anchors.length) return NextResponse.json({ success: true, city, note: 'no venues with map positions', reverified })
 
   const q = `[out:json][timeout:30];(${anchors.map(a =>
-    `nwr(around:600,${a.lat},${a.lng})[amenity~"^(bar|pub|restaurant|cafe)$"][!brand][~"^(website|contact:website)$"~"."];nwr(around:800,${a.lat},${a.lng})[tourism~"^(hotel|guest_house)$"][!brand][~"^(website|contact:website)$"~"."];`).join('')});out center tags 400;`
+    `nwr(around:600,${a.lat},${a.lng})[amenity~"^(bar|pub|restaurant|cafe)$"][~"^(website|contact:website)$"~"."];nwr(around:800,${a.lat},${a.lng})[tourism~"^(hotel|guest_house)$"][~"^(website|contact:website)$"~"."];`).join('')});out center tags 400;`
   const elements = await overpass(q)
   // Only count the city as looked at when the map search actually answered; otherwise the next run tries again.
   if (!elements.length) return NextResponse.json({ success: false, city, note: 'map search (Overpass) returned nothing: will retry next run', reverified }, { status: 503 })
@@ -150,17 +150,18 @@ async function handleGet(request: Request) {
     const lat = el.lat ?? el.center?.lat, lng = el.lon ?? el.center?.lon
     let website = (tags.website ?? tags['contact:website'] ?? '').trim()
     if (!tags.name || !website || lat == null || seenKeys.has(key)) continue
-    // Chains (OpenStreetMap tags them with a brand: Nando's, BrewDog, Hilton…) never buy a local listing.
-    if (tags.brand || tags['brand:wikidata'] || tags.operator && /hilton|marriott|premier inn|travelodge|ibis|holiday inn|novotel|mercure|nando|brewdog|wetherspoon|las iguanas|greene king|mitchells|stonegate|all bar one|slug and lettuce|revolution|pizza express|zizzi|ask italian|wagamama/i.test(tags.operator)) continue
+    if (isVenueName(tags.name)) continue   // the venue itself or its own bar
     if (!/^https?:\/\//i.test(website)) website = `https://${website}`
     const h = host(website)
-    if (looksLikeChain({ name: tags.name, website })) continue
-    if (!h || seenHosts.has(h) || /facebook|instagram|google|tripadvisor|booking\.com|opentable|wetherspoon|nandos|brewdog|hilton|marriott|premierinn|travelodge|ihg|accor|lasiguanas|greeneking|stonegate|allbarone|pizzaexpress|zizzi|wagamama|atgtickets|ambassadortheatre/.test(h)) continue
+    if (!h || seenHosts.has(h) || /facebook|instagram|google|tripadvisor|booking\.com|opentable|atgtickets|ambassadortheatre/.test(h)) continue
+    // Chains (OpenStreetMap brand tag, or a known chain name/site) are kept but looked at after the independents.
+    const chain = Boolean(tags.brand || tags['brand:wikidata']) || looksLikeChain({ name: tags.name, website })
     const nearest = anchors.map(a => ({ a, d: metresBetween({ lat, lng }, a) })).sort((x, y) => x.d - y.d)[0]
-    candidates.push({ key, name: tags.name, tags, lat, lng, website, venue: nearest.a.name, metres: nearest.d })
+    candidates.push({ key, name: tags.name, tags, lat, lng, website, venue: nearest.a.name, metres: nearest.d, chain })
     seenHosts.add(h)
   }
-  candidates.sort((a, b) => a.metres - b.metres)
+  // Small independents first, then chains; nearest first within each.
+  candidates.sort((a, b) => Number(a.chain) - Number(b.chain) || a.metres - b.metres)
   const batch = candidates.slice(0, PER_RUN)
 
   // 3. Read each website and decide.
@@ -180,9 +181,8 @@ async function handleGet(request: Request) {
     if (!home && !email) result = 'fetch_failed'
     else if (!email) result = 'no_email'
     else if (seenEmails.has(email)) result = 'duplicate'
-    // Small independents only: chains and groups with branches in other cities are skipped.
-    else if (looksLikeChain({ name: c.name, website: c.website, email }) || looksMultiSite(textOf(home ?? ''), city)) result = 'chain'
     else {
+      const group = c.chain || looksLikeChain({ name: c.name, website: c.website, email }) || looksMultiSite(textOf(home ?? ''), city)
       const numbers = extractCompanyNumbers(text), names = extractCompanyNames(text)
       const ok = hasKey ? await verifyCompany(numbers, names, text) : null
       // Until the Companies House key is added, the business's own website stating a limited company AND a company
@@ -195,11 +195,11 @@ async function handleGet(request: Request) {
         business_name: c.name, category: categoryFromOsm(c.tags), city, email, website: c.website, address,
         near_venue: c.venue, distance_label: walkLabel(c.metres, c.venue), osm_key: c.key,
         company_type: ok || siteStated ? 'ltd' : 'unconfirmed', status: result, company_number: ok?.number ?? numbers[0] ?? null,
-        notes: ok
+        notes: (group ? '[chain/group] ' : '') + (ok
           ? `Companies House: ${ok.name} (${ok.number}), found on their own website`
           : siteStated
           ? `Their website states ${names[0]}, company no. ${numbers[0]} (not checked with Companies House)`
-          : `${hasKey ? '[not confirmed]' : '[unverified]'} Found automatically, company not confirmed. numbers: ${numbers.join(', ') || 'none'} | names: ${names.join('; ') || 'none'}`,
+          : `${hasKey ? '[not confirmed]' : '[unverified]'} Found automatically, company not confirmed. numbers: ${numbers.join(', ') || 'none'} | names: ${names.join('; ') || 'none'}`),
       }
       seenEmails.add(email)
     }

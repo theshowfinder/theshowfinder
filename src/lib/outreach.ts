@@ -61,10 +61,14 @@ export function cityOfTheDay(cityNames: string[], now: Date = new Date()): strin
   return order[weekdays % order.length]
 }
 
-// ── Who we email: small independents (6 Nov 2026) ─────────────────────────────────────────────────────────────────
-// Chains and groups never buy a local listing and drag the reply rate down. A business is skipped when its name,
-// website or email belongs to a known chain/group, or its own site lists branches in several other cities.
-const CHAIN_NAME = /\b(nando'?s|brewdog|wetherspoon|las iguanas|hilton|marriott|premier inn|travelodge|ibis|holiday inn|novotel|mercure|radisson|crowne plaza|doubletree|hampton by|moxy|motel one|hotel indigo|malmaison|hotel du vin|all bar one|slug ?(and|&) ?lettuce|revolution|pizza express|zizzi|ask italian|wagamama|prezzo|bella italia|frankie (and|&) benny|harvester|toby carvery|miller (and|&) carter|cosy club|turtle bay|tgi|five guys|honest burgers|byron|gbk|gourmet burger|pret|costa|starbucks|caffe nero|greggs|mcdonald|burger king|kfc|subway|pizza hut|domino|yo! ?sushi|itsu|wasabi|tortilla|chiquito|the ivy|gaucho|hawksmoor|dishoom|six by nico|dirty martini|be at one|walkabout|o'neill'?s|yates|lloyds bar|be at one|mitchells|greene king|stonegate|nicholson'?s|young'?s|fuller'?s|brewhouse (and|&) kitchen|theatre royal|playhouse|academy|arena)\b/i
+// ── Who we email (6 Nov 2026) ────────────────────────────────────────────────────────────────────────────────────
+// Everyone near a busy venue, but small independents go first: they decide locally and benefit most. A business counts
+// as a chain/group when its name, website or email belongs to a known chain, or its own site lists branches in several
+// other cities; chains are still emailed, after the independents. The venues themselves are never emailed.
+const CHAIN_NAME = /\b(nando'?s|brewdog|wetherspoon|las iguanas|hilton|marriott|premier inn|travelodge|ibis|holiday inn|novotel|mercure|radisson|crowne plaza|doubletree|hampton by|moxy|motel one|hotel indigo|malmaison|hotel du vin|all bar one|slug ?(and|&) ?lettuce|revolution|pizza express|zizzi|ask italian|wagamama|prezzo|bella italia|frankie (and|&) benny|harvester|toby carvery|miller (and|&) carter|cosy club|turtle bay|tgi|five guys|honest burgers|byron|gbk|gourmet burger|pret|costa|starbucks|caffe nero|greggs|mcdonald|burger king|kfc|subway|pizza hut|domino|yo! ?sushi|itsu|wasabi|tortilla|chiquito|the ivy|gaucho|hawksmoor|dishoom|six by nico|dirty martini|be at one|walkabout|o'neill'?s|yates|lloyds bar|mitchells|greene king|stonegate|nicholson'?s|young'?s|fuller'?s|brewhouse (and|&) kitchen)\b/i
+const VENUE_NAME = /\b(theatre royal|playhouse|o2 academy|academy [1-3]|arena|apollo|empire theatre|concert hall|philharmonic hall|town hall|city hall)\b/i
+/** The venue itself (or its own bar): never emailed. */
+export const isVenueName = (name: string | null | undefined) => !!name && VENUE_NAME.test(name)
 const CHAIN_HOST = /(nandos|brewdog|jdwetherspoon|wetherspoon|iguanas|hilton|marriott|premierinn|travelodge|ihg|accor|all\.accor|radisson|malmaison|hotelduvin|allbarone|slugandlettuce|revolution-bars|revolutionbars|pizzaexpress|zizzi|askitalian|wagamama|prezzo|bellaitalia|harvester|tobycarvery|browns-restaurants|cosyclub|turtlebay|fiveguys|honestburgers|dishoom|sixbynico|greeneking|stonegate|mbplc|nicholsonspubs|youngs\.co|fullers|atgtickets|ambassadortheatre|livenation|academymusicgroup)/i
 const UK_CITIES = ['london', 'manchester', 'birmingham', 'leeds', 'liverpool', 'glasgow', 'edinburgh', 'bristol', 'cardiff', 'newcastle', 'sheffield', 'nottingham', 'leicester', 'brighton', 'southampton', 'york', 'belfast', 'aberdeen', 'oxford', 'cambridge', 'bath', 'norwich', 'exeter', 'plymouth', 'derby', 'coventry']
 

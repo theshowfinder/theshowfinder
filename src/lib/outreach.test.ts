@@ -57,9 +57,12 @@ test('one city a weekday: Manchester, London, Birmingham…, weekends look ahead
   assert.equal(cityOfTheDay(cities, new Date('2026-11-11T10:00:00Z')), 'Manchester') // starts over
 })
 
-test('small independents only: chains, groups and the venues themselves are skipped', async () => {
+test('chains and groups are recognised (emailed after independents); venues themselves are not emailed', async () => {
   const { looksLikeChain, looksMultiSite } = await import('./outreach.ts')
-  for (const name of ["Nando's", 'BrewDog Lothian Road', 'Hilton Garden Inn Glasgow City Centre', 'Six by Nico', 'Las Iguanas', 'Theatre Royal']) assert.equal(looksLikeChain({ name }), true, name)
+  for (const name of ["Nando's", 'BrewDog Lothian Road', 'Hilton Garden Inn Glasgow City Centre', 'Six by Nico', 'Las Iguanas']) assert.equal(looksLikeChain({ name }), true, name)
+  const { isVenueName } = await import('./outreach.ts')
+  assert.equal(isVenueName('Theatre Royal'), true)
+  assert.equal(isVenueName('Arts Bar Hope Street'), false)
   assert.equal(looksLikeChain({ name: 'Bar 1', email: 'events@slugandlettuce.co.uk' }), true)
   for (const name of ['The Blue Door', 'Ma Egertons', 'The 78', 'Kelvingrove Café', 'Porter & Rye']) assert.equal(looksLikeChain({ name, website: 'https://example.co.uk' }), false, name)
   assert.equal(looksMultiSite('Our venues: Leeds, York, Bath, Bristol and Cardiff', 'Manchester'), true)

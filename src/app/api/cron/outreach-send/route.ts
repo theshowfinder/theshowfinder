@@ -16,8 +16,10 @@ const PER_RUN = 5   // 9 weekday runs x 5 = up to 45 a day, spread out
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 const COLS = 'id, business_name, category, city, near_venue, distance_label, contact_name, email, company_type, status, ref_code, unsubscribe_token'
 
-/** Today's city first (see cityOfTheDay), then anything left from earlier cities, taking turns. */
-function firstsInOrder(rows: Prospect[], n: number): Prospect[] {
+/** Today's city first (see cityOfTheDay), then anything left from earlier cities, taking turns. Independents before chains. */
+function firstsInOrder(all: Prospect[], n: number): Prospect[] {
+  const isChain = (r: Prospect) => looksLikeChain({ name: r.business_name, email: r.email })
+  const rows = [...all.filter(r => !isChain(r)), ...all.filter(isChain)]
   const today = cityOfTheDay(CITIES.map(c => c.name))
   const mine = rows.filter(r => r.city === today)
   return [...mine, ...takeAcrossCities(rows.filter(r => r.city !== today), n)].slice(0, n)
@@ -58,8 +60,6 @@ async function handleGet(request: Request) {
     // Safety stop: several failures in one run (rejected addresses, a sending problem) and the rest wait for a person.
     if (failed.length >= 3) break
     if (!canEmail(p)) continue
-    // Queued before the small-independents rule (6 Nov 2026): chains are never emailed.
-    if (kind === 'first' && looksLikeChain({ name: p.business_name, email: p.email })) continue
     budget--
     if (dry) { sent.push(`${kind}: ${p.business_name} <${p.email}>`); continue }
     const r = await sendOutreachEmail(p, kind)
