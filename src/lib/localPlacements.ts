@@ -57,3 +57,78 @@ export function safeWebsite(url: string | null): string | null {
     return u.protocol === 'https:' || u.protocol === 'http:' ? u.toString() : null
   } catch { return null }
 }
+
+// ── Areas (6 Nov 2026) ────────────────────────────────────────────────────────────────────────────────────────────
+// Big cities (London, Glasgow, Manchester…) are too spread out for one city-wide list: a Camden bar is no use to
+// someone going to The O2. A partner's "area" is everything within walking distance of them (AREA_RADIUS_M, about a
+// mile). Show pages show the nearest Featured partners within that distance; sign-up allows at most three Featured
+// (and six Standard) partners within the same distance of each other. Partners without a map position (no postcode)
+// are treated as city-wide and only fill spare slots.
+export const AREA_RADIUS_M = 1600
+export const FEATURED_PER_AREA = 3
+export const STANDARD_PER_AREA = 6
+
+interface Point { lat: number | null; lng: number | null }
+const hasPoint = (p: Point): p is { lat: number; lng: number } => typeof p.lat === 'number' && typeof p.lng === 'number'
+
+/** Straight-line distance in metres (haversine). */
+export function metresApart(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6_371_000, rad = Math.PI / 180
+  const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+/**
+ * The Featured partners for one show page: the nearest ones within walking distance of the venue (closest first),
+ * then city-wide partners (no map position) in the spare slots. A venue with no map position only gets city-wide
+ * partners, or, in a city with no more than three Featured partners in total, all of them.
+ */
+export function pickNearbyForPage(featured: readonly Placement[], venue: Point, pageKey: string, max = PER_PAGE): Placement[] {
+  const cityWide = featured.filter(p => !hasPoint(p))
+  if (!hasPoint(venue)) {
+    return featured.length <= max ? pickForPage(featured, pageKey, max) : pickForPage(cityWide, pageKey, max)
+  }
+  const nearby = featured
+    .filter(p => hasPoint(p))
+    .map(p => ({ p, d: metresApart(venue, { lat: p.lat as number, lng: p.lng as number }) }))
+    .filter(x => x.d <= AREA_RADIUS_M)
+    .sort((a, b) => a.d - b.d || a.p.id.localeCompare(b.p.id))
+    .map(x => x.p)
+    .slice(0, max)
+  return [...nearby, ...pickForPage(cityWide, pageKey, max - nearby.length)].slice(0, max)
+}
+
+/** How many of `others` sit within walking distance of `point` (the sign-up cap check). */
+export function countWithinArea(point: { lat: number; lng: number }, others: readonly Point[]): number {
+  return others.filter(o => hasPoint(o) && metresApart(point, o) <= AREA_RADIUS_M).length
+}
+
+export interface AreaVenue { name: string; lat: number | null; lng: number | null }
+
+/**
+ * The area heading for a partner on the city page: "Near <venue>" for the first (biggest) venue in `venues` within
+ * walking distance, else "Around <city>". `venues` should be ordered biggest first.
+ */
+export function areaLabel(point: Point, venues: readonly AreaVenue[], city: string): string {
+  if (hasPoint(point)) {
+    const near = venues.find(v => hasPoint(v) && metresApart(point, v) <= AREA_RADIUS_M)
+    if (near) return `Near ${near.name}`
+  }
+  return `Around ${city}`
+}
+
+/** Groups partners by area heading, keeping the order they came in; "Around <city>" goes last. */
+export function groupByArea<T extends Point>(items: readonly T[], venues: readonly AreaVenue[], city: string): { label: string; items: T[] }[] {
+  const groups = new Map<string, T[]>()
+  for (const item of items) {
+    const label = areaLabel(item, venues, city)
+    const list = groups.get(label) ?? []
+    list.push(item)
+    groups.set(label, list)
+  }
+  const fallback = `Around ${city}`
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a === fallback ? 1 : 0) - (b === fallback ? 1 : 0))
+    .map(([label, list]) => ({ label, items: list }))
+}

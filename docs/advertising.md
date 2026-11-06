@@ -9,17 +9,20 @@
   2. A reason to choose you: an offer ("10% off food with your show ticket") that visitors claim as a one-off QR voucher on their phone, valid on the day of their show.
   3. Easy for them, and we promote them: staff scan the QR with any phone and enter the venue's PIN; each voucher works once. We feature partners on our social channels and check in every month. No app or equipment needed.
 - While we're growing (Chris, 29 Oct 2026): we don't promise reports or numbers publicly. We track every click and voucher; Chris sends an advertiser their report only when the numbers are good. Monthly contact with every advertiser, plus social media posts for them.
-- Why Featured over Standard: Standard is the city page's local guide only. Featured is on every show page in the city (live count on /advertise?city=X, e.g. "all 659 upcoming show pages in Leeds") and the top of the guide. Only 3 Featured places per city.
+- Why Featured over Standard: Standard is the city page's local guide only. Featured is on every show page within walking distance (src/lib/localPlacements.ts AREA_RADIUS_M = 1,600 m, about a mile) and the top of its area in the guide. Only 3 Featured places per area (6 Standard).
 - Our strengths (true, check the live counts before quoting): concerts, theatre, comedy, sport, family and local what's on across 40 UK cities, tens of thousands of upcoming shows and thousands of venues, updated every day from Ticketmaster, See Tickets, Gigsberg and the city tourism sites.
 - Be straight about what we can't count: people who walk in without a voucher. Suggest staff ask "did you find us on TheShowFinder?".
 - Spaces are limited per city. The aim is about two paying businesses per city (about 80 across 40 cities).
+
+## Areas (6 Nov 2026)
+- Big cities are split by walking distance, not by city: show pages show the nearest Featured partners within 1,600 m of the venue; sign-up refuses a 4th Featured (7th Standard) within 1,600 m of the applicant's postcode (api/advertise/applications). Featured requires a postcode. City pages group partners under "Near <biggest venue within 1,600 m>" headings, "Around <city>" last; one area = no headings.
 
 ## Term (6 Nov 2026)
 - Every package is a 12-month subscription: 12 monthly payments or paid upfront. Renews for a further 12 months unless cancelled at least 30 days before the end of the term. Early cancellation on monthly: remaining payments for the term are still due. Shown on /advertise, the sign-up form (required checkbox), Stripe checkout (custom text + metadata term/term_agreed_at), the welcome email and /terms#advertising (section 12).
 
 ## Packages (prices: Stripe price IDs in Vercel env; shown in src/app/advertise/page.tsx, src/components/AdvertiserOnboardingForm.tsx, src/lib/advertisingPackages.ts)
-- Standard listing: £29.95/month or £299.95/year. Local guide on the city page, offer + voucher, booking button, monthly check-in, a social mention. Max 6 per city.
-- Featured placement: £44.95/month or £449.95/year. Everything in Standard, plus the "Make a night of it" box on every show page in the city (src/components/BeforeTheShow.tsx, up to 3 per page, rotating fairly), top of the city guide with logo, walking distance. Max 3 per city.
+- Standard listing: £29.95/month or £299.95/year. Local guide on the city page, offer + voucher, booking button, monthly check-in, a social mention. Max 6 per area.
+- Featured placement: £44.95/month or £449.95/year. Everything in Standard, plus the "Make a night of it" box on every show page within walking distance (src/components/BeforeTheShow.tsx, nearest 3 within 1,600 m; partners without a postcode fill spare slots city-wide), top of the city guide with logo, walking distance. Max 3 per area.
 
 ## How it runs
 - Sign-up and payment: /advertise -> /advertise/onboard (ChatGPT's flow): city, package, billing, business details, postcode, booking link, offer, logo -> Stripe Checkout (subscription). Saved in advertiser_applications. The Stripe webhook (/api/stripe/webhook) marks it paid and emails a confirmation. /advertise/join redirects to the onboarding.

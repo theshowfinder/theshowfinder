@@ -48,7 +48,7 @@ import { buildEventFaq, cleanBoxOffice, cleanVenueNote, type EventDetails, type 
 import ShowDatesList from '@/components/ShowDatesList'
 import BeforeTheShow from '@/components/BeforeTheShow'
 import { monetisedOwnLink } from '@/lib/ownLinkAffiliate'
-import { PLACEMENT_COLUMNS, pickForPage, type Placement } from '@/lib/localPlacements'
+import { PLACEMENT_COLUMNS, pickNearbyForPage, type Placement } from '@/lib/localPlacements'
 import type { ShowDate } from '@/lib/showDates'
 import { toArtistEventRows, type ArtistEventLink, type ArtistEventRow } from '@/lib/artistEvents'
 import { dropDuplicateEvents } from '@/lib/listedEvents'
@@ -542,13 +542,13 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     event.details?.ticketLimit ? { label: 'Ticket limit', value: event.details.ticketLimit } : null,
   ].filter((f): f is { label: string; value: string } => !!f)
   const { venueEvents, artistEvents } = await getRelatedEvents(event, headliners[0]?.artist?.id ?? null)
-  // Featured local businesses in this city (paid placement; only live listings are readable).
+  // Featured local partners within walking distance of this venue, nearest first (paid placement; only live listings are readable).
   let placements: Placement[] = []
   if (venue?.city && event.status !== 'cancelled' && event.status !== 'postponed') {
     try {
       const { data } = await createPublicClient().from('local_businesses').select(PLACEMENT_COLUMNS)
-        .ilike('city', venue.city).eq('package', 'featured').limit(30) as unknown as { data: Placement[] | null }
-      placements = pickForPage(data ?? [], event.id)
+        .ilike('city', venue.city).eq('package', 'featured').limit(500) as unknown as { data: Placement[] | null }
+      placements = pickNearbyForPage(data ?? [], { lat: venue.lat ?? null, lng: venue.lng ?? null }, event.id)
     } catch (err) {
       console.error('[event] local placements lookup failed', err)
     }

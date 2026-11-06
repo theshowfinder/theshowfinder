@@ -3,6 +3,8 @@ import { CITIES } from '@/lib/cities'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { listingCategory } from '@/lib/advertiserCategory'
 import { tidyOffer, tidyPostcode } from '@/lib/businessOffers'
+import { geocodePostcode } from '@/lib/businessVouchers'
+import { AREA_RADIUS_M, FEATURED_PER_AREA, STANDARD_PER_AREA, countWithinArea } from '@/lib/localPlacements'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -124,6 +126,30 @@ export async function POST(request: Request) {
     if (!priceId) return NextResponse.json({ error: `The selected payment option is not configured yet (${priceEnvKey}).` }, { status: 503 })
 
     const db = createAdminClient()
+
+    // Places are limited per area (everything within walking distance), not per city: at most three Featured and six
+    // Standard partners within AREA_RADIUS_M of each other. Featured needs a postcode to place it on the map.
+    if (packageKey === 'featured' && !postcode) {
+      return NextResponse.json({ error: 'Please add your postcode: Featured partners are shown on the shows within walking distance of you.' }, { status: 400 })
+    }
+    const place = postcode ? await geocodePostcode(postcode) : null
+    if (packageKey === 'featured' && postcode && !place) {
+      return NextResponse.json({ error: 'We could not find that postcode. Please check it and try again.' }, { status: 400 })
+    }
+    if (place) {
+      const { data: nearby } = await db.from('local_businesses').select('lat, lng')
+        .ilike('city', city).eq('package', packageKey).in('status', ['active', 'paused']).limit(1000) as unknown as { data: { lat: number | null; lng: number | null }[] | null }
+      const cap = packageKey === 'featured' ? FEATURED_PER_AREA : STANDARD_PER_AREA
+      if (countWithinArea(place, nearby ?? []) >= cap) {
+        const miles = (AREA_RADIUS_M / 1609.34).toFixed(0)
+        return NextResponse.json({
+          error: packageKey === 'featured'
+            ? `All ${FEATURED_PER_AREA} Featured places within ${miles} mile of you are taken. Standard is still available, or email hello@theshowfinder.com to join the waiting list.`
+            : `All ${STANDARD_PER_AREA} Standard places within ${miles} mile of you are taken. Email hello@theshowfinder.com to join the waiting list.`,
+        }, { status: 409 })
+      }
+    }
+
     const { data: application, error: insertError } = await db
       .from('advertiser_applications')
       .insert({

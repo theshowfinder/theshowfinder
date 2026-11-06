@@ -37,7 +37,7 @@ export default async function AdvertiserApplicationsPage() {
         <Link href="/advertise" className="text-sm font-bold text-rose-600 hover:underline">View sales page →</Link>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-        <p className="mb-6 text-sm text-slate-500">Check each paid application, then press <b>Approve &amp; publish</b>: the business goes live on its city page straight away (Featured also appears in the &ldquo;Before the show&rdquo; box on show pages in that city within a few hours). Pause, cancel or change package afterwards on <a href="/admin/local-businesses" className="text-rose-600 hover:underline">Local businesses</a>. A cancelled Stripe subscription takes the listing down automatically.</p>
+        <p className="mb-6 text-sm text-slate-500">Check each paid application, then press <b>Approve &amp; publish</b>: the business goes live on its city page straight away (Featured also appears in the &ldquo;Before the show&rdquo; box on show pages within walking distance of its postcode within a few hours). Pause, cancel or change package afterwards on <a href="/admin/local-businesses" className="text-rose-600 hover:underline">Local businesses</a>. A cancelled Stripe subscription takes the listing down automatically.</p>
         {applications.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-500">No applications yet.</div>
         ) : (

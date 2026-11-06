@@ -8,7 +8,7 @@ type PackageKey = 'featured' | 'standard'
 type BillingKey = 'monthly' | 'yearly'
 
 const PACKAGES = {
-  featured: { label: 'Featured placement', price: '£44.95 per month · 12-month subscription', detail: 'On every show page in your city, right under the ticket buttons, plus the top of your city page. Includes a QR voucher offer and promotion on our social channels.' },
+  featured: { label: 'Featured placement', price: '£44.95 per month · 12-month subscription', detail: 'On every show page within walking distance of you, right under the ticket buttons, plus the top of your area in the city guide. Includes a QR voucher offer and promotion on our social channels.' },
   standard: { label: 'Standard listing', price: '£29.95 per month · 12-month subscription', detail: 'A listing in the local guide on your city page, with your offer and booking link.' },
 } as const
 
@@ -34,7 +34,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
   const [agreedTerm, setAgreedTerm] = useState(false)
 
   const canContinue = city.length > 0
-  const canSubmit = businessName.trim().length > 1 && contactName.trim().length > 1 && email.includes('@')
+  const canSubmit = businessName.trim().length > 1 && contactName.trim().length > 1 && email.includes('@') && (packageKey !== 'featured' || postcode.trim().length >= 5)
 
   async function submitApplication() {
     if (!canSubmit || submitting) return
@@ -100,7 +100,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
         {step === 1 && (
           <div>
             <h2 className="text-2xl font-extrabold text-slate-900">Choose your city and placement</h2>
-            <p className="mt-2 text-sm text-slate-500">Each city has nine advertising spaces: three featured and six standard.</p>
+            <p className="mt-2 text-sm text-slate-500">Spaces are limited around each venue: three Featured and six Standard within walking distance of each other.</p>
             <label className="mt-7 block text-sm font-bold text-slate-700">City
               <select value={city} onChange={event => setCity(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3">
                 <option value="">Select a city</option>
@@ -138,7 +138,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
               <label className="text-sm font-bold text-slate-700">Email address<input type="email" value={email} onChange={event => setEmail(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="you@business.com" /></label>
               <label className="text-sm font-bold text-slate-700">Phone number<input value={phone} onChange={event => setPhone(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Optional" /></label>
               <label className="text-sm font-bold text-slate-700">Website<input value={website} onChange={event => setWebsite(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="https://..." /></label>
-              <label className="text-sm font-bold text-slate-700">Postcode<input value={postcode} onChange={event => setPostcode(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="DE1 2AB" /><span className="mt-1 block text-xs font-normal text-slate-400">Shows visitors how far you are from their venue (&ldquo;4 min walk&rdquo;).</span></label>
+              <label className="text-sm font-bold text-slate-700">Postcode<input value={postcode} onChange={event => setPostcode(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="DE1 2AB" /><span className="mt-1 block text-xs font-normal text-slate-400">{packageKey === 'featured' ? 'Required for Featured: you appear on every show within walking distance of this postcode, with “4 min walk from the venue”.' : 'Shows visitors how far you are from their venue (“4 min walk”).'}</span></label>
               <label className="text-sm font-bold text-slate-700">Booking link<input value={bookingUrl} onChange={event => setBookingUrl(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Optional: OpenTable, ResDiary, your booking page" /></label>
               <div className="sm:col-span-2">
                 <label className="text-sm font-bold text-slate-700">Your offer for show-goers<input value={offer} maxLength={90} onChange={event => setOffer(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="e.g. 10% off food with your show ticket" /></label>

@@ -205,13 +205,13 @@ export default async function CityPage({
     // Venues in this city sorted by capacity
     supabase
       .from('venues')
-      .select('id, name, slug, capacity, address, image_url')
+      .select('id, name, slug, capacity, address, image_url, lat, lng')
       .ilike('city', cityName)
       .order('capacity', { ascending: false, nullsFirst: false })
-      .limit(20) as unknown as Promise<{ data: { id: string; name: string; slug: string; capacity: number | null; address: string; image_url: string | null }[] | null }>,
+      .limit(20) as unknown as Promise<{ data: { id: string; name: string; slug: string; capacity: number | null; address: string; image_url: string | null; lat: number | null; lng: number | null }[] | null }>,
 
-    // Local advertising placements for this city — Featured first. The
-    // presentation layer enforces the commercial cap of 3 Featured + 6 Standard.
+    // Local advertising placements for this city — Featured first, grouped by area (nearest big venue);
+    // at most 3 Featured + 6 Standard per area (src/lib/localBusinessPlacements.ts).
     supabase
       .from('local_businesses')
       .select('*')
@@ -787,7 +787,7 @@ export default async function CityPage({
         )}
 
         {/* ── LOCAL ADVERTISING (hidden until placements are added) ── */}
-        <div className="order-10"><LocalBusinessAds cityName={cityName} businesses={localBusinesses} /></div>
+        <div className="order-10"><LocalBusinessAds cityName={cityName} businesses={localBusinesses} venues={(venuesResult.data ?? []).map(v => ({ name: v.name, lat: v.lat, lng: v.lng }))} /></div>
 
       </div>
     </div>

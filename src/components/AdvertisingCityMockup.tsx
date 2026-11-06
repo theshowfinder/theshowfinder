@@ -180,14 +180,14 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester', heroIma
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {businesses.filter(business => !business.featured).map(business => <BusinessCard key={business.name} business={business} />)}
           </div>
-          <p className="mt-4 text-xs text-slate-400">Featured partners appear first. Placements are limited to nine businesses per city.</p>
+          <p className="mt-4 text-xs text-slate-400">Featured partners appear first. Each area has at most three Featured and six Standard partners.</p>
         </section>
 
         <section id="packages" className="scroll-mt-16 rounded-3xl bg-slate-950 p-7 text-white sm:p-10">
           <div className="max-w-3xl">
             <p className="text-xs font-extrabold uppercase tracking-widest text-rose-300">For local businesses</p>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">Put your business in front of people planning a night out.</h2>
-            <p className="mt-4 text-base leading-relaxed text-white/70">Choose a standard listing or one of the three featured placements in your city. The layout stays limited, clear and easy to understand.</p>
+            <p className="mt-4 text-base leading-relaxed text-white/70">Choose a standard listing or one of the three featured placements around your nearest venue. The layout stays limited, clear and easy to understand.</p>
             <div className="mt-7 grid gap-4 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/15 bg-white/10 p-5">
               <p className="text-xs font-extrabold uppercase tracking-widest text-rose-300">Featured placement</p>

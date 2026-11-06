@@ -1,8 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { CITIES } from '@/lib/cities'
-import { createPublicClient } from '@/lib/supabase/public'
-import { listedEventsCount } from '@/lib/listedEvents'
 import { gbp, yearlySaving } from '@/lib/advertisingPackages'
 
 export const metadata: Metadata = {
@@ -16,7 +14,7 @@ const standardBenefits = [
   'Business name, category, description and website link',
   'Your offer as a QR voucher, plus a "Book a table" button',
   'A monthly check-in from us, and a mention on our social channels',
-  'Maximum six Standard placements per city',
+  'Maximum six Standard places in each area',
 ]
 
 const featuredBenefits = (showPages: string) => [
@@ -25,7 +23,7 @@ const featuredBenefits = (showPages: string) => [
   '"4 min walk from the venue" shown on every show page, so you\'re the obvious choice',
   'Your offer as a QR voucher, plus a "Book a table" button',
   'Regular promotion on our social channels, and a monthly check-in from us',
-  'Only three Featured places per city',
+  'Only three Featured places around each venue',
 ]
 
 function PackageCard({ name, monthly, annual, saving, benefits, featured = false, href }: {
@@ -67,14 +65,9 @@ function PackageCard({ name, monthly, annual, saving, benefits, featured = false
 export default async function AdvertisePage({ searchParams }: { searchParams: Promise<{ city?: string; ref?: string }> }) {
   const params = await searchParams
   const city = CITIES.find(item => item.name.toLowerCase() === params.city?.trim().toLowerCase())?.name
-  // Live count of upcoming show pages in the chosen city: the Featured box appears on every one of them.
-  let showPages = 'every show page in your city'
-  if (city) {
-    try {
-      const { count } = await listedEventsCount(createPublicClient(), { city })
-      if (count) showPages = `all ${count.toLocaleString('en-GB')} upcoming show pages in ${city}`
-    } catch { /* keep the general wording */ }
-  }
+  // The Featured box appears on the show pages within walking distance of the partner (src/lib/localPlacements.ts,
+  // AREA_RADIUS_M), not every page in the city, so no city-wide count here.
+  const showPages = city ? `every show page within walking distance of you in ${city}` : 'every show page within walking distance of you'
   // Outreach link code (/p/<ref>): carried through to sign-up so the form is pre-filled.
   const ref = /^[a-f0-9]{6,20}$/.test(params.ref ?? '') ? params.ref! : null
   const onboardingUrl = (packageKey: 'standard' | 'featured') => `/advertise/onboard?${new URLSearchParams({ ...(city ? { city } : {}), package: packageKey, ...(ref ? { ref } : {}) }).toString()}`
@@ -88,9 +81,9 @@ export default async function AdvertisePage({ searchParams }: { searchParams: Pr
             People use TheShowFinder to choose a show and plan the night around it. Be the place they eat, drink or stay, with an offer they can claim on their phone and use at your door.
           </p>
           <div className="mt-9 inline-flex flex-wrap items-center gap-x-8 gap-y-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-sm font-bold text-slate-200">
-            <span><strong className="text-white">9</strong> businesses maximum per city</span>
-            <span><strong className="text-white">3</strong> Featured positions</span>
-            <span><strong className="text-white">6</strong> Standard positions</span>
+            <span><strong className="text-white">9</strong> businesses maximum in each area</span>
+            <span><strong className="text-white">3</strong> Featured places around each venue</span>
+            <span><strong className="text-white">6</strong> Standard places</span>
           </div>
         </div>
       </section>
@@ -118,7 +111,7 @@ export default async function AdvertisePage({ searchParams }: { searchParams: Pr
           <p className="mb-2 text-xs font-extrabold uppercase tracking-widest text-rose-600">Simple city pricing</p>
           <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Choose your position</h2>
           <p className="mt-4 leading-relaxed text-slate-600">
-            Standard puts you in your city&apos;s local guide. Featured puts you on every show page in your city as well, and there are only three Featured places per city.
+            Standard puts you in your city&apos;s local guide. Featured also puts you on every show page within walking distance of you (about a mile), right under the ticket buttons, and there are only three Featured places around each venue.
           </p>
         </div>
 

@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { LocalBusiness } from '@/lib/types/database'
 import { selectLocalBusinessPlacements } from '@/lib/localBusinessPlacements'
-import { safeWebsite } from '@/lib/localPlacements'
+import { safeWebsite, type AreaVenue } from '@/lib/localPlacements'
 
 const CATEGORY_DETAILS: Record<LocalBusiness['category'], { icon: string; label: string }> = {
   restaurant: { icon: '🍽️', label: 'Restaurant' },
@@ -48,9 +48,11 @@ function BusinessCard({ business, featured }: { business: LocalBusiness; feature
   return content
 }
 
-export default function LocalBusinessAds({ cityName, businesses }: { cityName: string; businesses: LocalBusiness[] }) {
-  const { featured, standard } = selectLocalBusinessPlacements(businesses)
-  if (featured.length === 0 && standard.length === 0) return null
+export default function LocalBusinessAds({ cityName, businesses, venues = [] }: { cityName: string; businesses: LocalBusiness[]; venues?: AreaVenue[] }) {
+  const { groups } = selectLocalBusinessPlacements(businesses, venues, cityName)
+  if (groups.length === 0) return null
+  // One area (small cities, or everyone near the same venue): the plain layout with no area headings.
+  const showHeadings = groups.length > 1
 
   return (
     <section aria-labelledby="local-partners-heading">
@@ -65,17 +67,22 @@ export default function LocalBusinessAds({ cityName, businesses }: { cityName: s
         </Link>
       </div>
 
-      {featured.length > 0 && (
-        <div className="mb-5 grid grid-cols-1 gap-5 md:grid-cols-3">
-          {featured.map(business => <BusinessCard key={business.id} business={business} featured />)}
+      {groups.map(group => (
+        <div key={group.label} className={showHeadings ? 'mb-10' : ''}>
+          {showHeadings && <h3 className="mb-4 text-lg font-extrabold text-slate-900">{group.label}</h3>}
+          {group.featured.length > 0 && (
+            <div className="mb-5 grid grid-cols-1 gap-5 md:grid-cols-3">
+              {group.featured.map(business => <BusinessCard key={business.id} business={business} featured />)}
+            </div>
+          )}
+          {group.standard.length > 0 && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {group.standard.map(business => <BusinessCard key={business.id} business={business} featured={false} />)}
+            </div>
+          )}
         </div>
-      )}
-      {standard.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {standard.map(business => <BusinessCard key={business.id} business={business} featured={false} />)}
-        </div>
-      )}
-      <p className="mt-4 text-xs text-slate-400">Featured partners appear first. Placements are limited to nine businesses per city.</p>
+      ))}
+      <p className="mt-4 text-xs text-slate-400">Featured partners appear first. Each area has at most three Featured and six Standard partners.</p>
     </section>
   )
 }
