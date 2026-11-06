@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import type { SocialPack } from '@/lib/types/database'
+import DownloadImageLink from '@/components/admin/DownloadImageLink'
 
 interface Props { packs: SocialPack[] }
 
@@ -34,12 +35,12 @@ export default function SocialBatchExport({ packs }: Props) {
               <div className="min-w-0 flex-1">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={imageUrl(pack, 'square')} alt={`${pack.city_name ?? 'National'} square graphic`} className="aspect-square w-full rounded-xl border border-slate-200 object-cover" />
-                <a href={imageUrl(pack, 'square')} download={`social-${pack.id}-square.png`} className="mt-2 block text-center text-xs font-bold text-blue-600 hover:underline">Download square</a>
+                <DownloadImageLink href={imageUrl(pack, 'square')} filename={`social-${pack.id}-square.png`} className="mt-2 block text-center text-xs font-bold text-blue-600 hover:underline">Download square</DownloadImageLink>
               </div>
               <div className="w-28 shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={imageUrl(pack, 'vertical')} alt={`${pack.city_name ?? 'National'} vertical graphic`} className="aspect-[9/16] w-full rounded-xl border border-slate-200 object-cover" />
-                <a href={imageUrl(pack, 'vertical')} download={`social-${pack.id}-vertical.png`} className="mt-2 block text-center text-xs font-bold text-blue-600 hover:underline">Download vertical</a>
+                <DownloadImageLink href={imageUrl(pack, 'vertical')} filename={`social-${pack.id}-vertical.png`} className="mt-2 block text-center text-xs font-bold text-blue-600 hover:underline">Download vertical</DownloadImageLink>
               </div>
             </div>
             <div className="space-y-2"><div className="flex items-center justify-between gap-3"><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Facebook + Instagram caption</p><button type="button" onClick={() => copy(pack.id, pack.facebook_text)} className="text-xs font-bold text-blue-600 hover:underline">{copied === pack.id ? 'Copied!' : 'Copy'}</button></div><textarea readOnly value={pack.facebook_text} rows={6} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700" /></div>

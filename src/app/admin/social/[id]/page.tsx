@@ -22,6 +22,7 @@ import {
   type SocialImageKind,
 } from '@/lib/socialPack'
 import type { SocialPack, SocialPackStatus } from '@/lib/types/database'
+import DownloadImageLink from '@/components/admin/DownloadImageLink'
 
 const IMAGE_KIND_OPTIONS: SocialImageKind[] = ['tour_announcement', 'onsale', 'presale', 'city_event', 'tonight']
 
@@ -182,25 +183,19 @@ export default async function SocialPackDetailPage({ params, searchParams }: Pag
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Square (Instagram)</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/admin/social/${pack.id}/image?format=square&v=${imageVersion}`} alt="Square social graphic" className="w-56 h-56 rounded-xl border border-slate-200 object-cover" />
-              <a href={`/admin/social/${pack.id}/image?format=square&v=${imageVersion}`} download={`social-${pack.id}-square.png`} className="block text-xs font-semibold text-blue-600 hover:underline">
-                Download square
-              </a>
+              <DownloadImageLink href={`/admin/social/${pack.id}/image?format=square&v=${imageVersion}`} filename={`social-${pack.id}-square.png`} className="block text-xs font-semibold text-blue-600 hover:underline">Download square</DownloadImageLink>
             </div>
             <div className="space-y-2">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Square (Facebook)</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/admin/social/${pack.id}/image?format=square&platform=facebook&v=${imageVersion}`} alt="Facebook social graphic" className="w-56 h-56 rounded-xl border border-slate-200 object-cover" />
-              <a href={`/admin/social/${pack.id}/image?format=square&platform=facebook&v=${imageVersion}`} download={`social-${pack.id}-facebook.png`} className="block text-xs font-semibold text-blue-600 hover:underline">
-                Download Facebook
-              </a>
+              <DownloadImageLink href={`/admin/social/${pack.id}/image?format=square&platform=facebook&v=${imageVersion}`} filename={`social-${pack.id}-facebook.png`} className="block text-xs font-semibold text-blue-600 hover:underline">Download Facebook</DownloadImageLink>
             </div>
             <div className="space-y-2">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Vertical (TikTok / Story)</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/admin/social/${pack.id}/image?format=vertical&v=${imageVersion}`} alt="Vertical social graphic" className="w-32 h-56 rounded-xl border border-slate-200 object-cover" />
-              <a href={`/admin/social/${pack.id}/image?format=vertical&v=${imageVersion}`} download={`social-${pack.id}-vertical.png`} className="block text-xs font-semibold text-blue-600 hover:underline">
-                Download vertical
-              </a>
+              <DownloadImageLink href={`/admin/social/${pack.id}/image?format=vertical&v=${imageVersion}`} filename={`social-${pack.id}-vertical.png`} className="block text-xs font-semibold text-blue-600 hover:underline">Download vertical</DownloadImageLink>
             </div>
           </div>
 
