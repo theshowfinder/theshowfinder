@@ -198,11 +198,10 @@ export async function mergeVenueFamilyDuplicates(opts: { dryRun?: boolean; limit
   // Extras: fold each into its main show (same building, within 4 days); unclear ones go to a person.
   for (const { extra, main, why } of findExtraHomes(events.filter(e => isExtraTitle(e.title)), shows)) {
     if (!main) {
+      // No main show on the site (or two candidates): leave it listed. It never appears in city, on-sale or tour
+      // lists (isPackageOrClassTitle), so nobody needs to decide; a later run folds it in once the main show arrives.
       res.extrasToReview++
-      if (!dryRun) await db.from('event_merge_reviews').upsert({
-        kind: 'duplicate_group', group_key: `extra:${extra.id}`, event_ids: [extra.id], suggested_keep_id: null, reasons: [`extra (hotel bundle, camping, parking, VIP...): ${why}`],
-        summary: { events: [{ id: extra.id, slug: extra.slug, title: extra.title, start: extra.start_date, venue: extra.venue.name, source: extra.source ?? 'ticketmaster' }] },
-      }, { onConflict: 'group_key', ignoreDuplicates: true })
+      if (res.examples.length < 40) res.examples.push(`extra left listed (${why}): ${extra.title} @ ${extra.venue.name}`)
       continue
     }
     if (decidedKeys.get(`extra:${extra.id}`) === 'not_duplicate') continue
@@ -213,6 +212,9 @@ export async function mergeVenueFamilyDuplicates(opts: { dryRun?: boolean; limit
       res.linksMoved += r.moved
     }
   }
+  // Extras used to be sent to the Decisions page; close any still open as 'resolved' (not 'not_duplicate', which
+  // would stop them being folded in later).
+  if (!dryRun) await db.from('event_merge_reviews').update({ status: 'resolved', decided_at: new Date().toISOString() }).like('group_key', 'extra:%').eq('status', 'open')
   if (!dryRun && (res.merged || res.extrasMerged)) {
     const { error } = await db.rpc('refresh_event_canonical')
     if (error) throw new Error(`refresh_event_canonical: ${error.message}`)

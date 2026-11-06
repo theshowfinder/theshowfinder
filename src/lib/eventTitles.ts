@@ -33,7 +33,13 @@ export function isExtraTitle(title: string | null | undefined): boolean {
 /** A package / upgrade / class listing: not something to promote as a show in its own right. */
 export function isPackageOrClassTitle(title: string | null | undefined): boolean {
   if (!title) return false
-  return PACKAGE_TITLE.test(title) || NOT_A_HEADLINE.test(title)
+  return PACKAGE_TITLE.test(title) || NOT_A_HEADLINE.test(title) || isExtraTitle(title) || isTestListing(title)
+}
+
+// Ticketmaster's own QA/test listings ("QA Festival DO NOT PURCHASE - Campervan").
+const TEST_LISTING = /\bdo\s+not\s+(purchase|buy)\b|\btest\s+(event|listing|only)\b|^\s*qa\s+(festival|event|test)\b/i
+export function isTestListing(title: string | null | undefined): boolean {
+  return !!title && TEST_LISTING.test(title)
 }
 
 // A year in the run that is part of the edition, not the act's name ("... Darts 2027"),

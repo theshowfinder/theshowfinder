@@ -368,7 +368,11 @@ export function findDuplicateGroups<T extends GroupEvent>(events: T[], isLocalSo
 
 // ── Extras (hotel bundles, camping, parking, VIP...) ─────────────────────────
 
-const firstWord = (title: string) => norm(title).replace(/^(the|a|an)\s+/, '').split(' ')[0] ?? ''
+// A short first token ("N-Dubz" -> "n dubz", "AC/DC" -> "ac dc") joins the next one, so the act is still indexed.
+const firstWord = (title: string) => {
+  const t = norm(title).replace(/^(the|a|an)\s+/, '').split(' ')
+  return (t[0] ?? '').length < 3 && t[1] ? `${t[0]} ${t[1]}` : t[0] ?? ''
+}
 const daysApart = (a: string, b: string) => Math.round(Math.abs(Date.parse(`${londonDay(a)}T12:00:00Z`) - Date.parse(`${londonDay(b)}T12:00:00Z`)) / 86_400_000)
 
 export const EXTRA_WINDOW_DAYS = 4
