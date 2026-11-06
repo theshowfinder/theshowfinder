@@ -9,6 +9,7 @@ const JOBS: Array<{ job: string; label: string }> = [
   { job: 'match-gigsberg', label: 'Gigsberg matching' },
   { job: 'sync-onsale', label: 'Ticketmaster on-sale' },
   { job: 'sync-council-events', label: 'Council events' },
+  { job: 'geocode-venues', label: 'Venue map positions' },
 ]
 
 export default function RunJobButtons() {

@@ -14,6 +14,8 @@ import { venuePageDescription } from '@/lib/venueBlurb'
 import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import { buildVenueSchema } from '@/lib/venueSeo'
+import BeforeTheShow from '@/components/BeforeTheShow'
+import { PLACEMENT_COLUMNS, pickNearbyForPage, type Placement } from '@/lib/localPlacements'
 
 export const PAGE_SIZE = 24
 
@@ -26,6 +28,8 @@ interface VenueRow {
   postcode: string
   capacity: number | null
   website: string | null
+  lat: number | null
+  lng: number | null
 }
 
 export default async function VenueView({ slug, page }: { slug: string; page: number }) {
@@ -37,7 +41,7 @@ export default async function VenueView({ slug, page }: { slug: string; page: nu
   // Fetch venue — first query so we have the ID for the events query
   const { data: venue } = await supabase
     .from('venues')
-    .select('id, name, slug, address, city, postcode, capacity, website')
+    .select('id, name, slug, address, city, postcode, capacity, website, lat, lng')
     .eq('slug', slug)
     .single() as unknown as { data: VenueRow | null }
 
@@ -61,6 +65,18 @@ export default async function VenueView({ slug, page }: { slug: string; page: nu
     .range(from, to) as unknown as { data: EventWithVenue[] | null; count: number | null }
 
   const upcomingEvents = events ?? []
+
+  // Featured local partners within walking distance of this venue (the same ones its show pages show).
+  let partners: Placement[] = []
+  if (venue.city) {
+    try {
+      const { data } = await supabase.from('local_businesses').select(PLACEMENT_COLUMNS)
+        .ilike('city', venue.city).eq('package', 'featured').limit(500) as unknown as { data: Placement[] | null }
+      partners = pickNearbyForPage(data ?? [], { lat: venue.lat, lng: venue.lng }, venue.id)
+    } catch (err) {
+      console.error('[venue] local partners lookup failed', err)
+    }
+  }
   const totalCount     = count ?? upcomingEvents.length
   const totalPages     = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
@@ -153,6 +169,11 @@ export default async function VenueView({ slug, page }: { slug: string; page: nu
 
       {/* ── EVENTS GRID ── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {partners.length > 0 && venue.city && (
+          <div className="mb-10 max-w-3xl">
+            <BeforeTheShow businesses={partners} city={venue.city} eventId="" venue={{ name: venue.name, lat: venue.lat, lng: venue.lng }} />
+          </div>
+        )}
         <div className="flex items-end justify-between mb-7">
           <div>
             <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>

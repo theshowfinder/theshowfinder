@@ -53,3 +53,11 @@ test('area headings on the city page', () => {
   const groups = groupByArea([at('e', null, null), at('dial', 51.5022, 0.005), at('cam', 51.539, -0.1426)], venues, 'London')
   assert.deepEqual(groups.map(g => g.label), ['Near The O2', 'Near Camden Assembly', 'Around London'])
 })
+
+test('hotels and parking reach shows up to about 3 miles away; bars and restaurants about a mile', async () => {
+  const { reachFor } = await import('./localPlacements.ts')
+  const hotel = { ...at('hotel', 51.5160, -0.0300), category: 'hotel' } as Placement   // ~2.7 km from The O2
+  const bar = { ...at('bar', 51.5160, -0.0300), category: 'bar' } as Placement
+  assert.equal(reachFor('hotel'), 4800)
+  assert.deepEqual(pickNearbyForPage([hotel, bar], O2, 'e1').map(p => p.id), ['hotel'])
+})

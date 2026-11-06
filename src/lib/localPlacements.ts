@@ -42,7 +42,7 @@ function hash(value: string): number {
  * point from its own id, so with more featured businesses than slots they all get an even
  * share of pages, and a page never reshuffles between visits.
  */
-export function pickForPage(featured: readonly Placement[], pageKey: string, max = PER_PAGE): Placement[] {
+export function pickForPage<T extends { id: string }>(featured: readonly T[], pageKey: string, max = PER_PAGE): T[] {
   const list = [...featured].sort((a, b) => a.id.localeCompare(b.id))
   if (list.length <= max) return list
   const start = hash(pageKey) % list.length
@@ -67,6 +67,12 @@ export function safeWebsite(url: string | null): string | null {
 export const AREA_RADIUS_M = 1600
 export const FEATURED_PER_AREA = 3
 export const STANDARD_PER_AREA = 6
+// Hotels, parking and transport are places people travel to rather than walk to: shown on shows up to ~3 miles away.
+// The sign-up cap still counts partners within AREA_RADIUS_M of each other.
+export const TRAVEL_RADIUS_M = 4800
+const TRAVEL_CATEGORIES = new Set(['hotel', 'parking', 'transport'])
+/** How far from a venue a partner of this category is still shown. */
+export const reachFor = (category: string | null | undefined) => (category && TRAVEL_CATEGORIES.has(category) ? TRAVEL_RADIUS_M : AREA_RADIUS_M)
 
 interface Point { lat: number | null; lng: number | null }
 const hasPoint = (p: Point): p is { lat: number; lng: number } => typeof p.lat === 'number' && typeof p.lng === 'number'
@@ -92,7 +98,7 @@ export function pickNearbyForPage(featured: readonly Placement[], venue: Point, 
   const nearby = featured
     .filter(p => hasPoint(p))
     .map(p => ({ p, d: metresApart(venue, { lat: p.lat as number, lng: p.lng as number }) }))
-    .filter(x => x.d <= AREA_RADIUS_M)
+    .filter(x => x.d <= reachFor(x.p.category))
     .sort((a, b) => a.d - b.d || a.p.id.localeCompare(b.p.id))
     .map(x => x.p)
     .slice(0, max)
@@ -132,3 +138,17 @@ export function groupByArea<T extends Point>(items: readonly T[], venues: readon
     .sort(([a], [b]) => (a === fallback ? 1 : 0) - (b === fallback ? 1 : 0))
     .map(([label, list]) => ({ label, items: list }))
 }
+
+/** The first (biggest) venue within reach of a partner, with the distance: for "2 min walk from The O2" labels. */
+export function nearestAreaVenue(point: Point & { category?: string | null }, venues: readonly AreaVenue[]): { name: string; metres: number } | null {
+  if (!hasPoint(point)) return null
+  for (const v of venues) {
+    if (!hasPoint(v)) continue
+    const metres = metresApart(point, v)
+    if (metres <= AREA_RADIUS_M) return { name: v.name, metres }
+  }
+  return null
+}
+
+/** UK date key (YYYY-MM-DD): the city-page Featured strip rotates once a day, the same for everyone that day. */
+export const dayKey = (now = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)

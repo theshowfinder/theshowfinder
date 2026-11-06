@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import type { LocalBusiness } from '@/lib/types/database'
 import { selectLocalBusinessPlacements } from '@/lib/localBusinessPlacements'
-import { safeWebsite, type AreaVenue } from '@/lib/localPlacements'
+import { dayKey, nearestAreaVenue, pickForPage, safeWebsite, type AreaVenue } from '@/lib/localPlacements'
+import { distanceLabel } from '@/lib/businessOffers'
 
 const CATEGORY_DETAILS: Record<LocalBusiness['category'], { icon: string; label: string }> = {
   restaurant: { icon: '🍽️', label: 'Restaurant' },
@@ -16,7 +17,7 @@ const CATEGORY_DETAILS: Record<LocalBusiness['category'], { icon: string; label:
   other: { icon: '📍', label: 'Local business' },
 }
 
-function BusinessCard({ business, featured }: { business: LocalBusiness; featured: boolean }) {
+function BusinessCard({ business, featured, where }: { business: LocalBusiness; featured: boolean; where?: string | null }) {
   const category = CATEGORY_DETAILS[business.category]
   const content = (
     <article className={`group h-full overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${featured ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200'}`}>
@@ -27,7 +28,7 @@ function BusinessCard({ business, featured }: { business: LocalBusiness; feature
         </span>
       </div>
       <div className={featured ? 'p-6' : 'p-5'}>
-        <p className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">{category.label}</p>
+        <p className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">{category.label}{where ? <span className="normal-case tracking-normal font-semibold text-rose-600"> · {where}</span> : null}</p>
         <h3 className="mb-1 text-lg font-extrabold leading-snug text-slate-900 group-hover:text-rose-600">{business.name}</h3>
         {business.description && <p className="line-clamp-3 text-sm leading-relaxed text-slate-500">{business.description}</p>}
         {business.offer_text && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900">🎟️ {business.offer_text}</p>}
@@ -48,41 +49,86 @@ function BusinessCard({ business, featured }: { business: LocalBusiness; feature
   return content
 }
 
+/** "2 min walk from The O2" for a partner, from the biggest venue within walking distance of it. */
+function whereLabel(business: LocalBusiness, venues: readonly AreaVenue[]): string | null {
+  const near = nearestAreaVenue(business, venues)
+  const distance = near ? distanceLabel(near.metres) : null
+  return near && distance ? `${distance} from ${near.name}` : null
+}
+
 export default function LocalBusinessAds({ cityName, businesses, venues = [] }: { cityName: string; businesses: LocalBusiness[]; venues?: AreaVenue[] }) {
   const { groups } = selectLocalBusinessPlacements(businesses, venues, cityName)
   if (groups.length === 0) return null
-  // One area (small cities, or everyone near the same venue): the plain layout with no area headings.
-  const showHeadings = groups.length > 1
+  // Big cities have several areas: a daily-rotating strip of three Featured partners (each says where it is), then
+  // every area's partners under "Places near your venue". One area (most cities): the plain list.
+  const areas = groups.length > 1
+  const strip = areas ? pickForPage(groups.flatMap(g => g.featured), dayKey(), 3) : []
+
+  const header = (
+    <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <p className="mb-1 text-xs font-bold uppercase tracking-widest text-rose-600">Local partners</p>
+        <h2 id="local-partners-heading" className="text-2xl font-extrabold text-slate-900 sm:text-3xl">Make more of your night in {cityName}</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">Places to eat, drink, stay and get ready near the action.</p>
+      </div>
+      <Link href={`/advertise?city=${encodeURIComponent(cityName)}`} className="shrink-0 text-sm font-bold text-rose-600 hover:underline">
+        Advertise your business <span aria-hidden="true">→</span>
+      </Link>
+    </div>
+  )
+
+  if (!areas) {
+    const [group] = groups
+    return (
+      <section aria-labelledby="local-partners-heading">
+        {header}
+        {group.featured.length > 0 && (
+          <div className="mb-5 grid grid-cols-1 gap-5 md:grid-cols-3">
+            {group.featured.map(business => <BusinessCard key={business.id} business={business} featured where={whereLabel(business, venues)} />)}
+          </div>
+        )}
+        {group.standard.length > 0 && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {group.standard.map(business => <BusinessCard key={business.id} business={business} featured={false} where={whereLabel(business, venues)} />)}
+          </div>
+        )}
+        <p className="mt-4 text-xs text-slate-400">Featured partners appear first. Each area has at most three Featured and six Standard partners.</p>
+      </section>
+    )
+  }
 
   return (
     <section aria-labelledby="local-partners-heading">
-      <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="mb-1 text-xs font-bold uppercase tracking-widest text-rose-600">Local partners</p>
-          <h2 id="local-partners-heading" className="text-2xl font-extrabold text-slate-900 sm:text-3xl">Make more of your night in {cityName}</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">Places to eat, drink, stay and get ready near the action.</p>
+      {header}
+      {strip.length > 0 && (
+        <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-3">
+          {strip.map(business => <BusinessCard key={business.id} business={business} featured where={whereLabel(business, venues)} />)}
         </div>
-        <Link href={`/advertise?city=${encodeURIComponent(cityName)}`} className="shrink-0 text-sm font-bold text-rose-600 hover:underline">
-          Advertise your business <span aria-hidden="true">→</span>
-        </Link>
+      )}
+      <h3 className="mb-3 text-lg font-extrabold text-slate-900">Places near your venue</h3>
+      <div className="space-y-3">
+        {groups.map(group => (
+          <details key={group.label} className="group rounded-2xl border border-slate-200 bg-white">
+            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 font-extrabold text-slate-900">
+              <span>{group.label}</span>
+              <span className="text-sm font-semibold text-slate-500">{group.featured.length + group.standard.length} place{group.featured.length + group.standard.length === 1 ? '' : 's'} <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-90">›</span></span>
+            </summary>
+            <div className="px-5 pb-5">
+              {group.featured.length > 0 && (
+                <div className="mb-4 grid grid-cols-1 gap-5 md:grid-cols-3">
+                  {group.featured.map(business => <BusinessCard key={business.id} business={business} featured where={whereLabel(business, venues)} />)}
+                </div>
+              )}
+              {group.standard.length > 0 && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {group.standard.map(business => <BusinessCard key={business.id} business={business} featured={false} where={whereLabel(business, venues)} />)}
+                </div>
+              )}
+            </div>
+          </details>
+        ))}
       </div>
-
-      {groups.map(group => (
-        <div key={group.label} className={showHeadings ? 'mb-10' : ''}>
-          {showHeadings && <h3 className="mb-4 text-lg font-extrabold text-slate-900">{group.label}</h3>}
-          {group.featured.length > 0 && (
-            <div className="mb-5 grid grid-cols-1 gap-5 md:grid-cols-3">
-              {group.featured.map(business => <BusinessCard key={business.id} business={business} featured />)}
-            </div>
-          )}
-          {group.standard.length > 0 && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {group.standard.map(business => <BusinessCard key={business.id} business={business} featured={false} />)}
-            </div>
-          )}
-        </div>
-      ))}
-      <p className="mt-4 text-xs text-slate-400">Featured partners appear first. Each area has at most three Featured and six Standard partners.</p>
+      <p className="mt-4 text-xs text-slate-400">Featured partners rotate daily at the top. Each area has at most three Featured and six Standard partners.</p>
     </section>
   )
 }

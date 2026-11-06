@@ -39,12 +39,12 @@ export default function BeforeTheShow({ businesses, city, eventId, venue }: { bu
               {!b.offer_text && b.description && <p className="mt-2 line-clamp-2 text-sm leading-snug text-slate-600">{b.description}</p>}
               <div className="mt-3 flex flex-wrap gap-2 text-sm font-bold">
                 {b.offer_text && (
-                  <form method="post" action={`/offer/${b.id}?e=${eventId}`}>
+                  <form method="post" action={eventId ? `/offer/${b.id}?e=${eventId}` : `/offer/${b.id}`}>
                     <button className="rounded-lg px-3 py-2 text-white" style={{ backgroundColor: '#E8003D' }}>Get voucher</button>
                   </form>
                 )}
-                {booking && <a href={`/out/biz/${b.id}?k=booking&e=${eventId}`} target="_blank" rel="sponsored noopener" className="rounded-lg border border-slate-300 px-3 py-2 text-slate-800 hover:border-slate-500">Book a table</a>}
-                {website && !booking && <a href={`/out/biz/${b.id}?k=website&e=${eventId}`} target="_blank" rel="sponsored noopener" className="rounded-lg border border-slate-300 px-3 py-2 text-slate-800 hover:border-slate-500">Website</a>}
+                {booking && <a href={`/out/biz/${b.id}?k=booking${eventId ? `&e=${eventId}` : ''}`} target="_blank" rel="sponsored noopener" className="rounded-lg border border-slate-300 px-3 py-2 text-slate-800 hover:border-slate-500">Book a table</a>}
+                {website && !booking && <a href={`/out/biz/${b.id}?k=website${eventId ? `&e=${eventId}` : ''}`} target="_blank" rel="sponsored noopener" className="rounded-lg border border-slate-300 px-3 py-2 text-slate-800 hover:border-slate-500">Website</a>}
               </div>
             </div>
           )

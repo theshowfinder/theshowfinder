@@ -86,6 +86,8 @@ export async function approveApplicationAction(applicationId: string) {
   revalidatePath('/admin/advertiser-applications')
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(app.city))
+  // Venue pages cache for a week: rebuild them so a new Featured partner shows on the venues near it.
+  revalidatePath('/venues/[slug]', 'page')
 }
 
 export async function rejectApplicationAction(applicationId: string) {

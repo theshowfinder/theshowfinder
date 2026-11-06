@@ -21,6 +21,7 @@ export const JOB_EXPECTATIONS: Record<string, { label: string; maxHoursSinceSucc
   'detect-new-shows':          { label: 'New-show detection',            maxHoursSinceSuccess: 16 },
   'refresh-listings':          { label: 'Refresh listings',              maxHoursSinceSuccess: 18 },
   'merge-duplicates':          { label: 'Merge duplicate listings',      maxHoursSinceSuccess: 18 },
+  'geocode-venues':            { label: 'Venue map positions',           maxHoursSinceSuccess: 30 },
   'indexnow':                  { label: 'IndexNow pings',                maxHoursSinceSuccess: 30 },
   'event-reminders':           { label: 'Event reminders',               maxHoursSinceSuccess: 30 },
   'follow-alerts':             { label: 'Follow alerts',                 maxHoursSinceSuccess: 30 },

@@ -18,6 +18,7 @@ const RUNNABLE = new Set([
   'sync-gigsberg',
   'sync-city-news',
   'import-feed-events',
+  'geocode-venues',
 ])
 
 export async function POST(request: Request) {
