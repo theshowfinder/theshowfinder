@@ -8,7 +8,7 @@ import { distanceLabel, metresBetween } from '@/lib/businessOffers'
 
 interface VenuePoint { name: string; lat: number | null; lng: number | null }
 
-export default function BeforeTheShow({ businesses, city, eventId, venue }: { businesses: Placement[]; city: string; eventId: string; venue: VenuePoint }) {
+export default function BeforeTheShow({ businesses, city, eventId, venue, wide = false }: { businesses: Placement[]; city: string; eventId: string; venue: VenuePoint; wide?: boolean }) {
   if (!businesses.length) return null
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -16,7 +16,7 @@ export default function BeforeTheShow({ businesses, city, eventId, venue }: { bu
         <h2 className="text-lg font-extrabold text-slate-900">Make a night of it</h2>
         <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Local partners</span>
       </div>
-      <div className="space-y-3">
+      <div className={wide ? 'grid grid-cols-1 gap-3 md:grid-cols-3' : 'space-y-3'}>
         {businesses.map(b => {
           const website = safeWebsite(b.website_url)
           const booking = safeWebsite(b.booking_url)

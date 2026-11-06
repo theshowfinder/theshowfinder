@@ -452,10 +452,12 @@ export async function updateLocalBusinessOfferAction(id: string, city: string, f
   const booking_url = String(formData.get('booking_url') ?? '').trim() || null
   const rawPostcode = String(formData.get('postcode') ?? '').trim()
   const place = rawPostcode ? await geocodePostcode(rawPostcode) : null
-  await db.from('local_businesses').update({
+  const { error: saveError } = await db.from('local_businesses').update({
     offer_text, booking_url, updated_at: new Date().toISOString(),
     ...(rawPostcode ? { postcode: place?.postcode ?? rawPostcode, lat: place?.lat ?? null, lng: place?.lng ?? null } : { postcode: null, lat: null, lng: null }),
   }).eq('id', id)
+  // Say so instead of quietly reloading the old values (6 Nov 2026: an offer "would not save" with no message).
+  if (saveError) throw new Error(`Could not save the offer: ${saveError.message}`)
   const { data: acc } = await db.from('local_business_accounts').select('redeem_pin').eq('business_id', id).maybeSingle()
   if (acc && !acc.redeem_pin) await db.from('local_business_accounts').update({ redeem_pin: newPin() }).eq('business_id', id)
   if (!acc) await db.from('local_business_accounts').insert({ business_id: id, contact_email: 'hello@theshowfinder.com', redeem_pin: newPin(), notes: 'Added from admin; no advertiser contact yet' })

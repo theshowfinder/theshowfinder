@@ -804,6 +804,19 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
           {/* Left */}
           <div className="lg:col-span-2 space-y-10">
+            {/* Featured local partners at the top of the page, beside the ticket buttons, so they are seen without
+                scrolling (the sticky ticket column is taller than the screen, so its bottom was only reached at the end
+                of the page). On phones this follows straight after the ticket buttons. */}
+            {venue?.city && placements.length > 0 && (
+              <BeforeTheShow
+                businesses={placements}
+                city={venue.city}
+                eventId={event.id}
+                venue={{ name: venue.name, lat: venue.lat ?? null, lng: venue.lng ?? null }}
+                wide
+              />
+            )}
+
             {event.description && (
               <div>
                 <h2 className="text-xl font-extrabold text-slate-900 mb-3">About this event</h2>
@@ -1230,16 +1243,6 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 </div>
                 <span className="text-xl ml-3">→</span>
               </TrackedTicketLink>
-            )}
-
-            {/* Featured local partners right under the ticket buttons: the moment people plan the rest of the night. */}
-            {venue?.city && (
-              <BeforeTheShow
-                businesses={placements}
-                city={venue.city}
-                eventId={event.id}
-                venue={{ name: venue.name, lat: venue.lat ?? null, lng: venue.lng ?? null }}
-              />
             )}
 
             {event.tags && event.tags.length > 0 && (
