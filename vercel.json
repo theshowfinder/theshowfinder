@@ -52,6 +52,14 @@
       "schedule": "15 4 * * *"
     },
     {
+      "path": "/api/cron/sync-stubhub",
+      "schedule": "25 4 * * *"
+    },
+    {
+      "path": "/api/cron/match-stubhub",
+      "schedule": "55 4 * * *"
+    },
+    {
       "path": "/api/cron/merge-duplicates",
       "schedule": "35 14 * * *"
     },

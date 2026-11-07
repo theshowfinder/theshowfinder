@@ -252,7 +252,17 @@ const getRelatedEvents = cache(async (event: EventDetail, headlinerId: string | 
 
 // ── Ticket providers ────────────────────────────────────────────────────────
 
-function buildProviders(event: Pick<EventDetail, 'slug' | 'title' | 'status' | 'category' | 'source' | 'ttd_url' | 'ttd_price' | 'price_from' | 'price_source' | 'resale_from' | 'presale_start' | 'public_onsale_start' | 'onsale_date' | 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>) {
+// Cheapest StubHub price in pounds (set nightly from the StubHub catalog). Read on its own and
+// error-tolerant, so the page still renders if the column is not there yet.
+async function loadStubHubFrom(eventId: string): Promise<number | null> {
+  try {
+    const { data } = await createPublicClient().from('events').select('stubhub_from').eq('id', eventId).maybeSingle() as unknown as { data: { stubhub_from: number | null } | null }
+    const v = data?.stubhub_from
+    return v != null && Number(v) > 0 ? Number(v) : null
+  } catch { return null }
+}
+
+function buildProviders(event: Pick<EventDetail, 'slug' | 'title' | 'status' | 'category' | 'source' | 'ttd_url' | 'ttd_price' | 'price_from' | 'price_source' | 'resale_from' | 'presale_start' | 'public_onsale_start' | 'onsale_date' | 'tickets_url' | 'viagogo_url' | 'stubhub_url' | 'gigsberg_url' | 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'gigsberg_inventory_status'>, stubhubFrom: number | null = null) {
   const mainPrimary = event.tickets_url
     ? [{ name: 'Ticketmaster', tagline: 'Official UK tickets', bg: '#026CDF', href: ticketmasterOutLink(event.tickets_url, `evt-${event.slug}`) }]
     : event.gigsberg_affiliate_url
@@ -289,7 +299,7 @@ function buildProviders(event: Pick<EventDetail, 'slug' | 'title' | 'status' | '
     ...(event.tickets_url && event.gigsberg_affiliate_url && !gigsbergLeads ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_affiliate_url), price: event.resale_from ? `from ${money(event.resale_from, '£')}` : undefined }] : []),
     ...(!event.tickets_url && !event.gigsberg_affiliate_url && event.gigsberg_url && !isBareProviderHomepage(event.gigsberg_url) ? [{ name: 'Gigsberg', bg: '#1a1f6e', href: outLink('gb', event.gigsberg_url) }] : []),
     ...(event.viagogo_url && !isBareProviderHomepage(event.viagogo_url) ? [{ name: 'Viagogo', bg: '#00a650', href: outLink('vg', event.viagogo_url) }] : []),
-    ...(event.stubhub_url && !isBareProviderHomepage(event.stubhub_url) ? [{ name: 'StubHub', bg: '#400078', href: outLink('sh', event.stubhub_url) }] : []),
+    ...(event.stubhub_url && !isBareProviderHomepage(event.stubhub_url) ? [{ name: 'StubHub', bg: '#400078', href: outLink('sh', event.stubhub_url), price: stubhubFrom ? `from ${money(stubhubFrom, '£')}` : undefined }] : []),
   ]
   // Viagogo, StubHub and Vivid Seats on every show: a search for this show on each, in its own colours, so fans can
   // compare resale. Plain links until those affiliate programmes approve us; the /out hop then wraps them with the
@@ -507,7 +517,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const priceLabel = ttdCheaper ? fmtPrice(Number(event.ttd_price), null, event.currency) : fmtPrice(event.price_from, event.price_to, event.currency)
   const priceSourceLabel = ttdCheaper ? 'Theatre Tickets Direct' : event.price_source ?? null
   const imageUrl = eventImageUrl(event.image_url, event.category, event.title)
-  const { primary, resale } = buildProviders(event)
+  const { primary, resale } = buildProviders(event, event.stubhub_url ? await loadStubHubFrom(event.id) : null)
   // Sold out at Ticketmaster but Gigsberg has it: that is where we send people (and earn).
   const soldOutGigsberg = event.status === 'sold_out' ? resale.find(r => r.name === 'Gigsberg') ?? null : null
   const moreOptions = soldOutGigsberg ? resale.filter(r => r.name !== 'Gigsberg') : resale

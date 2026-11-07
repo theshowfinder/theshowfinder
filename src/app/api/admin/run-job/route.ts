@@ -19,6 +19,8 @@ const RUNNABLE = new Set([
   'sync-city-news',
   'import-feed-events',
   'geocode-venues',
+  'sync-stubhub',
+  'match-stubhub',
 ])
 
 export async function POST(request: Request) {
