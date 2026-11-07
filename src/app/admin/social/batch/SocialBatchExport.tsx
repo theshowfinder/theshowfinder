@@ -18,7 +18,9 @@ export default function SocialBatchExport({ packs }: Props) {
     setCopied(key)
     window.setTimeout(() => setCopied(current => current === key ? null : current), 1500)
   }
-  const facebookBundle = packs.map(pack => `${pack.city_name ?? 'National'}\n${pack.facebook_text}`).join('\n\n---\n\n')
+  // One ready-to-paste Facebook post per pack: title, description, web address and hashtags (no link: see the editor).
+  const facebookPost = (pack: SocialPack) => [pack.headline, pack.context, 'Compare tickets at theshowfinder.com', (pack.hashtags ?? []).map(t => (t.startsWith('#') ? t : `#${t}`)).join(' ')].filter(Boolean).join('\n\n')
+  const facebookBundle = packs.map(pack => `${pack.city_name ?? 'National'}\n${facebookPost(pack)}`).join('\n\n---\n\n')
 
   return (
     <div className="space-y-5">
@@ -43,7 +45,7 @@ export default function SocialBatchExport({ packs }: Props) {
                 <DownloadImageLink href={imageUrl(pack, 'vertical')} filename={`social-${pack.id}-vertical.png`} className="mt-2 block text-center text-xs font-bold text-blue-600 hover:underline">Download vertical</DownloadImageLink>
               </div>
             </div>
-            <div className="space-y-2"><div className="flex items-center justify-between gap-3"><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Facebook + Instagram caption</p><button type="button" onClick={() => copy(pack.id, pack.facebook_text)} className="text-xs font-bold text-blue-600 hover:underline">{copied === pack.id ? 'Copied!' : 'Copy'}</button></div><textarea readOnly value={pack.facebook_text} rows={6} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700" /></div>
+            <div className="space-y-2"><div className="flex items-center justify-between gap-3"><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Facebook + Instagram caption</p><button type="button" onClick={() => copy(pack.id, facebookPost(pack))} className="text-xs font-bold text-blue-600 hover:underline">{copied === pack.id ? 'Copied!' : 'Copy'}</button></div><textarea readOnly value={facebookPost(pack)} rows={8} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700" /></div>
             <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 break-all"><span className="font-bold text-slate-500">Tracked link: </span>{pack.facebook_link}</div>
           </article>
         ))}

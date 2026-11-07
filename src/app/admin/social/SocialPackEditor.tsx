@@ -44,8 +44,24 @@ export default function SocialPackEditor({ pack, updateAction }: SocialPackEdito
     }
   }
 
+  // Everything for a Facebook post in one block: title, description and hashtags. Facebook posts don't carry links
+  // well, so the web address is written out instead of the tracked link.
+  const hashtagLine = hashtagsText.split(/\s+/).filter(Boolean).map(t => (t.startsWith('#') ? t : `#${t}`)).join(' ')
+  const facebookPost = [headline.trim(), context.trim(), 'Compare tickets at theshowfinder.com', hashtagLine].filter(Boolean).join('\n\n')
+
   return (
     <form action={updateAction} className="space-y-6">
+      <section className="bg-white rounded-2xl border-2 border-blue-200 shadow-sm p-6 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Facebook post: ready to copy</h2>
+          <button type="button" onClick={() => copy('facebook_post', facebookPost)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700">
+            {copiedKey === 'facebook_post' ? 'Copied!' : 'Copy post'}
+          </button>
+        </div>
+        <textarea readOnly value={facebookPost} rows={8} onFocus={e => e.currentTarget.select()} className="w-full text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2" />
+        <p className="text-xs text-slate-400">Title, description and hashtags together. Edit them below and this updates; paste it with the Facebook image.</p>
+      </section>
+
       <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
         <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Headline &amp; context</h2>
 
