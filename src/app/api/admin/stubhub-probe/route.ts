@@ -13,8 +13,8 @@ type Item = Record<string, unknown>
 
 export async function GET(request: Request) {
   try { await requireAdmin() } catch { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  const sid = process.env.IMPACT_ACCOUNT_SID
-  const token = process.env.IMPACT_AUTH_TOKEN
+  const sid = (process.env.IMPACT_ACCOUNT_SID ?? '').trim().replace(/^['"]|['"]$/g, '')
+  const token = (process.env.IMPACT_AUTH_TOKEN ?? '').trim().replace(/^['"]|['"]$/g, '')
   if (!sid || !token) return NextResponse.json({ error: 'IMPACT_ACCOUNT_SID / IMPACT_AUTH_TOKEN not set' }, { status: 500 })
   const maxPages = Math.min(Number(new URL(request.url).searchParams.get('pages') || '30'), 40)
   const auth = 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64')
@@ -25,6 +25,11 @@ export async function GET(request: Request) {
   let scanned = 0; let pages = 0; let numPages: unknown = null; let total: unknown = null
   let next: string | null = `/Mediapartners/${sid}/Catalogs/${CATALOG_ID}/Items?PageSize=1000&Page=1`
   const errors: string[] = []
+  // Shape check only (never the values): helps spot a swapped or mis-pasted pair.
+  const credentials = { sidPrefix: sid.slice(0, 2), sidLength: sid.length, tokenLength: token.length, rawSidHadSpaces: (process.env.IMPACT_ACCOUNT_SID ?? '') !== sid, rawTokenHadSpaces: (process.env.IMPACT_AUTH_TOKEN ?? '') !== token }
+  const catalogsCheck = await fetch(`https://api.impact.com/Mediapartners/${sid}/Catalogs`, { headers: { Authorization: auth, Accept: 'application/json' }, cache: 'no-store' })
+  const catalogsStatus = catalogsCheck.status
+  const catalogsBody = (await catalogsCheck.text()).slice(0, 600)
   while (next && pages < maxPages && Date.now() < deadline) {
     const res = await fetch(`https://api.impact.com${next}`, { headers: { Authorization: auth, Accept: 'application/json' }, cache: 'no-store' })
     if (!res.ok) { errors.push(`${res.status} ${(await res.text()).slice(0, 300)}`); break }
@@ -52,5 +57,5 @@ export async function GET(request: Request) {
     distinct: m.size >= 400 ? '400+' : m.size,
     top: [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([v, n]) => `${n} × ${v}`),
   }]))
-  return NextResponse.json({ catalog: CATALOG_ID, total, numPages, pagesRead: pages, scanned, finished: !next, errors, fields, samples, ukSamples })
+  return NextResponse.json({ credentials, catalogsStatus, catalogsBody, catalog: CATALOG_ID, total, numPages, pagesRead: pages, scanned, finished: !next, errors, fields, samples, ukSamples })
 }
