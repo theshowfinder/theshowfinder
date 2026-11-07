@@ -12,11 +12,12 @@ import { ukToday } from '@/lib/ukTime'
 
 const PAGE = 25
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
-type Platform = 'gigsberg' | 'see_tickets'
+type Platform = 'gigsberg' | 'see_tickets' | 'stubhub'
 
-const PLATFORM: Record<Platform, { label: string; table: string; cols: string; colour: string; urlCol: 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' }> = {
+const PLATFORM: Record<Platform, { label: string; table: string; cols: string; colour: string; urlCol: 'gigsberg_affiliate_url' | 'see_tickets_affiliate_url' | 'stubhub_url' }> = {
   gigsberg: { label: 'Gigsberg', table: 'gigsberg_catalogue_events', cols: 'id, name, event_date, event_time, venue, city, url, performer1, performer2, match_status, match_reason, inventory_status', colour: '#1a1f6e', urlCol: 'gigsberg_affiliate_url' },
   see_tickets: { label: 'See Tickets', table: 'see_tickets_catalogue_events', cols: 'id, name, event_date, venue, city, url, primary_artist, second_artist, match_status, match_reason', colour: '#E4022D', urlCol: 'see_tickets_affiliate_url' },
+  stubhub: { label: 'StubHub', table: 'stubhub_catalogue_events', cols: 'id, name, event_date, event_time, venue, city, url, parent_name, match_status, match_reason', colour: '#400078', urlCol: 'stubhub_url' },
 }
 
 const day = (d: string) => new Date(d).toLocaleDateString('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
@@ -24,7 +25,7 @@ const clock = (minutes: number | null) => (minutes === null ? '' : ` · ${format
 const cleanReason = (reason: string | null) => (reason ?? '').replace(/\s*\[time checked[^\]]*\]/g, '')
 const dayShift = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString()
 
-type EvRow = { id: string; title: string; slug: string; start_date: string; status: string; venue_name: string | null; venue_city: string | null; gigsberg_affiliate_url: string | null; see_tickets_affiliate_url: string | null }
+type EvRow = { id: string; title: string; slug: string; start_date: string; status: string; venue_name: string | null; venue_city: string | null; gigsberg_affiliate_url: string | null; see_tickets_affiliate_url: string | null; stubhub_url?: string | null }
 const toShowfinder = (e: EvRow): ShowfinderEvent & EvRow => ({ ...e, venue: { name: e.venue_name ?? '', city: e.venue_city ?? '' }, artists: [] })
 
 // Site events that day. Reads the events table itself: the events_with_venue view has no affiliate-link
@@ -32,7 +33,7 @@ const toShowfinder = (e: EvRow): ShowfinderEvent & EvRow => ({ ...e, venue: { na
 // A failure is now reported on the page instead of looking like "no event matches".
 async function eventsOnDay(db: Loose, date: string): Promise<Array<ShowfinderEvent & EvRow>> {
   const { data, error } = await db.from('events')
-    .select('id, title, slug, start_date, status, gigsberg_affiliate_url, see_tickets_affiliate_url, venue:venues(name, city)')
+    .select('id, title, slug, start_date, status, gigsberg_affiliate_url, see_tickets_affiliate_url, stubhub_url, venue:venues(name, city)')
     .gte('start_date', new Date(Date.parse(dayShift(date, 0)) - 3_600_000).toISOString()).lt('start_date', dayShift(date, 1))
     .in('status', LIVE_EVENT_STATUSES).order('start_date').range(0, 999)
   if (error) throw new Error(`Could not load site events for ${date}: ${error.message}`)
@@ -46,8 +47,8 @@ async function eventsOnDay(db: Loose, date: string): Promise<Array<ShowfinderEve
 function toCatalogueRow(platform: Platform, r: Record<string, any>): CatalogueRow { // eslint-disable-line @typescript-eslint/no-explicit-any
   return {
     id: r.id, name: r.name, event_date: r.event_date, event_time: r.event_time ?? null, venue: r.venue, city: r.city,
-    performer1: platform === 'gigsberg' ? r.performer1 : r.primary_artist,
-    performer2: platform === 'gigsberg' ? r.performer2 : r.second_artist,
+    performer1: platform === 'gigsberg' ? r.performer1 : platform === 'stubhub' ? r.parent_name : r.primary_artist,
+    performer2: platform === 'gigsberg' ? r.performer2 : platform === 'stubhub' ? null : r.second_artist,
     url: r.url, matched_event_id: null,
   }
 }
@@ -55,7 +56,7 @@ function toCatalogueRow(platform: Platform, r: Record<string, any>): CatalogueRo
 export default async function UnmatchedPage({ searchParams }: { searchParams: Promise<{ platform?: string; view?: string; filter?: string; q?: string; page?: string; msg?: string; ok?: string; status?: string }> }) {
   await requireAdmin()
   const sp = await searchParams
-  const platform: Platform = sp.platform === 'see_tickets' ? 'see_tickets' : 'gigsberg'
+  const platform: Platform = sp.platform === 'see_tickets' ? 'see_tickets' : sp.platform === 'stubhub' ? 'stubhub' : 'gigsberg'
   const view = sp.view === 'soldout' ? 'soldout' : sp.view === 'hidden' ? 'hidden' : 'unlinked'
   const page = Math.max(1, Number(sp.page) || 1)
   const q = (sp.q ?? '').trim().replace(/[%_,()\\]/g, ' ')
@@ -66,9 +67,10 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
   const from = (page - 1) * PAGE
 
   const unlinkedCount = (table: string) => db.from(table).select('id', { count: 'exact', head: true }).is('gone_at', null).gte('event_date', today).is('matched_event_id', null).or('match_status.is.null,match_status.neq.rejected').then((r: Loose) => r.count ?? 0)
-  const [unlinkedGb, unlinkedSt, soldOutCount] = await Promise.all([
+  const [unlinkedGb, unlinkedSt, unlinkedSh, soldOutCount] = await Promise.all([
     unlinkedCount('gigsberg_catalogue_events'),
     unlinkedCount('see_tickets_catalogue_events'),
+    unlinkedCount('stubhub_catalogue_events'),
     db.from('events').select('id', { count: 'exact', head: true }).gte('start_date', nowIso).eq('status', 'sold_out').is(meta.urlCol, null).then((r: Loose) => r.count ?? 0),
   ])
 
@@ -78,12 +80,14 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
   let total = 0
 
   if (view === 'soldout') {
-    const { data, count } = await db.from('events_with_venue')
-      .select('id, title, slug, start_date, status, venue_name, venue_city, gigsberg_affiliate_url, see_tickets_affiliate_url', { count: 'exact' })
+    // Reads the events table: the events_with_venue view has no affiliate-link columns.
+    const { data: raw, count } = await db.from('events')
+      .select('id, title, slug, start_date, status, gigsberg_affiliate_url, see_tickets_affiliate_url, stubhub_url, venue:venues(name, city)', { count: 'exact' })
       .gte('start_date', nowIso).eq('status', 'sold_out').is(meta.urlCol, null)
       .order('start_date', { ascending: true }).range(from, from + PAGE - 1)
     total = count ?? 0
-    await Promise.all(((data ?? []) as EvRow[]).map(async ev => {
+    const data = ((raw ?? []) as Array<EvRow & { venue: { name: string | null; city: string | null } | null }>).map(e => ({ ...e, venue_name: e.venue?.name ?? null, venue_city: e.venue?.city ?? null }))
+    await Promise.all((data as EvRow[]).map(async ev => {
       const date = new Date(ev.start_date).toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
       const { data: cats } = await db.from(meta.table).select(meta.cols).eq('event_date', date).is('gone_at', null).is('matched_event_id', null).limit(300)
       const asEvent = toShowfinder(ev)
@@ -135,6 +139,7 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
         <div className="flex flex-wrap gap-2 mb-3">
           <Link href={`/admin/unmatched?platform=gigsberg&view=${view}`} className={tab(platform === 'gigsberg')}>Gigsberg ({unlinkedGb.toLocaleString('en-GB')})</Link>
           <Link href={`/admin/unmatched?platform=see_tickets&view=${view}`} className={tab(platform === 'see_tickets')}>See Tickets ({unlinkedSt.toLocaleString('en-GB')})</Link>
+          <Link href={`/admin/unmatched?platform=stubhub&view=${view}`} className={tab(platform === 'stubhub')}>StubHub ({unlinkedSh.toLocaleString('en-GB')})</Link>
         </div>
         <div className="flex flex-wrap gap-2 mb-4">
           <Link href={href({ view: 'soldout', filter: '', status: '', page: 1 })} className={tab(view === 'soldout')}>Sold-out site events with no {meta.label} button ({soldOutCount.toLocaleString('en-GB')})</Link>
@@ -200,7 +205,7 @@ export default async function UnmatchedPage({ searchParams }: { searchParams: Pr
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                   <a href={item.catalogue!.url} target="_blank" rel="noreferrer" className="text-blue-600 font-semibold">Open on {meta.label} →</a>
-                  <Link href={platform === 'gigsberg' ? `/admin/gigsberg/link?catalogue_id=${item.catalogue!.id}&return_to=${encodeURIComponent(href({}))}` : `/admin/see-tickets/link?catalogue_id=${item.catalogue!.id}&return_to=${encodeURIComponent(href({}))}`} className="text-slate-600 font-semibold underline">Search all events</Link>
+                  {platform !== 'stubhub' && <Link href={platform === 'gigsberg' ? `/admin/gigsberg/link?catalogue_id=${item.catalogue!.id}&return_to=${encodeURIComponent(href({}))}` : `/admin/see-tickets/link?catalogue_id=${item.catalogue!.id}&return_to=${encodeURIComponent(href({}))}`} className="text-slate-600 font-semibold underline">Search all events</Link>}
                   {!isHidden && (
                     <form action={createEventAction}><input type="hidden" name="platform" value={platform} /><input type="hidden" name="catalogue_id" value={String(item.catalogue!.id)} /><input type="hidden" name="return_to" value={href({})} /><button className="rounded-lg bg-blue-700 text-white font-bold text-sm px-3 py-1" title="Builds a new event page from this feed listing">Create event page</button></form>
                   )}

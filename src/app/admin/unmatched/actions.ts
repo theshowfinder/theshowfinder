@@ -5,18 +5,19 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createEventFromCatalogue } from '@/lib/feedEventImport'
+import { poundsFrom } from '@/lib/stubhubCatalogue'
 
 async function checkAuth() {
   const store = await cookies()
   if (store.get('admin_token')?.value !== process.env.ADMIN_PASSWORD) redirect('/admin/login')
 }
 
-type Platform = 'gigsberg' | 'see_tickets'
-const TABLE: Record<Platform, string> = { gigsberg: 'gigsberg_catalogue_events', see_tickets: 'see_tickets_catalogue_events' }
+type Platform = 'gigsberg' | 'see_tickets' | 'stubhub'
+const TABLE: Record<Platform, string> = { gigsberg: 'gigsberg_catalogue_events', see_tickets: 'see_tickets_catalogue_events', stubhub: 'stubhub_catalogue_events' }
 
 function parse(formData: FormData) {
   const platform = String(formData.get('platform') ?? '') as Platform
-  if (platform !== 'gigsberg' && platform !== 'see_tickets') throw new Error('Unknown platform')
+  if (platform !== 'gigsberg' && platform !== 'see_tickets' && platform !== 'stubhub') throw new Error('Unknown platform')
   const id = String(formData.get('catalogue_id') ?? '')
   if (!id) throw new Error('Missing catalogue record')
   return { platform, id }
@@ -31,14 +32,16 @@ export async function linkAction(formData: FormData) {
   const db = createAdminClient()
   const table = TABLE[platform]
 
-  const { data: row, error: rowErr } = await db.from(table as never).select('*').eq('id', id as never).maybeSingle() as unknown as { data: { url: string; inventory_status?: string } | null; error: { message: string } | null }
+  const { data: row, error: rowErr } = await db.from(table as never).select('*').eq('id', id as never).maybeSingle() as unknown as { data: { url: string; inventory_status?: string; min_price_usd?: number | string | null } | null; error: { message: string } | null }
   if (rowErr || !row) throw new Error(rowErr?.message ?? 'Catalogue record not found')
   const { data: event, error: evErr } = await db.from('events').select('id, slug').eq('id', eventId).maybeSingle()
   if (evErr || !event) throw new Error(evErr?.message ?? 'Site event not found')
 
   const eventPatch = platform === 'gigsberg'
     ? { gigsberg_affiliate_url: row.url, gigsberg_inventory_status: row.inventory_status ?? 'unknown' }
-    : { see_tickets_affiliate_url: row.url }
+    : platform === 'stubhub'
+      ? { stubhub_url: row.url, stubhub_from: poundsFrom(row.min_price_usd == null ? null : Number(row.min_price_usd)) }
+      : { see_tickets_affiliate_url: row.url }
   const { error: upErr } = await db.from('events').update(eventPatch as never).eq('id', eventId)
   if (upErr) throw new Error(upErr.message)
 

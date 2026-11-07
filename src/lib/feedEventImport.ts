@@ -15,6 +15,7 @@ import { searchGigsbergAffiliateListings } from '@/lib/gigsbergAffiliate'
 import { fallbackEventImage, inferEventCategory } from '@/lib/eventImages'
 import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
 import { CITIES } from '@/lib/cities'
+import { poundsFrom } from '@/lib/stubhubCatalogue'
 import { cleanFeedDescription, comparableVenue, feedCategory, feedPriceFrom, londonToUtcIso, normalize, overlap, postcodeFrom, resolveFeedCity, skipReason, slugify, venueBusy, type FeedRow, type KnownEvent, type SkipReason } from '@/lib/feedImportRules'
 
 type Mode = 'off' | 'dry' | 'live'
@@ -34,10 +35,12 @@ export interface FeedImportResult {
   mode: Mode
   gigsbergMode: Mode
   seeTicketsMode: Mode
+  stubhubMode: Mode
   status: 'disabled' | 'complete' | 'partial'
   maxPerRun: number
   gigsberg: PlatformImportStats
   see_tickets: PlatformImportStats
+  stubhub: PlatformImportStats
   durationMs: number
 }
 
@@ -131,6 +134,55 @@ interface GigsbergRow extends FeedRow { id: number; event_time: string | null; p
 // feed_description / search_price / min_price / max_price: the seller's own text and face-value prices.
 interface SeeTicketsRow extends FeedRow { id: string; event_time: string | null; venue_address: string | null; primary_artist: string | null; second_artist: string | null; feed_description: string | null; search_price: string | null; min_price: string | number | null; max_price: string | number | null }
 
+// StubHub catalog row (stubhub_catalogue_events). parent_name is the act StubHub files the show under.
+interface StubHubRow extends FeedRow { id: string; event_time: string | null; parent_name: string | null; category: string | null; labels: string[] | null; image_url: string | null; min_price_usd: number | string | null; raw_city?: string | null }
+
+// StubHub's own type, with comedy picked out of the labels ("Comedy" sits under theater).
+function stubhubCategory(row: StubHubRow): 'concert' | 'theatre' | 'comedy' | 'sports' | null {
+  const labels = (row.labels ?? []).join(' ').toLowerCase()
+  if (/\bcomedy\b/.test(labels)) return 'comedy'
+  if (row.category === 'concerts') return 'concert'
+  if (row.category === 'sports') return 'sports'
+  if (row.category === 'theater') return 'theatre'
+  return null
+}
+
+// StubHub names many shows "<Act> <City>" ("Dominum Bristol"): the page title drops the town.
+export function stubhubTitle(name: string, city: string | null | undefined): string {
+  const c = (city ?? '').trim()
+  if (c && name.toLowerCase().endsWith(` ${c.toLowerCase()}`)) {
+    const t = name.slice(0, name.length - c.length - 1).trim()
+    if (t.length >= 2) return t
+  }
+  return name
+}
+
+// Only StubHub performer photos are specific to the act; their category pictures are generic stock.
+function stubhubImage(url: string | null): string | null {
+  if (!url || !/stubcloudstatic\.com\/.+\/performer\//i.test(url)) return null
+  return url.replace(/^http:\/\//i, 'https://')
+}
+
+async function createStubHubEvent(db: Loose, row: StubHubRow): Promise<string> {
+  const venueId = await findOrCreateVenue(db, row.venue!, row.city!)
+  const title = stubhubTitle(row.name, row.raw_city ?? row.city)
+  const category = stubhubCategory(row) ?? inferEventCategory(title)
+  const slug = `${slugify(`${title}-${row.event_date}-${row.city}`)}-sh${row.id}`
+  const { data: event, error } = await db.from('events').insert({
+    title, slug, category, venue_id: venueId,
+    description: `Live event in ${row.city}. Check StubHub for current ticket availability and prices.`,
+    start_date: londonToUtcIso(row.event_date!, row.event_time), currency: 'GBP',
+    stubhub_url: row.url, stubhub_from: poundsFrom(row.min_price_usd == null ? null : Number(row.min_price_usd)),
+    source: 'stubhub', source_url: row.url, status: 'upcoming',
+  }).select('id').single()
+  if (error || !event) throw new Error(error?.message ?? 'Could not create event')
+  const feedImage = stubhubImage(row.image_url)
+  const artistImage = await linkArtist(db, event.id, row.parent_name, feedImage)
+  await db.from('events').update({ image_url: artistImage ?? feedImage ?? fallbackEventImage(category, title) }).eq('id', event.id)
+  await db.from('stubhub_catalogue_events').update({ matched_event_id: event.id, match_status: 'approved_new', match_reason: 'Imported automatically from the StubHub catalog', match_checked_at: new Date().toISOString() }).eq('id', row.id)
+  return event.id as string
+}
+
 async function createGigsbergEvent(db: Loose, row: GigsbergRow): Promise<string> {
   const venueId = await findOrCreateVenue(db, row.venue!, row.city!)
   const category = feedCategory('gigsberg', row.type_name, row.sub_type) ?? inferEventCategory(row.name)
@@ -195,13 +247,14 @@ async function fetchCandidates<T>(db: Loose, table: string, columns: string, fro
 export async function importFeedEvents(opts: { deadlineMs: number }): Promise<FeedImportResult> {
   const started = Date.now()
   const db = createAdminClient() as Loose
-  const { data: state } = await db.from('feed_import_state').select('mode, max_per_run, gigsberg_mode, see_tickets_mode').eq('id', 1).maybeSingle() as { data: { mode: Mode; max_per_run: number; gigsberg_mode: Mode | null; see_tickets_mode: Mode | null } | null }
+  const { data: state } = await db.from('feed_import_state').select('mode, max_per_run, gigsberg_mode, see_tickets_mode, stubhub_mode').eq('id', 1).maybeSingle() as { data: { mode: Mode; max_per_run: number; gigsberg_mode: Mode | null; see_tickets_mode: Mode | null; stubhub_mode: Mode | null } | null }
   const baseMode: Mode = state?.mode ?? 'dry'
   const gMode: Mode = state?.gigsberg_mode ?? baseMode
   const sMode: Mode = state?.see_tickets_mode ?? baseMode
-  const mode: Mode = gMode === 'live' || sMode === 'live' ? 'live' : gMode === 'off' && sMode === 'off' ? 'off' : 'dry'
+  const hMode: Mode = state?.stubhub_mode ?? 'dry'
+  const mode: Mode = gMode === 'live' || sMode === 'live' || hMode === 'live' ? 'live' : gMode === 'off' && sMode === 'off' && hMode === 'off' ? 'off' : 'dry'
   const maxPerRun = state?.max_per_run ?? 150
-  const result: FeedImportResult = { mode, gigsbergMode: gMode, seeTicketsMode: sMode, status: 'complete', maxPerRun, gigsberg: emptyStats(), see_tickets: emptyStats(), durationMs: 0 }
+  const result: FeedImportResult = { mode, gigsbergMode: gMode, seeTicketsMode: sMode, stubhubMode: hMode, status: 'complete', maxPerRun, gigsberg: emptyStats(), see_tickets: emptyStats(), stubhub: emptyStats(), durationMs: 0 }
   if (mode === 'off') { result.status = 'disabled'; return result }
   // Our cities first, then soonest (rows arrive sorted by date; the sort is stable).
   const ourCitiesFirst = <T extends FeedRow>(rows: T[]) => rows.sort((a, b) => Number(!isOurCity(a.city)) - Number(!isOurCity(b.city)))
@@ -271,19 +324,46 @@ export async function importFeedEvents(opts: { deadlineMs: number }): Promise<Fe
     }
   }
 
+  // StubHub (after the other two, so a show both list is created from the seller with face-value tickets first)
+  const h = result.stubhub
+  const hRows = hMode === 'off' ? [] : await fetchCandidates<StubHubRow>(db, 'stubhub_catalogue_events', 'id, name, event_date, event_time, venue, city, url, parent_name, category, labels, image_url, min_price_usd', today, horizon)
+  h.candidates = hRows.length
+  for (const r of hRows) { r.raw_city = r.city; r.city = resolveFeedCity(r.city, null) }
+  ourCitiesFirst(hRows)
+  for (const row of hRows) {
+    if (outOfTime()) { result.status = 'partial'; break }
+    const title = stubhubTitle(row.name, row.raw_city)
+    const check = { ...row, name: title }
+    const why = skipReason(check, sameDay(row.event_date!), today)
+    if (why) { bump(h, why); continue }
+    if (stubhubCategory(row) !== 'sports' && venueBusy(check, sameDay(row.event_date!))) { bump(h, 'venue_busy'); continue }
+    h.eligible++
+    if (hMode === 'dry') { h.wouldImport++; if (h.sample.length < 12) h.sample.push(`${title} | ${row.venue}, ${row.city} | ${row.event_date}`); remember(check); continue }
+    if (h.imported >= maxPerRun) { result.status = 'partial'; continue }
+    try {
+      await createStubHubEvent(db, row)
+      remember(check); h.imported++
+      if (h.sample.length < 12) h.sample.push(`${title} | ${row.venue}, ${row.city} | ${row.event_date}`)
+    } catch (e) {
+      h.errors++
+      console.error('[feed-import] stubhub', row.id, e instanceof Error ? e.message : e)
+    }
+  }
+
   result.durationMs = Date.now() - started
   await db.from('feed_import_state').update({ last_stats: { at: new Date().toISOString(), ...result } }).eq('id', 1)
   return result
 }
 
 /** Manual "create the event page" for one unmatched catalogue row (used by the Unmatched worklist). */
-export async function createEventFromCatalogue(platform: 'gigsberg' | 'see_tickets', id: string): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
+export async function createEventFromCatalogue(platform: 'gigsberg' | 'see_tickets' | 'stubhub', id: string): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
   const db = createAdminClient() as Loose
-  const table = platform === 'gigsberg' ? 'gigsberg_catalogue_events' : 'see_tickets_catalogue_events'
-  const { data: row } = await db.from(table).select('*').eq('id', id).maybeSingle() as { data: (GigsbergRow & SeeTicketsRow & { gone_at: string | null; matched_event_id: string | null }) | null }
+  const table = platform === 'gigsberg' ? 'gigsberg_catalogue_events' : platform === 'stubhub' ? 'stubhub_catalogue_events' : 'see_tickets_catalogue_events'
+  const { data: row } = await db.from(table).select('*').eq('id', id).maybeSingle() as { data: (GigsbergRow & SeeTicketsRow & StubHubRow & { gone_at: string | null; matched_event_id: string | null }) | null }
   if (!row) return { ok: false, error: 'That listing no longer exists.' }
   if (row.matched_event_id) return { ok: false, error: 'That listing is already linked to a site event.' }
   if (row.gone_at) return { ok: false, error: 'That listing has been removed from the feed.' }
+  row.raw_city = row.city
   row.city = resolveFeedCity(row.city, platform === 'see_tickets' ? row.venue_address : null)
   if (!row.venue?.trim() || !row.city?.trim()) return { ok: false, error: 'The feed gives no venue or city for this show, so a page cannot be built. Hide it or link it by hand.' }
   if (!row.event_date || row.event_date < londonDate(new Date().toISOString())) return { ok: false, error: 'That show is in the past.' }
@@ -294,6 +374,8 @@ export async function createEventFromCatalogue(platform: 'gigsberg' | 'see_ticke
       await db.from(table).update({ inventory_status: inv.total > 0 ? 'available' : 'no_inventory', inventory_checked_at: new Date().toISOString() }).eq('id', row.id)
       if (!(inv.total > 0)) return { ok: false, error: 'Gigsberg has no tickets for this show right now, so a page would have a dead button. Not created.' }
       eventId = await createGigsbergEvent(db, row)
+    } else if (platform === 'stubhub') {
+      eventId = await createStubHubEvent(db, row as unknown as StubHubRow)
     } else {
       eventId = await createSeeTicketsEvent(db, row)
     }

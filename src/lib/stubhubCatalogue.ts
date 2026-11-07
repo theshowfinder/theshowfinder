@@ -131,6 +131,12 @@ export async function syncStubHubCatalogue(options: { deadlineMs?: number } = {}
         const { error } = await db.from('stubhub_catalogue_events').update({ gone_at: now }).in('id', gone.slice(i, i + 200))
         if (!error) result.gone += Math.min(200, gone.length - i)
       }
+      // A page created from a StubHub listing has nothing left to sell once StubHub drops it.
+      for (let i = 0; i < gone.length; i += 200) {
+        const { data } = await db.from('stubhub_catalogue_events').select('matched_event_id').in('id', gone.slice(i, i + 200)).not('matched_event_id', 'is', null)
+        const ids = ((data ?? []) as Array<{ matched_event_id: string }>).map(r => r.matched_event_id)
+        if (ids.length) await db.from('events').update({ status: 'cancelled' }).in('id', ids).eq('source', 'stubhub').neq('status', 'cancelled')
+      }
     }
   } else {
     result.detail = 'time limit reached before the whole catalog was read; nothing removed'
@@ -235,7 +241,7 @@ export async function reconcileStubHubLinks(options: { dryRun?: boolean } = {}):
   const priceByUrl = new Map(rows.map(r => [r.url, r.min_price_usd]))
   const byEvent = new Map<string, LinkedRow[]>()
   for (const r of rows) {
-    if (r.gone_at || !r.matched_event_id || !['auto_matched', 'approved_existing'].includes(r.match_status)) continue
+    if (r.gone_at || !r.matched_event_id || !['auto_matched', 'approved_existing', 'approved_new'].includes(r.match_status)) continue
     const list = byEvent.get(r.matched_event_id) ?? []
     list.push({ id: r.id, url: r.url, event_time: r.event_time, manual: r.match_status !== 'auto_matched' })
     byEvent.set(r.matched_event_id, list)

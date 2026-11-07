@@ -10,12 +10,12 @@ export const dynamic = 'force-dynamic'
 async function runOnce() {
   try {
     const result = await importFeedEvents({ deadlineMs: Date.now() + 240_000 })
-    if (result.mode === 'live' && (result.gigsberg.imported > 0 || result.see_tickets.imported > 0)) {
+    if (result.mode === 'live' && (result.gigsberg.imported > 0 || result.see_tickets.imported > 0 || result.stubhub.imported > 0)) {
       // New shows have no cached page yet; existing pages whose links changed are rebuilt by refresh-listings
       // (src/lib/changedPages.ts). Only the city lists need refreshing now.
       revalidatePath('/cities', 'layout')
     }
-    return NextResponse.json({ success: result.gigsberg.errors + result.see_tickets.errors === 0 || result.gigsberg.imported + result.see_tickets.imported > 0 || result.mode !== 'live', ...result })
+    return NextResponse.json({ success: result.gigsberg.errors + result.see_tickets.errors + result.stubhub.errors === 0 || result.gigsberg.imported + result.see_tickets.imported + result.stubhub.imported > 0 || result.mode !== 'live', ...result })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error('[feed-import] failed:', message)
