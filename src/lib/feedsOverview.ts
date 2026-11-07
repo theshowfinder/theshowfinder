@@ -96,7 +96,7 @@ export function providerStatuses(): ProviderStatus[] {
     { provider: 'See Tickets', envVar: null, tracked: true, note: 'Awin, built in' },
     { provider: 'Gigsberg', envVar: null, tracked: true, note: 'aff=showfinder, built in' },
     { provider: 'Viagogo', envVar: 'VIAGOGO_AFFILIATE_TEMPLATE', tracked: probe(getViagogoAffiliateLink, 'https://www.viagogo.co.uk/x'), note: 'needs the Partnerize template in Vercel' },
-    { provider: 'StubHub', envVar: 'STUBHUB_AFFILIATE_TEMPLATE', tracked: probe(getStubHubAffiliateLink, 'https://www.stubhub.co.uk/x'), note: 'not applied for yet' },
+    { provider: 'StubHub', envVar: 'STUBHUB_AFFILIATE_TEMPLATE', tracked: probe(getStubHubAffiliateLink, 'https://www.stubhub.co.uk/x'), note: 'StubHub International via Impact (approved 7 Nov 2026)' },
     { provider: 'Eventim', envVar: 'EVENTIM_AFFILIATE_TEMPLATE', tracked: probe(getEventimAffiliateLink, 'https://www.eventim.co.uk/x'), note: 'not applied for yet' },
     { provider: 'Vivid Seats', envVar: 'VIVIDSEATS_AFFILIATE_TEMPLATE', tracked: probe(getVividSeatsAffiliateLink, 'https://www.vividseats.com/x'), note: 'Impact, being signed up' },
     { provider: 'Eventbrite', envVar: 'EVENTBRITE_AFFILIATE_TEMPLATE', tracked: probe(getEventbriteAffiliateLink, 'https://www.eventbrite.co.uk/x'), note: 'not applied for yet' },
