@@ -652,7 +652,7 @@ export default async function CityPage({
               {onsaleGroups.map(group => (
                 <OnSaleTile
                   key={group.slug}
-                  href={`/on-sale-this-week/${group.slug}`}
+                  href={`/on-sale-this-week/${group.slug}/in/${encodeURIComponent(cityName)}`}
                   image={eventImageUrl(group.image_url, 'concert', group.artistName)}
                   title={group.artistName}
                   meta={`${groupDateCount(group)} UK date${groupDateCount(group) !== 1 ? 's' : ''} · ${saleBadgeText(group.saleType, group.onsale_date)}`}

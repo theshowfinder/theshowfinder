@@ -27,7 +27,7 @@ test('root layout does not set a site-wide canonical', () => {
 // through its metadata helper).
 const NO_CANONICAL = [/\/admin\//, /\/login\/page\.tsx$/, /\/signup\/page\.tsx$/, /\/saved\/page\.tsx$/]
 // Pages whose metadata is built by a shared helper that sets the canonical.
-const HELPER_PAGES = [/\/venues\/\[slug\]\/page\.tsx$/, /\/venues\/\[slug\]\/p\/\[n\]\/page\.tsx$/]
+const HELPER_PAGES = [/\/venues\/\[slug\]\/page\.tsx$/, /\/venues\/\[slug\]\/p\/\[n\]\/page\.tsx$/, /\/on-sale-this-week\/\[slug\]\/page\.tsx$/, /\/on-sale-this-week\/\[slug\]\/in\/\[city\]\/page\.tsx$/]
 
 test('every public page sets its own canonical', () => {
   const missing = walk(APP).filter(f => {
@@ -37,6 +37,10 @@ test('every public page sets its own canonical', () => {
     return !/canonical/.test(readFileSync(f, 'utf8'))
   })
   assert.deepEqual(missing.map(f => f.replace(APP, '')), [])
+})
+
+test('on-sale tour metadata helper sets a canonical', () => {
+  assert.match(readFileSync(join(APP, 'on-sale-this-week', '[slug]', 'OnSaleArtistView.tsx'), 'utf8'), /canonical/)
 })
 
 test('venue metadata helper sets a canonical', () => {
