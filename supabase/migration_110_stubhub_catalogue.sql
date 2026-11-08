@@ -29,3 +29,4 @@ alter table public.stubhub_catalogue_events enable row level security;
 
 -- Cheapest StubHub price for the show, in pounds, shown on the StubHub button.
 alter table public.events add column if not exists stubhub_from numeric;
+grant select, insert, update, delete on public.stubhub_catalogue_events to service_role;   -- Supabase Data API: new tables need explicit grants (30 Oct 2026)

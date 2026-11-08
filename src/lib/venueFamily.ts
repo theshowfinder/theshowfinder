@@ -264,11 +264,14 @@ export function keepReason(e: KeepCandidate): string {
  *      over a bare TicketWeb / Universe / ticketmaster.com copy;
  *   3. the most seller links;  4. the oldest (then lowest id, so the answer is stable).
  */
+const titleLength = (e: KeepCandidate) => ((e as { title?: string | null }).title ?? '').length
+
 export function pickKeeper<T extends KeepCandidate>(events: T[]): T {
   return [...events].sort((x, y) =>
     Number(isFromTicketmaster(y)) - Number(isFromTicketmaster(x))
     || (isFromTicketmaster(x) && isFromTicketmaster(y) ? listingFullness(y) - listingFullness(x) : 0)
     || sellerLinkCount(y) - sellerLinkCount(x)
+    || titleLength(x) - titleLength(y)
     || x.created_at.localeCompare(y.created_at)
     || x.id.localeCompare(y.id))[0]
 }
@@ -306,6 +309,15 @@ export function titlesFullyMatch(a: string, b: string): boolean {
  * `isLocalSource(source)` says whether a source is a council / tourism feed: a council copy is only merged
  * when its start time is within 15 minutes of the kept event and its title fully matches.
  */
+export const SAME_VENUE_TWIN_MINUTES = 15
+// An act title that is really a date or a club-night slot ("Mon 28th Dec - Real Deal Comedy Jam") says nothing.
+const DATE_ACT = /^(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(day)?\b|^\d{1,2}(st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/
+/** Two titles at one venue record and time that name the same act (the tour name or ticket type may differ). */
+export function sameVenueTwin(a: string, b: string): boolean {
+  const x = actTitle(a), y = actTitle(b)
+  return x.length >= 4 && x === y && !GENERIC_TITLE.test(x) && !DATE_ACT.test(x)
+}
+
 /** One side is a council / tourism listing, the other is not, and both are in the same town. */
 function localCopyInTown(a: GroupEvent, b: GroupEvent, isLocalSource: (source: string | null) => boolean): boolean {
   if (isLocalSource(a.source) === isLocalSource(b.source)) return false
@@ -331,7 +343,14 @@ export function findDuplicateGroups<T extends GroupEvent>(events: T[], isLocalSo
       // from a council feed and Ticketmaster's "Placebo - 30th Anniversary Tour" at Utilita Arena Cardiff fell
       // between the two. Events reaching here are already canonical, so nothing is grouped twice.
       // Two Ticketmaster products at the same venue record (hospitality, hotel bundles) stay as they are.
-      if (a.venue_id === b.venue_id && !isLocalSource(a.source) && !isLocalSource(b.source)) continue
+      // Two seller listings at the same venue record are one show only when they start within 15 minutes and are the
+      // same act: Ticketmaster lists ticket types and tour-name variants as separate events ("Day Fever" / "Day Fever -
+      // Birmingham", "Creamfields 2027 - 2 Day Camping - Gold / Silver / Bronze", "Nations Championship 2026: Team
+      // Ticket - Wales / Fiji"). Hospitality and hotel bundles are extras and never reach here.
+      if (a.venue_id === b.venue_id && !isLocalSource(a.source) && !isLocalSource(b.source)) {
+        if (mins[i] === null || mins[j] === null || Math.abs(mins[i]! - mins[j]!) > SAME_VENUE_TWIN_MINUTES) continue
+        if (!sameVenueTwin(a.title, b.title)) continue
+      }
       if (mins[i] !== null && mins[j] !== null && Math.abs(mins[i]! - mins[j]!) > SAME_SHOW_MINUTES) continue
       const show = sameShow(a, b)
       if (!show) continue
@@ -361,7 +380,7 @@ export function findDuplicateGroups<T extends GroupEvent>(events: T[], isLocalSo
     if (gp.some(p => p.show === 'weak')) why.push('act not certain (start time not announced and titles differ, or a generic night name)')
     const loose = [...new Set(gp.filter(p => p.bld === 'postcode' || p.bld === 'coords' || (p.bld === 'place' && p.show !== 'strong')).map(p => p.bld))]
     if (loose.length) why.push(`building matched only by ${loose.join('/')}`)
-    if (evs.filter(isTicketmasterPrimary).length > 1) why.push('Ticketmaster itself lists it in more than one room')
+    if (new Set(evs.filter(isTicketmasterPrimary).map(e => e.venue_id)).size > 1) why.push('Ticketmaster itself lists it in more than one room')
     if (gp.some(p => p.bld === 'town') && evs.filter(e => !isLocalSource(e.source)).length !== 1) why.push('council copy matched by town only, and more than one seller listing')
     const times = evs.map(e => londonStartMinutes(e.start_date)).filter((m): m is number => m !== null)
     if (times.length && Math.max(...times) - Math.min(...times) > SAME_SHOW_MINUTES) why.push(`copies start more than ${SAME_SHOW_MINUTES} minutes apart (two performances?)`)

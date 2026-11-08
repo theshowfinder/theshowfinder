@@ -162,3 +162,22 @@ describe('council copy at a differently named venue in the same town', () => {
     assert.equal(findDuplicateGroups([tm, tm2], isLocal).length, 0)
   })
 })
+
+describe('Ticketmaster ticket types and tour-name variants at one venue', () => {
+  const tmEv = (id: string, title: string, start = '2026-12-19T15:00:00+00:00') => ev({ id, title, venue: academy, start_date: start, tickets_url: `https://www.ticketmaster.co.uk/x/event/${id}` })
+  test('"Day Fever" and "Day Fever - Birmingham" are one show, the plain title kept', () => {
+    const [g] = findDuplicateGroups([tmEv('a', 'Day Fever - Birmingham'), tmEv('b', 'Day Fever')], () => false)
+    assert.ok(g); assert.equal(g.confident, true, g.reasons.join('; ')); assert.equal(g.keep.title, 'Day Fever')
+  })
+  test('festival ticket types fold into one listing', () => {
+    const gs = findDuplicateGroups([tmEv('a', 'Creamfields 2027 - 2 Day Camping - Gold'), tmEv('b', 'Creamfields 2027 - 2 Day Camping - Silver'), tmEv('c', 'Creamfields 2027 - 2 Day Camping - Bronze')], () => false)
+    assert.equal(gs.length, 1); assert.equal(gs[0].duplicates.length, 2); assert.equal(gs[0].confident, true, gs[0].reasons.join('; '))
+  })
+  test('not when they start more than 15 minutes apart (early and late show)', () => {
+    assert.equal(findDuplicateGroups([tmEv('a', 'Day Fever'), tmEv('b', 'Day Fever', '2026-12-19T19:00:00+00:00')], () => false).length, 0)
+  })
+  test('not different acts, nor a date used as the title', () => {
+    assert.equal(findDuplicateGroups([tmEv('a', 'Jake Bugg'), tmEv('b', 'Gabrielle - The Hits')], () => false).length, 0)
+    assert.equal(findDuplicateGroups([tmEv('a', 'Mon 28th Dec - Real Deal Comedy Jam'), tmEv('b', 'Mon 28th Dec - Stand Up Comedy Show')], () => false).length, 0)
+  })
+})
