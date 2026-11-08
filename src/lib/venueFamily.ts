@@ -306,6 +306,12 @@ export function titlesFullyMatch(a: string, b: string): boolean {
  * `isLocalSource(source)` says whether a source is a council / tourism feed: a council copy is only merged
  * when its start time is within 15 minutes of the kept event and its title fully matches.
  */
+/** One side is a council / tourism listing, the other is not, and both are in the same town. */
+function localCopyInTown(a: GroupEvent, b: GroupEvent, isLocalSource: (source: string | null) => boolean): boolean {
+  if (isLocalSource(a.source) === isLocalSource(b.source)) return false
+  return Boolean(norm(a.venue?.city) && norm(a.venue?.city) === norm(b.venue?.city))
+}
+
 export function findDuplicateGroups<T extends GroupEvent>(events: T[], isLocalSource: (source: string | null) => boolean): DuplicateGroup<T>[] {
   const byDay = new Map<string, T[]>()
   for (const e of events) {
@@ -315,7 +321,7 @@ export function findDuplicateGroups<T extends GroupEvent>(events: T[], isLocalSo
   }
   const parent = new Map<string, string>()
   const find = (x: string): string => { const p = parent.get(x) ?? x; if (p === x) return x; const r = find(p); parent.set(x, r); return r }
-  type Pair = { a: string; b: string; bld: NonNullable<ReturnType<typeof sameBuilding>>; show: 'strong' | 'weak' }
+  type Pair = { a: string; b: string; bld: NonNullable<ReturnType<typeof sameBuilding>> | 'town'; show: 'strong' | 'weak' }
   const pairs: Pair[] = []
   for (const list of byDay.values()) {
     const mins = list.map(e => londonStartMinutes(e.start_date))
@@ -329,7 +335,11 @@ export function findDuplicateGroups<T extends GroupEvent>(events: T[], isLocalSo
       if (mins[i] !== null && mins[j] !== null && Math.abs(mins[i]! - mins[j]!) > SAME_SHOW_MINUTES) continue
       const show = sameShow(a, b)
       if (!show) continue
-      const bld = sameBuilding(a.venue, b.venue)
+      // A council / tourism copy often names the venue differently from Ticketmaster ("The Garage" / "G2",
+      // "Scottish Event Campus (SEC)" / "SEC Armadillo", a street for Oran Mor) and has no start time, so the building
+      // test fails. Same town, same day, the act's full title and a strong act match is the same show; the group
+      // checks below still require the council time to agree and the kept copy to be the seller's.
+      const bld = sameBuilding(a.venue, b.venue) ?? (localCopyInTown(a, b, isLocalSource) && show === 'strong' && titlesFullyMatch(a.title, b.title) ? 'town' : null)
       if (!bld) continue
       pairs.push({ a: a.id, b: b.id, bld, show })
       parent.set(find(a.id), find(b.id))
@@ -352,6 +362,7 @@ export function findDuplicateGroups<T extends GroupEvent>(events: T[], isLocalSo
     const loose = [...new Set(gp.filter(p => p.bld === 'postcode' || p.bld === 'coords' || (p.bld === 'place' && p.show !== 'strong')).map(p => p.bld))]
     if (loose.length) why.push(`building matched only by ${loose.join('/')}`)
     if (evs.filter(isTicketmasterPrimary).length > 1) why.push('Ticketmaster itself lists it in more than one room')
+    if (gp.some(p => p.bld === 'town') && evs.filter(e => !isLocalSource(e.source)).length !== 1) why.push('council copy matched by town only, and more than one seller listing')
     const times = evs.map(e => londonStartMinutes(e.start_date)).filter((m): m is number => m !== null)
     if (times.length && Math.max(...times) - Math.min(...times) > SAME_SHOW_MINUTES) why.push(`copies start more than ${SAME_SHOW_MINUTES} minutes apart (two performances?)`)
     if (duplicates.some(e => !gp.some(p => (p.a === e.id && p.b === keep.id) || (p.b === e.id && p.a === keep.id)))) why.push('not every copy matches the kept event directly')

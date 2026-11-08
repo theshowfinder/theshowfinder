@@ -139,3 +139,26 @@ describe('the one same-show rule (isSameShow)', () => {
     assert.equal(isSameShow(at('a', 'Lucia & The Best Boys', '2027-01-28T19:30:00Z', guildhall), at('b', 'Lucia & the Best Boys', '2027-01-28T20:15:00Z', guildhall)), 'strong')
   })
 })
+
+// Glasgow, Nov 2026: the council feed lists "Scarlet Rebels" at "The Garage" with no time; Ticketmaster at "G2".
+describe('council copy at a differently named venue in the same town', () => {
+  const garage = { id: 'g1', name: 'The Garage', city: 'Glasgow', postcode: null }
+  const g2 = { id: 'g2', name: 'G2', city: 'Glasgow', postcode: null }
+  const tm = ev({ id: 'tm', title: 'Scarlet Rebels', venue: g2, start_date: '2027-02-15T19:00:00+00:00', tickets_url: 'https://www.ticketmaster.co.uk/x/event/1' })
+  const council = ev({ id: 'gc', title: 'Scarlet Rebels', venue: garage, start_date: '2027-02-15T00:00:00+00:00', source: 'glasgow_council', ticketmaster_id: null })
+  const isLocal = (s: string | null) => s === 'glasgow_council'
+  test('merged into the Ticketmaster listing', () => {
+    const [g] = findDuplicateGroups([tm, council], isLocal)
+    assert.ok(g)
+    assert.equal(g.keep.id, 'tm')
+    assert.equal(g.confident, true, g.reasons.join('; '))
+  })
+  test('not when the titles differ', () => {
+    const other = ev({ ...council, id: 'gc2', title: 'Scarlet Rebels Tribute Night' })
+    assert.equal(findDuplicateGroups([tm, other], isLocal).filter(x => x.confident).length, 0)
+  })
+  test('not between two seller listings in different venues', () => {
+    const tm2 = ev({ ...tm, id: 'tm2', venue: garage })
+    assert.equal(findDuplicateGroups([tm, tm2], isLocal).length, 0)
+  })
+})

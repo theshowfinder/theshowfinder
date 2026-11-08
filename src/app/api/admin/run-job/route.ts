@@ -21,6 +21,7 @@ const RUNNABLE = new Set([
   'geocode-venues',
   'sync-stubhub',
   'match-stubhub',
+  'merge-duplicates',
 ])
 
 export async function POST(request: Request) {
