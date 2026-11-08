@@ -310,7 +310,9 @@ function buildProviders(event: Pick<EventDetail, 'slug' | 'title' | 'status' | '
   const has = (name: string) => resale.some(r => r.name === name)
   if (isLocal) return { primary, resale }
   if (!has('Viagogo')) resale.push({ name: 'Viagogo', bg: '#00a650', href: outLink('vg', `https://www.viagogo.co.uk/search?q=${q}`), price: 'Search resale' })
-  if (!has('StubHub')) resale.push({ name: 'StubHub', bg: '#400078', href: outLink('sh', `https://www.stubhub.com/search?q=${q}`), price: 'Search resale' })
+  // No StubHub search button: our StubHub link is StubHub International (Impact), whose UK site has no search page,
+  // and stubhub.com is the separate US company, so Impact rejects it ("link is malformed"). StubHub shows only
+  // where the nightly StubHub catalog import found the show (stubhub_url, with its price).
   resale.push({ name: 'Vivid Seats', bg: '#02044a', href: outLink('vs', `https://www.vividseats.com/search?searchTerm=${q}`), price: 'Search resale' })
   return { primary, resale }
 }
