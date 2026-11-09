@@ -5,7 +5,7 @@ const SITE = 'https://www.theshowfinder.com'
 export const OUTREACH_FROM = 'TheShowFinder <partners@theshowfinder.com>'
 export const OUTREACH_REPLY_TO = 'hello@theshowfinder.com'
 // Few, well-chosen emails (Chris, 6 Nov 2026): small independents close to busy venues, not volume.
-export const DAILY_LIMIT = 15
+export const DAILY_LIMIT = 40   // first emails + follow-ups a weekday (Chris, 9 Nov 2026; was 15 from 6 Nov)
 export const FOLLOW_UP_AFTER_DAYS = 4
 /** No reply this long after the first email (follow-up sent in between): marked "No response", never chased again. */
 export const NO_RESPONSE_AFTER_DAYS = 10
