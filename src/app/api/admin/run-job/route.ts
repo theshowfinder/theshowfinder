@@ -23,6 +23,7 @@ const RUNNABLE = new Set([
   'match-stubhub',
   'merge-duplicates',
   'detect-new-shows',
+  'outreach-find',
 ])
 
 export async function POST(request: Request) {

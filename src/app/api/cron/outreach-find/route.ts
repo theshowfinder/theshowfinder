@@ -68,11 +68,13 @@ async function verifyCompany(numbers: string[], names: string[], siteText?: stri
 
 async function overpass(query: string, rounds = 2): Promise<Loose[]> {
   // Overpass servers are often busy (half the runs on 5-6 Nov found nothing): try three servers, twice round.
-  const servers = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter']
+  // 9 Nov 2026: overpass-api.de reset connections and kumi / private.coffee timed out, while the maps.mail.ru mirror
+  // answered in ~20s, so it goes first; the others stay as fallbacks.
+  const servers = ['https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter']
   for (let round = 0; round < rounds; round++) {
     for (const url of servers) {
       try {
-        const r = await fetch(url, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query), signal: AbortSignal.timeout(25_000) })
+        const r = await fetch(url, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query), signal: AbortSignal.timeout(35_000) })
         if (r.ok) { const els = (await r.json()).elements ?? []; if (els.length) return els }
       } catch { /* try the next server */ }
     }
