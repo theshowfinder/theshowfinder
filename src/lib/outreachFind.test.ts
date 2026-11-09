@@ -40,3 +40,8 @@ test('never picks another branch\'s inbox', () => {
   assert.equal(pickEmail(['york@rudyspizza.co.uk', 'peterstreet@rudyspizza.co.uk'], 'https://www.rudyspizza.co.uk/', 'Manchester'), 'peterstreet@rudyspizza.co.uk')
   assert.equal(pickEmail(['leeds@bar.co.uk'], 'https://bar.co.uk', 'Manchester'), null)
 })
+
+test('legal / data-protection inboxes are never picked (Tim Hortons, Roxy Ball Room, 9 Nov 2026)', () => {
+  assert.equal(pickEmail(['thgdpr@timhortons.co.uk'], 'https://www.timhortons.co.uk', 'Birmingham'), null)
+  assert.equal(pickEmail(['dataprotection@roxyleisure.co.uk', 'birmingham@roxyleisure.co.uk'], 'https://www.roxyleisure.co.uk', 'Birmingham'), 'birmingham@roxyleisure.co.uk')
+})

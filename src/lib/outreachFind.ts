@@ -1,6 +1,8 @@
 // Pure helpers for the automatic prospect finder (cron outreach-find): reading a business's own website for a
 // contact email and its company details. No network here, so it is unit-tested.
 
+// Anywhere in the name: "thgdpr@", "dataprotection@", "group-privacy@" are legal inboxes, never for a sales email.
+const BAD_ANYWHERE = /gdpr|privacy|data\.?protection|dpo\b|unsubscribe|no-?reply|donotreply|recruit|careers/i
 const BAD_LOCAL = /^(no-?reply|donotreply|privacy|dpo|gdpr|data|careers?|jobs?|recruit\w*|press|media|pr|accounts?|invoices?|finance|payroll|hr|legal|complaints|webmaster|admin|support|abuse|sales?|marketing|newsletter|unsubscribe|test|example|name|email|your|user|shop|store|feedback|vouchers?|gifts?|giftcards?|orders?|deliver\w*)$/i
 // Place names that, in a chain's inbox ("yorkbookings@"), mean another branch.
 const PLACES = ['aberdeen', 'ancoats', 'bath', 'belfast', 'birmingham', 'blackpool', 'bournemouth', 'bradford', 'brighton', 'bristol', 'brixton', 'cambridge', 'camden', 'canarywharf', 'cardiff', 'chester', 'clapham', 'covent', 'coventry', 'derby', 'dublin', 'edinburgh', 'exeter', 'glasgow', 'harrogate', 'hull', 'ipswich', 'islington', 'kingscross', 'leeds', 'leicester', 'liverpool', 'london', 'manchester', 'middlesbrough', 'miltonkeynes', 'newcastle', 'northernquarter', 'norwich', 'nottingham', 'oxford', 'plymouth', 'portsmouth', 'reading', 'scarborough', 'sheffield', 'shoreditch', 'soho', 'southampton', 'spinningfields', 'stokeontrent', 'sunderland', 'swansea', 'wolverhampton', 'york']
@@ -35,7 +37,7 @@ export function pickEmail(emails: string[], website: string, city: string, osmEm
   const citySlug = city.toLowerCase().replace(/[^a-z]/g, '')
   const ok = [...new Set([...(osmEmail ? [osmEmail.toLowerCase().trim()] : []), ...emails])].filter(e => {
     const [local, domain] = e.split('@')
-    if (!local || !domain || BAD_LOCAL.test(local)) return false
+    if (!local || !domain || BAD_LOCAL.test(local) || BAD_ANYWHERE.test(local)) return false
     return (osmEmail && e === osmEmail.toLowerCase().trim()) || (site && (domain === site || domain.endsWith('.' + site) || site.endsWith(domain)))
   })
   if (ok.length === 0) return null
