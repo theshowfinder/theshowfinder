@@ -7,6 +7,8 @@ export interface AlertStory {
   standfirst: string
   image: string
   saleLabel: string | null
+  /** Why this person is getting it ("Coming to Birmingham"), shown above the headline. */
+  reason?: string | null
 }
 
 interface Props {
@@ -36,7 +38,7 @@ export default function NewsAlertEmail({ stories, unsubscribeUrl }: Props) {
         <title>{lead.headline}</title>
       </head>
       <body style={{ margin: 0, padding: 0, backgroundColor: '#F5F5F0', fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
-        <span style={{ display: 'none', maxHeight: 0, overflow: 'hidden' }}>{lead.standfirst}</span>
+        <span style={{ display: 'none', maxHeight: 0, overflow: 'hidden' }}>{lead.reason ? `${lead.reason}. ` : ''}{lead.standfirst}</span>
         <table width="100%" cellPadding="0" cellSpacing="0" style={{ backgroundColor: '#F5F5F0', padding: '24px 12px' }}>
           <tbody>
             <tr>
@@ -62,6 +64,9 @@ export default function NewsAlertEmail({ stories, unsubscribeUrl }: Props) {
                     </tr>
                     <tr>
                       <td style={{ padding: '22px 28px 8px' }}>
+                        {lead.reason && (
+                          <p style={{ margin: '0 0 6px', fontSize: '12px', fontWeight: 800, color: '#026CDF' }}>{lead.reason}</p>
+                        )}
                         {lead.saleLabel && (
                           <p style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: 800, color: RED, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{lead.saleLabel}</p>
                         )}
@@ -94,6 +99,7 @@ export default function NewsAlertEmail({ stories, unsubscribeUrl }: Props) {
                                   <td style={{ padding: '12px 0', verticalAlign: 'top' }}>
                                     <a href={alertLink(s.slug, 'more-title')} style={{ fontSize: '16px', lineHeight: '1.3', fontWeight: 800, color: '#0f172a', textDecoration: 'none' }}>{s.headline}</a>
                                     {s.saleLabel && <p style={{ margin: '6px 0 0', fontSize: '12px', fontWeight: 700, color: RED }}>{s.saleLabel}</p>}
+                                    {s.reason && <p style={{ margin: '4px 0 0', fontSize: '12px', fontWeight: 700, color: '#026CDF' }}>{s.reason}</p>}
                                   </td>
                                 </tr>
                               </tbody>
