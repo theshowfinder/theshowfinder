@@ -497,9 +497,11 @@ export default async function CityPage({
         )}
 
 
-        {/* ── CITY GUIDE INTRO: hand-written where we have it, otherwise built from the city's own numbers ── */}
+        {/* ── CITY GUIDE ("<city>'s Live Scene"): hand-written where we have it, otherwise built from the city's own
+             numbers. Last on the page (order-12): it is background reading and search text, and in the middle of the
+             listings it broke up the page (9 Nov 2026). ── */}
         {(introText || autoIntro) && (
-          <div className="order-10"><CityIntro
+          <div className="order-12"><CityIntro
             cityName={cityName}
             emoji={cityConfig.emoji}
             intro={(introText || autoIntro)!}
