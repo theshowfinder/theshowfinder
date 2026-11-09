@@ -175,18 +175,20 @@ async function handleGet(request: Request) {
 
   let mapNote: string | null = null
   let found = 0
-  let backlog = await loadBacklog(city)
-  if (backlog.length < PER_RUN * 2) {
-    const anchors = await anchorVenues(db, city)
-    // One small query per venue (one combined query often timed out on the busy public servers).
+  const runStarted = Date.now()
+
+  // Map one city's venues and add every new place with a website to the backlog. Returns how many places it saw.
+  const mapCity = async (target: string): Promise<number> => {
+    const anchors = await anchorVenues(db, target)
+    if (!anchors.length) { mapNote = `${target}: no venues with map positions`; return 0 }
     const elements: Loose[] = []
     const seenEl = new Set<string>()
     const mapStarted = Date.now()
-    // Overpass first; once it has failed for one venue this run, every venue uses Nominatim instead (four dead
-    // Overpass servers at 35 s each would otherwise use up the whole run on one venue).
+    // Overpass first; once it has failed for one venue, every venue uses Nominatim instead (dead Overpass servers
+    // would otherwise use up the whole run on one venue). One small query per venue.
     let overpassDown = false
     for (const a of anchors) {
-      if (Date.now() - mapStarted > 150_000) break   // leave time to read the websites
+      if (Date.now() - mapStarted > 120_000) break   // leave time to read the websites
       let els: Loose[] = []
       if (!overpassDown && Date.now() - mapStarted < 60_000) {
         const q = `[out:json][timeout:60];(nwr(around:600,${a.lat},${a.lng})[amenity~"^(bar|pub|restaurant|cafe)$"];nwr(around:800,${a.lat},${a.lng})[tourism~"^(hotel|guest_house)$"];);out center tags 300;`
@@ -199,10 +201,8 @@ async function handleGet(request: Request) {
         if (!seenEl.has(k)) { seenEl.add(k); elements.push(el) }
       }
     }
-    found = elements.length
-    if (!anchors.length) mapNote = 'no venues with map positions'
-    else if (!elements.length) mapNote = 'map search (Overpass and Nominatim) returned nothing: working from the backlog'
-    else if (!dry) await db.from('outreach_scanned').upsert({ key: `run:${city}`, city, result: 'run', checked_at: new Date().toISOString() })
+    if (!elements.length) { mapNote = `${target}: map search (Overpass and Nominatim) returned nothing`; return 0 }
+    if (!dry) await db.from('outreach_scanned').upsert({ key: `run:${target}`, city: target, result: 'run', checked_at: new Date().toISOString() })
     const fresh: Loose[] = []
     for (const el of elements) {
       const tags = el.tags ?? {}
@@ -217,15 +217,33 @@ async function handleGet(request: Request) {
       // Chains (OpenStreetMap brand tag, or a known chain name/site) are kept but looked at after the independents.
       const chain = Boolean(tags.brand || tags['brand:wikidata']) || looksLikeChain({ name: tags.name, website })
       const nearest = anchors.map(a => ({ a, d: metresBetween({ lat, lng }, a) })).sort((x, y) => x.d - y.d)[0]
-      fresh.push({ key, city, name: tags.name, website, lat, lng, venue: nearest.a.name, metres: Math.round(nearest.d), chain, tags })
+      fresh.push({ key, city: target, name: tags.name, website, lat, lng, venue: nearest.a.name, metres: Math.round(nearest.d), chain, tags })
     }
     if (!dry) for (let i = 0; i < fresh.length; i += 200) await db.from('outreach_candidates').upsert(fresh.slice(i, i + 200), { onConflict: 'key', ignoreDuplicates: true })
-    backlog = dry ? [...backlog, ...fresh] : await loadBacklog(city)
+    found += elements.length
+    return elements.length
   }
-  // Fill the run from other cities' backlog when the city of the day has too few (or its map search failed).
+
+  // City of the day first: map it when its backlog is low (and it was not already mapped in the last week).
+  const lastRun = new Map<string, number>()
+  const { data: runRows } = await db.from('outreach_scanned').select('key, checked_at').like('key', 'run:%')
+  for (const r of (runRows ?? []) as Array<{ key: string; checked_at: string }>) lastRun.set(r.key.slice(4), Date.parse(r.checked_at))
+  const mappedRecently = (c: string) => (lastRun.get(c) ?? 0) > Date.now() - 7 * 86_400_000
+  let backlog = await loadBacklog(city)
+  if (backlog.length < PER_RUN * 2 && (!mappedRecently(city) || backlog.length === 0)) {
+    await mapCity(city)
+    backlog = await loadBacklog(city)
+  }
+  // Not enough left in today's city: take other cities' backlog, and when that is short too, map the next city
+  // nobody has searched for longest (never-searched first), so a run is never left with a handful.
+  if (backlog.length < PER_RUN) backlog = [...backlog, ...(await loadBacklog(null)).filter(c => c.city !== city)]
   if (backlog.length < PER_RUN) {
-    const others = (await loadBacklog(null)).filter(c => c.city !== city)
-    backlog = [...backlog, ...others]
+    const next = CITIES.map(c => c.name).filter(c => c !== city).sort((a, b) => (lastRun.get(a) ?? 0) - (lastRun.get(b) ?? 0))
+    for (const c of next.slice(0, 2)) {
+      if (Date.now() - runStarted > 150_000 || backlog.length >= PER_RUN) break
+      await mapCity(c)
+      backlog = [...backlog, ...(await loadBacklog(c))]
+    }
   }
   const hostsInBatch = new Set<string>()
   const candidates = backlog.filter(c => { const h = host(c.website); if (hostsInBatch.has(h)) return false; hostsInBatch.add(h); return true })
