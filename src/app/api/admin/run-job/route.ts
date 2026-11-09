@@ -22,6 +22,7 @@ const RUNNABLE = new Set([
   'sync-stubhub',
   'match-stubhub',
   'merge-duplicates',
+  'detect-new-shows',
 ])
 
 export async function POST(request: Request) {
