@@ -14,6 +14,8 @@ export interface DigestOnSaleItem {
   /** Human label, e.g. "Fri 9 Oct 09:00 GMT". */
   whenLabel: string
   saleType: 'presale' | 'onsale'
+  /** Act photo (absolute or site-relative). */
+  image?: string | null
 }
 
 export interface DigestEventItem {
@@ -23,6 +25,7 @@ export interface DigestEventItem {
   startDate: string
   venueName: string
   venueCity: string
+  image?: string | null
 }
 
 export interface DigestShowItem {
@@ -31,9 +34,21 @@ export interface DigestShowItem {
   /** /west-end/<slug> */
   slug: string
   nextDate: string
+  image?: string | null
+}
+
+/** A "just announced" story from our news section (the same stories as the news alert emails). */
+export interface DigestNewsItem {
+  slug: string
+  headline: string
+  standfirst: string
+  image: string
+  saleLabel: string | null
 }
 
 export interface DigestContent {
+  /** The week's biggest tour announcements, lead story first (pictures). */
+  news?: DigestNewsItem[]
   onSale: DigestOnSaleItem[]
   events: DigestEventItem[]
   shows: DigestShowItem[]
@@ -119,6 +134,7 @@ export function limitDigestContent(content: DigestContent): DigestContent {
     events: content.events.slice(0, 6),
     shows: content.shows.slice(0, 3),
     cityName: content.cityName ?? null,
+    ...(content.news ? { news: content.news.slice(0, 4) } : {}),
   }
 }
 

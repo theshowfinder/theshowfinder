@@ -14,6 +14,11 @@ import {
 } from '@/lib/weeklyDigest'
 import { CITIES } from '@/lib/cities'
 import WeeklyDigestEmail from '@/emails/WeeklyDigestEmail'
+import { storyImage, type NewsStory } from '@/lib/newsStoriesData'
+import { saleChip } from '@/components/StoryCard'
+import { eventImageUrl } from '@/lib/eventImages'
+import { isPackageOrClassTitle } from '@/lib/eventTitles'
+import type { DigestNewsItem } from '@/lib/weeklyDigest'
 import { withJobRun } from '@/lib/jobRuns'
 
 export const maxDuration = 120
@@ -61,14 +66,33 @@ async function handleGet(request: Request) {
   const supabase = createPublicClient()
   const [{ data: artists }, events, shows] = await Promise.all([
     fetchAllArtists(supabase).then(data => ({ data })),
-    fetchEventsThisWeek(supabase, { limit: 6 }),
+    fetchEventsThisWeek(supabase, { limit: 24 }),
     fetchWestEndShows(supabase),
   ])
   const groups = await fetchOnSaleThisWeek(supabase, artists ?? [], { limit: 6 })
 
-  const toItems = (rows: typeof events): DigestEventItem[] => rows.map(e => ({
-    title: e.title, slug: e.slug, startDate: e.start_date,
-    venueName: e.venue_name, venueCity: e.venue_city,
+  // The week's picks are ticketed shows with a real picture: council / tourist-board listings, attraction entry
+  // tickets and packages stay on the site but are not what a newsletter leads with (2 Nov 2026 picked "Sea Life
+  // Birmingham - Standard Entry" and a toy museum exhibition).
+  const ATTRACTION = /\b(standard entry|entry ticket|admission|exhibition|museum|tour of|guided)\b/i
+  const toItems = (rows: typeof events): DigestEventItem[] => rows
+    .filter(e => e.category !== 'local' && !ATTRACTION.test(e.title) && !isPackageOrClassTitle(e.title) && Boolean(e.image_url))
+    .map(e => ({
+      title: e.title, slug: e.slug, startDate: e.start_date,
+      venueName: e.venue_name, venueCity: e.venue_city,
+      image: eventImageUrl(e.image_url, e.category, e.title),
+    }))
+
+  // The week's biggest tour announcements from our news section (the stories the "Just announced" alerts use).
+  const { data: storyRows } = await createAdminClient()
+    .from('news_stories')
+    .select('id,slug,artist_name,story_type,headline,standfirst,image_url,image_url_large,facts,score,published_at')
+    .eq('status', 'published').eq('is_headline', true)
+    .gte('published_at', new Date(Date.now() - 7 * 86_400_000).toISOString())
+    .order('score', { ascending: false }).limit(4)
+  const news: DigestNewsItem[] = ((storyRows ?? []) as unknown as NewsStory[]).map(st => ({
+    slug: st.slug, headline: st.headline, standfirst: st.standfirst,
+    image: storyImage(st, true), saleLabel: saleChip(st)?.text ?? null,
   }))
 
   const nationalContent = limitDigestContent({
@@ -78,12 +102,14 @@ async function handleGet(request: Request) {
       dateCount: g.events.length,
       whenLabel: fmtOnSaleLabel(g.onsale_date),
       saleType: g.saleType,
+      image: g.image_url ?? g.dbArtist?.image_url ?? null,
     })),
     events: toItems(events),
+    news,
     // Shows with the most upcoming performances are the ones a reader can
     // actually book, so they lead.
     shows: [...shows].sort((a, b) => b.dateCount - a.dateCount).map(s => ({
-      title: s.title, venueName: s.venueName, slug: s.slug, nextDate: s.nextDate,
+      title: s.title, venueName: s.venueName, slug: s.slug, nextDate: s.nextDate, image: s.imageUrl,
     })),
   } satisfies DigestContent)
 
@@ -100,7 +126,7 @@ async function handleGet(request: Request) {
     if (cached) return cached
     const [cityGroups, cityRows] = await Promise.all([
       fetchOnSaleThisWeek(supabase, artists ?? [], { city, limit: 6 }),
-      fetchEventsThisWeek(supabase, { city, limit: 6 }),
+      fetchEventsThisWeek(supabase, { city, limit: 24 }),
     ])
     const cityEvents = toItems(cityRows)
     const cityContent = limitDigestContent({
@@ -110,8 +136,10 @@ async function handleGet(request: Request) {
         dateCount: g.events.length,
         whenLabel: fmtOnSaleLabel(g.onsale_date),
         saleType: g.saleType,
+        image: g.image_url ?? g.dbArtist?.image_url ?? null,
       })),
       events: cityEvents,
+      news,
       shows: [],
       cityName: city,
     } satisfies DigestContent)
