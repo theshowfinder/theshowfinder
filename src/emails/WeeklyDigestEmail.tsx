@@ -73,7 +73,7 @@ export default function WeeklyDigestEmail({ content, weekKey, unsubscribeUrl }: 
                           {cityName ? `Your week in ${cityName}` : 'Your week in live events'}
                         </h1>
                         <p style={{ margin: '6px 0 0', fontSize: '14px', color: '#94a3b8' }}>
-                          {cityName ? `What's on in ${cityName}, tickets going on sale, and West End picks.` : 'Tickets going on sale, what&apos;s on, and West End picks.'}
+                          {cityName ? `What's on in ${cityName}, tickets going on sale, and West End picks.` : "Tickets going on sale, what's on, and West End picks."}
                         </p>
                       </td>
                     </tr>

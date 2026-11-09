@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { resend, FROM_EMAIL } from '@/lib/resend'
+import { resend, FROM_EMAIL, listUnsubscribeHeaders } from '@/lib/resend'
 import { chunkRecipients, buildUnsubscribeLink } from '@/lib/newsletterContent'
 import { resolveDigestMode, resolvePreviewRecipient } from '@/lib/weeklyDigest'
 import { storyImage, type NewsStory } from '@/lib/newsStoriesData'
@@ -64,6 +64,7 @@ async function handleGet(request: Request) {
     const messages = batch.map(email => ({
       from: FROM_EMAIL,
       to: email,
+      headers: listUnsubscribeHeaders(email),
       subject: mode === 'preview' ? `[PREVIEW] ${subject}` : subject,
       react: <NewsAlertEmail stories={items} unsubscribeUrl={buildUnsubscribeLink(email)} />,
     }))

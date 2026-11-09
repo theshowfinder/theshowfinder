@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { resend, FROM_EMAIL } from '@/lib/resend'
+import { resend, FROM_EMAIL, listUnsubscribeHeaders } from '@/lib/resend'
 import NewsletterEmail from '@/emails/NewsletterEmail'
 import { normalizeEmail, isValidEmail } from '@/lib/subscribers'
 import {
@@ -201,6 +201,7 @@ export async function sendNewsletterAction(id: string) {
     const messages = batch.map(email => ({
       from: FROM_EMAIL,
       to: email,
+      headers: listUnsubscribeHeaders(email),
       subject: newsletter.subject,
       react: <NewsletterEmail
         subject={newsletter.subject}

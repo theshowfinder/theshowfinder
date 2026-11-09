@@ -2,7 +2,7 @@ import { fetchAllArtists } from '@/lib/allArtists'
 import { NextResponse } from 'next/server'
 import { createPublicClient } from '@/lib/supabase/public'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { resend, FROM_EMAIL } from '@/lib/resend'
+import { resend, FROM_EMAIL, listUnsubscribeHeaders } from '@/lib/resend'
 import { fetchOnSaleThisWeek, fetchEventsThisWeek } from '@/lib/eventPools'
 import { fetchWestEndShows } from '@/lib/showPool'
 import { fmtOnSaleLabel } from '@/lib/on-sale'
@@ -163,6 +163,7 @@ async function handleGet(request: Request) {
       const messages = batch.map(email => ({
         from: FROM_EMAIL,
         to: email,
+        headers: listUnsubscribeHeaders(email),
         subject: mode === 'preview'   ? `[PREVIEW] ${digestSubject(content)}`   : digestSubject(content),
         react: <WeeklyDigestEmail content={content} weekKey={weekKey} unsubscribeUrl={buildUnsubscribeLink(email)} />,
       }))
