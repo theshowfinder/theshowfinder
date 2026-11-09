@@ -317,13 +317,39 @@ export function standfirstFor(f: StoryFacts): string {
 
 // ── Grouping ─────────────────────────────────────────────────────────────────
 
+/**
+ * A "Venue Premium Tickets" / hospitality listing that is otherwise a fresh show: never a story on its own, but it
+ * proves a date. Ticketmaster often lists those first (Billy Ocean, Nov 2026: Leeds and Newcastle existed only as
+ * Venue Premium copies, so the story said "announces Manchester show" for a ten-date tour).
+ */
+export function isAddOnDateRow(row: StoryEventRow, now: number): boolean {
+  if (!ADD_ON_TITLE.test(row.title) || ADD_ON_TITLE.test(row.artist_name ?? '')) return false
+  return isStoryEligibleRow({ ...row, title: row.artist_name ?? '' }, now)
+}
+
+const ukDayOf = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso))
+
 export function buildStoryDrafts(rows: StoryEventRow[], now: number): StoryDraft[] {
   const groups = new Map<string, StoryEventRow[]>()
+  const addOns = new Map<string, StoryEventRow[]>()
   for (const r of rows) {
-    if (!isStoryEligibleRow(r, now)) continue
+    if (!isStoryEligibleRow(r, now)) {
+      if (isAddOnDateRow(r, now)) addOns.set(r.artist_id!, [...(addOns.get(r.artist_id!) ?? []), r])
+      continue
+    }
     const list = groups.get(r.artist_id!) ?? []
     list.push(r)
     groups.set(r.artist_id!, list)
+  }
+  // Fill in tour dates known only from an add-on listing (one per city and day, never a second copy of a show).
+  for (const [artistId, list] of groups) {
+    const have = new Set(list.map(r => `${(r.venue_city ?? '').toLowerCase()}|${ukDayOf(r.start_date)}`))
+    for (const r of addOns.get(artistId) ?? []) {
+      const key = `${(r.venue_city ?? '').toLowerCase()}|${ukDayOf(r.start_date)}`
+      if (have.has(key)) continue
+      have.add(key)
+      list.push(r)
+    }
   }
   const drafts: StoryDraft[] = []
   for (const [artistId, list] of groups) {

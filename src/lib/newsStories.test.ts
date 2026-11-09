@@ -183,3 +183,17 @@ describe('news hooks: never say what the listings do not support', () => {
     assert.equal(parseHookResponse('nope'), null)
   })
 })
+
+describe('news stories: dates Ticketmaster only lists as premium / hospitality copies', () => {
+  test('they count as tour dates (once per city and day), never as a story on their own', () => {
+    const withPremiumOnly = [
+      ...tour,
+      row({ event_id: 'p1', title: 'Sam Fender - Venue Premium Tickets', start_date: '2027-06-20T18:00:00Z', venue_name: 'First Direct Arena', venue_city: 'Leeds', venue_capacity: 13500 }),
+    ]
+    const [d] = buildStoryDrafts(withPremiumOnly, NOW)
+    assert.equal(d.facts.dateCount, 4)
+    assert.ok(d.facts.cities.includes('Leeds'))
+    const onlyPremium = [row({ event_id: 'p2', title: 'Sam Fender - Venue Premium Tickets' })]
+    assert.equal(buildStoryDrafts(onlyPremium, NOW).length, 0)
+  })
+})
