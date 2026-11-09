@@ -57,7 +57,7 @@ function normaliseName(s: string): string {
 }
 
 /** Why a hook is not allowed, or null when it passes. */
-export function hookProblem(text: string, f: StoryFacts, opts: { requireName: boolean }): string | null {
+export function hookProblem(text: string, f: StoryFacts, opts: { requireName: boolean; now?: number }): string | null {
   if (opts.requireName && !normaliseName(text).includes(normaliseName(f.artistName))) return 'artist name missing'
   // Text minus the artist and venue names, so "Texas" or "O2 Academy" never trips the checks below.
   let rest = text
@@ -86,6 +86,14 @@ export function hookProblem(text: string, f: StoryFacts, opts: { requireName: bo
   if (/\bstadium/i.test(rest) && !f.hasStadiumDate) return 'not a stadium tour'
   if (/\barena/i.test(rest) && !f.scale && !f.hasStadiumDate && !f.dates.some(d => /arena/i.test(d.venue ?? ''))) return 'not an arena tour'
   if (/\bpresale|pre-sale/i.test(rest) && !f.presaleAt) return 'no presale in facts'
+  // "this autumn" / "this year" for a tour that starts next year (Billy Ocean, Oct 2027 dates, written Nov 2026).
+  const rel = /\bthis (spring|summer|autumn|fall|winter|year|month|week|weekend)\b|\bnext (week|weekend|month)\b|\blater this\b/i.exec(rest)
+  if (rel && f.firstDate) {
+    const now = opts.now ?? Date.now()
+    const first = Date.parse(f.firstDate)
+    if (new Date(first).getUTCFullYear() !== new Date(now).getUTCFullYear() || first - now > 120 * 86_400_000) return `wrong time phrase: ${rel[0]}`
+  }
+  if (/\bnext year\b/i.test(rest) && f.firstDate && new Date(Date.parse(f.firstDate)).getUTCFullYear() !== new Date(opts.now ?? Date.now()).getUTCFullYear() + 1) return 'wrong time phrase: next year'
   if (/\bannounc/i.test(rest) === false && /\bnew\b/i.test(rest) === false && /\btour|dates?|show|gig/i.test(rest) === false) return 'not about the announcement'
   return null
 }

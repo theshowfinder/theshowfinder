@@ -197,3 +197,11 @@ describe('news stories: dates Ticketmaster only lists as premium / hospitality c
     assert.equal(buildStoryDrafts(onlyPremium, NOW).length, 0)
   })
 })
+
+describe('news hooks: no "this autumn" for next year', () => {
+  test('a June 2027 tour written in October 2026 is not "this summer", but is "next year"', () => {
+    const [d] = buildStoryDrafts(tour, NOW)
+    assert.match(hookProblem('Sam Fender announces UK stadium tour this summer', d.facts, { requireName: true, now: NOW })!, /time phrase/)
+    assert.equal(hookProblem('Sam Fender announces UK stadium tour for next year', d.facts, { requireName: true, now: NOW }), null)
+  })
+})
