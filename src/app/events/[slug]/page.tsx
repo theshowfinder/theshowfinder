@@ -440,6 +440,16 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
       const hits = (found ?? []).filter(e => e.ticketmaster_id?.endsWith(tail) && e.slug !== slug)
       if (hits.length === 1) permanentRedirect(`/events/${hits[0].slug}`)
     }
+    // A listing we removed (Ticketmaster time-slot copies of one attraction, a relisted show): send visitors and
+    // Google to the next upcoming listing with the same name rather than a 404. About 980 of the 990 "not found"
+    // pages in Search Console (Nov 2026) were removed Twist Museum / Chimney Lift time slots.
+    const stem = slug.replace(/-[A-Za-z0-9_-]{8}$/, '')
+    if (stem !== slug && stem.length >= 6) {
+      const { data: same } = await createPublicClient().from('events').select('slug')
+        .like('slug', `${stem.replace(/[%_\\]/g, '\\$&')}-%`).in('status', LIVE_EVENT_STATUSES).gte('start_date', new Date().toISOString())
+        .order('start_date', { ascending: true }).limit(1) as unknown as { data: Array<{ slug: string }> | null }
+      if (same?.[0] && same[0].slug !== slug) permanentRedirect(`/events/${same[0].slug}`)
+    }
     notFound()
   }
 
