@@ -75,13 +75,37 @@ async function overpass(query: string, rounds = 2): Promise<Loose[]> {
   for (let round = 0; round < rounds; round++) {
     for (const url of servers) {
       try {
-        const r = await fetch(url, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query), signal: AbortSignal.timeout(35_000) })
+        const r = await fetch(url, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query), signal: AbortSignal.timeout(14_000) })
         if (r.ok) { const els = (await r.json()).elements ?? []; if (els.length) return els }
       } catch { /* try the next server */ }
     }
     await new Promise(res => setTimeout(res, 5000))
   }
   return []
+}
+
+// Fallback when the Overpass servers are down (often, Nov 2026): OpenStreetMap's own place search (Nominatim), up to
+// 50 places per type inside a box around the venue, with their website from extratags. Its fair-use rule is one
+// request a second, so calls are spaced out.
+const NOMINATIM_TYPES: Array<[string, string, string]> = [['pub', 'amenity', 'pub'], ['bar', 'amenity', 'bar'], ['restaurant', 'amenity', 'restaurant'], ['cafe', 'amenity', 'cafe'], ['hotel', 'tourism', 'hotel'], ['guest house', 'tourism', 'guest_house']]
+async function nominatimAround(lat: number, lng: number, metres: number): Promise<Loose[]> {
+  const dLat = metres / 111_000, dLng = metres / (111_000 * Math.cos(lat * Math.PI / 180))
+  const box = [lng - dLng, lat + dLat, lng + dLng, lat - dLat].map(n => n.toFixed(5)).join(',')
+  const out: Loose[] = []
+  for (const [q, key, value] of NOMINATIM_TYPES) {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=jsonv2&limit=50&bounded=1&viewbox=${box}&extratags=1`
+      const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(15_000) })
+      if (r.ok) {
+        for (const x of (await r.json()) as Loose[]) {
+          if (x.category !== key || x.type !== value || !x.name) continue
+          out.push({ type: x.osm_type, id: x.osm_id, lat: Number(x.lat), lon: Number(x.lon), tags: { name: x.name, [key]: value, ...(x.extratags ?? {}) } })
+        }
+      }
+    } catch { /* next type */ }
+    await new Promise(res => setTimeout(res, 1100))
+  }
+  return out
 }
 
 function pickCity(forced: string | null): string {
@@ -158,17 +182,26 @@ async function handleGet(request: Request) {
     const elements: Loose[] = []
     const seenEl = new Set<string>()
     const mapStarted = Date.now()
+    // Overpass first; once it has failed for one venue this run, every venue uses Nominatim instead (four dead
+    // Overpass servers at 35 s each would otherwise use up the whole run on one venue).
+    let overpassDown = false
     for (const a of anchors) {
-      if (Date.now() - mapStarted > 120_000) break   // leave time to read the websites
-      const q = `[out:json][timeout:60];(nwr(around:600,${a.lat},${a.lng})[amenity~"^(bar|pub|restaurant|cafe)$"];nwr(around:800,${a.lat},${a.lng})[tourism~"^(hotel|guest_house)$"];);out center tags 300;`
-      for (const el of await overpass(q, 1)) {
+      if (Date.now() - mapStarted > 150_000) break   // leave time to read the websites
+      let els: Loose[] = []
+      if (!overpassDown && Date.now() - mapStarted < 60_000) {
+        const q = `[out:json][timeout:60];(nwr(around:600,${a.lat},${a.lng})[amenity~"^(bar|pub|restaurant|cafe)$"];nwr(around:800,${a.lat},${a.lng})[tourism~"^(hotel|guest_house)$"];);out center tags 300;`
+        els = await overpass(q, 1)
+        if (!els.length) overpassDown = true
+      }
+      if (!els.length) els = await nominatimAround(a.lat, a.lng, 700)
+      for (const el of els) {
         const k = `${el.type}/${el.id}`
         if (!seenEl.has(k)) { seenEl.add(k); elements.push(el) }
       }
     }
     found = elements.length
     if (!anchors.length) mapNote = 'no venues with map positions'
-    else if (!elements.length) mapNote = 'map search (Overpass) returned nothing: working from the backlog'
+    else if (!elements.length) mapNote = 'map search (Overpass and Nominatim) returned nothing: working from the backlog'
     else if (!dry) await db.from('outreach_scanned').upsert({ key: `run:${city}`, city, result: 'run', checked_at: new Date().toISOString() })
     const fresh: Loose[] = []
     for (const el of elements) {
