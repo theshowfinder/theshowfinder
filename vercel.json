@@ -149,7 +149,7 @@
     },
     {
       "path": "/api/cron/outreach-send",
-      "schedule": "10 9-17 * * 1-5"
+      "schedule": "10 6-10 * * 1-5"
     },
     {
       "path": "/api/cron/geocode-venues",

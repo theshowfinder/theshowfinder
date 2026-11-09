@@ -8,11 +8,17 @@ import { CITIES } from '@/lib/cities'
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
 
-// Advertiser outreach sender (vercel.json: hourly, weekdays 09:10–17:10 UTC). Each run sends a few emails, so the
-// day's sends are spread out and never more than DAILY_LIMIT: first emails to businesses Chris approved, then one
+// Advertiser outreach sender: weekday mornings, 10 an hour at 07:10, 08:10, 09:10 and 10:10 UK time (Chris, 9 Nov
+// 2026), never more than DAILY_LIMIT a day. vercel.json runs it 06:10–10:10 UTC and a run outside 07:00–10:59 UK time
+// does nothing, so it keeps to UK hours through the clock changes. first emails to businesses Chris approved, then one
 // follow-up FOLLOW_UP_AFTER_DAYS later to anyone still at "sent" (not replied, interested, onboarding or opted out),
 // and "No response" NO_RESPONSE_AFTER_DAYS after the first email. ?dry=1 lists only.
-const PER_RUN = 5   // 9 weekday runs x 5 = up to 45 a day, spread out
+const PER_RUN = 10  // 4 morning runs x 10 = DAILY_LIMIT (40)
+const UK_HOURS = { from: 7, to: 10 }
+
+function ukHour(now = new Date()): number {
+  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hourCycle: 'h23' }).format(now))
+}
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 const COLS = 'id, business_name, category, city, near_venue, distance_label, contact_name, email, company_type, status, ref_code, unsubscribe_token'
 
@@ -30,7 +36,12 @@ async function handleGet(request: Request) {
   if (!cronSecret || request.headers.get('authorization') !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const dry = new URL(request.url).searchParams.get('dry') === '1'
+  const params = new URL(request.url).searchParams
+  const dry = params.get('dry') === '1'
+  const h = ukHour()
+  if (params.get('anytime') !== '1' && (h < UK_HOURS.from || h > UK_HOURS.to)) {
+    return NextResponse.json({ success: true, dry, sent: [], failed: [], note: `outside sending hours (UK ${h}:00; sends 07:00-10:59)` })
+  }
   const db = createAdminClient() as Loose
   // Followed up and still nothing after NO_RESPONSE_AFTER_DAYS: "No response", never chased again.
   if (!dry) {
