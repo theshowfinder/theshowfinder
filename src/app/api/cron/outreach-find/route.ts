@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { withJobRun } from '@/lib/jobRuns'
+import { fetchAllPages } from '@/lib/pagedFetch'
 import { CITIES } from '@/lib/cities'
 import { cityOfTheDay, isVenueName, looksLikeChain, looksMultiSite } from '@/lib/outreach'
 import {
@@ -23,7 +24,7 @@ const CONCURRENCY = 6
 const UA = 'TheShowFinderBot/1.0 (+https://www.theshowfinder.com/advertise; partners@theshowfinder.com)'
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 
-interface Candidate { key: string; name: string; tags: Record<string, string>; lat: number; lng: number; website: string; venue: string; metres: number; chain: boolean }
+interface Candidate { key: string; city: string; name: string; tags: Record<string, string>; lat: number; lng: number; website: string; venue: string; metres: number; chain: boolean }
 
 async function fetchText(url: string, ms = 8000): Promise<string | null> {
   try {
@@ -124,57 +125,80 @@ async function handleGet(request: Request) {
     }
   }
 
-  // 2. The next city: candidates near its busiest venues that nobody has looked at yet.
+  // 2. Candidates. Everything the map search finds is kept in outreach_candidates, so one good map answer feeds many
+  //    runs (London found 352 places on 5 Nov but a run reads only PER_RUN sites, and the rest used to be forgotten).
+  //    The map is only asked again when the backlog for the city of the day runs low; when the map service is down,
+  //    runs carry on with the backlog of any city.
   const city = pickCity(params.get('city'))
-  const anchors = await anchorVenues(db, city)
-  if (!anchors.length) return NextResponse.json({ success: true, city, note: 'no venues with map positions', reverified })
-
-  // One small query per venue (a single combined query with a regex-key website filter often timed out on the busy
-  // public servers, so whole runs came back empty). Places without a website are dropped below.
-  const elements: Loose[] = []
-  const seenEl = new Set<string>()
-  const mapStarted = Date.now()
-  for (const a of anchors) {
-    if (Date.now() - mapStarted > 120_000) break   // leave time to read the websites
-    const q = `[out:json][timeout:60];(nwr(around:600,${a.lat},${a.lng})[amenity~"^(bar|pub|restaurant|cafe)$"];nwr(around:800,${a.lat},${a.lng})[tourism~"^(hotel|guest_house)$"];);out center tags 300;`
-    for (const el of await overpass(q, 1)) {
-      const k = `${el.type}/${el.id}`
-      if (!seenEl.has(k)) { seenEl.add(k); elements.push(el) }
-    }
-  }
-  // Only count the city as looked at when the map search actually answered; otherwise the next run tries again.
-  if (!elements.length) return NextResponse.json({ success: false, city, note: 'map search (Overpass) returned nothing: will retry next run', reverified }, { status: 503 })
-  if (!dry) await db.from('outreach_scanned').upsert({ key: `run:${city}`, city, result: 'run', checked_at: new Date().toISOString() })
-
-  const [{ data: scanned }, { data: existing }] = await Promise.all([
-    db.from('outreach_scanned').select('key, website_host').eq('city', city).limit(5000),
-    db.from('outreach_prospects').select('email, website').limit(10000),
-  ])
-  const seenKeys = new Set((scanned ?? []).map((s: Loose) => s.key))
   const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, '') } catch { return '' } }
-  const seenHosts = new Set<string>([...(scanned ?? []).map((s: Loose) => s.website_host), ...(existing ?? []).map((p: Loose) => host(p.website ?? ''))].filter(Boolean))
+  // Paged: PostgREST returns at most 1000 rows per request, and these tables grow by a few hundred a day.
+  const [scannedAll, existing] = await Promise.all([
+    fetchAllPages<Loose>((from, to) => db.from('outreach_scanned').select('key, website_host').order('key').range(from, to)),
+    fetchAllPages<Loose>((from, to) => db.from('outreach_prospects').select('id, email, website').order('id').range(from, to)),
+  ])
+  const seenKeys = new Set((scannedAll ?? []).map((s: Loose) => s.key))
+  const seenHosts = new Set<string>([...(scannedAll ?? []).map((s: Loose) => s.website_host), ...(existing ?? []).map((p: Loose) => host(p.website ?? ''))].filter(Boolean))
   const seenEmails = new Set((existing ?? []).map((p: Loose) => (p.email ?? '').toLowerCase()))
 
-  const candidates: Candidate[] = []
-  for (const el of elements) {
-    const tags = el.tags ?? {}
-    const key = `${el.type}/${el.id}`
-    const lat = el.lat ?? el.center?.lat, lng = el.lon ?? el.center?.lon
-    let website = (tags.website ?? tags['contact:website'] ?? '').trim()
-    if (!tags.name || !website || lat == null || seenKeys.has(key)) continue
-    if (isVenueName(tags.name)) continue   // the venue itself or its own bar
-    if (!/^https?:\/\//i.test(website)) website = `https://${website}`
-    const h = host(website)
-    if (!h || seenHosts.has(h) || /facebook|instagram|google|tripadvisor|booking\.com|opentable|atgtickets|ambassadortheatre/.test(h)) continue
-    // Chains (OpenStreetMap brand tag, or a known chain name/site) are kept but looked at after the independents.
-    const chain = Boolean(tags.brand || tags['brand:wikidata']) || looksLikeChain({ name: tags.name, website })
-    const nearest = anchors.map(a => ({ a, d: metresBetween({ lat, lng }, a) })).sort((x, y) => x.d - y.d)[0]
-    candidates.push({ key, name: tags.name, tags, lat, lng, website, venue: nearest.a.name, metres: nearest.d, chain })
-    seenHosts.add(h)
+  const loadBacklog = async (onlyCity: string | null) => {
+    const data = await fetchAllPages<Loose>((from, to) => {
+      let q = db.from('outreach_candidates').select('key, city, name, website, lat, lng, venue, metres, chain, tags').order('key').range(from, to)
+      if (onlyCity) q = q.eq('city', onlyCity)
+      return q
+    })
+    return (data as Array<Candidate & { city: string }>).filter(c => !seenKeys.has(c.key) && !seenHosts.has(host(c.website)))
   }
-  // Small independents first, then chains; nearest first within each.
+
+  let mapNote: string | null = null
+  let found = 0
+  let backlog = await loadBacklog(city)
+  if (backlog.length < PER_RUN * 2) {
+    const anchors = await anchorVenues(db, city)
+    // One small query per venue (one combined query often timed out on the busy public servers).
+    const elements: Loose[] = []
+    const seenEl = new Set<string>()
+    const mapStarted = Date.now()
+    for (const a of anchors) {
+      if (Date.now() - mapStarted > 120_000) break   // leave time to read the websites
+      const q = `[out:json][timeout:60];(nwr(around:600,${a.lat},${a.lng})[amenity~"^(bar|pub|restaurant|cafe)$"];nwr(around:800,${a.lat},${a.lng})[tourism~"^(hotel|guest_house)$"];);out center tags 300;`
+      for (const el of await overpass(q, 1)) {
+        const k = `${el.type}/${el.id}`
+        if (!seenEl.has(k)) { seenEl.add(k); elements.push(el) }
+      }
+    }
+    found = elements.length
+    if (!anchors.length) mapNote = 'no venues with map positions'
+    else if (!elements.length) mapNote = 'map search (Overpass) returned nothing: working from the backlog'
+    else if (!dry) await db.from('outreach_scanned').upsert({ key: `run:${city}`, city, result: 'run', checked_at: new Date().toISOString() })
+    const fresh: Loose[] = []
+    for (const el of elements) {
+      const tags = el.tags ?? {}
+      const key = `${el.type}/${el.id}`
+      const lat = el.lat ?? el.center?.lat, lng = el.lon ?? el.center?.lon
+      let website = (tags.website ?? tags['contact:website'] ?? '').trim()
+      if (!tags.name || !website || lat == null || seenKeys.has(key)) continue
+      if (isVenueName(tags.name)) continue   // the venue itself or its own bar
+      if (!/^https?:\/\//i.test(website)) website = `https://${website}`
+      const h = host(website)
+      if (!h || seenHosts.has(h) || /facebook|instagram|google|tripadvisor|booking\.com|opentable|atgtickets|ambassadortheatre/.test(h)) continue
+      // Chains (OpenStreetMap brand tag, or a known chain name/site) are kept but looked at after the independents.
+      const chain = Boolean(tags.brand || tags['brand:wikidata']) || looksLikeChain({ name: tags.name, website })
+      const nearest = anchors.map(a => ({ a, d: metresBetween({ lat, lng }, a) })).sort((x, y) => x.d - y.d)[0]
+      fresh.push({ key, city, name: tags.name, website, lat, lng, venue: nearest.a.name, metres: Math.round(nearest.d), chain, tags })
+    }
+    if (!dry) for (let i = 0; i < fresh.length; i += 200) await db.from('outreach_candidates').upsert(fresh.slice(i, i + 200), { onConflict: 'key', ignoreDuplicates: true })
+    backlog = dry ? [...backlog, ...fresh] : await loadBacklog(city)
+  }
+  // Fill the run from other cities' backlog when the city of the day has too few (or its map search failed).
+  if (backlog.length < PER_RUN) {
+    const others = (await loadBacklog(null)).filter(c => c.city !== city)
+    backlog = [...backlog, ...others]
+  }
+  const hostsInBatch = new Set<string>()
+  const candidates = backlog.filter(c => { const h = host(c.website); if (hostsInBatch.has(h)) return false; hostsInBatch.add(h); return true })
   candidates.sort((a, b) => Number(a.chain) - Number(b.chain) || a.metres - b.metres)
   const batch = candidates.slice(0, PER_RUN)
+  if (!batch.length) return NextResponse.json({ success: false, city, note: mapNote ?? 'nothing left to check', reverified }, { status: mapNote ? 503 : 200 })
 
   // 3. Read each website and decide.
   const results: Array<{ name: string; result: string; email?: string }> = []
@@ -187,14 +211,14 @@ async function handleGet(request: Request) {
     }
     const html = pages.join('\n')
     const text = textOf(html)
-    const email = pickEmail(extractEmails(html), c.website, city, c.tags.email ?? c.tags['contact:email'])
+    const email = pickEmail(extractEmails(html), c.website, c.city, c.tags.email ?? c.tags['contact:email'])
     let result: string
     let row: Loose = null
     if (!home && !email) result = 'fetch_failed'
     else if (!email) result = 'no_email'
     else if (seenEmails.has(email)) result = 'duplicate'
     else {
-      const group = c.chain || looksLikeChain({ name: c.name, website: c.website, email }) || looksMultiSite(textOf(home ?? ''), city)
+      const group = c.chain || looksLikeChain({ name: c.name, website: c.website, email }) || looksMultiSite(textOf(home ?? ''), c.city)
       const numbers = extractCompanyNumbers(text), names = extractCompanyNames(text)
       const ok = hasKey ? await verifyCompany(numbers, names, text) : null
       // Until the Companies House key is added, the business's own website stating a limited company AND a company
@@ -204,7 +228,7 @@ async function handleGet(request: Request) {
       result = 'approved'
       const address = [c.tags['addr:housenumber'], c.tags['addr:street'], c.tags['addr:postcode']].filter(Boolean).join(' ') || null
       row = {
-        business_name: c.name, category: categoryFromOsm(c.tags), city, email, website: c.website, address,
+        business_name: c.name, category: categoryFromOsm(c.tags), city: c.city, email, website: c.website, address,
         near_venue: c.venue, distance_label: walkLabel(c.metres, c.venue), osm_key: c.key,
         company_type: ok || siteStated ? 'ltd' : 'unconfirmed', status: result, company_number: ok?.number ?? numbers[0] ?? null,
         notes: (group ? '[chain/group] ' : '') + (ok
@@ -218,13 +242,13 @@ async function handleGet(request: Request) {
     results.push({ name: c.name, result, email: email ?? undefined })
     if (dry) return
     if (row) await db.from('outreach_prospects').insert(row)
-    await db.from('outreach_scanned').upsert({ key: c.key, city, website_host: host(c.website), result, checked_at: new Date().toISOString() })
+    await db.from('outreach_scanned').upsert({ key: c.key, city: c.city, website_host: host(c.website), result, checked_at: new Date().toISOString() })
   }
   for (let i = 0; i < batch.length; i += CONCURRENCY) await Promise.all(batch.slice(i, i + CONCURRENCY).map(work))
 
   const tally = results.reduce<Record<string, number>>((t, r) => ({ ...t, [r.result]: (t[r.result] ?? 0) + 1 }), {})
   return NextResponse.json({
-    success: true, dry, city, anchors: anchors.map(a => a.name), found: elements.length, newCandidates: candidates.length,
+    success: true, dry, city, mapNote, found, backlog: candidates.length, cities: [...new Set(batch.map(b => b.city))],
     checked: batch.length, tally, reverified, companiesHouse: hasKey, results: dry ? results : undefined,
   })
 }
