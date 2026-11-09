@@ -145,8 +145,23 @@ export function collectIssues(input: {
   newsErrors: NewsErrorRow[]
   db?: { max_connections: number; connections: number } | null
   tmFreshness?: TmFreshness | null
+  /** The last news run's AI headline problems ("Billy Ocean: HTTP 401") and how many AI headlines it wrote. */
+  newsHooks?: { aiHooks: number; problems: string[] } | null
 }): HealthIssue[] {
   const issues: HealthIssue[] = []
+
+  // The AI that writes story headlines failing on every story (a revoked key went unnoticed 30 Oct - 9 Nov 2026).
+  const h = input.newsHooks
+  if (h && h.aiHooks === 0 && h.problems.length >= 3) {
+    const auth = h.problems.some(p => /HTTP 40[13]/.test(p))
+    issues.push({
+      key: 'news-ai-hooks',
+      severity: 'high',
+      message: auth
+        ? `News headlines: the AI service is refusing the API key (${h.problems[0].replace(/^.*?: /, '')}). Replace ANTHROPIC_API_KEY in Vercel and check billing at console.anthropic.com`
+        : `News headlines: the AI service failed on all ${h.problems.length} stories in the last run (${h.problems[0]})`,
+    })
+  }
 
   const f = input.tmFreshness
   if (f && f.lap_completed && f.future_tm > 0 && f.stale_48h / f.future_tm > TM_STALE_48H_ALERT) {

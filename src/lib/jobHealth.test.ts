@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { collectIssues, evaluateJobs, shouldSendAlert, stalenessSummary, type JobRunRow } from './jobHealth.ts'
 
@@ -73,4 +73,15 @@ test('tm-not-daily is raised only after a full sweep has finished and too many e
   assert.ok(collectIssues({ ...base, tmFreshness: bad }).some(i => i.key === 'tm-not-daily'))
   assert.ok(!collectIssues({ ...base, tmFreshness: { ...bad, lap_completed: false } }).some(i => i.key === 'tm-not-daily'))
   assert.ok(!collectIssues({ ...base, tmFreshness: { ...bad, stale_48h: 20 } }).some(i => i.key === 'tm-not-daily'))
+})
+
+describe('news AI headlines', () => {
+  test('a refused API key on every story is a high issue', () => {
+    const issues = collectIssues({ jobs: [], staleness: [], newsErrors: [], newsHooks: { aiHooks: 0, problems: ['Billy Ocean: HTTP 401', 'Jamiroquai: HTTP 401', 'King King: HTTP 401'] } })
+    const i = issues.find(x => x.key === 'news-ai-hooks')
+    assert.ok(i); assert.equal(i!.severity, 'high'); assert.match(i!.message, /ANTHROPIC_API_KEY/)
+  })
+  test('working, or the odd failure, is not an issue', () => {
+    assert.equal(collectIssues({ jobs: [], staleness: [], newsErrors: [], newsHooks: { aiHooks: 5, problems: ['X: HTTP 500'] } }).some(x => x.key === 'news-ai-hooks'), false)
+  })
 })

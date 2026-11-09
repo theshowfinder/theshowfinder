@@ -29,6 +29,9 @@ export async function loadHealthSnapshot(now = new Date()): Promise<HealthSnapsh
     db.rpc('health_db_stats'),
     db.rpc('health_tm_freshness'),
   ])
+  const { data: newsRun } = await db.from('job_runs').select('summary').eq('job', 'detect-new-shows').eq('status', 'ok').order('started_at', { ascending: false }).limit(1)
+  const stories = ((newsRun ?? [])[0] as { summary?: { stories?: { aiHooks?: number; hookProblems?: string[]; candidates?: number } } } | undefined)?.summary?.stories
+  const newsHooks = stories && (stories.candidates ?? 0) > 0 ? { aiHooks: Number(stories.aiHooks ?? 0), problems: stories.hookProblems ?? [] } : null
 
   const runs = (runsRes.data ?? []) as JobRunRow[]
   const first = (firstRes.data ?? [])[0] as { started_at: string } | undefined
@@ -43,6 +46,6 @@ export async function loadHealthSnapshot(now = new Date()): Promise<HealthSnapsh
   const tmFreshness: TmFreshness | null = fr ? { future_tm: Number(fr.future_tm), stale_48h: Number(fr.stale_48h), lap_completed: !!fr.lap_completed, lap_completed_at: fr.lap_completed_at } : null
 
   const jobs = evaluateJobs(runs, now, monitoringSince)
-  const issues = collectIssues({ jobs, staleness, newsErrors, db: dbStats, tmFreshness })
+  const issues = collectIssues({ jobs, staleness, newsErrors, db: dbStats, tmFreshness, newsHooks })
   return { now, jobs, staleness, tmFreshness, newsErrors, db: dbStats, monitoringSince, issues }
 }
