@@ -158,7 +158,7 @@ export default function MorningCleanup() {
         ['links to listings that are gone (See Tickets)', report.see_tickets_links_to_gone_listings],
         ['live pages whose listing is gone', report.catalogue_pages_live_but_listing_gone],
         ['live events with no way to buy', report.live_events_with_no_way_to_buy],
-        ['council events not refreshed in 48h', report.other_source_not_refreshed_48h],
+        ['council events not refreshed in 21 days', report.other_source_not_refreshed_48h],
       ]
       const bad = hard.filter(([, n]) => n > 0)
       const warnBits: string[] = []
