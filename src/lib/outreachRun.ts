@@ -3,14 +3,17 @@
 //    the same way as their first email so it threads in their inbox.
 //  • Then new businesses: cities take turns (least emailed first); within a city independents before chains, and
 //    businesses near the busiest venues (most shows in the next 60 days) before quieter ones (12 Nov 2026).
+//  • Then, while the founding partner offer is open, one "update" email about it to businesses emailed before it
+//    existed (OFFER_UPDATES_PER_DAY, Resend only), so they hear about it too (Chris, 12 Nov 2026).
 //  • Each business is claimed for one channel before sending, so the two senders never email the same business.
 //  • The brake (outreach_settings): a channel that is paused sends nothing; a Zoho refusal pauses Zoho for the day.
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPages } from '@/lib/pagedFetch'
 import { LISTED_EVENTS_VIEW, LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
-import { canEmail, subjectVariantFor, looksLikeChain, spreadAcrossCities, DAILY_LIMIT, ZOHO_DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
+import { canEmail, subjectVariantFor, looksLikeChain, spreadAcrossCities, DAILY_LIMIT, ZOHO_DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, OFFER_UPDATES_PER_DAY, type OutreachKind, type Prospect } from '@/lib/outreach'
 import { sendOutreachEmail, sendOutreachEmailZoho, zohoConfigured, type SendResult } from '@/lib/outreachSend'
 import { loadOutreachShow } from '@/lib/outreachShow'
+import { foundingOfferOpen } from '@/lib/advertisingPackages'
 
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 export type Channel = 'resend' | 'zoho'
@@ -49,26 +52,37 @@ export async function runOutreachSend(channel: Channel, perRun: number, opts: { 
     await db.from('outreach_prospects').update({ status: 'no_response', updated_at: new Date().toISOString() }).eq('status', 'followed_up').lte('sent_at', cutoff)
   }
   const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0)
-  const [{ count: firstToday }, { count: followToday }] = await Promise.all([
+  const [{ count: firstToday }, { count: followToday }, { count: offerToday }] = await Promise.all([
     byChannel(db.from('outreach_prospects').select('id', { count: 'exact', head: true }).gte('sent_at', dayStart.toISOString()), channel),
     byChannel(db.from('outreach_prospects').select('id', { count: 'exact', head: true }).gte('followed_up_at', dayStart.toISOString()), channel),
+    byChannel(db.from('outreach_prospects').select('id', { count: 'exact', head: true }).gte('offer_sent_at', dayStart.toISOString()), channel),
   ])
-  let budget = Math.min(perRun, LIMIT[channel] - (firstToday ?? 0) - (followToday ?? 0))
+  let budget = Math.min(perRun, LIMIT[channel] - (firstToday ?? 0) - (followToday ?? 0) - (offerToday ?? 0))
   if (budget <= 0) return { success: true, channel, dry, sent, failed, note: 'daily limit reached' }
 
   const followBefore = new Date(Date.now() - FOLLOW_UP_AFTER_DAYS * 86_400_000).toISOString()
-  const [firsts, sentRows, { data: follows }] = await Promise.all([
+  // Founding-offer updates: emailed (at least two days ago) with an old subject version, not yet told about the
+  // offer, still open to hearing from us. Clickers still at "sent" get the offer in their follow-up instead.
+  const offerSlots = channel === 'resend' && foundingOfferOpen() ? Math.max(0, Math.min(budget, OFFER_UPDATES_PER_DAY - (offerToday ?? 0))) : 0
+  const updatesQuery = offerSlots > 0
+    ? byChannel(db.from('outreach_prospects').select(COLS + ', clicked_at').is('offer_sent_at', null).in('status', ['sent', 'followed_up', 'no_response'])
+        .lte('sent_at', new Date(Date.now() - 2 * 86_400_000).toISOString()).or('subject_variant.is.null,subject_variant.in.(A,B)'), channel).order('sent_at').limit(offerSlots * 3)
+    : Promise.resolve({ data: [] })
+  const [firsts, sentRows, { data: follows }, { data: updateRows }] = await Promise.all([
     fetchAllPages<Prospect & { created_at: string }>((from, to) => db.from('outreach_prospects').select(COLS).eq('status', 'approved').is('sent_via', null).order('created_at').order('id').range(from, to)),
     fetchAllPages<{ city: string }>((from, to) => db.from('outreach_prospects').select('city').not('sent_at', 'is', null).order('id').range(from, to)),
     byChannel(db.from('outreach_prospects').select(COLS).eq('status', 'sent').not('clicked_at', 'is', null).lte('sent_at', followBefore), channel).order('sent_at').limit(budget),
+    updatesQuery,
   ])
+  const updates = ((updateRows ?? []) as Array<Prospect & { clicked_at: string | null }>).filter(u => !(u.status === 'sent' && u.clicked_at)).slice(0, offerSlots)
   const sentByCity = new Map<string, number>()
   for (const r of sentRows) sentByCity.set(r.city, (sentByCity.get(r.city) ?? 0) + 1)
   const busy = await venueShows(db, [...new Set(firsts.map(f => f.near_venue).filter((v): v is string => Boolean(v)))])
   const isChain = (r: Prospect) => looksLikeChain({ name: r.business_name, email: r.email })
   const ordered = [...firsts].sort((a, b) => Number(isChain(a)) - Number(isChain(b)) || (busy.get(b.near_venue ?? '') ?? 0) - (busy.get(a.near_venue ?? '') ?? 0))
-  const queue: Array<{ p: Prospect; kind: 'first' | 'follow_up' }> = [
+  const queue: Array<{ p: Prospect; kind: OutreachKind }> = [
     ...((follows ?? []) as Prospect[]).map(p => ({ p, kind: 'follow_up' as const })),
+    ...updates.map(p => ({ p, kind: 'offer_update' as const })),
     ...spreadAcrossCities(ordered, budget, sentByCity).map(p => ({ p, kind: 'first' as const })),
   ]
 
@@ -94,6 +108,8 @@ export async function runOutreachSend(channel: Channel, perRun: number, opts: { 
       sent.push(`${kind}: ${p.business_name}`)
       await db.from('outreach_prospects').update(kind === 'first'
         ? { status: 'sent', sent_at: now, subject_variant: variant, ...(channel === 'resend' && r.id ? { resend_id: r.id } : {}), last_error: null, updated_at: now }
+        : kind === 'offer_update'
+        ? { offer_sent_at: now, ...(channel === 'resend' && r.id ? { resend_id: r.id } : {}), last_error: null, updated_at: now }
         : { status: 'followed_up', followed_up_at: now, last_error: null, updated_at: now }).eq('id', p.id)
     } else {
       failed.push(`${p.business_name}: ${r.error}`)

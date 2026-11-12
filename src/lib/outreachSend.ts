@@ -3,7 +3,7 @@
 // personal email: one at a time, a few each quarter hour), so outreach can grow without putting everything on Resend.
 import nodemailer from 'nodemailer'
 import { resend } from '@/lib/resend'
-import { buildOutreachEmail, canEmail, unsubscribeUrl, OUTREACH_FROM, OUTREACH_REPLY_TO, type OutreachShow, type Prospect } from '@/lib/outreach'
+import { buildOutreachEmail, canEmail, unsubscribeUrl, OUTREACH_FROM, OUTREACH_REPLY_TO, type OutreachKind, type OutreachShow, type Prospect } from '@/lib/outreach'
 
 export type SendResult = { ok: true; id?: string } | { ok: false; error: string; fatal?: boolean }
 
@@ -12,7 +12,7 @@ const unsubscribeHeaders = (p: Prospect) => ({
   'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
 })
 
-export async function sendOutreachEmail(p: Prospect, kind: 'first' | 'follow_up', show?: OutreachShow): Promise<SendResult> {
+export async function sendOutreachEmail(p: Prospect, kind: OutreachKind, show?: OutreachShow): Promise<SendResult> {
   if (!canEmail(p)) return { ok: false, error: 'not allowed to email this business (company type or status)' }
   const { subject, text, html } = buildOutreachEmail(p, kind, { show })
   const { data, error } = await resend.emails.send({
@@ -44,7 +44,7 @@ function zoho() {
   return transport
 }
 
-export async function sendOutreachEmailZoho(p: Prospect, kind: 'first' | 'follow_up', show?: OutreachShow): Promise<SendResult> {
+export async function sendOutreachEmailZoho(p: Prospect, kind: OutreachKind, show?: OutreachShow): Promise<SendResult> {
   if (!canEmail(p)) return { ok: false, error: 'not allowed to email this business (company type or status)' }
   if (!zohoConfigured()) return { ok: false, error: 'Zoho is not set up (ZOHO_SMTP_USER / ZOHO_SMTP_PASS)', fatal: true }
   // Plain text only: reads like a person's email, which is what it is.

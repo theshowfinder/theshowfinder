@@ -154,3 +154,19 @@ test('offer subjects (C/D) while the founding offer is open; A/B after', async (
   // a business first emailed with C gets "Re:" the same subject
   assert.equal(buildOutreachEmail({ ...p, status: 'sent', sent_at: '2026-11-13T08:00:00Z', subject_variant: 'C' }, 'follow_up').subject, "Re: Free month for The Blue Door beside Co-op Live's shows")
 })
+
+test('founding-offer update email to businesses emailed before the offer', () => {
+  const show = { title: 'Example Band', when: 'Sat 21 Nov, 19:30', venue: 'Co-op Live', imageUrl: 'https://s1.ticketm.net/x.jpg', url: 'https://www.theshowfinder.com/events/x' }
+  const u = buildOutreachEmail({ ...p, status: 'sent', sent_at: '2026-11-05T08:00:00Z', subject_variant: null }, 'offer_update', { show, now: new Date('2026-11-20T08:00:00Z') })
+  assert.equal(u.subject, 'Update: a free first month for The Blue Door')
+  assert.match(u.text, /A quick update since I last emailed about The Blue Door/)
+  assert.match(u.text, /£24\.95 a month for a Featured spot \(normally £44\.95\)/)
+  assert.match(u.text, /open until 31 December/)
+  assert.match(u.text, /Start The Blue Door's free month: https:\/\/www\.theshowfinder\.com\/p\/abc123/)
+  assert.match(u.text, /For example, The Blue Door would be on the page for Example Band at Co-op Live/)
+  assert.doesNotMatch(u.text, /Here's how it would look:/)
+  assert.match(u.html, /BEFORE THE SHOW/)
+  assert.match(u.html, /\/unsubscribe\/tok/)
+  assert.equal(canEmail({ ...p, status: 'no_response' }), true)
+  assert.equal(canEmail({ ...p, status: 'unsubscribed' }), false)
+})
