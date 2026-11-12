@@ -1,7 +1,7 @@
 import { revalidatePath } from 'next/cache'
 
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
-type Changed = { slug: string | null; venue_slug: string | null; artist_slugs: string[] | null }
+type Changed = { slug: string | null; venue_slug: string | null; artist_slugs: string[] | null; list_changed?: boolean | null }
 
 /**
  * Rebuild only the show pages whose content changed (migration 103). Event, artist and venue pages otherwise stay
@@ -9,11 +9,15 @@ type Changed = { slug: string | null; venue_slug: string | null; artist_slugs: s
  * visited. Returns counts for the job log.
  */
 export async function revalidateChangedShowPages(admin: Loose): Promise<{ events: number; artists: number; venues: number } | { error: string }> {
-  const { data, error } = await admin.rpc('take_changed_event_pages', { max_rows: 8000 }) as { data: Changed[] | null; error: { message: string } | null }
+  // 1000 = PostgREST's row cap: asking for more marked shows as done that were never returned (so never rebuilt).
+  const { data, error } = await admin.rpc('take_changed_event_pages', { max_rows: 1000 }) as { data: Changed[] | null; error: { message: string } | null }
   if (error) return { error: error.message }
   const events = new Set<string>(), artists = new Set<string>(), venues = new Set<string>()
   for (const r of data ?? []) {
     if (r.slug) events.add(r.slug)
+    // A price-only change rebuilds the event page alone (migration 119); venue and artist lists pick the price up on
+    // their weekly refresh. Older databases without list_changed treat every change as a list change.
+    if (r.list_changed === false) continue
     if (r.venue_slug) venues.add(r.venue_slug)
     for (const a of r.artist_slugs ?? []) artists.add(a)
   }
