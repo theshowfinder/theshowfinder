@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { withJobRun } from '@/lib/jobRuns'
-import { canEmail, subjectVariantFor, looksLikeChain, takeAcrossCities, cityOfTheDay, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
+import { canEmail, subjectVariantFor, looksLikeChain, spreadAcrossCities, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
 import { sendOutreachEmail } from '@/lib/outreachSend'
 import { loadOutreachShow } from '@/lib/outreachShow'
-import { CITIES } from '@/lib/cities'
+import { fetchAllPages } from '@/lib/pagedFetch'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -23,13 +23,13 @@ function ukHour(now = new Date()): number {
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 const COLS = 'id, business_name, category, city, near_venue, distance_label, contact_name, email, company_type, status, ref_code, unsubscribe_token, sent_at, subject_variant'
 
-/** Today's city first (see cityOfTheDay), then anything left from earlier cities, taking turns. Independents before chains. */
-function firstsInOrder(all: Prospect[], n: number): Prospect[] {
+/**
+ * Every city takes turns (12 Nov 2026; it used to be "today's city" first), the cities we have emailed least so far
+ * going first. Within a city: independents before chains, oldest first.
+ */
+function firstsInOrder(all: Prospect[], n: number, sentByCity: Map<string, number>): Prospect[] {
   const isChain = (r: Prospect) => looksLikeChain({ name: r.business_name, email: r.email })
-  const rows = [...all.filter(r => !isChain(r)), ...all.filter(isChain)]
-  const today = cityOfTheDay(CITIES.map(c => c.name))
-  const mine = rows.filter(r => r.city === today)
-  return [...mine, ...takeAcrossCities(rows.filter(r => r.city !== today), n)].slice(0, n)
+  return spreadAcrossCities([...all.filter(r => !isChain(r)), ...all.filter(isChain)], n, sentByCity)
 }
 
 async function handleGet(request: Request) {
@@ -59,12 +59,16 @@ async function handleGet(request: Request) {
   if (budget <= 0) return NextResponse.json({ success: true, dry, sent, failed, note: 'daily limit reached' })
 
   const followBefore = new Date(Date.now() - FOLLOW_UP_AFTER_DAYS * 86_400_000).toISOString()
-  const [{ data: firsts }, { data: follows }] = await Promise.all([
-    db.from('outreach_prospects').select(COLS).eq('status', 'approved').order('created_at').limit(300),
+  // All of the queue (paged: it can pass PostgREST's 1,000-row cap), and how many each city has had so far.
+  const [firsts, sentRows, { data: follows }] = await Promise.all([
+    fetchAllPages<Prospect>((from, to) => db.from('outreach_prospects').select(COLS).eq('status', 'approved').order('created_at').order('id').range(from, to)),
+    fetchAllPages<{ city: string }>((from, to) => db.from('outreach_prospects').select('city').not('sent_at', 'is', null).order('id').range(from, to)),
     db.from('outreach_prospects').select(COLS).eq('status', 'sent').lte('sent_at', followBefore).order('sent_at').limit(budget),
   ])
+  const sentByCity = new Map<string, number>()
+  for (const r of sentRows) sentByCity.set(r.city, (sentByCity.get(r.city) ?? 0) + 1)
   const queue: Array<{ p: Prospect; kind: 'first' | 'follow_up' }> = [
-    ...firstsInOrder((firsts ?? []) as Prospect[], budget).map(p => ({ p, kind: 'first' as const })),
+    ...firstsInOrder(firsts, budget, sentByCity).map(p => ({ p, kind: 'first' as const })),
     ...((follows ?? []) as Prospect[]).map(p => ({ p, kind: 'follow_up' as const })),
   ]
   for (const { p, kind } of queue) {

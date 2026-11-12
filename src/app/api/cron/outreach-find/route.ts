@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { withJobRun } from '@/lib/jobRuns'
 import { fetchAllPages } from '@/lib/pagedFetch'
 import { CITIES } from '@/lib/cities'
-import { cityOfTheDay, isVenueName, looksLikeChain, looksMultiSite } from '@/lib/outreach'
+import { anchorCountFor, isVenueName, looksLikeChain, looksMultiSite, spreadAcrossCities } from '@/lib/outreach'
 import {
   extractEmails, pickEmail, extractCompanyNumbers, extractCompanyNames, normCompanyName, isEmailableCompany,
   categoryFromOsm, walkLabel, metresBetween, usefulLinks,
@@ -12,9 +12,10 @@ import {
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
-// Automatic advertiser prospecting (vercel.json: six runs each weekday morning-to-afternoon). Every run works on the
-// city of the day (cityOfTheDay: one city a weekday, Manchester first), finds
-// bars, pubs, restaurants, cafes and hotels near its three busiest venues on OpenStreetMap, and reads each one's own
+// Automatic advertiser prospecting (vercel.json: six runs each weekday morning-to-afternoon). Covers every city
+// (12 Nov 2026; it used to work one "city of the day", so a city came round once every eight weeks): each run maps the
+// next city not yet searched (biggest first, around its busiest venues: London 20, big cities 10, others 6), finds
+// bars, pubs, restaurants, cafes and hotels near them on OpenStreetMap, and reads each one's own
 // website (home, contact, privacy, terms) for a general inbox and its company number or registered name. Companies
 // House must confirm an ACTIVE company before a business is approved for email (UK PECR: we only cold-email
 // companies); anything we cannot confirm is parked as "to check" for a person. Places already looked at are recorded
@@ -108,19 +109,17 @@ async function nominatimAround(lat: number, lng: number, metres: number): Promis
   return out
 }
 
-function pickCity(forced: string | null): string {
-  if (forced) return CITIES.find(c => c.name.toLowerCase() === forced.toLowerCase())?.name ?? forced
-  return cityOfTheDay(CITIES.map(c => c.name))
-}
+/** A city is searched again this long after its last full search, once its backlog has run low. */
+const REMAP_DAYS = 30
 
-async function anchorVenues(db: Loose, city: string) {
+async function anchorVenues(db: Loose, city: string, howMany: number) {
   const { data: venues } = await db.from('venues').select('id, name, lat, lng').ilike('city', city).not('lat', 'is', null).limit(300)
   if (!venues?.length) return []
   const { data: evs } = await db.from('events').select('venue_id').in('venue_id', venues.map((v: Loose) => v.id)).gte('start_date', new Date().toISOString()).limit(8000)
   const count = new Map<string, number>()
   for (const e of evs ?? []) count.set(e.venue_id, (count.get(e.venue_id) ?? 0) + 1)
   // A venue named just after the city ("Liverpool") is a placeholder, not a place anyone walks to.
-  return venues.filter((v: Loose) => count.get(v.id) && String(v.name).trim().toLowerCase() !== city.toLowerCase()).sort((a: Loose, b: Loose) => (count.get(b.id) ?? 0) - (count.get(a.id) ?? 0)).slice(0, 6) as Array<{ name: string; lat: number; lng: number }>
+  return venues.filter((v: Loose) => count.get(v.id) && String(v.name).trim().toLowerCase() !== city.toLowerCase()).sort((a: Loose, b: Loose) => (count.get(b.id) ?? 0) - (count.get(a.id) ?? 0)).slice(0, howMany) as Array<{ name: string; lat: number; lng: number }>
 }
 
 async function handleGet(request: Request) {
@@ -151,59 +150,75 @@ async function handleGet(request: Request) {
 
   // 2. Candidates. Everything the map search finds is kept in outreach_candidates, so one good map answer feeds many
   //    runs (London found 352 places on 5 Nov but a run reads only PER_RUN sites, and the rest used to be forgotten).
-  //    The map is only asked again when the backlog for the city of the day runs low; when the map service is down,
-  //    runs carry on with the backlog of any city.
-  const city = pickCity(params.get('city'))
+  //    Cities not searched yet are mapped first; when the map services are down, runs carry on with the backlog.
+  const cityNames = CITIES.map(c => c.name)
+  const forced = params.get('city')
+  const forcedCity = forced ? (cityNames.find(c => c.toLowerCase() === forced.toLowerCase()) ?? forced) : null
   const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, '') } catch { return '' } }
   // Paged: PostgREST returns at most 1000 rows per request, and these tables grow by a few hundred a day.
   const [scannedAll, existing] = await Promise.all([
-    fetchAllPages<Loose>((from, to) => db.from('outreach_scanned').select('key, website_host').order('key').range(from, to)),
-    fetchAllPages<Loose>((from, to) => db.from('outreach_prospects').select('id, email, website').order('id').range(from, to)),
+    fetchAllPages<Loose>((from, to) => db.from('outreach_scanned').select('key, website_host, checked_at').order('key').range(from, to)),
+    fetchAllPages<Loose>((from, to) => db.from('outreach_prospects').select('id, email, website, city, status').order('id').range(from, to)),
   ])
   const seenKeys = new Set((scannedAll ?? []).map((s: Loose) => s.key))
   const seenHosts = new Set<string>([...(scannedAll ?? []).map((s: Loose) => s.website_host), ...(existing ?? []).map((p: Loose) => host(p.website ?? ''))].filter(Boolean))
   const seenEmails = new Set((existing ?? []).map((p: Loose) => (p.email ?? '').toLowerCase()))
+  // Search progress: "venue:<city>:<venue>" when the places around one venue were collected, "map:<city>" when all of
+  // a city's venues were. (Older "run:<city>" keys are from before the backlog was kept and are ignored: those
+  // searches' results were never saved, so London, Manchester, Liverpool, Bristol and Cardiff are searched again.)
+  const stamp = new Map<string, number>()
+  for (const r of (scannedAll ?? []) as Array<{ key: string; checked_at: string }>) if (/^(venue|map):/.test(r.key)) stamp.set(r.key, Date.parse(r.checked_at))
+  const fresh = (key: string) => (stamp.get(key) ?? 0) > Date.now() - REMAP_DAYS * 86_400_000
+  const markDone = async (key: string, city: string) => {
+    stamp.set(key, Date.now())
+    if (!dry) await db.from('outreach_scanned').upsert({ key, city, result: 'map', checked_at: new Date().toISOString() })
+  }
 
-  const loadBacklog = async (onlyCity: string | null) => {
-    const data = await fetchAllPages<Loose>((from, to) => {
-      let q = db.from('outreach_candidates').select('key, city, name, website, lat, lng, venue, metres, chain, tags').order('key').range(from, to)
-      if (onlyCity) q = q.eq('city', onlyCity)
-      return q
-    })
+  const loadBacklog = async () => {
+    const data = await fetchAllPages<Loose>((from, to) =>
+      db.from('outreach_candidates').select('key, city, name, website, lat, lng, venue, metres, chain, tags').order('key').range(from, to))
     return (data as Array<Candidate & { city: string }>).filter(c => !seenKeys.has(c.key) && !seenHosts.has(host(c.website)))
   }
 
   let mapNote: string | null = null
   let found = 0
+  const mapped: string[] = []
   const runStarted = Date.now()
 
-  // Map one city's venues and add every new place with a website to the backlog. Returns how many places it saw.
-  const mapCity = async (target: string): Promise<number> => {
-    const anchors = await anchorVenues(db, target)
-    if (!anchors.length) { mapNote = `${target}: no venues with map positions`; return 0 }
+  // Map the venues of one city not collected yet (or not for REMAP_DAYS), as many as fit in the time left, and add
+  // every new place with a website to the backlog. The rest of a big city carries on next run.
+  const mapCity = async (target: string, budgetMs: number): Promise<number> => {
+    const anchors = await anchorVenues(db, target, anchorCountFor(target, cityNames))
+    if (!anchors.length) { mapNote = `${target}: no venues with map positions`; await markDone(`map:${target}`, target); return 0 }
+    const todo = anchors.filter(a => !fresh(`venue:${target}:${a.name}`))
     const elements: Loose[] = []
     const seenEl = new Set<string>()
     const mapStarted = Date.now()
     // Overpass first; once it has failed for one venue, every venue uses Nominatim instead (dead Overpass servers
     // would otherwise use up the whole run on one venue). One small query per venue.
     let overpassDown = false
-    for (const a of anchors) {
-      if (Date.now() - mapStarted > 120_000) break   // leave time to read the websites
+    let venuesDone = 0
+    for (const a of todo) {
+      if (Date.now() - mapStarted > budgetMs) break   // leave time to read the websites
       let els: Loose[] = []
-      if (!overpassDown && Date.now() - mapStarted < 60_000) {
+      if (!overpassDown) {
         const q = `[out:json][timeout:60];(nwr(around:600,${a.lat},${a.lng})[amenity~"^(bar|pub|restaurant|cafe)$"];nwr(around:800,${a.lat},${a.lng})[tourism~"^(hotel|guest_house)$"];);out center tags 300;`
         els = await overpass(q, 1)
         if (!els.length) overpassDown = true
       }
       if (!els.length) els = await nominatimAround(a.lat, a.lng, 700)
+      if (!els.length) continue   // both map services failed for this venue: try it again next run
       for (const el of els) {
         const k = `${el.type}/${el.id}`
         if (!seenEl.has(k)) { seenEl.add(k); elements.push(el) }
       }
+      await markDone(`venue:${target}:${a.name}`, target)
+      venuesDone++
     }
-    if (!elements.length) { mapNote = `${target}: map search (Overpass and Nominatim) returned nothing`; return 0 }
-    if (!dry) await db.from('outreach_scanned').upsert({ key: `run:${target}`, city: target, result: 'run', checked_at: new Date().toISOString() })
-    const fresh: Loose[] = []
+    if (todo.every(a => fresh(`venue:${target}:${a.name}`))) await markDone(`map:${target}`, target)
+    if (venuesDone) mapped.push(`${target} (${venuesDone} venue${venuesDone === 1 ? '' : 's'})`)
+    if (!elements.length) { if (todo.length && !venuesDone) mapNote = `${target}: map search (Overpass and Nominatim) returned nothing`; return 0 }
+    const rows: Loose[] = []
     for (const el of elements) {
       const tags = el.tags ?? {}
       const key = `${el.type}/${el.id}`
@@ -217,38 +232,39 @@ async function handleGet(request: Request) {
       // Chains (OpenStreetMap brand tag, or a known chain name/site) are kept but looked at after the independents.
       const chain = Boolean(tags.brand || tags['brand:wikidata']) || looksLikeChain({ name: tags.name, website })
       const nearest = anchors.map(a => ({ a, d: metresBetween({ lat, lng }, a) })).sort((x, y) => x.d - y.d)[0]
-      fresh.push({ key, city: target, name: tags.name, website, lat, lng, venue: nearest.a.name, metres: Math.round(nearest.d), chain, tags })
+      rows.push({ key, city: target, name: tags.name, website, lat, lng, venue: nearest.a.name, metres: Math.round(nearest.d), chain, tags })
     }
-    if (!dry) for (let i = 0; i < fresh.length; i += 200) await db.from('outreach_candidates').upsert(fresh.slice(i, i + 200), { onConflict: 'key', ignoreDuplicates: true })
+    if (!dry) for (let i = 0; i < rows.length; i += 200) await db.from('outreach_candidates').upsert(rows.slice(i, i + 200), { onConflict: 'key', ignoreDuplicates: true })
     found += elements.length
     return elements.length
   }
 
-  // City of the day first: map it when its backlog is low (and it was not already mapped in the last week).
-  const lastRun = new Map<string, number>()
-  const { data: runRows } = await db.from('outreach_scanned').select('key, checked_at').like('key', 'run:%')
-  for (const r of (runRows ?? []) as Array<{ key: string; checked_at: string }>) lastRun.set(r.key.slice(4), Date.parse(r.checked_at))
-  const mappedRecently = (c: string) => (lastRun.get(c) ?? 0) > Date.now() - 7 * 86_400_000
-  let backlog = await loadBacklog(city)
-  if (backlog.length < PER_RUN * 2 && (!mappedRecently(city) || backlog.length === 0)) {
-    await mapCity(city)
-    backlog = await loadBacklog(city)
+  // 2a. Map: the biggest city not searched yet first (?city= forces one). Once every city has been searched, a city
+  //     is searched again after REMAP_DAYS when it has fewer than PER_RUN places left to read.
+  let backlog = await loadBacklog()
+  const left = new Map<string, number>()
+  for (const c of backlog) left.set(c.city, (left.get(c.city) ?? 0) + 1)
+  const toMap = forcedCity ? [forcedCity] : [
+    ...cityNames.filter(c => !fresh(`map:${c}`) && !stamp.has(`map:${c}`)),
+    ...cityNames.filter(c => stamp.has(`map:${c}`) && !fresh(`map:${c}`) && (left.get(c) ?? 0) < PER_RUN),
+  ]
+  for (const c of toMap) {
+    const budget = 130_000 - (Date.now() - runStarted)
+    if (budget < 20_000) break
+    await mapCity(c, budget)
   }
-  // Not enough left in today's city: take other cities' backlog, and when that is short too, map the next city
-  // nobody has searched for longest (never-searched first), so a run is never left with a handful.
-  if (backlog.length < PER_RUN) backlog = [...backlog, ...(await loadBacklog(null)).filter(c => c.city !== city)]
-  if (backlog.length < PER_RUN) {
-    const next = CITIES.map(c => c.name).filter(c => c !== city).sort((a, b) => (lastRun.get(a) ?? 0) - (lastRun.get(b) ?? 0))
-    for (const c of next.slice(0, 2)) {
-      if (Date.now() - runStarted > 150_000 || backlog.length >= PER_RUN) break
-      await mapCity(c)
-      backlog = [...backlog, ...(await loadBacklog(c))]
-    }
-  }
+  if (mapped.length) backlog = await loadBacklog()
+  if (forcedCity) backlog = backlog.filter(c => c.city === forcedCity)
+
+  // 2b. Read: take turns between cities, the cities with the fewest businesses waiting to be emailed going first,
+  //     so every city gets its share. Within a city, independents before chains, nearest the venue first.
+  const queued = new Map<string, number>()
+  for (const p of (existing ?? []) as Loose[]) if (p.status === 'approved') queued.set(p.city, (queued.get(p.city) ?? 0) + 1)
   const hostsInBatch = new Set<string>()
   const candidates = backlog.filter(c => { const h = host(c.website); if (hostsInBatch.has(h)) return false; hostsInBatch.add(h); return true })
   candidates.sort((a, b) => Number(a.chain) - Number(b.chain) || a.metres - b.metres)
-  const batch = candidates.slice(0, PER_RUN)
+  const batch = spreadAcrossCities(candidates, PER_RUN, queued)
+  const city = forcedCity ?? 'all'
   if (!batch.length) return NextResponse.json({ success: false, city, note: mapNote ?? 'nothing left to check', reverified }, { status: mapNote ? 503 : 200 })
 
   // 3. Read each website and decide.
@@ -299,7 +315,7 @@ async function handleGet(request: Request) {
 
   const tally = results.reduce<Record<string, number>>((t, r) => ({ ...t, [r.result]: (t[r.result] ?? 0) + 1 }), {})
   return NextResponse.json({
-    success: true, dry, city, mapNote, found, backlog: candidates.length, cities: [...new Set(batch.map(b => b.city))],
+    success: true, dry, city, mapped, mapNote, found, backlog: candidates.length, cities: [...new Set(batch.map(b => b.city))],
     checked: batch.length, tally, reverified, companiesHouse: hasKey, results: dry ? results : undefined,
   })
 }

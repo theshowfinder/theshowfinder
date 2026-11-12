@@ -115,3 +115,15 @@ test('visual email: banner, show card, offer badge, button, no stray values, sma
   assert.match(noShow.html, /On our Atlantis page/)
   assert.match(buildOutreachEmail({ ...p, category: 'Hotel' }, 'first').html, /STAY NEARBY/)
 })
+
+test('every city gets a turn: fewest-so-far cities first, more venues searched in big cities', async () => {
+  const { spreadAcrossCities, anchorCountFor } = await import('./outreach.ts')
+  const rows = [{ city: 'Edinburgh', n: 1 }, { city: 'Edinburgh', n: 2 }, { city: 'Edinburgh', n: 3 }, { city: 'London', n: 4 }, { city: 'London', n: 5 }, { city: 'Bath', n: 6 }]
+  const have = new Map([['Edinburgh', 49], ['London', 14]])
+  assert.deepEqual(spreadAcrossCities(rows, 5, have).map(r => r.n), [6, 4, 1, 5, 2])   // Bath (0) → London (14) → Edinburgh (49), in turns
+  const names = ['London', 'Manchester', 'Birmingham', 'Glasgow', 'Edinburgh', 'Leeds', 'Liverpool', 'Bristol', 'Cardiff', 'Belfast', 'Bath']
+  assert.equal(anchorCountFor('London', names), 20)
+  assert.equal(anchorCountFor('Cardiff', names), 10)
+  assert.equal(anchorCountFor('Belfast', names), 6)
+  assert.equal(anchorCountFor('Nowhere', names), 6)
+})

@@ -63,6 +63,28 @@ export function cityOfTheDay(cityNames: string[], now: Date = new Date()): strin
   return order[weekdays % order.length]
 }
 
+/**
+ * Outreach covers every city (12 Nov 2026), not one city a weekday. Bigger cities get more venues searched around:
+ * London 20, the next eight biggest 10, everywhere else 6. CITIES is in size order.
+ */
+export function anchorCountFor(city: string, cityNames: string[]): number {
+  const i = cityNames.indexOf(city)
+  return i === 0 ? 20 : i > 0 && i <= 8 ? 10 : 6
+}
+
+/**
+ * Takes turns between cities, the cities with the fewest so far going first (`have`: emails sent, or businesses
+ * already queued, per city). Within a city the rows keep their given order.
+ */
+export function spreadAcrossCities<T extends { city: string }>(rows: T[], n: number, have: Map<string, number>): T[] {
+  const byCity = new Map<string, T[]>()
+  for (const r of rows) byCity.set(r.city, [...(byCity.get(r.city) ?? []), r])
+  const order = [...byCity.keys()].sort((a, b) => (have.get(a) ?? 0) - (have.get(b) ?? 0))
+  const ordered: T[] = []
+  for (const c of order) ordered.push(...byCity.get(c)!)
+  return takeAcrossCities(ordered, n)
+}
+
 // ── Who we email (6 Nov 2026) ────────────────────────────────────────────────────────────────────────────────────
 // Everyone near a busy venue, but small independents go first: they decide locally and benefit most. A business counts
 // as a chain/group when its name, website or email belongs to a known chain, or its own site lists branches in several
