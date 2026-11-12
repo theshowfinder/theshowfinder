@@ -1,10 +1,10 @@
 // Sending side of outreach (kept apart from outreach.ts so the email text can be unit-tested without Resend).
 import { resend } from '@/lib/resend'
-import { buildOutreachEmail, canEmail, unsubscribeUrl, OUTREACH_FROM, OUTREACH_REPLY_TO, type Prospect } from '@/lib/outreach'
+import { buildOutreachEmail, canEmail, unsubscribeUrl, OUTREACH_FROM, OUTREACH_REPLY_TO, type OutreachShow, type Prospect } from '@/lib/outreach'
 
-export async function sendOutreachEmail(p: Prospect, kind: 'first' | 'follow_up'): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function sendOutreachEmail(p: Prospect, kind: 'first' | 'follow_up', show?: OutreachShow): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!canEmail(p)) return { ok: false, error: 'not allowed to email this business (company type or status)' }
-  const { subject, text, html } = buildOutreachEmail(p, kind)
+  const { subject, text, html } = buildOutreachEmail(p, kind, { show })
   const { error } = await resend.emails.send({
     from: OUTREACH_FROM,
     to: p.email,

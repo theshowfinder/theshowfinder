@@ -76,7 +76,8 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
                         <summary className="text-xs font-semibold text-blue-600 cursor-pointer">Preview the {r.status === 'sent' ? 'follow-up' : 'email'}</summary>
                         <div className="mt-2 rounded-xl border border-slate-200 p-3 text-sm">
                           <p className="font-bold mb-2">{email.subject}</p>
-                          <div dangerouslySetInnerHTML={{ __html: email.html }} />
+                          <iframe title={`Email to ${r.business_name}`} srcDoc={email.html} className="w-full h-[640px] rounded-lg border border-slate-200 bg-white" />
+                          <a href={`/admin/outreach/preview/${r.id}`} target="_blank" rel="noreferrer" className="inline-block mt-2 text-xs font-semibold text-blue-600">Open full preview with the real show →</a>
                         </div>
                       </details>
                     </div>

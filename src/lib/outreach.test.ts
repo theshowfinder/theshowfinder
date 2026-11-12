@@ -10,13 +10,11 @@ const p: Prospect = {
 
 test('first email: personal, offer link, unsubscribe, no numbers', () => {
   const e = buildOutreachEmail(p, 'first')
-  assert.match(e.subject, /The Blue Door/)
   assert.match(e.text, /You're a 6-minute walk from Co-op Live, so you'd be shown on every show there/)
   assert.match(e.text, /only take three Featured partners around each venue/)
   assert.doesNotMatch(e.text, /nine/)
   assert.match(e.text, /£29\.95 a month/)
   assert.match(e.text, /decide where to eat before the show/)
-  assert.match(e.subject, /We'd love to feature The Blue Door on TheShowFinder Manchester/)
   assert.doesNotMatch(e.text, /chains|independent/i)
   assert.match(e.text, /\/p\/abc123/)
   assert.match(e.text, /\/unsubscribe\/tok/)
@@ -76,4 +74,44 @@ test('accented chain names and placeholder venues', async () => {
   const e = buildOutreachEmail({ ...p, city: 'Liverpool', near_venue: 'Liverpool', distance_label: '1 min walk from Liverpool' }, 'first')
   assert.doesNotMatch(e.text, /walk from Liverpool/)
   assert.match(e.text, /three Featured partners around each venue in Liverpool/)
+})
+
+test('A/B subjects: venue, category, length, and follow-ups reply to the subject actually sent', async () => {
+  const { outreachSubject, subjectVariantFor, shortVenue } = await import('./outreach.ts')
+  assert.equal(outreachSubject(p, 'A'), 'Where do Co-op Live crowds eat before the show?')
+  assert.equal(outreachSubject(p, 'B'), "3 spots next to Co-op Live's shows. One for The Blue Door?")
+  assert.equal(outreachSubject({ ...p, category: 'Pub' }, 'A'), 'Where do Co-op Live crowds grab a drink before the show?')
+  assert.equal(outreachSubject({ ...p, category: 'Hotel' }, 'A'), 'Where do Co-op Live crowds stay the night?')
+  assert.equal(outreachSubject({ ...p, near_venue: null }, 'A'), 'Where do Manchester show-goers eat before the show?')
+  assert.equal(outreachSubject({ ...p, near_venue: null }, 'B'), '3 spots on our Manchester page. One for The Blue Door?')
+  assert.equal(shortVenue('OVO Hydro', 'Glasgow'), 'the Hydro')
+  assert.equal(shortVenue('Ulster Hall Belfast', 'Belfast'), 'Ulster Hall')
+  assert.equal(shortVenue('O2 Academy Glasgow', 'Glasgow'), 'O2 Academy')
+  assert.equal(shortVenue('The Bodega', 'Nottingham'), 'the Bodega')
+  assert.equal(shortVenue('Utilita Arena Birmingham', 'Birmingham'), 'Utilita Arena')
+  const long = { ...p, business_name: 'The Very Long Named Restaurant and Cocktail Lounge', near_venue: 'Glasgow Royal Concert Hall', city: 'Glasgow' }
+  for (const v of ['A', 'B'] as const) assert.ok(outreachSubject(long, v).length <= 60, outreachSubject(long, v))
+  assert.ok(['A', 'B'].includes(subjectVariantFor('3f2a9c1e-0000-4000-8000-00000000000b')))
+  // follow-up to a business emailed with version B
+  assert.equal(buildOutreachEmail({ ...p, status: 'sent', sent_at: '2026-11-13T08:00:00Z', subject_variant: 'B' }, 'follow_up').subject, "Re: 3 spots next to Co-op Live's shows. One for The Blue Door?")
+  // follow-up to a business emailed before the A/B test keeps the old subject
+  assert.equal(buildOutreachEmail({ ...p, status: 'sent', sent_at: '2026-11-10T08:00:00Z', subject_variant: null }, 'follow_up').subject, "Re: We'd love to feature The Blue Door on TheShowFinder Manchester")
+})
+
+test('visual email: banner, show card, offer badge, button, no stray values, small', () => {
+  const show = { title: 'Example Band', when: 'Sat 21 Nov, 19:30', venue: 'Co-op Live', imageUrl: 'https://s1.ticketm.net/x.jpg', url: 'https://www.theshowfinder.com/events/example-band-abc12345' }
+  const e = buildOutreachEmail(p, 'first', { show })
+  assert.match(e.html, /email\/city\/manchester\.jpg/)
+  assert.match(e.html, /Example Band/)
+  assert.match(e.html, /BEFORE THE SHOW/)
+  assert.match(e.html, /10% off with your show ticket/)
+  assert.match(e.html, /\/p\/abc123/)
+  assert.match(e.html, /\/unsubscribe\/tok/)
+  assert.match(e.text, /Next at Co-op Live: Example Band, Sat 21 Nov, 19:30/)
+  assert.doesNotMatch(e.html + e.text, /undefined|null|NaN/)
+  assert.ok(e.html.length < 60_000)
+  const noShow = buildOutreachEmail({ ...p, city: 'Atlantis', near_venue: null }, 'first')
+  assert.doesNotMatch(noShow.html, /email\/city\//)
+  assert.match(noShow.html, /On our Atlantis page/)
+  assert.match(buildOutreachEmail({ ...p, category: 'Hotel' }, 'first').html, /STAY NEARBY/)
 })

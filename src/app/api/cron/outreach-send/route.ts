@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { withJobRun } from '@/lib/jobRuns'
-import { canEmail, looksLikeChain, takeAcrossCities, cityOfTheDay, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
+import { canEmail, subjectVariantFor, looksLikeChain, takeAcrossCities, cityOfTheDay, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
 import { sendOutreachEmail } from '@/lib/outreachSend'
+import { loadOutreachShow } from '@/lib/outreachShow'
 import { CITIES } from '@/lib/cities'
 
 export const maxDuration = 60
@@ -20,7 +21,7 @@ function ukHour(now = new Date()): number {
   return Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hourCycle: 'h23' }).format(now))
 }
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
-const COLS = 'id, business_name, category, city, near_venue, distance_label, contact_name, email, company_type, status, ref_code, unsubscribe_token'
+const COLS = 'id, business_name, category, city, near_venue, distance_label, contact_name, email, company_type, status, ref_code, unsubscribe_token, sent_at, subject_variant'
 
 /** Today's city first (see cityOfTheDay), then anything left from earlier cities, taking turns. Independents before chains. */
 function firstsInOrder(all: Prospect[], n: number): Prospect[] {
@@ -73,12 +74,15 @@ async function handleGet(request: Request) {
     if (!canEmail(p)) continue
     budget--
     if (dry) { sent.push(`${kind}: ${p.business_name} <${p.email}>`); continue }
-    const r = await sendOutreachEmail(p, kind)
+    // First emails get an A/B subject (see outreachSubject), saved with sent_at so the follow-up replies to it.
+    const variant = kind === 'first' ? subjectVariantFor(p.id) : null
+    const show = await loadOutreachShow(db, p)
+    const r = await sendOutreachEmail(variant ? { ...p, subject_variant: variant } : p, kind, show)
     const now = new Date().toISOString()
     if (r.ok) {
       sent.push(`${kind}: ${p.business_name}`)
       await db.from('outreach_prospects').update(kind === 'first'
-        ? { status: 'sent', sent_at: now, last_error: null, updated_at: now }
+        ? { status: 'sent', sent_at: now, subject_variant: variant, last_error: null, updated_at: now }
         : { status: 'followed_up', followed_up_at: now, last_error: null, updated_at: now }).eq('id', p.id)
     } else {
       failed.push(`${p.business_name}: ${r.error}`)
