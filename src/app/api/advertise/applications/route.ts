@@ -6,7 +6,7 @@ import { tidyOffer, tidyPostcode } from '@/lib/businessOffers'
 import { geocodePostcode } from '@/lib/businessVouchers'
 import { AREA_RADIUS_M, FEATURED_PER_AREA, STANDARD_PER_AREA, countWithinArea } from '@/lib/localPlacements'
 import { prospectByRef } from '@/lib/outreachProspect'
-import { PACKAGES, gbp, foundingOfferOpen, FOUNDING_OFFER_KEY, FOUNDING_TRIAL_DAYS } from '@/lib/advertisingPackages'
+import { gbp, foundingOfferOpen, FOUNDING_OFFER_KEY, FOUNDING_TRIAL_DAYS, FOUNDING_PRICES } from '@/lib/advertisingPackages'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -61,7 +61,16 @@ async function createCheckoutSession({
   const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://www.theshowfinder.com'
   const params = new URLSearchParams()
   params.set('mode', 'subscription')
-  params.set('line_items[0][price]', priceId)
+  if (founding && !priceId.startsWith('price_')) {
+    // Founding price (£24.95 / £14.95 a month), made at checkout so no extra Stripe price has to be set up. A Stripe
+    // price id in STRIPE_FEATURED_FOUNDING_PRICE_ID / STRIPE_STANDARD_FOUNDING_PRICE_ID is used instead when set.
+    params.set('line_items[0][price_data][currency]', 'gbp')
+    params.set('line_items[0][price_data][unit_amount]', String(Math.round(FOUNDING_PRICES[packageKey] * 100)))
+    params.set('line_items[0][price_data][recurring][interval]', 'month')
+    params.set('line_items[0][price_data][product_data][name]', `TheShowFinder ${packageKey === 'featured' ? 'Featured placement' : 'Standard listing'} (founding partner price)`)
+  } else {
+    params.set('line_items[0][price]', priceId)
+  }
   params.set('line_items[0][quantity]', '1')
   params.set('customer_email', email)
   params.set('client_reference_id', applicationId)
@@ -87,7 +96,7 @@ async function createCheckoutSession({
     params.set('subscription_data[metadata][offer]', FOUNDING_OFFER_KEY)
     params.set('subscription_data[trial_period_days]', String(FOUNDING_TRIAL_DAYS))
     params.set('payment_method_collection', 'always')
-    params.set('custom_text[submit][message]', `Founding partner offer: nothing to pay for your first ${FOUNDING_TRIAL_DAYS} days, then ${gbp(PACKAGES[packageKey].monthly)} a month until you cancel. Cancel any time by emailing hello@theshowfinder.com. theshowfinder.com/terms#advertising`)
+    params.set('custom_text[submit][message]', `Founding partner offer: nothing to pay for your first ${FOUNDING_TRIAL_DAYS} days, then your founding price of ${gbp(FOUNDING_PRICES[packageKey])} a month, kept for as long as you stay. Cancel any time by emailing hello@theshowfinder.com. theshowfinder.com/terms#advertising`)
   } else {
     params.set('custom_text[submit][message]', billing === 'monthly'
       ? '12-month subscription: 12 monthly payments. Renews for a further 12 months unless cancelled at least 30 days before the end of the term. theshowfinder.com/terms#advertising'
@@ -141,7 +150,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Please upload no more than five PNG, JPG, WebP or PDF files, up to 5MB each.' }, { status: 400 })
     }
 
-    const { priceId, key: priceEnvKey } = priceIdFor(packageKey, billing)
+    const normal = priceIdFor(packageKey, billing)
+    const foundingEnv = packageKey === 'featured' ? process.env.STRIPE_FEATURED_FOUNDING_PRICE_ID : process.env.STRIPE_STANDARD_FOUNDING_PRICE_ID
+    const priceId = founding ? (foundingEnv || 'founding_inline') : normal.priceId
+    const priceEnvKey = normal.key
     if (!priceId) return NextResponse.json({ error: `The selected payment option is not configured yet (${priceEnvKey}).` }, { status: 503 })
 
     const db = createAdminClient()

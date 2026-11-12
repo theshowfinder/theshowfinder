@@ -11,7 +11,7 @@ import { listingCategory } from '@/lib/advertiserCategory'
 import { geocodePostcode, newPin } from '@/lib/businessVouchers'
 import { tidyOffer } from '@/lib/businessOffers'
 import { sendAdvertiserWelcome } from '@/lib/advertiserEmails'
-import { PACKAGES, gbp, FOUNDING_OFFER_KEY } from '@/lib/advertisingPackages'
+import { gbp, FOUNDING_OFFER_KEY, FOUNDING_PRICES } from '@/lib/advertisingPackages'
 
 const LOGO_BUCKET = 'business-logos'   // public (migration 094); advertiser-assets stays private
 
@@ -81,7 +81,7 @@ export async function approveApplicationAction(applicationId: string) {
       to: app.email, contactName: app.contact_name, businessName: app.business_name, city: app.city, featured: app.package === 'featured', offer: listing.offer_text, pin,
       // Founding partner offer still in its free month: say so (and when it ends) instead of the 12-month term.
       trial: app.offer === FOUNDING_OFFER_KEY && app.payment_status === 'trial' && app.trial_ends_at
-        ? { endsOn: new Date(app.trial_ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'Europe/London' }), monthlyPrice: gbp(PACKAGES[app.package === 'featured' ? 'featured' : 'standard'].monthly) }
+        ? { endsOn: new Date(app.trial_ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'Europe/London' }), monthlyPrice: gbp(FOUNDING_PRICES[app.package === 'featured' ? 'featured' : 'standard']) }
         : null,
     })
   } catch (err) {

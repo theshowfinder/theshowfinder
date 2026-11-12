@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { withJobRun } from '@/lib/jobRuns'
 import { businessMonthStats } from '@/lib/advertiserReports'
 import { sendTrialCheckIn } from '@/lib/advertiserEmails'
-import { PACKAGES, gbp, FOUNDING_OFFER_KEY } from '@/lib/advertisingPackages'
+import { gbp, FOUNDING_OFFER_KEY, FOUNDING_PRICES } from '@/lib/advertisingPackages'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -41,7 +41,7 @@ async function handleGet(request: Request) {
       if (b && b.status === 'active') {
         const start = new Date(a.approved_at ?? a.created_at)
         const stats = await businessMonthStats(b, { start, end: new Date(), label: 'your first three weeks' })
-        const t = { contactName: a.contact_name ?? '', endsOn: day(a.trial_ends_at), monthlyPrice: gbp(PACKAGES[a.package === 'featured' ? 'featured' : 'standard'].monthly) }
+        const t = { contactName: a.contact_name ?? '', endsOn: day(a.trial_ends_at), monthlyPrice: gbp(FOUNDING_PRICES[a.package === 'featured' ? 'featured' : 'standard']) }
         if (dry) checkIns.push(a.business_name)
         else {
           try {

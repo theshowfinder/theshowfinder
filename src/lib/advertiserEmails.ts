@@ -33,7 +33,7 @@ export async function sendAdvertiserWelcome(a: { to: string; contactName: string
     'We will feature you on our social channels and check in with you each month.',
     '',
     a.trial
-      ? `Your first month is free, until ${a.trial.endsOn}. After that it is ${a.trial.monthlyPrice} a month, and you can cancel any time: just reply to this email. Around three weeks in we will send you what your listing has done so far.`
+      ? `Your first month is free, until ${a.trial.endsOn}. After that it is your founding price of ${a.trial.monthlyPrice} a month, kept for as long as you stay, and you can cancel any time: just reply to this email. Around three weeks in we will send you what your listing has done so far.`
       : 'Your placement is a 12-month subscription. It renews for a further 12 months unless you cancel at least 30 days before the end of the term: just reply to this email.',
     '',
     'Any changes, just reply to this email.',
@@ -97,7 +97,7 @@ export function trialCheckInText(s: MonthlyStats, t: { contactName: string; ends
   else lines.push('', 'Tip: add an offer (for example "10% off food with your show ticket"). It gives people a reason to pick you, and we count every voucher used. Just reply with the offer and we will add it.')
   lines.push(
     '',
-    `Your free month ends on ${t.endsOn}. After that it is ${t.monthlyPrice} a month and you stay on every show page; there is nothing you need to do. If you would rather stop, just reply before then and you will not be charged.`,
+    `Your free month ends on ${t.endsOn}. After that it is your founding price of ${t.monthlyPrice} a month and you stay on every show page; there is nothing you need to do. If you would rather stop, just reply before then and you will not be charged.`,
     '',
     'Clicks are counted from real visitors only (automated traffic is filtered out).',
     '',

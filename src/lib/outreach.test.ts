@@ -13,7 +13,6 @@ test('first email: personal, offer link, unsubscribe, no numbers', () => {
   assert.match(e.text, /You're a 6-minute walk from Co-op Live, so you'd be shown on every show there/)
   assert.match(e.text, /only take three Featured partners around each venue/)
   assert.doesNotMatch(e.text, /nine/)
-  assert.match(e.text, /£29\.95 a month/)
   assert.match(e.text, /decide where to eat before the show/)
   assert.doesNotMatch(e.text, /chains|independent/i)
   assert.match(e.text, /\/p\/abc123/)
@@ -91,7 +90,7 @@ test('A/B subjects: venue, category, length, and follow-ups reply to the subject
   assert.equal(shortVenue('Utilita Arena Birmingham', 'Birmingham'), 'Utilita Arena')
   const long = { ...p, business_name: 'The Very Long Named Restaurant and Cocktail Lounge', near_venue: 'Glasgow Royal Concert Hall', city: 'Glasgow' }
   for (const v of ['A', 'B'] as const) assert.ok(outreachSubject(long, v).length <= 60, outreachSubject(long, v))
-  assert.ok(['A', 'B'].includes(subjectVariantFor('3f2a9c1e-0000-4000-8000-00000000000b')))
+  assert.ok(['A', 'B'].includes(subjectVariantFor('3f2a9c1e-0000-4000-8000-00000000000b', new Date('2027-02-01T00:00:00Z'))))
   // follow-up to a business emailed with version B
   assert.equal(buildOutreachEmail({ ...p, status: 'sent', sent_at: '2026-11-13T08:00:00Z', subject_variant: 'B' }, 'follow_up').subject, "Re: 3 spots next to Co-op Live's shows. One for The Blue Door?")
   // follow-up to a business emailed before the A/B test keeps the old subject
@@ -107,7 +106,7 @@ test('visual email: banner, show card, offer badge, button, no stray values, sma
   assert.match(e.html, /10% off with your show ticket/)
   assert.match(e.html, /\/p\/abc123/)
   assert.match(e.html, /\/unsubscribe\/tok/)
-  assert.match(e.text, /Next at Co-op Live: Example Band, Sat 21 Nov, 19:30/)
+  assert.match(e.text, /For example, on the page for Example Band at Co-op Live \(Sat 21 Nov, 19:30\), The Blue Door would sit right under the ticket buttons/)
   assert.doesNotMatch(e.html + e.text, /undefined|null|NaN/)
   assert.ok(e.html.length < 60_000)
   const noShow = buildOutreachEmail({ ...p, city: 'Atlantis', near_venue: null }, 'first')
@@ -138,4 +137,20 @@ test('founding partner offer: in the emails until 31 Dec 2026, gone after', () =
   const f = buildOutreachEmail({ ...p, status: 'sent', sent_at: '2026-11-13T08:00:00Z', subject_variant: 'A' }, 'follow_up', { now: before })
   assert.match(f.text, /first month is free if you join before 31 December/)
   assert.match(f.text, /Start The Blue Door's free month/)
+})
+
+test('offer subjects (C/D) while the founding offer is open; A/B after', async () => {
+  const { outreachSubject, subjectVariantFor } = await import('./outreach.ts')
+  assert.equal(outreachSubject(p, 'C'), 'Free month for The Blue Door beside Co-op Live\'s shows')
+  assert.equal(outreachSubject(p, 'D'), 'Be one of 3 spots by Co-op Live, first month free')
+  assert.equal(outreachSubject({ ...p, near_venue: null }, 'C'), 'Free month for The Blue Door on our Manchester page')
+  const long = { ...p, business_name: 'The Very Long Named Restaurant and Cocktail Lounge', near_venue: 'Glasgow Royal Concert Hall', city: 'Glasgow' }
+  for (const v of ['C', 'D'] as const) assert.ok(outreachSubject(long, v).length <= 60, outreachSubject(long, v))
+  assert.ok(['C', 'D'].includes(subjectVariantFor('abc', new Date('2026-12-01T00:00:00Z'))))
+  assert.ok(['A', 'B'].includes(subjectVariantFor('abc', new Date('2027-01-05T00:00:00Z'))))
+  const e = buildOutreachEmail(p, 'first', { now: new Date('2026-12-01T00:00:00Z') })
+  assert.match(e.subject, /free/i)
+  assert.match(e.text, /£24\.95 a month \(normally £44\.95\)/)
+  // a business first emailed with C gets "Re:" the same subject
+  assert.equal(buildOutreachEmail({ ...p, status: 'sent', sent_at: '2026-11-13T08:00:00Z', subject_variant: 'C' }, 'follow_up').subject, "Re: Free month for The Blue Door beside Co-op Live's shows")
 })

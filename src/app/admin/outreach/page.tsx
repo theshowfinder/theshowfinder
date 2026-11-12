@@ -3,20 +3,26 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { buildOutreachEmail, SENDABLE_COMPANY_TYPES, DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
+import { buildOutreachEmail, SENDABLE_COMPANY_TYPES, DAILY_LIMIT, ZOHO_DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
 import PendingButton from '@/components/admin/PendingButton'
-import { addProspectAction, approveSelectedAction, setStatusAction, setCompanyTypeAction, deleteProspectAction } from './actions'
+import { addProspectAction, approveSelectedAction, setStatusAction, setCompanyTypeAction, deleteProspectAction, resumeOutreachAction } from './actions'
 
 // Outreach: businesses near busy venues, each emailed only after Chris ticks it. The sender (cron outreach-send)
 // sends up to DAILY_LIMIT a weekday, spread through the day, then one follow-up after FOLLOW_UP_AFTER_DAYS days.
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
-type Row = Prospect & { website: string | null; address: string | null; company_number: string | null; notes: string | null; sent_at: string | null; followed_up_at: string | null; clicked_at: string | null; last_error: string | null; created_at: string }
+type Row = Prospect & { website: string | null; address: string | null; company_number: string | null; notes: string | null; sent_at: string | null; followed_up_at: string | null; clicked_at: string | null; last_error: string | null; created_at: string; sent_via?: string | null }
 
 const STATUSES: Array<[string, string]> = [
   ['to_check', 'Ready to check'], ['approved', 'Approved, waiting to send'], ['sent', 'Sent'], ['followed_up', 'Followed up'],
   ['replied', 'Replied'], ['interested', 'Interested'], ['onboarding', 'Onboarding'], ['won', 'Won (paid)'],
   ['no_response', 'No response'], ['not_interested', 'Not a fit'], ['unsubscribed', 'Unsubscribed'], ['bounced', 'Bounced'],
 ]
+/** Channels the automatic brake has paused right now. */
+function pausedChannels(b: { resend_paused_until?: string | null; zoho_paused_until?: string | null } | null): string[] {
+  const now = Date.now()
+  const on = (t: string | null | undefined) => Boolean(t && Date.parse(t) > now)
+  return [on(b?.resend_paused_until) ? 'Resend' : null, on(b?.zoho_paused_until) ? 'Zoho' : null].filter((x): x is string => Boolean(x))
+}
 const label = (s: string) => STATUSES.find(([k]) => k === s)?.[1] ?? s
 const day = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' }) : null
 const input = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm'
@@ -26,10 +32,12 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams
   const status = STATUSES.some(([k]) => k === sp.status) ? sp.status! : 'to_check'
   const db = createAdminClient() as Loose
-  const [{ data: rows }, { data: all }] = await Promise.all([
+  const [{ data: rows }, { data: all }, { data: brake }] = await Promise.all([
     db.from('outreach_prospects').select('*').eq('status', status).order('created_at', { ascending: false }).limit(200),
     db.from('outreach_prospects').select('status, clicked_at'),
+    db.from('outreach_settings').select('resend_paused_until, zoho_paused_until, pause_reason').eq('id', 1).maybeSingle(),
   ])
+  const paused = pausedChannels(brake)
   const counts = new Map<string, number>()
   for (const r of (all ?? []) as Array<{ status: string }>) counts.set(r.status, (counts.get(r.status) ?? 0) + 1)
   const clicks = ((all ?? []) as Array<{ clicked_at: string | null }>).filter(r => r.clicked_at).length
@@ -41,8 +49,14 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-5">
         <div>
           <h1 className="text-xl font-extrabold text-slate-900">Outreach</h1>
-          <p className="text-sm text-slate-600">Nothing is emailed until you tick it. Up to {DAILY_LIMIT} emails a weekday from partners@, spread through the day; one follow-up after {FOLLOW_UP_AFTER_DAYS} days, then &ldquo;No response&rdquo; after {NO_RESPONSE_AFTER_DAYS}; replies go to hello@. The link opens the city mock-up with their name in it and a pre-filled sign-up. Only limited companies can be ticked (UK rules: sole traders and partnerships need consent first). {clicks} business{clicks === 1 ? '' : 'es'} clicked through so far.</p>
+          <p className="text-sm text-slate-600">Nothing is emailed until you tick it. Up to {DAILY_LIMIT} visual emails a weekday from partners@ (Resend) and {ZOHO_DAILY_LIMIT} plain ones from your Zoho mailbox, 07:00–11:00 UK, busiest venues first; one follow-up after {FOLLOW_UP_AFTER_DAYS} days, then &ldquo;No response&rdquo; after {NO_RESPONSE_AFTER_DAYS}; replies go to hello@. The link opens the city mock-up with their name in it and a pre-filled sign-up. Only limited companies can be ticked (UK rules: sole traders and partnerships need consent first). {clicks} business{clicks === 1 ? '' : 'es'} clicked through so far.</p>
         </div>
+        {paused.length > 0 && (
+          <form action={resumeOutreachAction} className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-wrap items-center justify-between gap-3">
+            <span><b>{paused.join(' and ')} outreach paused</b> by the automatic brake: {brake?.pause_reason ?? 'no reason recorded'}</span>
+            <PendingButton pendingLabel="Resuming…" className="rounded-lg bg-amber-600 text-white font-bold text-xs px-3 py-1.5">Resume sending</PendingButton>
+          </form>
+        )}
         {sp.msg && <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${sp.ok === '1' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>{sp.msg}</div>}
 
         <nav className="flex gap-2 overflow-x-auto pb-1">
@@ -68,7 +82,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
                       <p className="text-xs text-slate-500">{[r.distance_label ?? (r.near_venue ? `near ${r.near_venue}` : null), r.address].filter(Boolean).join(' · ')}</p>
                       <p className={`text-xs font-semibold mt-1 ${ok ? 'text-emerald-700' : 'text-amber-700'}`}>
                         {r.company_type === 'ltd' ? `Limited company${r.company_number ? ` (${r.company_number})` : ''}` : r.company_type === 'consented' ? 'Said yes to hearing from us' : `Company type: ${r.company_type.replace('_', ' ')} (not confirmed)`}
-                        {' · '}{label(r.status)}{r.sent_at ? ` · sent ${day(r.sent_at)}` : ''}{r.followed_up_at ? ` · followed up ${day(r.followed_up_at)}` : ''}{r.clicked_at ? ' · clicked' : ''}
+                        {' · '}{label(r.status)}{r.sent_at ? ` · sent ${day(r.sent_at)}${r.sent_via === 'zoho' ? ' (Zoho)' : ''}` : ''}{r.followed_up_at ? ` · followed up ${day(r.followed_up_at)}` : ''}{r.clicked_at ? ' · clicked' : ''}
                       </p>
                       {r.last_error && <p className="text-xs text-red-700 mt-1">Last send failed: {r.last_error}</p>}
                       {r.notes && <p className="text-xs text-slate-500 mt-1">{r.notes}</p>}

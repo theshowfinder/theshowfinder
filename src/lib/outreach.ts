@@ -7,7 +7,9 @@ const SITE = 'https://www.theshowfinder.com'
 export const OUTREACH_FROM = 'TheShowFinder <partners@theshowfinder.com>'
 export const OUTREACH_REPLY_TO = 'hello@theshowfinder.com'
 // Few, well-chosen emails (Chris, 6 Nov 2026): small independents close to busy venues, not volume.
-export const DAILY_LIMIT = 40   // first emails + follow-ups a weekday (Chris, 9 Nov 2026; was 15 from 6 Nov)
+export const DAILY_LIMIT = 60   // Resend: first emails + follow-ups a weekday (Chris, 12 Nov 2026; was 40 from 9 Nov, 15 from 6 Nov)
+/** Chris's Zoho mailbox, on top of Resend (12 Nov 2026): plain one-to-one emails, spaced through the morning. */
+export const ZOHO_DAILY_LIMIT = 25
 export const FOLLOW_UP_AFTER_DAYS = 4
 /** No reply this long after the first email (follow-up sent in between): marked "No response", never chased again. */
 export const NO_RESPONSE_AFTER_DAYS = 10
@@ -130,8 +132,12 @@ export interface OutreachShow { title: string; when: string; venue: string; imag
 // ── Subject lines (12 Nov 2026): two versions, A/B by prospect id, stored in outreach_prospects.subject_variant
 // when the first email goes, so a follow-up always replies to the subject that business actually got. Businesses
 // emailed before this (subject_variant null, already sent) keep the old subject on their follow-up.
-export type SubjectVariant = 'A' | 'B'
-export const subjectVariantFor = (id: string): SubjectVariant => (parseInt(id.replace(/[^0-9a-f]/gi, '').slice(-1) || '0', 16) % 2 === 0 ? 'A' : 'B')
+// C and D (12 Nov 2026) carry the founding partner offer and are used while it is open; A and B after it ends.
+export type SubjectVariant = 'A' | 'B' | 'C' | 'D'
+export const subjectVariantFor = (id: string, now: Date = new Date()): SubjectVariant => {
+  const even = parseInt(id.replace(/[^0-9a-f]/gi, '').slice(-1) || '0', 16) % 2 === 0
+  return foundingOfferOpen(now) ? (even ? 'C' : 'D') : (even ? 'A' : 'B')
+}
 const realVenue = (p: Pick<Prospect, 'near_venue' | 'city'>) =>
   p.near_venue && p.near_venue.toLowerCase() !== p.city.toLowerCase() ? p.near_venue : null
 
@@ -167,6 +173,20 @@ export function outreachSubject(p: Prospect, variant: SubjectVariant | 'legacy')
     ]
     return options.find(o => o.length <= 60) ?? options[options.length - 1]
   }
+  if (variant === 'C') {
+    const options = [
+      ...(short ? [`Free month for ${b} beside ${short}'s shows`, `A free month beside ${short}'s shows`] : []),
+      `Free month for ${b} on our ${p.city} page`, `A free month on our ${p.city} page`,
+    ]
+    return options.find(o => o.length <= 60) ?? options[options.length - 1]
+  }
+  if (variant === 'D') {
+    const options = [
+      ...(short ? [`Be one of 3 spots by ${short}, first month free`, `One of 3 spots by ${short}, first month free`] : []),
+      `One of 3 spots in ${p.city}, first month free`, `3 spots in ${p.city}, first month free`,
+    ]
+    return options.find(o => o.length <= 60) ?? options[options.length - 1]
+  }
   const options = [
     ...(short ? [`3 spots next to ${short}'s shows. One for ${b}?`, `3 spots next to ${short}'s shows. One for you?`] : []),
     `3 spots on our ${p.city} page. One for ${b}?`, `3 spots on our ${p.city} page. One for you?`,
@@ -175,9 +195,9 @@ export function outreachSubject(p: Prospect, variant: SubjectVariant | 'legacy')
 }
 
 /** The subject this prospect gets (first) or got (follow-up "Re:"). */
-function subjectFor(p: Prospect): string {
-  const v = p.subject_variant === 'A' || p.subject_variant === 'B' ? p.subject_variant
-    : p.sent_at ? 'legacy' : subjectVariantFor(p.id)
+function subjectFor(p: Prospect, now?: Date): string {
+  const v = p.subject_variant === 'A' || p.subject_variant === 'B' || p.subject_variant === 'C' || p.subject_variant === 'D' ? p.subject_variant
+    : p.sent_at ? 'legacy' : subjectVariantFor(p.id, now)
   return outreachSubject(p, v)
 }
 
@@ -230,7 +250,7 @@ export function buildOutreachEmail(p: Prospect, kind: 'first' | 'follow_up', opt
   const hi = p.contact_name?.trim() ? `Hi ${p.contact_name.trim().split(/\s+/)[0]},` : `Hi there,`
   const b = p.business_name
   const venue = realVenue(p)
-  const firstSubject = subjectFor(p)
+  const firstSubject = subjectFor(p, opts.now)
   const subject = kind === 'follow_up' ? `Re: ${firstSubject}` : firstSubject
   const button = founding && kind === 'follow_up' ? `Start ${b}'s free month` : `See how ${b} would look`
   const intro = kind === 'first'
@@ -245,18 +265,22 @@ export function buildOutreachEmail(p: Prospect, kind: 'first' | 'follow_up', opt
         `Just checking this reached you. We'd still love to have ${b} on our ${p.city} page${venue ? ` and on the shows at ${venue}` : ''}. There are only three Featured places around each venue, and here's how yours would look:`,
       ]
   const offerLine = founding
-    ? 'As one of our first partners, your first month is free: no commitment, then from £29.95 a month and you can cancel any time.'
+    ? 'As one of our first partners, your first month is free. After that a Featured spot is £24.95 a month (normally £44.95), and that price stays yours for as long as you stay. No contract, cancel any time.'
     : 'Introductory rates start at £29.95 a month.'
   const outro = kind === 'first'
     ? [venue
         ? `${p.distance_label ? `You're ${/^\d/.test(p.distance_label) ? 'a ' : ''}${p.distance_label}, so you'd` : 'You would'} be shown on every show there and at the venues around it. We only take three Featured partners around each venue, and we'd genuinely love ${b} to be one of them. ${offerLine}`
         : `We only take three Featured partners around each venue in ${p.city}, and we'd genuinely love ${b} to be one of them. ${offerLine}`]
-    : founding ? ['Your first month is free if you join before 31 December, then it is monthly and you can cancel any time.'] : []
+    : founding ? ['Your first month is free if you join before 31 December, then £24.95 a month for a Featured spot (normally £44.95), kept for as long as you stay. No contract, cancel any time.'] : []
   const why = `You're getting this because ${b} is close to ${venue ?? `the busy venues in ${p.city}`}.`
 
+  // The plain version (also what the Zoho mailbox sends) has no preview card, so it says it in words instead.
+  const plainIntro = kind === 'first' ? intro.map(l => l.replace(/ Roughly like this:$/, '')) : intro
   const text = [
-    ...intro.flatMap(l => [l, '']),
-    ...(show ? [`Next at ${show.venue}: ${show.title}, ${show.when}`, ''] : []),
+    ...plainIntro.flatMap(l => [l, '']),
+    ...(show ? [kind === 'first'
+      ? `For example, on the page for ${show.title} at ${show.venue} (${show.when}), ${b} would sit right under the ticket buttons.`
+      : `Next at ${show.venue}: ${show.title}, ${show.when}`, ''] : []),
     ...outro.flatMap(l => [l, '']),
     `${button}: ${offerUrl(p)}`,
     '',
@@ -268,7 +292,7 @@ export function buildOutreachEmail(p: Prospect, kind: 'first' | 'follow_up', opt
     `${why} Not for you? Unsubscribe: ${unsubscribeUrl(p)}`,
   ].join('\n')
 
-  const preheader = `We feature three local places beside every show ${venue ? `at ${venue}` : `in ${p.city}`}. Here's how ${b} would look${founding ? ', and your first month is free' : ''}.`
+  const preheader = `We feature three local places beside every show ${venue ? `at ${venue}` : `in ${p.city}`}. Here's how ${b} would look${founding ? '. First month free, then £24.95 a month' : ''}.`
   const banner = cityBannerUrl(p.city)
   const buttonHtml = `
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 22px"><tr>

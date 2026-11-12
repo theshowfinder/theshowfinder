@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { CITIES } from '@/lib/cities'
-import { PACKAGES as PACKAGE_PRICES, gbp, yearlySaving, foundingPriceLine, FOUNDING_TRIAL_DAYS } from '@/lib/advertisingPackages'
+import { PACKAGES as PACKAGE_PRICES, gbp, yearlySaving, foundingPriceLine, FOUNDING_TRIAL_DAYS, FOUNDING_PRICES } from '@/lib/advertisingPackages'
 
 type PackageKey = 'featured' | 'standard'
 type BillingKey = 'monthly' | 'yearly'
@@ -80,7 +80,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
     <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
       <aside className="rounded-3xl bg-slate-950 p-7 text-white sm:p-9">
         <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-rose-300">Advertiser onboarding</p>
-        {founding && <p className="mt-4 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-extrabold">Founding partner offer: your first month is free. Then monthly, cancel any time.</p>}
+        {founding && <p className="mt-4 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-extrabold">Founding partner offer: your first month is free, then a founding price that stays yours for as long as you stay. Monthly, cancel any time.</p>}
         <h1 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">Get your business in front of people planning a night out.</h1>
         <p className="mt-4 text-sm leading-relaxed text-white/70">Choose your city and placement, send us your details and upload your marketing assets. We will confirm availability, arrange payment and prepare your listing.</p>
         <div className="mt-8 space-y-4 text-sm">
@@ -119,7 +119,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
               ))}
             </div>
             {founding ? (
-              <p className="mt-7 rounded-xl bg-rose-50 px-4 py-3 text-sm text-slate-700"><b>Billing:</b> nothing to pay for your first {FOUNDING_TRIAL_DAYS} days. After that {gbp(PACKAGE_PRICES[packageKey].monthly)} a month, and you can cancel any time.</p>
+              <p className="mt-7 rounded-xl bg-rose-50 px-4 py-3 text-sm text-slate-700"><b>Billing:</b> nothing to pay for your first {FOUNDING_TRIAL_DAYS} days. After that your founding price of {gbp(FOUNDING_PRICES[packageKey])} a month (normally {gbp(PACKAGE_PRICES[packageKey].monthly)}), kept for as long as you stay. Cancel any time.</p>
             ) : (
             <label className="mt-7 block text-sm font-bold text-slate-700">Billing
               <select value={billing} onChange={event => setBilling(event.target.value as BillingKey)} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3">
@@ -164,12 +164,12 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
             <h2 className="text-2xl font-extrabold text-slate-900">Review your application</h2>
             <p className="mt-2 text-sm text-slate-500">Check the details below, then continue to secure your placement through Stripe. Your listing will remain pending until we review and approve it.</p>
             <div className="mt-7 rounded-2xl bg-slate-50 p-5 text-sm text-slate-700">
-              <p><b>City:</b> {city}</p><p><b>Package:</b> {PACKAGES[packageKey].label} ({founding ? foundingPriceLine(packageKey) : PACKAGES[packageKey].price})</p>{founding ? <><p><b>Billing:</b> first {FOUNDING_TRIAL_DAYS} days free, then {gbp(PACKAGE_PRICES[packageKey].monthly)} a month</p><p><b>Term:</b> monthly, cancel any time</p></> : <><p><b>Billing:</b> {billing === 'monthly' ? `12 monthly payments of ${gbp(PACKAGE_PRICES[packageKey].monthly)}` : `${gbp(PACKAGE_PRICES[packageKey].yearly)} paid upfront for 12 months (you save ${gbp(yearlySaving(packageKey))})`}</p><p><b>Term:</b> 12-month subscription</p></>}<p><b>Business:</b> {businessName}</p><p><b>Contact:</b> {contactName} · {email}</p><p><b>Postcode:</b> {postcode || 'Not supplied'}</p><p><b>Offer:</b> {offer || 'None'}</p><p><b>Logo:</b> {logoFile?.name ?? 'Not supplied'}</p><p><b>Marketing files:</b> {assetFiles.length || 'None'}</p>
+              <p><b>City:</b> {city}</p><p><b>Package:</b> {PACKAGES[packageKey].label} ({founding ? foundingPriceLine(packageKey) : PACKAGES[packageKey].price})</p>{founding ? <><p><b>Billing:</b> first {FOUNDING_TRIAL_DAYS} days free, then {gbp(FOUNDING_PRICES[packageKey])} a month (founding price)</p><p><b>Term:</b> monthly, cancel any time</p></> : <><p><b>Billing:</b> {billing === 'monthly' ? `12 monthly payments of ${gbp(PACKAGE_PRICES[packageKey].monthly)}` : `${gbp(PACKAGE_PRICES[packageKey].yearly)} paid upfront for 12 months (you save ${gbp(yearlySaving(packageKey))})`}</p><p><b>Term:</b> 12-month subscription</p></>}<p><b>Business:</b> {businessName}</p><p><b>Contact:</b> {contactName} · {email}</p><p><b>Postcode:</b> {postcode || 'Not supplied'}</p><p><b>Offer:</b> {offer || 'None'}</p><p><b>Logo:</b> {logoFile?.name ?? 'Not supplied'}</p><p><b>Marketing files:</b> {assetFiles.length || 'None'}</p>
             </div>
             <label className="mt-6 flex items-start gap-3 text-sm text-slate-700">
               <input type="checkbox" checked={agreedTerm} onChange={event => { setAgreedTerm(event.target.checked); if (event.target.checked) setError('') }} className="mt-1 h-4 w-4 shrink-0" />
               {founding
-                ? <span>I agree to a <b>monthly subscription</b>: the first {FOUNDING_TRIAL_DAYS} days are free, then {gbp(PACKAGE_PRICES[packageKey].monthly)} a month is charged to my card until I cancel. I can cancel any time, and cancelling before the free month ends costs nothing. See the <a href="/terms#advertising" target="_blank" className="font-semibold text-rose-600 underline">advertising terms</a>.</span>
+                ? <span>I agree to a <b>monthly subscription</b>: the first {FOUNDING_TRIAL_DAYS} days are free, then {gbp(FOUNDING_PRICES[packageKey])} a month is charged to my card until I cancel. I can cancel any time, and cancelling before the free month ends costs nothing. See the <a href="/terms#advertising" target="_blank" className="font-semibold text-rose-600 underline">advertising terms</a>.</span>
                 : <span>I agree to a <b>12-month subscription</b>{billing === 'monthly' ? ' (12 monthly payments)' : ''}. It renews for a further 12 months unless cancelled at least 30 days before the end of the term. See the <a href="/terms#advertising" target="_blank" className="font-semibold text-rose-600 underline">advertising terms</a>.</span>}
             </label>
             {error && <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}

@@ -71,3 +71,11 @@ export async function deleteProspectAction(id: string) {
   revalidatePath('/admin/outreach')
   back('Removed (only businesses not yet emailed can be removed; emailed ones stay as a record).')
 }
+
+/** Restart outreach after the automatic brake paused it (spam complaint, bounces, or a Zoho refusal). */
+export async function resumeOutreachAction() {
+  await checkAuth()
+  await db().from('outreach_settings').update({ resend_paused_until: null, zoho_paused_until: null, pause_reason: null, updated_at: new Date().toISOString() }).eq('id', 1)
+  revalidatePath('/admin/outreach')
+  back('Outreach resumed: the next morning runs will send again.')
+}

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resend, FROM_EMAIL } from '@/lib/resend'
-import { PACKAGES, gbp, FOUNDING_OFFER_KEY, FOUNDING_TRIAL_DAYS } from '@/lib/advertisingPackages'
+import { PACKAGES, gbp, FOUNDING_OFFER_KEY, FOUNDING_TRIAL_DAYS, FOUNDING_PRICES } from '@/lib/advertisingPackages'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -56,10 +56,11 @@ export async function POST(request: Request) {
     } else if (application) {
       const packageName = application.package === 'featured' ? 'Featured advertising' : 'Standard advertising'
       const billingLabel = application.billing === 'yearly' ? 'annual billing' : 'monthly billing'
-      const price = gbp(PACKAGES[application.package === 'featured' ? 'featured' : 'standard'].monthly)
+      const pkgKey = application.package === 'featured' ? 'featured' : 'standard'
+      const price = gbp(founding ? FOUNDING_PRICES[pkgKey] : PACKAGES[pkgKey].monthly)
       const endsOn = trialEnds.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'Europe/London' })
       const confirmed = founding
-        ? `Your ${packageName.toLowerCase()} application for ${application.city} has been received and your free month has started. Nothing is charged until ${endsOn}; after that it is ${price} a month, and you can cancel any time by replying to this email.`
+        ? `Your ${packageName.toLowerCase()} application for ${application.city} has been received and your free month has started. Nothing is charged until ${endsOn}; after that it is your founding price of ${price} a month, kept for as long as you stay, and you can cancel any time by replying to this email.`
         : `Your ${packageName.toLowerCase()} application for ${application.city} has been received and payment has been confirmed on ${billingLabel}.`
       const { error: emailError } = await resend.emails.send({
         from: FROM_EMAIL,

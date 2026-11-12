@@ -108,7 +108,7 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester', heroIma
       {preview && (
         <div className="bg-rose-600 text-white">
           <div className="mx-auto max-w-7xl px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm font-bold">
-            <span>This is how {preview.name} would appear on TheShowFinder {cityName}.{founding ? ' Founding partner offer: your first month is free, then monthly, cancel any time.' : ''}</span>
+            <span>This is how {preview.name} would appear on TheShowFinder {cityName}.{founding ? ' Founding partner offer: your first month is free, then from £14.95 a month, kept for as long as you stay.' : ''}</span>
             <a href="#packages" className="rounded-lg bg-white px-3 py-1.5 text-rose-700">{founding ? 'Start your free month ↓' : 'Choose your placement ↓'}</a>
           </div>
         </div>
@@ -191,14 +191,14 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester', heroIma
             <div className="mt-7 grid gap-4 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/15 bg-white/10 p-5">
               <p className="text-xs font-extrabold uppercase tracking-widest text-rose-300">Featured placement</p>
-              <p className="mt-2 text-2xl font-black">£44.95<span className="text-sm font-bold text-white/60">/month</span></p>
-              <p className="mt-1 text-xs text-white/60">{founding ? 'First month free · then monthly, cancel any time' : '£449.95 annually · introductory city rate'}</p>
+              <p className="mt-2 text-2xl font-black">{founding ? <>£24.95<span className="text-sm font-bold text-white/60">/month </span><s className="text-sm font-bold text-white/40">£44.95</s></> : <>£44.95<span className="text-sm font-bold text-white/60">/month</span></>}</p>
+              <p className="mt-1 text-xs text-white/60">{founding ? 'First month free · founding price kept for as long as you stay · cancel any time' : '£449.95 annually · introductory city rate'}</p>
               <Link href={onboard('featured')} className="mt-4 inline-flex rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-rose-400">{founding ? 'Start free month: Featured →' : 'Secure featured placement →'}</Link>
             </div>
             <div className="rounded-2xl border border-white/15 bg-white/5 p-5">
               <p className="text-xs font-extrabold uppercase tracking-widest text-white/60">Standard listing</p>
-              <p className="mt-2 text-2xl font-black">£29.95<span className="text-sm font-bold text-white/60">/month</span></p>
-              <p className="mt-1 text-xs text-white/60">{founding ? 'First month free · then monthly, cancel any time' : '£299.95 annually · introductory city rate'}</p>
+              <p className="mt-2 text-2xl font-black">{founding ? <>£14.95<span className="text-sm font-bold text-white/60">/month </span><s className="text-sm font-bold text-white/40">£29.95</s></> : <>£29.95<span className="text-sm font-bold text-white/60">/month</span></>}</p>
+              <p className="mt-1 text-xs text-white/60">{founding ? 'First month free · founding price kept for as long as you stay · cancel any time' : '£299.95 annually · introductory city rate'}</p>
               <Link href={onboard('standard')} className="mt-4 inline-flex rounded-xl bg-white/10 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-white/20">{founding ? 'Start free month: Standard →' : 'Secure standard listing →'}</Link>
             </div>
           </div>
