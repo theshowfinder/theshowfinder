@@ -136,6 +136,10 @@
       "schedule": "10 7,13,19 * * *"
     },
     {
+      "path": "/api/cron/founding-partners",
+      "schedule": "20 9 * * *"
+    },
+    {
       "path": "/api/cron/advertiser-reports",
       "schedule": "5 9 1 * *"
     },

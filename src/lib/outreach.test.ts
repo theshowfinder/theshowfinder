@@ -127,3 +127,15 @@ test('every city gets a turn: fewest-so-far cities first, more venues searched i
   assert.equal(anchorCountFor('Belfast', names), 6)
   assert.equal(anchorCountFor('Nowhere', names), 6)
 })
+
+test('founding partner offer: in the emails until 31 Dec 2026, gone after', () => {
+  const before = new Date('2026-12-01T10:00:00Z'), after = new Date('2027-01-02T10:00:00Z')
+  const e = buildOutreachEmail(p, 'first', { now: before })
+  assert.match(e.text, /your first month is free/)
+  assert.match(e.text, /cancel any time/)
+  assert.doesNotMatch(buildOutreachEmail(p, 'first', { now: after }).text, /first month is free/)
+  assert.match(buildOutreachEmail(p, 'first', { now: after }).text, /Introductory rates start at £29\.95 a month/)
+  const f = buildOutreachEmail({ ...p, status: 'sent', sent_at: '2026-11-13T08:00:00Z', subject_variant: 'A' }, 'follow_up', { now: before })
+  assert.match(f.text, /first month is free if you join before 31 December/)
+  assert.match(f.text, /Start The Blue Door's free month/)
+})

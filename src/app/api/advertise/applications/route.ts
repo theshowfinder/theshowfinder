@@ -5,6 +5,8 @@ import { listingCategory } from '@/lib/advertiserCategory'
 import { tidyOffer, tidyPostcode } from '@/lib/businessOffers'
 import { geocodePostcode } from '@/lib/businessVouchers'
 import { AREA_RADIUS_M, FEATURED_PER_AREA, STANDARD_PER_AREA, countWithinArea } from '@/lib/localPlacements'
+import { prospectByRef } from '@/lib/outreachProspect'
+import { PACKAGES, gbp, foundingOfferOpen, FOUNDING_OFFER_KEY, FOUNDING_TRIAL_DAYS } from '@/lib/advertisingPackages'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -41,6 +43,8 @@ async function createCheckoutSession({
   email,
   city,
   priceId,
+  founding,
+  ref,
 }: {
   request: Request
   applicationId: string
@@ -49,6 +53,8 @@ async function createCheckoutSession({
   email: string
   city: string
   priceId: string
+  founding: boolean
+  ref: string
 }) {
   const secret = process.env.STRIPE_SECRET_KEY
   if (!secret) throw new Error('Stripe is not configured on the server.')
@@ -60,7 +66,7 @@ async function createCheckoutSession({
   params.set('customer_email', email)
   params.set('client_reference_id', applicationId)
   params.set('success_url', `${origin}/advertise/success?session_id={CHECKOUT_SESSION_ID}`)
-  params.set('cancel_url', `${origin}/advertise/onboard?city=${encodeURIComponent(city)}&package=${packageKey}&payment=cancelled`)
+  params.set('cancel_url', `${origin}/advertise/onboard?city=${encodeURIComponent(city)}&package=${packageKey}&payment=cancelled${ref ? `&ref=${encodeURIComponent(ref)}` : ''}`)
   params.set('metadata[application_id]', applicationId)
   params.set('metadata[package]', packageKey)
   params.set('metadata[billing]', billing)
@@ -68,15 +74,25 @@ async function createCheckoutSession({
   params.set('subscription_data[metadata][application_id]', applicationId)
   params.set('subscription_data[metadata][package]', packageKey)
   params.set('subscription_data[metadata][billing]', billing)
-  // The 12-month term: recorded on the subscription (with when it was agreed) and shown above the Pay button.
+  // The term: recorded on the subscription (with when it was agreed) and shown above the Pay button.
   const agreedAt = new Date().toISOString()
-  params.set('metadata[term]', '12 months')
+  const term = founding ? 'monthly, cancel any time' : '12 months'
+  params.set('metadata[term]', term)
   params.set('metadata[term_agreed_at]', agreedAt)
-  params.set('subscription_data[metadata][term]', '12 months')
+  params.set('subscription_data[metadata][term]', term)
   params.set('subscription_data[metadata][term_agreed_at]', agreedAt)
-  params.set('custom_text[submit][message]', billing === 'monthly'
-    ? '12-month subscription: 12 monthly payments. Renews for a further 12 months unless cancelled at least 30 days before the end of the term. theshowfinder.com/terms#advertising'
-    : '12-month subscription paid upfront. Renews for a further 12 months unless cancelled at least 30 days before the end of the term. theshowfinder.com/terms#advertising')
+  if (founding) {
+    // Founding partner offer: card taken now, nothing charged for FOUNDING_TRIAL_DAYS, then monthly until cancelled.
+    params.set('metadata[offer]', FOUNDING_OFFER_KEY)
+    params.set('subscription_data[metadata][offer]', FOUNDING_OFFER_KEY)
+    params.set('subscription_data[trial_period_days]', String(FOUNDING_TRIAL_DAYS))
+    params.set('payment_method_collection', 'always')
+    params.set('custom_text[submit][message]', `Founding partner offer: nothing to pay for your first ${FOUNDING_TRIAL_DAYS} days, then ${gbp(PACKAGES[packageKey].monthly)} a month until you cancel. Cancel any time by emailing hello@theshowfinder.com. theshowfinder.com/terms#advertising`)
+  } else {
+    params.set('custom_text[submit][message]', billing === 'monthly'
+      ? '12-month subscription: 12 monthly payments. Renews for a further 12 months unless cancelled at least 30 days before the end of the term. theshowfinder.com/terms#advertising'
+      : '12-month subscription paid upfront. Renews for a further 12 months unless cancelled at least 30 days before the end of the term. theshowfinder.com/terms#advertising')
+  }
   const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -92,7 +108,7 @@ export async function POST(request: Request) {
     const form = await request.formData()
     const city = text(form.get('city'))
     const packageKey = text(form.get('package')) as PackageKey
-    const billing = text(form.get('billing')) as BillingKey
+    const billingAsked = text(form.get('billing')) as BillingKey
     const businessName = text(form.get('business_name'))
     const category = listingCategory(text(form.get('category')))
     const contactName = text(form.get('contact_name'))
@@ -104,14 +120,17 @@ export async function POST(request: Request) {
     const bookingUrl = text(form.get('booking_url'))
     const offerText = tidyOffer(text(form.get('offer_text')))
     const ref = text(form.get('ref'))
+    // Founding partner offer: only for a real outreach link, checked here (not trusted from the form), before 31 Dec.
+    const founding = Boolean(ref) && foundingOfferOpen() && Boolean(await prospectByRef(ref))
     const termAgreed = text(form.get('term_agreed')) === 'yes'
     const logo = form.get('logo')
     const assets = form.getAll('assets').filter(value => value instanceof File) as File[]
 
     if (!CITIES.some(item => item.name === city)) return NextResponse.json({ error: 'Please choose a valid city.' }, { status: 400 })
     if (packageKey !== 'featured' && packageKey !== 'standard') return NextResponse.json({ error: 'Please choose a valid package.' }, { status: 400 })
+    const billing: BillingKey = founding ? 'monthly' : billingAsked
     if (billing !== 'monthly' && billing !== 'yearly') return NextResponse.json({ error: 'Please choose a valid billing option.' }, { status: 400 })
-    if (!termAgreed) return NextResponse.json({ error: 'Please confirm the 12-month subscription to continue.' }, { status: 400 })
+    if (!termAgreed) return NextResponse.json({ error: founding ? 'Please confirm the monthly subscription to continue.' : 'Please confirm the 12-month subscription to continue.' }, { status: 400 })
     if (businessName.length < 2 || contactName.length < 2 || !/^\S+@\S+\.\S+$/.test(email)) {
       return NextResponse.json({ error: 'Please provide a business name, contact name and valid email address.' }, { status: 400 })
     }
@@ -167,7 +186,8 @@ export async function POST(request: Request) {
         postcode,
         booking_url: bookingUrl || null,
         offer_text: offerText,
-      })
+        ...(founding ? { offer: FOUNDING_OFFER_KEY } : {}),
+      } as never)
       .select('id')
       .single()
 
@@ -209,7 +229,7 @@ export async function POST(request: Request) {
       const loose = db as any // eslint-disable-line @typescript-eslint/no-explicit-any
       await loose.from('outreach_prospects').update({ status: 'onboarding', updated_at: new Date().toISOString() }).eq('ref_code', ref).not('status', 'eq', 'unsubscribed')
     }
-    const session = await createCheckoutSession({ request, applicationId: application.id, packageKey, billing, email, city, priceId })
+    const session = await createCheckoutSession({ request, applicationId: application.id, packageKey, billing, email, city, priceId, founding, ref: founding ? ref : '' })
     await db.from('advertiser_applications').update({
       stripe_checkout_session_id: session.id,
       updated_at: new Date().toISOString(),

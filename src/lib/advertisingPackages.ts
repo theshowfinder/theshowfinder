@@ -31,3 +31,15 @@ export const gbp = (n: number) => `£${n.toFixed(2)}`
 
 /** What paying for the year upfront saves against 12 monthly payments (Featured £89.45, Standard £59.45). */
 export const yearlySaving = (key: PackageKey) => Math.round((PACKAGES[key].monthly * TERM_MONTHS - PACKAGES[key].yearly) * 100) / 100
+
+// ── Founding partner offer (Chris, 12 Nov 2026) ───────────────────────────────────────────────────────────────────
+// For businesses that sign up from one of our outreach emails (a /p/<ref> link) by 31 Dec 2026: first month free,
+// then the normal monthly price, monthly, cancel any time (no 12-month term). The card is taken at checkout and Stripe
+// starts charging after FOUNDING_TRIAL_DAYS. Shown on the outreach emails, the sign-up form, Stripe checkout, the
+// confirmation and live emails and /terms (section 12).
+export const FOUNDING_OFFER_ENDS = '2026-12-31T23:59:59Z'
+export const FOUNDING_TRIAL_DAYS = 30
+export const FOUNDING_OFFER_KEY = 'founding_free_month'
+export const foundingOfferOpen = (now: Date = new Date()) => now.getTime() <= Date.parse(FOUNDING_OFFER_ENDS)
+export const FOUNDING_SUMMARY = 'First month free, then monthly. Cancel any time.'
+export const foundingPriceLine = (key: PackageKey) => `First month free, then ${gbp(PACKAGES[key].monthly)} a month · cancel any time`

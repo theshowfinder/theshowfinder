@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resend, FROM_EMAIL } from '@/lib/resend'
+import { PACKAGES, gbp, FOUNDING_OFFER_KEY, FOUNDING_TRIAL_DAYS } from '@/lib/advertisingPackages'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -31,23 +32,35 @@ export async function POST(request: Request) {
   const event = JSON.parse(payload) as { type: string; data?: { object?: Record<string, unknown> } }
   const object = event.data?.object ?? {}
   const metadata = (object.metadata ?? {}) as Record<string, string>
-  const applicationId = metadata.application_id || (typeof object.client_reference_id === 'string' ? object.client_reference_id : '')
+  // Invoices carry the subscription's metadata under subscription_details (parent.subscription_details on newer API versions).
+  const subMeta = ((object.subscription_details as { metadata?: Record<string, string> } | undefined)?.metadata
+    ?? (object.parent as { subscription_details?: { metadata?: Record<string, string> } } | undefined)?.subscription_details?.metadata ?? {})
+  const applicationId = metadata.application_id || subMeta.application_id || (typeof object.client_reference_id === 'string' ? object.client_reference_id : '')
   if (!applicationId) return NextResponse.json({ received: true })
 
   const db = createAdminClient()
   if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+    // Founding partner offer: card saved, nothing charged yet, free until trial_ends_at (then Stripe bills monthly).
+    const founding = metadata.offer === FOUNDING_OFFER_KEY
+    const trialEnds = new Date(Date.now() + FOUNDING_TRIAL_DAYS * 86_400_000)
     const { data: application, error } = await db.from('advertiser_applications').update({
-      payment_status: 'paid',
+      payment_status: founding ? 'trial' : 'paid',
+      ...(founding ? { trial_ends_at: trialEnds.toISOString() } : {}),
       stripe_customer_id: typeof object.customer === 'string' ? object.customer : null,
       stripe_subscription_id: typeof object.subscription === 'string' ? object.subscription : null,
       updated_at: new Date().toISOString(),
-    }).eq('id', applicationId).is('confirmation_email_sent_at', null).select('email,business_name,city,package,billing').maybeSingle()
+    } as never).eq('id', applicationId).is('confirmation_email_sent_at', null).select('email,business_name,city,package,billing').maybeSingle()
 
     if (error) {
       console.error('[stripe-webhook] failed to update paid application', error.message)
     } else if (application) {
       const packageName = application.package === 'featured' ? 'Featured advertising' : 'Standard advertising'
       const billingLabel = application.billing === 'yearly' ? 'annual billing' : 'monthly billing'
+      const price = gbp(PACKAGES[application.package === 'featured' ? 'featured' : 'standard'].monthly)
+      const endsOn = trialEnds.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'Europe/London' })
+      const confirmed = founding
+        ? `Your ${packageName.toLowerCase()} application for ${application.city} has been received and your free month has started. Nothing is charged until ${endsOn}; after that it is ${price} a month, and you can cancel any time by replying to this email.`
+        : `Your ${packageName.toLowerCase()} application for ${application.city} has been received and payment has been confirmed on ${billingLabel}.`
       const { error: emailError } = await resend.emails.send({
         from: FROM_EMAIL,
         to: application.email,
@@ -55,7 +68,7 @@ export async function POST(request: Request) {
         text: [
           `Thanks for signing up for TheShowFinder advertising, ${application.business_name}.`,
           '',
-          `Your ${packageName.toLowerCase()} application for ${application.city} has been received and payment has been confirmed on ${billingLabel}.`,
+          confirmed,
           '',
           'What happens next:',
           '• We will review your details and uploaded assets.',
@@ -66,7 +79,7 @@ export async function POST(request: Request) {
           '',
           'TheShowFinder',
         ].join('\\n'),
-        html: `<p>Thanks for signing up for TheShowFinder advertising, ${application.business_name}.</p><p>Your ${packageName.toLowerCase()} application for ${application.city} has been received and payment has been confirmed on ${billingLabel}.</p><p><strong>What happens next:</strong></p><ul><li>We will review your details and uploaded assets.</li><li>We will contact you if anything else is needed.</li><li>Once approved, we will prepare and publish your listing.</li></ul><p>Your listing is not live yet because all advertiser applications are manually reviewed.</p><p>TheShowFinder</p>`,
+        html: `<p>Thanks for signing up for TheShowFinder advertising, ${application.business_name}.</p><p>${confirmed}</p><p><strong>What happens next:</strong></p><ul><li>We will review your details and uploaded assets.</li><li>We will contact you if anything else is needed.</li><li>Once approved, we will prepare and publish your listing.</li></ul><p>Your listing is not live yet because all advertiser applications are manually reviewed.</p><p>TheShowFinder</p>`,
       })
       if (emailError) {
         console.error('[stripe-webhook] confirmation email failed', emailError)
@@ -76,6 +89,11 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString(),
         }).eq('id', applicationId).is('confirmation_email_sent_at', null)
       }
+    }
+  } else if (event.type === 'invoice.paid') {
+    // First real payment after a founding free month: the business is now paying.
+    if (Number(object.amount_paid ?? 0) > 0) {
+      await db.from('advertiser_applications').update({ payment_status: 'paid', updated_at: new Date().toISOString() }).eq('id', applicationId).eq('payment_status', 'trial')
     }
   } else if (event.type === 'invoice.payment_failed') {
     await db.from('advertiser_applications').update({ payment_status: 'pending', updated_at: new Date().toISOString() }).eq('id', applicationId)

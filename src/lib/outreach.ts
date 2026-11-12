@@ -1,6 +1,8 @@
 // Advertiser outreach emails (admin → Advertisers → Outreach). Short, local, honest: what the site is, where they
 // would appear, the founding offer, and how to stop hearing from us. No visitor or click numbers, ever.
 
+import { foundingOfferOpen } from './advertisingPackages.ts'
+
 const SITE = 'https://www.theshowfinder.com'
 export const OUTREACH_FROM = 'TheShowFinder <partners@theshowfinder.com>'
 export const OUTREACH_REPLY_TO = 'hello@theshowfinder.com'
@@ -221,14 +223,16 @@ function previewHtml(p: Prospect, show: OutreachShow | undefined): string {
  * have one, a real upcoming show at their nearest venue. Praise stays general so it is true for every business it goes
  * to; no invented facts, no numbers, no guarantees.
  */
-export function buildOutreachEmail(p: Prospect, kind: 'first' | 'follow_up', opts: { show?: OutreachShow } = {}): { subject: string; text: string; html: string } {
+export function buildOutreachEmail(p: Prospect, kind: 'first' | 'follow_up', opts: { show?: OutreachShow; now?: Date } = {}): { subject: string; text: string; html: string } {
   const show = opts.show
+  // Founding partner offer (until 31 Dec 2026): first month free, then monthly, cancel any time.
+  const founding = foundingOfferOpen(opts.now)
   const hi = p.contact_name?.trim() ? `Hi ${p.contact_name.trim().split(/\s+/)[0]},` : `Hi there,`
   const b = p.business_name
   const venue = realVenue(p)
   const firstSubject = subjectFor(p)
   const subject = kind === 'follow_up' ? `Re: ${firstSubject}` : firstSubject
-  const button = `See how ${b} would look`
+  const button = founding && kind === 'follow_up' ? `Start ${b}'s free month` : `See how ${b} would look`
   const intro = kind === 'first'
     ? [
         hi,
@@ -240,11 +244,14 @@ export function buildOutreachEmail(p: Prospect, kind: 'first' | 'follow_up', opt
         hi,
         `Just checking this reached you. We'd still love to have ${b} on our ${p.city} page${venue ? ` and on the shows at ${venue}` : ''}. There are only three Featured places around each venue, and here's how yours would look:`,
       ]
+  const offerLine = founding
+    ? 'As one of our first partners, your first month is free: no commitment, then from £29.95 a month and you can cancel any time.'
+    : 'Introductory rates start at £29.95 a month.'
   const outro = kind === 'first'
     ? [venue
-        ? `${p.distance_label ? `You're ${/^\d/.test(p.distance_label) ? 'a ' : ''}${p.distance_label}, so you'd` : 'You would'} be shown on every show there and at the venues around it. We only take three Featured partners around each venue, and we'd genuinely love ${b} to be one of them. Introductory rates start at £29.95 a month.`
-        : `We only take three Featured partners around each venue in ${p.city}, and we'd genuinely love ${b} to be one of them. Introductory rates start at £29.95 a month.`]
-    : []
+        ? `${p.distance_label ? `You're ${/^\d/.test(p.distance_label) ? 'a ' : ''}${p.distance_label}, so you'd` : 'You would'} be shown on every show there and at the venues around it. We only take three Featured partners around each venue, and we'd genuinely love ${b} to be one of them. ${offerLine}`
+        : `We only take three Featured partners around each venue in ${p.city}, and we'd genuinely love ${b} to be one of them. ${offerLine}`]
+    : founding ? ['Your first month is free if you join before 31 December, then it is monthly and you can cancel any time.'] : []
   const why = `You're getting this because ${b} is close to ${venue ?? `the busy venues in ${p.city}`}.`
 
   const text = [
@@ -261,7 +268,7 @@ export function buildOutreachEmail(p: Prospect, kind: 'first' | 'follow_up', opt
     `${why} Not for you? Unsubscribe: ${unsubscribeUrl(p)}`,
   ].join('\n')
 
-  const preheader = `We feature three local places beside every show ${venue ? `at ${venue}` : `in ${p.city}`}. Here's how ${b} would look.`
+  const preheader = `We feature three local places beside every show ${venue ? `at ${venue}` : `in ${p.city}`}. Here's how ${b} would look${founding ? ', and your first month is free' : ''}.`
   const banner = cityBannerUrl(p.city)
   const buttonHtml = `
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 22px"><tr>
