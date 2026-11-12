@@ -70,7 +70,7 @@ export function poundsFrom(usd: number | null): number | null {
 
 export type StubHubSyncResult = {
   scanned: number; uk: number; complete: boolean; inserted: number; updated: number; errors: number
-  gone: number; reappeared: number; durationMs: number; detail?: string
+  gone: number; reappeared: number; moved?: number; durationMs: number; detail?: string
 }
 
 export async function syncStubHubCatalogue(options: { deadlineMs?: number } = {}): Promise<StubHubSyncResult> {
@@ -105,19 +105,28 @@ export async function syncStubHubCatalogue(options: { deadlineMs?: number } = {}
   const now = new Date().toISOString()
   const result: StubHubSyncResult = { scanned, uk: rows.size, complete, inserted: 0, updated: 0, errors: 0, gone: 0, reappeared: 0, durationMs: 0 }
   const all = [...rows.values()]
+  // Every row in an upsert must carry the same columns: PostgREST sends a missing key as NULL, so one changed row's
+  // match_status in a batch blanked it for the other 199 and the whole batch failed on NOT NULL (800 errors a night,
+  // 10-12 Nov 2026). Rows are written in one shape; changed ones are sent back for matching in a separate update.
+  const moved: string[] = []
   for (let i = 0; i < all.length; i += 200) {
     const batch = all.slice(i, i + 200).map(r => {
       const old = existing.get(r.id)
-      const reappeared = Boolean(old?.gone_at)
-      if (reappeared) result.reappeared++
+      if (old?.gone_at) result.reappeared++
       if (old) result.updated++; else result.inserted++
       // A changed name / place / time sends the row back for matching.
-      const moved = old && (old.name !== r.name || old.venue !== r.venue || old.city !== r.city || new Date(String(old.event_start)).getTime() !== new Date(r.event_start!).getTime())
-      return { ...r, last_seen_at: now, ...(reappeared ? { gone_at: null } : {}), ...(moved ? { match_status: 'pending', match_checked_at: null } : {}) }
+      if (old && (old.name !== r.name || old.venue !== r.venue || old.city !== r.city || new Date(String(old.event_start)).getTime() !== new Date(r.event_start!).getTime())) moved.push(r.id)
+      // Every row here is in today's catalog, so none is gone.
+      return { ...r, last_seen_at: now, gone_at: null }
     })
     const { error } = await db.from('stubhub_catalogue_events').upsert(batch, { onConflict: 'id', ignoreDuplicates: false })
     if (error) { result.errors += batch.length; console.error('[stubhub] upsert failed:', error.message) }
   }
+  for (let i = 0; i < moved.length; i += 200) {
+    const { error } = await db.from('stubhub_catalogue_events').update({ match_status: 'pending', match_checked_at: null }).in('id', moved.slice(i, i + 200))
+    if (error) console.error('[stubhub] re-match flag failed:', error.message)
+  }
+  result.moved = moved.length
   // Rows the catalog has stopped listing: only after a complete read that looks whole, and unseen for a day+.
   if (complete) {
     const held = await fetchAllPages<{ id: string; last_seen_at: string }>((from, to) =>
