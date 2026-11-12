@@ -1,5 +1,5 @@
 import { dropDuplicateEvents } from '@/lib/listedEvents'
-import { artistPageTitle } from '@/lib/artistTitle'
+import { artistPageTitle, tourYearSpan } from '@/lib/artistTitle'
 import { cache } from 'react'
 import { notFound, redirect } from 'next/navigation'
 import { after } from 'next/server'
@@ -26,7 +26,7 @@ import { LIVE_EVENT_STATUSES } from '@/lib/eventPools'
 import { fallbackEventImage, artistPhotoUrl, teamImageFor } from '@/lib/eventImages'
 import {
   toArtistEventRows, shouldIndexArtistPage, artistMetaDescription, buildArtistSummary, fallbackGenreLabel, dominantArtistCategory,
-  type ArtistEventLink, type ArtistEventRow,
+  type ArtistEventLink, type ArtistEventRow, artistTourSummary,
 } from '@/lib/artistEvents'
 
 export const revalidate = 604800   // a week as a backstop; rebuilt sooner only when the show changes (src/lib/changedPages.ts)
@@ -161,6 +161,9 @@ export default async function ArtistPage({ params }: PageProps) {
   const eventRows = await getArtistUpcomingEvents(artist.id)
   const nextShow = eventRows[0] ?? null
   const dateCount = dates.length > 0 ? upcoming.length : eventRows.length
+  // "<Artist> UK Tour Dates 2027" and one line saying how many dates and where: what people search for.
+  const yearSpan = tourYearSpan(dates.length > 0 ? upcoming.map(d => d.date) : eventRows.map(e => e.startDate))
+  const tourSummary = artistTourSummary(eventRows)
 
   const onSaleLabel = artist.onsale_date
     ? new Date(artist.onsale_date).toLocaleDateString('en-GB', { timeZone: 'Europe/London',
@@ -390,9 +393,11 @@ export default async function ArtistPage({ params }: PageProps) {
               </section>
             )}
 
-            <h2 className="text-xl font-extrabold text-slate-900 mb-5">
-              {dateCount > 0 ? `${dateCount} UK Date${dateCount !== 1 ? 's' : ''}` : 'Tour Dates'}
+            <h2 className="text-xl font-extrabold text-slate-900 mb-1">
+              {dateCount > 0 ? `${artist.name} UK Tour Dates${yearSpan ? ` ${yearSpan}` : ''} (${dateCount})` : `${artist.name} Tour Dates`}
             </h2>
+            {tourSummary && <p className="text-sm text-slate-600 mb-5">{tourSummary}</p>}
+            {!tourSummary && <div className="mb-4" />}
 
             {dates.length === 0 && eventRows.length > 0 ? (
               <div className="space-y-3">

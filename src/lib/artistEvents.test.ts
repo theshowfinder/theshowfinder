@@ -63,11 +63,18 @@ describe('artistMetaDescription', () => {
   const rows = toArtistEventRows([link('a', '2026-11-28T16:00:00Z', { name: 'Scarborough Spa', city: 'Scarborough' })])
   test('single show names the venue, city and date', () => {
     const d = artistMetaDescription('Mr. Polska', rows)
-    assert.match(d, /Mr\. Polska plays Scarborough Spa in Scarborough on 28 November 2026/)
+    assert.equal(d, 'Mr. Polska UK tour dates: playing Scarborough Spa on 28 Nov 2026. Find tickets from official sellers.')
   })
   test('several shows give a count', () => {
     const many = toArtistEventRows([link('a', '2026-11-28T16:00:00Z'), link('b', '2026-12-01T16:00:00Z')])
-    assert.match(artistMetaDescription('Act', many), /2 upcoming UK dates, next 28 November 2026 in London/)
+    assert.match(artistMetaDescription('Act', many), /Act UK tour dates: 2 UK dates in London, from 28 Nov 2026 to 1 Dec 2026\./)
+    const tour = toArtistEventRows([
+      link('a', '2027-02-03T19:00:00Z', { name: 'OVO Hydro', city: 'Glasgow' }), link('b', '2027-02-05T19:00:00Z', { name: 'Co-op Live', city: 'Manchester' }),
+      link('c', '2027-02-06T19:00:00Z', { name: 'Co-op Live', city: 'Manchester' }), link('d', '2027-02-09T19:00:00Z', { name: 'The O2', city: 'London' }),
+      link('e', '2027-02-11T19:00:00Z', { name: 'Utilita Arena', city: 'Cardiff' }), link('f', '2027-02-14T19:00:00Z', { name: 'bp pulse LIVE', city: 'Birmingham' }),
+      link('g', '2027-02-20T19:00:00Z', { name: 'First Direct Arena', city: 'Leeds' }),
+    ])
+    assert.equal(artistMetaDescription('Act', tour), 'Act UK tour dates: 7 UK dates in Glasgow, Manchester, London, Cardiff and 2 more cities, from 3 Feb 2027 to 20 Feb 2027. Find tickets from official sellers.')
   })
   test('no events falls back to the generic line', () => {
     assert.match(artistMetaDescription('Act', []), /^Find Act UK tour dates/)

@@ -4,5 +4,15 @@ export function artistPageTitle(name: string, startDates: string[]): string {
   const years = [...new Set(startDates.map(d => Number(d.slice(0, 4))).filter(y => y > 2000))].sort()
   if (years.length === 0) return `${name} UK Tour Dates & Tickets`
   const span = years.length === 1 ? String(years[0]) : `${years[0]}–${String(years[years.length - 1]).slice(2)}`
+  // The number of dates in the result itself ("24 Dates") when it fits (the layout adds " | TheShowFinder").
+  const withCount = `${name} UK Tour ${span}: ${startDates.length} Dates & Tickets`
+  if (startDates.length >= 2 && withCount.length <= 60) return withCount
   return `${name} UK Tour ${span}: Dates & Tickets`
+}
+
+/** "2027", "2026–27", or "" when there are no dates. */
+export function tourYearSpan(startDates: string[]): string {
+  const years = [...new Set(startDates.map(d => Number(d.slice(0, 4))).filter(y => y > 2000))].sort()
+  if (!years.length) return ''
+  return years.length === 1 ? String(years[0]) : `${years[0]}–${String(years[years.length - 1]).slice(2)}`
 }

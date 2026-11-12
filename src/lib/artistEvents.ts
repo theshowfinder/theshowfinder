@@ -106,19 +106,49 @@ export function shouldListArtistInSitemap(input: {
   return input.upcomingEvents >= 2
 }
 
-export function artistMetaDescription(name: string, upcoming: ArtistEventRow[]): string {
-  if (upcoming.length === 0) {
-    return `Find ${name} UK tour dates and find tickets from official sellers.`
+/** Cities in tour order (first date first), each once. */
+export function tourCities(upcoming: ArtistEventRow[]): string[] {
+  const out: string[] = []
+  for (const e of [...upcoming].sort((a, b) => a.startDate.localeCompare(b.startDate))) {
+    const c = e.venueCity?.trim()
+    if (c && !out.some(x => x.toLowerCase() === c.toLowerCase())) out.push(c)
   }
-  const first = upcoming[0]
-  const when = new Date(first.startDate).toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London',
-  })
-  const where = first.venueCity ? ` in ${first.venueCity}` : ''
-  const count = upcoming.length === 1
-    ? `${name} plays ${first.venueName ?? 'the UK'}${where} on ${when}.`
-    : `${upcoming.length} upcoming UK dates, next ${when}${where}.`
-  return `${name} UK tour dates and tickets. ${count} Find tickets from official sellers.`
+  return out
+}
+
+const dayMonthYear = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London' })
+
+function cityList(cities: string[], show: number): string {
+  if (cities.length <= show) return cities.length <= 1 ? (cities[0] ?? '') : `${cities.slice(0, -1).join(', ')} and ${cities[cities.length - 1]}`
+  const rest = cities.length - show
+  return `${cities.slice(0, show).join(', ')} and ${rest} more ${rest === 1 ? 'city' : 'cities'}`
+}
+
+/**
+ * One factual line for the tour (page intro and meta description), e.g. "24 UK dates in London, Manchester, Glasgow
+ * and 9 more cities, from 3 Feb 2027 to 30 Jun 2027." Search Console (12 Nov 2026): "<act> tour dates <year> <city>"
+ * searches show artist pages but rarely get clicked (0.6%); saying how many dates and where answers the search in the
+ * result itself.
+ */
+export function artistTourSummary(upcoming: ArtistEventRow[]): string | null {
+  if (!upcoming.length) return null
+  const sorted = [...upcoming].sort((a, b) => a.startDate.localeCompare(b.startDate))
+  const cities = tourCities(sorted)
+  const first = sorted[0], last = sorted[sorted.length - 1]
+  if (sorted.length === 1) {
+    return `Playing ${first.venueName ?? first.venueCity ?? 'the UK'}${first.venueCity && first.venueName && !first.venueName.includes(first.venueCity) ? `, ${first.venueCity}` : ''} on ${dayMonthYear(first.startDate)}.`
+  }
+  const where = cities.length ? ` in ${cityList(cities, 4)}` : ''
+  const span = dayMonthYear(first.startDate) === dayMonthYear(last.startDate) ? `on ${dayMonthYear(first.startDate)}` : `from ${dayMonthYear(first.startDate)} to ${dayMonthYear(last.startDate)}`
+  return `${sorted.length} UK dates${where}, ${span}.`
+}
+
+export function artistMetaDescription(name: string, upcoming: ArtistEventRow[]): string {
+  const summary = artistTourSummary(upcoming)
+  if (!summary) return `Find ${name} UK tour dates and find tickets from official sellers.`
+  const line = summary.startsWith('Playing') ? `p${summary.slice(1)}` : summary
+  const full = `${name} UK tour dates: ${line} Find tickets from official sellers.`
+  return full.length <= 158 ? full : `${name} UK tour dates: ${line}`
 }
 
 // ── Profile info that needs no outside source ────────────────────────────────
