@@ -36,11 +36,14 @@ export async function sendAdvertiserWelcome(a: { to: string; contactName: string
       ? `Your first month is free, until ${a.trial.endsOn}. After that it is your founding price of ${a.trial.monthlyPrice} a month, kept for as long as you stay, and you can cancel any time: just reply to this email. Around three weeks in we will send you what your listing has done so far.`
       : 'Your placement is a 12-month subscription. It renews for a further 12 months unless you cancel at least 30 days before the end of the term: just reply to this email.',
     '',
+    `Show customers you're featured: add our badge to your website (it takes a minute): ${SITE}/badge?city=${encodeURIComponent(a.city)}`,
+    '',
     'Any changes, just reply to this email.',
     '',
     'TheShowFinder',
   ].join('\n')
-  const html = text.split('\n').map(l => l ? `<p style="margin:0 0 8px">${esc(l).replace(esc(cityUrl), `<a href="${cityUrl}">${esc(cityUrl)}</a>`)}</p>` : '').join('')
+  const badgeUrl = `${SITE}/badge?city=${encodeURIComponent(a.city)}`
+  const html = text.split('\n').map(l => l ? `<p style="margin:0 0 8px">${esc(l).replace(esc(cityUrl), `<a href="${cityUrl}">${esc(cityUrl)}</a>`).replace(esc(badgeUrl), `<a href="${badgeUrl}">${esc(badgeUrl)}</a>`)}</p>` : '').join('')
   const { error } = await resend.emails.send({ from: FROM_EMAIL, to: a.to, bcc: COPY_TO, replyTo: COPY_TO, subject: `${a.businessName} is live on TheShowFinder`, text, html })
   if (error) throw new Error(typeof error === 'object' && 'message' in error ? String(error.message) : String(error))
 }
