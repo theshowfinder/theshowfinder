@@ -257,7 +257,10 @@ export function offerUpdateSubject(p: Pick<Prospect, 'business_name'>): string {
   return s.length <= 60 ? s : 'Update: a free first month on TheShowFinder'
 }
 
-export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show?: OutreachShow; now?: Date } = {}): { subject: string; text: string; html: string } {
+/** A personal message in the same visual email (warm leads, e.g. someone who replied): own subject, greeting and words. */
+export interface PersonalNote { subject: string; greeting: string; paragraphs: string[]; afterPreview?: string[] }
+
+export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show?: OutreachShow; now?: Date; personal?: PersonalNote } = {}): { subject: string; text: string; html: string } {
   const show = opts.show
   // Founding partner offer (until 31 Dec 2026): first month free, then monthly, cancel any time.
   const founding = foundingOfferOpen(opts.now)
@@ -265,9 +268,12 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
   const b = p.business_name
   const venue = realVenue(p)
   const firstSubject = subjectFor(p, opts.now)
-  const subject = kind === 'offer_update' ? offerUpdateSubject(p) : kind === 'follow_up' ? `Re: ${firstSubject}` : firstSubject
+  const personal = opts.personal
+  const subject = personal ? personal.subject : kind === 'offer_update' ? offerUpdateSubject(p) : kind === 'follow_up' ? `Re: ${firstSubject}` : firstSubject
   const button = founding && kind !== 'first' ? `Start ${b}'s free month` : `See how ${b} would look`
-  const intro = kind === 'offer_update'
+  const intro = personal
+    ? [personal.greeting, ...personal.paragraphs]
+    : kind === 'offer_update'
     ? [
         hi,
         `A quick update since I last emailed about ${b}: we've just launched a founding partner offer for a small number of ${p.city} businesses (details above).`,
@@ -286,7 +292,9 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
       ]
   // While the founding offer is open it leads the email (the box under the banner); the text below doesn't repeat it.
   const offerLine = founding ? '' : ' Introductory rates start at £29.95 a month.'
-  const outro = kind === 'first'
+  const outro = personal
+    ? (personal.afterPreview ?? [])
+    : kind === 'first'
     ? [venue
         ? `${p.distance_label ? `You're ${/^\d/.test(p.distance_label) ? 'a ' : ''}${p.distance_label}, so you'd` : 'You would'} be shown on every show there and at the venues around it. We only take three Featured partners around each venue, and we'd genuinely love ${b} to be one of them.${offerLine}`
         : `We only take three Featured partners around each venue in ${p.city}, and we'd genuinely love ${b} to be one of them.${offerLine}`]
