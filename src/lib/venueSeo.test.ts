@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { venueSeoTitle, venueSeoDescription, buildVenueSchema } from './venueSeo.ts'
 
 test('venue title says what the page is and stays short', () => {
-  assert.equal(venueSeoTitle('O2 Academy Brixton', 'London'), 'O2 Academy Brixton, London: Events & Tickets')
-  assert.equal(venueSeoTitle('Lincoln Cathedral', 'Lincoln'), 'Lincoln Cathedral: Events & Tickets')
+  assert.equal(venueSeoTitle('O2 Academy Brixton', 'London'), 'O2 Academy Brixton, London: Upcoming Events')
+  assert.equal(venueSeoTitle('Lincoln Cathedral', 'Lincoln'), 'Lincoln Cathedral: Upcoming Events & Tickets'); assert.equal(venueSeoTitle('Victoria Hall', 'Stoke-on-Trent'), 'Victoria Hall: Upcoming Events & Tickets')
   const long = venueSeoTitle('The Very Long Named Performing Arts Centre', 'Wolverhampton')
   assert.ok(long.length <= 44, long)
 })

@@ -44,6 +44,7 @@ import EventCard from '@/components/EventCard'
 import { buildShareText } from '@/lib/shareText'
 import { googleCalendarUrl } from '@/lib/ics'
 import { displayTitle, londonTimeSuffix, londonTimeOrNull, venueLabel } from '@/lib/displayTitle'
+import { eventSeoTitle, eventSeoDescription } from '@/lib/eventSeo'
 import { buildEventFaq, cleanBoxOffice, cleanVenueNote, type EventDetails, type VenueDetails } from '@/lib/eventDetails'
 import ShowDatesList from '@/components/ShowDatesList'
 import BeforeTheShow from '@/components/BeforeTheShow'
@@ -364,12 +365,16 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const shortDate = new Date(event.start_date).toLocaleDateString('en-GB', {
     day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/London',
   })
-  const title = venueStr
-    ? `${displayTitle(event.title)} at ${venueStr} – ${shortDate}`
-    : `${displayTitle(event.title)} – ${shortDate}`
+  // Shows in the next 30 days say "Set Times" (what people search for close to a show); see src/lib/eventSeo.ts.
+  const daysAway = Math.floor((Date.parse(event.start_date) - Date.now()) / 86_400_000)
+  const title = eventSeoTitle({ title: displayTitle(event.title), venueStr, venueName: venue?.name ?? null, shortDate, daysAway })
 
   const description = venue
-    ? `Get tickets for ${event.title} at ${venue.name} in ${venue.city} on ${dateStr}. Find tickets from official sellers.`
+    ? eventSeoDescription({
+        title: displayTitle(event.title), venueName: venue.name, city: venue.city, dateStr,
+        doors: event.doors_time ? fmtTime(event.doors_time) : null, start: londonTimeOrNull(event.start_date),
+        support: event.details?.support ?? null,
+      })
     : event.description ?? `${event.title} — find tickets on TheShowFinder`
 
   // Branded share card (artwork + date + venue) so a pasted link says where and

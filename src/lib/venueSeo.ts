@@ -9,10 +9,15 @@ const TITLE_BUDGET = 44
 
 export function venueSeoTitle(name: string, city: string): string {
   const cityInName = name.toLowerCase().includes(city.toLowerCase())
+  // "Upcoming events" is how people search for a venue's listings (Search Console, 12 Nov 2026: "<venue> upcoming
+  // events" queries at positions 10–11 for Victoria Hall Stoke, The Fire Station, The Met, King's Hall, Resident).
+  const where = cityInName ? name : `${name}, ${city}`
   const options = [
-    cityInName ? `${name}: Events & Tickets` : `${name}, ${city}: Events & Tickets`,
-    `${name} Events & Tickets`,
-    `${name} Tickets`,
+    `${where}: Upcoming Events & Tickets`,
+    `${where}: Upcoming Events`,
+    `${name}: Upcoming Events & Tickets`,
+    `${name}: Upcoming Events`,
+    `${name} Events`,
     name,
   ]
   return options.find(o => o.length <= TITLE_BUDGET) ?? name
