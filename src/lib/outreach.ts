@@ -270,7 +270,7 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
   const intro = kind === 'offer_update'
     ? [
         hi,
-        `A quick update since I last emailed about ${b}. We've just launched a founding partner offer for a small number of ${p.city} businesses: your first month is free, then £24.95 a month for a Featured spot (normally £44.95), and that price stays yours for as long as you stay. No contract, cancel any time.`,
+        `A quick update since I last emailed about ${b}: we've just launched a founding partner offer for a small number of ${p.city} businesses (details above).`,
         `You'd sit right under the ticket buttons on every show ${venue ? `at ${venue} and the venues around it` : `near you in ${p.city}`}, at the moment people decide where to ${visitPhrase(p.category)}. Here's how it would look:`,
       ]
     : kind === 'first'
@@ -284,22 +284,22 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
         hi,
         `Just checking this reached you. We'd still love to have ${b} on our ${p.city} page${venue ? ` and on the shows at ${venue}` : ''}. There are only three Featured places around each venue, and here's how yours would look:`,
       ]
-  const offerLine = founding
-    ? 'As one of our first partners, your first month is free. After that a Featured spot is £24.95 a month (normally £44.95), and that price stays yours for as long as you stay. No contract, cancel any time.'
-    : 'Introductory rates start at £29.95 a month.'
+  // While the founding offer is open it leads the email (the box under the banner); the text below doesn't repeat it.
+  const offerLine = founding ? '' : ' Introductory rates start at £29.95 a month.'
   const outro = kind === 'first'
     ? [venue
-        ? `${p.distance_label ? `You're ${/^\d/.test(p.distance_label) ? 'a ' : ''}${p.distance_label}, so you'd` : 'You would'} be shown on every show there and at the venues around it. We only take three Featured partners around each venue, and we'd genuinely love ${b} to be one of them. ${offerLine}`
-        : `We only take three Featured partners around each venue in ${p.city}, and we'd genuinely love ${b} to be one of them. ${offerLine}`]
+        ? `${p.distance_label ? `You're ${/^\d/.test(p.distance_label) ? 'a ' : ''}${p.distance_label}, so you'd` : 'You would'} be shown on every show there and at the venues around it. We only take three Featured partners around each venue, and we'd genuinely love ${b} to be one of them.${offerLine}`
+        : `We only take three Featured partners around each venue in ${p.city}, and we'd genuinely love ${b} to be one of them.${offerLine}`]
     : kind === 'offer_update'
-    ? ['The offer is open until 31 December, and we only take three Featured partners around each venue.']
-    : founding ? ['Your first month is free if you join before 31 December, then £24.95 a month for a Featured spot (normally £44.95), kept for as long as you stay. No contract, cancel any time.'] : []
+    ? ['We only take three Featured partners around each venue, so it is first come, first served.']
+    : []
   const why = `You're getting this because ${b} is close to ${venue ?? `the busy venues in ${p.city}`}.`
 
   // The plain version (also what the Zoho mailbox sends) has no preview card, so it says it in words instead.
   const plainIntro = kind === 'follow_up' ? intro : intro.map(l => l.replace(/ (Roughly like this|Here's how it would look):$/, ''))
+  const offerText = `FOUNDING PARTNER OFFER (until 31 December): your first month is free, then £24.95 a month for a Featured spot (normally £44.95). That price is locked for as long as you stay. No contract, cancel any time.`
   const text = [
-    ...plainIntro.flatMap(l => [l, '']),
+    ...(founding ? [plainIntro[0], '', offerText, '', ...plainIntro.slice(1).flatMap(l => [l, ''])] : plainIntro.flatMap(l => [l, ''])),
     ...(show ? [kind === 'offer_update'
       ? `For example, ${b} would be on the page for ${show.title} at ${show.venue} (${show.when}).`
       : kind === 'first'
@@ -316,13 +316,29 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
     `${why} Not for you? Unsubscribe: ${unsubscribeUrl(p)}`,
   ].join('\n')
 
-  const preheader = `We feature three local places beside every show ${venue ? `at ${venue}` : `in ${p.city}`}. Here's how ${b} would look${founding ? '. First month free, then £24.95 a month' : ''}.`
+  const preheader = founding
+    ? `Your first month free, then £24.95 a month (normally £44.95), locked in. Here's how ${b} would look beside every show ${venue ? `at ${venue}` : `in ${p.city}`}.`
+    : `We feature three local places beside every show ${venue ? `at ${venue}` : `in ${p.city}`}. Here's how ${b} would look.`
   const banner = cityBannerUrl(p.city)
   const buttonHtml = `
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 22px"><tr>
 <td bgcolor="${BRAND}" style="border-radius:8px">
 <a href="${offerUrl(p)}" style="display:inline-block;padding:14px 22px;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:8px;background:${BRAND}">${esc(button)} &rarr;</a>
 </td></tr></table>`
+  const offerBox = founding ? `
+<tr><td style="padding:16px 24px 0" bgcolor="#ffffff">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFF0F4" style="border:2px solid ${BRAND};border-radius:12px">
+<tr><td style="padding:18px 20px;font-family:Arial,Helvetica,sans-serif" bgcolor="#FFF0F4">
+  <p style="margin:0 0 6px;font-size:11px;letter-spacing:1.5px;font-weight:bold;color:${BRAND}">FOUNDING PARTNER OFFER &middot; UNTIL 31 DECEMBER</p>
+  <p style="margin:0 0 6px;font-size:26px;line-height:1.15;font-weight:bold;color:${INK}">Your first month <span style="color:${BRAND}">FREE</span></p>
+  <p style="margin:0 0 10px;font-size:16px;color:${INK}">Then <b>£24.95 a month</b> <span style="color:${GREY};text-decoration:line-through">£44.95</span> for a Featured spot</p>
+  <p style="margin:0 0 14px;font-size:13px;line-height:1.6;color:${INK}">&#10003; Price locked for as long as you stay<br>&#10003; No contract, cancel any time<br>&#10003; Only 3 Featured spots around each venue</p>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="${BRAND}" style="border-radius:8px">
+    <a href="${offerUrl(p)}" style="display:inline-block;padding:11px 18px;font-size:14px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:8px;background:${BRAND}">Claim your free month &rarr;</a>
+  </td></tr></table>
+</td></tr>
+</table>
+</td></tr>` : ''
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${esc(subject)}</title></head>
 <body style="margin:0;padding:0;background:#F5F5F7" bgcolor="#F5F5F7">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#F5F5F7">${esc(preheader)}</div>
@@ -332,6 +348,7 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
   <span style="font-size:20px;font-weight:bold;color:${INK}">TheShow<span style="color:${BRAND}">Finder</span></span>
 </td></tr>
 ${banner ? `<tr><td style="padding:0 24px" bgcolor="#ffffff"><img src="${banner}" width="512" alt="${esc(p.city)}" style="display:block;width:100%;max-width:512px;height:auto;border:0;border-radius:8px"></td></tr>` : ''}
+${offerBox}
 <tr><td style="padding:20px 24px 8px;font-family:Arial,Helvetica,sans-serif" bgcolor="#ffffff">
 ${intro.map(para).join('\n')}
 ${previewHtml(p, show)}
