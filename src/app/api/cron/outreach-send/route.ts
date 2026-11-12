@@ -11,8 +11,9 @@ export const dynamic = 'force-dynamic'
 
 // Advertiser outreach sender: weekday mornings, 10 an hour at 07:10, 08:10, 09:10 and 10:10 UK time (Chris, 9 Nov
 // 2026), never more than DAILY_LIMIT a day. vercel.json runs it 06:10–10:10 UTC and a run outside 07:00–10:59 UK time
-// does nothing, so it keeps to UK hours through the clock changes. first emails to businesses Chris approved, then one
-// follow-up FOLLOW_UP_AFTER_DAYS later to anyone still at "sent" (not replied, interested, onboarding or opted out),
+// does nothing, so it keeps to UK hours through the clock changes. One follow-up FOLLOW_UP_AFTER_DAYS after the first
+// email to anyone who clicked through and is still at "sent" (not replied, interested, onboarding or opted out), then first
+// emails to businesses approved for sending,
 // and "No response" NO_RESPONSE_AFTER_DAYS after the first email. ?dry=1 lists only.
 const PER_RUN = 10  // 4 morning runs x 10 = DAILY_LIMIT (40)
 const UK_HOURS = { from: 7, to: 10 }
@@ -63,13 +64,15 @@ async function handleGet(request: Request) {
   const [firsts, sentRows, { data: follows }] = await Promise.all([
     fetchAllPages<Prospect>((from, to) => db.from('outreach_prospects').select(COLS).eq('status', 'approved').order('created_at').order('id').range(from, to)),
     fetchAllPages<{ city: string }>((from, to) => db.from('outreach_prospects').select('city').not('sent_at', 'is', null).order('id').range(from, to)),
-    db.from('outreach_prospects').select(COLS).eq('status', 'sent').lte('sent_at', followBefore).order('sent_at').limit(budget),
+    // Follow-ups only to businesses that clicked through (Chris, 12 Nov 2026: no chasing people who never looked).
+    db.from('outreach_prospects').select(COLS).eq('status', 'sent').not('clicked_at', 'is', null).lte('sent_at', followBefore).order('sent_at').limit(budget),
   ])
   const sentByCity = new Map<string, number>()
   for (const r of sentRows) sentByCity.set(r.city, (sentByCity.get(r.city) ?? 0) + 1)
+  // Follow-ups to interested businesses go first (a handful a day); new businesses fill the rest of the 40.
   const queue: Array<{ p: Prospect; kind: 'first' | 'follow_up' }> = [
-    ...firstsInOrder(firsts, budget, sentByCity).map(p => ({ p, kind: 'first' as const })),
     ...((follows ?? []) as Prospect[]).map(p => ({ p, kind: 'follow_up' as const })),
+    ...firstsInOrder(firsts, budget, sentByCity).map(p => ({ p, kind: 'first' as const })),
   ]
   for (const { p, kind } of queue) {
     if (budget <= 0) break
