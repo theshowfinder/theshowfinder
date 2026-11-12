@@ -16,7 +16,9 @@ export async function sendOutreachEmail(p: Prospect, kind: 'first' | 'follow_up'
   if (!canEmail(p)) return { ok: false, error: 'not allowed to email this business (company type or status)' }
   const { subject, text, html } = buildOutreachEmail(p, kind, { show })
   const { data, error } = await resend.emails.send({
-    from: OUTREACH_FROM,
+    // OUTREACH_FROM_ADDRESS (Vercel) moves outreach onto its own sending subdomain (e.g. partners@go.theshowfinder.com,
+    // verified in Resend) so its reputation is kept apart from the newsletter and site emails on theshowfinder.com.
+    from: process.env.OUTREACH_FROM_ADDRESS ? `TheShowFinder <${process.env.OUTREACH_FROM_ADDRESS}>` : OUTREACH_FROM,
     to: p.email,
     replyTo: OUTREACH_REPLY_TO,
     subject,
