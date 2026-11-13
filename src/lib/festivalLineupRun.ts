@@ -130,8 +130,13 @@ async function runSource(db: Db, src: SourceRow, force: boolean): Promise<Lineup
     .in('status', LIVE)
     .limit(200)
   if (evError) throw new Error(evError.message)
-  const listings = ((evData ?? []) as { id: string; title: string }[])
+  const matching = ((evData ?? []) as { id: string; title: string }[])
     .filter(e => titleMatches(src.title_pattern, e.title) && !isListingAddon(e.title))
+  // Festivals also sell day, kids' and early-entry tickets as separate listings. When there is a
+  // weekend ticket, link acts to that only, so an artist page shows "Download 2027 - Weekend Arena",
+  // not a kids' ticket as well.
+  const weekend = matching.filter(e => /weekend/i.test(e.title))
+  const listings = weekend.length > 0 ? weekend : matching
   if (listings.length === 0) throw new Error(`no upcoming ticket listings match "${src.title_pattern}"`)
   const eventIds = listings.map(e => e.id)
 
