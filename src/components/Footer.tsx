@@ -146,6 +146,8 @@ export default function Footer() {
               <li><Link href="/calendars" className="hover:text-white transition-colors">Gig calendar feeds</Link></li>
               <li><Link href="/new-tours" className="hover:text-white transition-colors">New tour announcements</Link></li>
               <li><Link href="/insights" className="hover:text-white transition-colors">UK live events index</Link></li>
+              <li><Link href="/guides/how-presales-work" className="hover:text-white transition-colors">How presales work</Link></li>
+              <li><Link href="/guides/how-to-avoid-ticket-scams" className="hover:text-white transition-colors">Avoiding ticket scams</Link></li>
             </ul>
           </div>
 

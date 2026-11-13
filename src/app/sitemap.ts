@@ -1,3 +1,4 @@
+import { GUIDES } from '@/lib/guides'
 import type { MetadataRoute } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
 import { getArtistSeoAlias, getEventSeoAlias } from '@/lib/seoAliases'
@@ -195,6 +196,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/calendars`,           changeFrequency: 'monthly', priority: 0.5 },
     { url: `${BASE}/new-tours`,           lastModified: new Date(), changeFrequency: 'daily', priority: 0.7 },
     { url: `${BASE}/insights`,            lastModified: new Date(), changeFrequency: 'weekly', priority: 0.6 },
+    { url: `${BASE}/guides`,              changeFrequency: 'monthly', priority: 0.5 },
+    ...GUIDES.map(g => ({ url: `${BASE}/guides/${g.slug}`, lastModified: new Date(`${g.updated}T12:00:00Z`), changeFrequency: 'monthly' as const, priority: 0.6 })),
   ]
 
   const cityPages: MetadataRoute.Sitemap = CITIES.map(city => ({
