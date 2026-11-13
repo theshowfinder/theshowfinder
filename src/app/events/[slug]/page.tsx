@@ -13,6 +13,7 @@ export async function generateStaticParams() {
 }
 
 import { cache } from 'react'
+import SetBrowseCity from '@/components/browse/SetBrowseCity'
 import { notFound, permanentRedirect, redirect } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -1049,6 +1050,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               </div>
             )}
 
+            <SetBrowseCity city={venue?.city} />
             {venue?.city && (
               <ArtistsInCity city={venue.city} excludeArtistIds={headliners.map(h => h.artist?.id).filter((id): id is string => !!id)} />
             )}

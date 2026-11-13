@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import SetBrowseCity from '@/components/browse/SetBrowseCity'
 import Link from 'next/link'
 import { createPublicClient } from '@/lib/supabase/public'
 import EventCard from '@/components/EventCard'
@@ -110,6 +111,7 @@ export default async function VenueView({ slug, page }: { slug: string; page: nu
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
+      <SetBrowseCity city={venue.city} />
       {schemas.map((s, i) => (
         <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(s) }} />
       ))}

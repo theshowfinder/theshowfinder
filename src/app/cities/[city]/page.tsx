@@ -11,6 +11,7 @@ export const maxDuration = 60
 // acceptable window without regenerating on every request.
 
 import { listedEventsCount } from '@/lib/listedEvents'
+import SetBrowseCity from '@/components/browse/SetBrowseCity'
 import { fetchAllArtists } from '@/lib/allArtists'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -362,6 +363,7 @@ export default async function CityPage({
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F5F0' }}>
+      <SetBrowseCity city={cityName} />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLdScript(breadcrumbSchema) }}

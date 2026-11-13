@@ -1,6 +1,8 @@
 import { dropDuplicateEvents } from '@/lib/listedEvents'
+import SetBrowseCity from '@/components/browse/SetBrowseCity'
 import { artistPageTitle, tourYearSpan } from '@/lib/artistTitle'
-import { cache, Fragment } from 'react'
+import { cache } from 'react'
+import { CityFirstDates, CityNextShowButton } from '@/components/browse/CityFirstDates'
 import { notFound, redirect } from 'next/navigation'
 import { after } from 'next/server'
 import Link from 'next/link'
@@ -147,11 +149,12 @@ export async function ArtistPageView({ slug, city }: { slug: string; city?: stri
   // Real upcoming shows from the events table (see getArtistUpcomingEvents).
   const artistPhoto = artistPhotoUrl(artist.name, artist.image_url)
   const allRows = await getArtistUpcomingEvents(artist.id)
-  // Opened from a city: that city's dates first, and the top button goes to the first of them.
+  // The dates list and the top "Get tickets" button put a city's dates first on the client
+  // (components/browse/CityFirstDates.tsx): the page's own city on /in/<city>, else the city the
+  // visitor was just browsing. The server order stays soonest first.
+  const eventRows = allRows
   const inCity = (e: ArtistEventRow) => !!city && (e.venueCity ?? '').toLowerCase() === city.toLowerCase()
-  const cityRows = allRows.filter(inCity)
-  const eventRows = cityRows.length ? [...cityRows, ...allRows.filter(e => !inCity(e))] : allRows
-  const nextShow = eventRows[0] ?? null
+  const nextShow = allRows.find(inCity) ?? allRows[0] ?? null
   const dateCount = dates.length > 0 ? upcoming.length : allRows.length
   // "<Artist> UK Tour Dates 2027" and one line saying how many dates and where: what people search for.
   const yearSpan = tourYearSpan(dates.length > 0 ? upcoming.map(d => d.date) : allRows.map(e => e.startDate))
@@ -391,16 +394,12 @@ export async function ArtistPageView({ slug, city }: { slug: string; city?: stri
             {tourSummary && <p className="text-sm text-slate-600 mb-5">{tourSummary}</p>}
             {!tourSummary && <div className="mb-4" />}
 
+            {city && <SetBrowseCity city={city} />}
             {dates.length === 0 && eventRows.length > 0 ? (
-              <div className="space-y-3">
-                {eventRows.map((e, idx) => {
+              <CityFirstDates pageCity={city} items={eventRows.map(e => {
                   const dt = new Date(e.startDate)
                   const pounds = (n: number) => `£${Number(n).toFixed(Number(n) % 1 ? 2 : 0)}`
-                  return (
-                    <Fragment key={e.id}>
-                    {cityRows.length > 0 && (idx === 0 || idx === cityRows.length) && (
-                      <p className="text-xs font-extrabold uppercase tracking-widest text-slate-500 pt-2">{idx === 0 ? `In ${cityRows[0].venueCity}` : 'Other dates'}</p>
-                    )}
+                  return { key: e.id, city: e.venueCity, node: (
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:border-slate-400 transition-colors">
                     <Link
                       href={`/events/${e.slug}`}
@@ -444,10 +443,8 @@ export async function ArtistPageView({ slug, city }: { slug: string; city?: stri
                       </TrackedTicketLink>
                     )}
                     </div>
-                    </Fragment>
-                  )
-                })}
-              </div>
+                  ) }
+                })} />
             ) : dates.length === 0 ? (
               <div className="bg-white rounded-2xl p-8 text-center border border-slate-200 shadow-sm">
                 <p className="text-slate-400 text-4xl mb-3">🗓</p>
@@ -513,17 +510,7 @@ export async function ArtistPageView({ slug, city }: { slug: string; city?: stri
           <div className="mt-10 lg:mt-0">
             <div className="sticky top-6 space-y-4">
               {nextShow && !artist.tickets_url && !artist.see_tickets_url && (
-                <Link
-                  href={`/events/${nextShow.slug}`}
-                  className="block w-full text-center font-bold text-white py-4 px-6 rounded-2xl text-lg shadow-lg hover:opacity-90 transition-opacity"
-                  style={{ backgroundColor: '#E8003D' }}
-                >
-                  Get tickets · next show
-                  <span className="block text-sm font-semibold text-white/80">
-                    {new Date(nextShow.startDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' })}
-                    {nextShow.venueCity ? ` · ${nextShow.venueCity}` : ''}
-                  </span>
-                </Link>
+                <CityNextShowButton pageCity={city} shows={allRows.map(e => ({ slug: e.slug, startDate: e.startDate, city: e.venueCity }))} />
               )}
               {artist.tickets_url && (
                 <div>
