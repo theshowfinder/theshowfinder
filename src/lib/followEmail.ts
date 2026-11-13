@@ -1,9 +1,11 @@
 // The two follow emails: "new shows added for something you follow" (daily
-// job) and the short "you're following X" confirmation. Links go to our own
-// pages, tagged for analytics. Pure module (no '@/' imports).
+// job) and the short "you're following X" confirmation. "Buy tickets" goes
+// straight to the seller when we know it (Ticketmaster, See Tickets); every
+// other link goes to our own pages, tagged for analytics. Pure module (no '@/' imports).
 
 import { formatShareWhen } from './shareText.ts'
-import type { FollowAlertBatch, FollowKind } from './follows.ts'
+import type { FollowAlertBatch, FollowKind, NewShow } from './follows.ts'
+import { emailTicketLink } from './emailTicketLink.ts'
 
 const SITE = 'https://www.theshowfinder.com'
 
@@ -35,11 +37,20 @@ function shell(inner: string): string {
   </td></tr></table></body></html>`
 }
 
+// Songkick-style: a big "Buy tickets" straight to the seller, and a quieter
+// link to the show on our site. Without a known seller: one "Find tickets" button to our page.
+function showButtons(s: NewShow): string {
+  const buy = emailTicketLink(s.ticketsUrl, 'email-follow')
+  if (!buy) return `<a href="${followShowUrl(s.slug)}" style="display:inline-block;margin-top:8px;background:#E8003D;color:#ffffff;text-decoration:none;font-weight:700;font-size:13px;padding:9px 16px;border-radius:8px">Find tickets</a>`
+  return `<a href="${esc(buy.href)}" style="display:inline-block;margin-top:8px;background:#E8003D;color:#ffffff;text-decoration:none;font-weight:700;font-size:13px;padding:9px 16px;border-radius:8px">Buy tickets</a>
+          <a href="${followShowUrl(s.slug)}" style="display:inline-block;margin:8px 0 0 12px;color:#475569;font-weight:700;font-size:13px;text-decoration:underline">View on TheShowFinder</a>`
+}
+
 export function buildFollowAlertEmail(batch: FollowAlertBatch, unsubscribeUrl: string): { subject: string; html: string; text: string } {
   const { items, totalShows } = batch
   const names = items.map(i => i.name)
   const subject = items.length === 1
-    ? (totalShows === 1 ? `New show added: ${items[0].name}` : `${totalShows} new shows added for ${items[0].name}`)
+    ? (totalShows === 1 ? `Just announced: ${items[0].name}` : `Just announced: ${totalShows} new ${items[0].name} shows`)
     : `New shows from ${names[0]}${items.length === 2 ? ` and ${names[1]}` : ` and ${items.length - 1} more you follow`}`
 
   const followedNames = names.length <= 3 ? names.join(', ') : `${names.slice(0, 3).join(', ')} and others`
@@ -49,7 +60,9 @@ export function buildFollowAlertEmail(batch: FollowAlertBatch, unsubscribeUrl: s
     textLines.push(it.name.toUpperCase())
     for (const s of it.shows) {
       textLines.push(`- ${s.title}, ${formatShareWhen(s.startISO) ?? ''}${where(s.venueName, s.city) ? `, ${where(s.venueName, s.city)}` : ''}`)
-      textLines.push(`  Find tickets: ${followShowUrl(s.slug)}`)
+      const buy = emailTicketLink(s.ticketsUrl, 'email-follow')
+      if (s.lineup) textLines.push(`  Added to the line-up`)
+      textLines.push(buy ? `  Buy tickets (${buy.seller}): ${buy.href}` : `  Find tickets: ${followShowUrl(s.slug)}`)
     }
     if (it.more > 0) textLines.push(`  + ${it.more} more: ${followTargetUrl(it.kind, it.slug)}`)
     textLines.push('')
@@ -64,15 +77,16 @@ export function buildFollowAlertEmail(batch: FollowAlertBatch, unsubscribeUrl: s
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${it.shows.map(s => `
         <tr><td style="padding:12px 0;border-top:1px solid #e2e8f0">
           <a href="${followShowUrl(s.slug)}" style="font-size:16px;font-weight:800;color:#0f172a;text-decoration:none">${esc(s.title)}</a>
+          ${s.lineup ? '<div style="font-size:12px;font-weight:700;color:#026CDF;margin-top:2px">Added to the line-up</div>' : ''}
           <div style="font-size:14px;color:#475569;margin-top:2px">${esc(formatShareWhen(s.startISO) ?? '')}${where(s.venueName, s.city) ? ` · ${esc(where(s.venueName, s.city) as string)}` : ''}</div>
-          <a href="${followShowUrl(s.slug)}" style="display:inline-block;margin-top:8px;background:#E8003D;color:#ffffff;text-decoration:none;font-weight:700;font-size:13px;padding:9px 16px;border-radius:8px">Find tickets</a>
+          ${showButtons(s)}
         </td></tr>`).join('')}
       </table>
       ${it.more > 0 ? `<p style="margin:8px 0 0;font-size:14px"><a href="${followTargetUrl(it.kind, it.slug)}" style="color:#E8003D;font-weight:700;text-decoration:none">+ ${it.more} more show${it.more === 1 ? '' : 's'} →</a></p>` : ''}
     </div>`).join('')
 
   const html = shell(`
-    <p style="margin:0 0 18px;font-size:16px;color:#1A1A2E">New shows have been added for ${items.length === 1 ? 'something' : 'things'} you follow:</p>
+    <p style="margin:0 0 18px;font-size:16px;color:#1A1A2E">Just announced for ${items.length === 1 ? 'an artist or venue' : 'artists and venues'} you follow. Don&rsquo;t miss out:</p>
     ${sections}
     <p style="margin:8px 0 0;font-size:12px;color:#94a3b8;line-height:1.5">You are getting this because you follow ${esc(followedNames)} on TheShowFinder. <a href="${esc(unsubscribeUrl)}" style="color:#94a3b8">Stop these emails</a>.</p>`)
 

@@ -30,6 +30,8 @@ export interface DueReminder {
   onsaleISO: string
   venueName: string | null
   city: string | null
+  /** The seller's page, for a straight-to-tickets button. */
+  ticketsUrl?: string | null
 }
 
 export interface ReminderBatch {

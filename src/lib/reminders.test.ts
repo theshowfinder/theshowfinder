@@ -54,6 +54,12 @@ describe('buildReminderEmail', () => {
     assert.ok(!e.html.includes('<b>X</b>'))
     assert.ok(e.html.includes('utm_source=reminder'))
   })
+  test('Buy tickets goes straight to Ticketmaster when the show is there', () => {
+    const e = buildReminderEmail([row({ ticketsUrl: 'https://www.ticketmaster.co.uk/x/event/1' })])
+    assert.ok(e.html.includes('https://www.theshowfinder.com/out/tm?u=https%3A%2F%2Fwww.ticketmaster.co.uk%2Fx%2Fevent%2F1&amp;s=email-reminder&amp;v=s'))
+    assert.ok(e.html.includes('Compare sellers'))
+    assert.match(e.text, /Buy tickets \(Ticketmaster\): /)
+  })
   test('several shows get a count subject', () => {
     const e = buildReminderEmail([row({}), row({ id: '2', slug: 'will-young', title: 'Will Young' })])
     assert.equal(e.subject, '2 shows you saved go on sale soon')

@@ -21,9 +21,42 @@ interface EventDbRow {
   title: string
   start_date: string
   created_at: string
+  tickets_url: string | null
   venue_id: string | null
   venue: { name: string | null; city: string | null } | null
   event_artists: { artist_id: string }[] | null
+}
+
+interface LineupDbRow {
+  artist_id: string
+  created_at: string
+  events: { id: string; slug: string; title: string; start_date: string; tickets_url: string | null; venue_id: string | null; venue: { name: string | null; city: string | null } | null }
+}
+
+function lineupShow(l: LineupDbRow): NewShow {
+  const e = l.events
+  return {
+    id: `${e.id}:${l.artist_id}`, slug: e.slug, title: e.title, startISO: e.start_date, createdISO: l.created_at,
+    // no venueId: a line-up addition is news for the act's followers, not the venue's
+    venueId: null, venueName: e.venue?.name ?? null, city: e.venue?.city ?? null,
+    artistIds: [l.artist_id], ticketsUrl: e.tickets_url ?? null, lineup: true,
+  }
+}
+
+// One entry per act per festival site (a festival sells weekend, day and kids'
+// tickets as separate listings; the weekend ticket is the one to show), and
+// none where the festival listing is itself new and already in the email.
+function pickLineupShows(lineup: NewShow[], newShows: NewShow[]): NewShow[] {
+  const already = new Set(newShows.flatMap(s => s.artistIds.map(a => `${s.id}:${a}`)))
+  const best = new Map<string, NewShow>()
+  for (const s of lineup) {
+    if (already.has(s.id)) continue
+    const key = `${s.artistIds[0]}:${s.venueName ?? ''}:${s.title.slice(0, 12).toLowerCase()}`
+    const cur = best.get(key)
+    const score = (x: NewShow) => (/weekend/i.test(x.title) ? 0 : 1)
+    if (!cur || score(s) < score(cur) || (score(s) === score(cur) && s.startISO < cur.startISO)) best.set(key, s)
+  }
+  return [...best.values()]
 }
 
 // Daily: for everyone following an artist or venue, email the shows added since
@@ -78,7 +111,7 @@ async function handleGet(request: Request) {
   for (let page = 0; page < MAX_EVENT_PAGES; page++) {
     const { data, error } = await db
       .from('events')
-      .select('id, slug, title, start_date, created_at, venue_id, venue:venues(name, city), event_artists(artist_id)')
+      .select('id, slug, title, start_date, created_at, tickets_url, venue_id, venue:venues(name, city), event_artists(artist_id)')
       .gt('created_at', lookbackISO)
       .lte('created_at', runISO)
       .gte('start_date', runISO)
@@ -95,10 +128,34 @@ async function handleGet(request: Request) {
         id: e.id, slug: e.slug, title: e.title, startISO: e.start_date, createdISO: e.created_at,
         venueId: e.venue_id, venueName: e.venue?.name ?? null, city: e.venue?.city ?? null,
         artistIds: (e.event_artists ?? []).map(a => a.artist_id),
+        ticketsUrl: e.tickets_url ?? null,
       })
     }
     if (rows.length < PAGE) break
   }
+
+  // Acts newly added to a festival line-up (festival-lineups job): the festival
+  // is not a new show, but for someone following the act it is news.
+  const followedArtistIds = [...new Set(follows.filter(f => f.kind === 'artist').map(f => f.targetId))]
+  const lineupShows: NewShow[] = []
+  for (let i = 0; i < followedArtistIds.length; i += 200) {
+    const { data, error } = await db
+      .from('event_artists')
+      .select('artist_id, created_at, events!inner(id, slug, title, start_date, status, tickets_url, venue_id, venue:venues(name, city))')
+      .eq('source', 'lineup')
+      .in('artist_id', followedArtistIds.slice(i, i + 200))
+      .gt('created_at', lookbackISO)
+      .lte('created_at', runISO)
+      .gte('events.start_date', runISO)
+      .in('events.status', ['upcoming', 'on_sale'])
+      .limit(2000)
+    if (error) {
+      console.error('[follow-alerts] line-up query failed (has migration 122 been run?)', error.message)
+      break
+    }
+    for (const l of (data ?? []) as unknown as LineupDbRow[]) lineupShows.push(lineupShow(l))
+  }
+  shows.push(...pickLineupShows(lineupShows, shows))
 
   const batches = buildFollowAlerts(follows, shows, runISO)
   const toSend = batches.slice(0, MAX_EMAILS_PER_RUN)

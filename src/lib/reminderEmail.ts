@@ -1,9 +1,11 @@
-// The "tickets go on sale soon" email. Links go to our own event page (never
-// straight to a seller), tagged so reminder traffic shows up in analytics.
+// The "tickets go on sale soon" email. "Buy tickets" goes straight to the
+// seller when we know it (through our /out hop); other links go to our own
+// event page, tagged so reminder traffic shows up in analytics.
 // Pure module (no '@/' imports) so it runs under `node --test`.
 
 import { formatShareWhen } from './shareText.ts'
 import type { DueReminder } from './reminders.ts'
+import { emailTicketLink } from './emailTicketLink.ts'
 
 const SITE = 'https://www.theshowfinder.com'
 
@@ -20,6 +22,20 @@ function where(item: DueReminder): string | null {
   return parts.length ? parts.join(', ') : null
 }
 
+function buyLine(i: DueReminder): string[] {
+  const buy = emailTicketLink(i.ticketsUrl, 'email-reminder')
+  return buy ? [`Buy tickets (${buy.seller}): ${buy.href}`] : []
+}
+
+// "Buy tickets" straight to the seller when we know it, plus a quieter link to
+// our page (which compares every seller). Otherwise one button to our page.
+function reminderButtons(i: DueReminder): string {
+  const buy = emailTicketLink(i.ticketsUrl, 'email-reminder')
+  if (!buy) return `<a href="${reminderEventUrl(i.slug)}" style="display:inline-block;margin-top:10px;background:#E8003D;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:10px 18px;border-radius:8px">See where to buy</a>`
+  return `<a href="${esc(buy.href)}" style="display:inline-block;margin-top:10px;background:#E8003D;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:10px 18px;border-radius:8px">Buy tickets</a>
+      <a href="${reminderEventUrl(i.slug)}" style="display:inline-block;margin:10px 0 0 12px;color:#475569;font-weight:700;font-size:13px;text-decoration:underline">Compare sellers</a>`
+}
+
 export function buildReminderEmail(items: DueReminder[]): { subject: string; html: string; text: string } {
   const first = items[0]
   const subject = items.length === 1
@@ -33,6 +49,7 @@ export function buildReminderEmail(items: DueReminder[]): { subject: string; htm
       i.title,
       `On sale: ${formatShareWhen(i.onsaleISO) ?? 'soon'}`,
       ...(where(i) ? [where(i) as string] : []),
+      ...buyLine(i),
       `Where to buy: ${reminderEventUrl(i.slug)}`,
       '',
     ]),
@@ -45,7 +62,7 @@ export function buildReminderEmail(items: DueReminder[]): { subject: string; htm
       <div style="font-size:18px;font-weight:800;color:#1A1A2E">${esc(i.title)}</div>
       <div style="font-size:15px;color:#E8003D;font-weight:700;margin-top:4px">On sale ${esc(formatShareWhen(i.onsaleISO) ?? 'soon')}</div>
       ${where(i) ? `<div style="font-size:14px;color:#64748b;margin-top:2px">${esc(where(i) as string)}</div>` : ''}
-      <a href="${reminderEventUrl(i.slug)}" style="display:inline-block;margin-top:10px;background:#E8003D;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:10px 18px;border-radius:8px">See where to buy</a>
+      ${reminderButtons(i)}
     </td></tr>`).join('')
 
   const html = `<!doctype html><html><body style="margin:0;background:#F5F5F0;font-family:Arial,Helvetica,sans-serif">

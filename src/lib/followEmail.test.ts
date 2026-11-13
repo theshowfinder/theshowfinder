@@ -19,11 +19,11 @@ const batch: FollowAlertBatch = {
 
 describe('follow alert email', () => {
   test('subject names the artist and counts shows', () => {
-    assert.equal(buildFollowAlertEmail(batch, UNSUB).subject, '2 new shows added for Nickelback & Friends')
+    assert.equal(buildFollowAlertEmail(batch, UNSUB).subject, 'Just announced: 2 new Nickelback & Friends shows')
   })
   test('single show subject', () => {
     const one: FollowAlertBatch = { ...batch, totalShows: 1, items: [{ ...batch.items[0], shows: [batch.items[0].shows[0]], more: 0 }] }
-    assert.equal(buildFollowAlertEmail(one, UNSUB).subject, 'New show added: Nickelback & Friends')
+    assert.equal(buildFollowAlertEmail(one, UNSUB).subject, 'Just announced: Nickelback & Friends')
   })
   test('several follows are summarised in the subject', () => {
     const two: FollowAlertBatch = { ...batch, items: [batch.items[0], { ...batch.items[0], followId: 'f2', name: 'The O2', kind: 'venue' }] }
@@ -43,6 +43,14 @@ describe('follow alert email', () => {
     assert.ok(mail.html.includes('Nickelback &lt;live&gt;'))
     assert.ok(!mail.html.includes('<live>'))
     assert.ok(mail.html.includes('Nickelback &amp; Friends'))
+  })
+  test('Buy tickets goes straight to the seller when we know it', () => {
+    const withTm: FollowAlertBatch = { ...batch, items: [{ ...batch.items[0], shows: [{ ...batch.items[0].shows[0], ticketsUrl: 'https://www.ticketmaster.co.uk/nb/event/1', lineup: true }] }] }
+    const mail = buildFollowAlertEmail(withTm, UNSUB)
+    assert.match(mail.html, /href="https:\/\/www\.theshowfinder\.com\/out\/tm\?u=https%3A%2F%2Fwww\.ticketmaster\.co\.uk%2Fnb%2Fevent%2F1&amp;s=email-follow&amp;v=s" [^>]*>Buy tickets/)
+    assert.ok(mail.html.includes('View on TheShowFinder'))
+    assert.ok(mail.html.includes('Added to the line-up'))
+    assert.match(mail.text, /Buy tickets \(Ticketmaster\): https:\/\/www\.theshowfinder\.com\/out\/tm/)
   })
   test('times are London time', () => {
     assert.match(buildFollowAlertEmail(batch, UNSUB).text, /Mon 1 Mar, 19:30 GMT/)

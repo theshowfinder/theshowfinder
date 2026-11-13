@@ -20,6 +20,7 @@ interface DueRow {
     title: string
     onsale_date: string
     status: string
+    tickets_url: string | null
     venue: { name: string | null; city: string | null } | null
   }
 }
@@ -36,7 +37,7 @@ async function handleGet(request: Request) {
   const db = createAdminClient()
   const { data, error } = await db
     .from('event_reminders')
-    .select('id, email, events!inner(id, slug, title, onsale_date, status, venue:venues(name, city))')
+    .select('id, email, events!inner(id, slug, title, onsale_date, status, tickets_url, venue:venues(name, city))')
     .is('sent_at', null)
     .gte('events.onsale_date', fromISO)
     .lt('events.onsale_date', toISO)
@@ -59,6 +60,7 @@ async function handleGet(request: Request) {
     onsaleISO: r.events.onsale_date,
     venueName: r.events.venue?.name ?? null,
     city: r.events.venue?.city ?? null,
+    ticketsUrl: r.events.tickets_url ?? null,
   }))
 
   const batches = groupRemindersByEmail(rows).slice(0, MAX_EMAILS_PER_RUN)

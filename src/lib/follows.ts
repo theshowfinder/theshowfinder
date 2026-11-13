@@ -83,6 +83,10 @@ export interface NewShow {
   venueName: string | null
   city: string | null
   artistIds: string[]
+  /** The seller's page, for a straight-to-tickets button in the email. */
+  ticketsUrl?: string | null
+  /** True when this is an act added to a festival line-up, not a new show. */
+  lineup?: boolean
 }
 
 export interface FollowAlertItem {
