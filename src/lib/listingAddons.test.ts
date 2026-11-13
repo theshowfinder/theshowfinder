@@ -16,6 +16,9 @@ test('festival add-ons and test listings are hidden', () => {
     'QA Festival DO NOT PURCHASE - Souvenir',
     'Moseley Shoals Commemorative Merch Bundle - Event ticket not included',
     'QA Festival DO NOT PURCHASE - Event Lineup T-Shirt',
+    'Kehlani VIP Upgrades (UPGRADE ONLY NO TICKET INCLUDED)',
+    'Marti Pellow - M&G Add-On MATINEE *DOES NOT INCLUDE EVENT TICKET*',
+    'Ulster Rugby TM Gift Card',
   ]) assert.equal(isListingAddon(t), true, t)
 })
 
@@ -31,6 +34,8 @@ test('real tickets and ordinary gigs stay listed', () => {
     'Caravan',
     'Cabin Boy Jumped Ship',
     'The Prodigy',
+    'The Merch Market',
+    'Sheffield Steelers Vs Blaze: The Seven Upgrade',
     '',
   ]) assert.equal(isListingAddon(t), false, t)
 })

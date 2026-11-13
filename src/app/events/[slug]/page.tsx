@@ -57,6 +57,7 @@ import { toArtistEventRows, type ArtistEventLink, type ArtistEventRow } from '@/
 import { dropDuplicateEvents } from '@/lib/listedEvents'
 import { isSeeTicketsRunPage } from '@/lib/seeTicketsWestEnd'
 import { isEventPast } from '@/lib/pastEvents'
+import { isListingAddon } from '@/lib/listingAddons'
 import { buildSiblingOffers, type SiblingEvent, type SiblingOffer } from '@/lib/eventOffers'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -458,6 +459,13 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
       if (same?.[0] && same[0].slug !== slug) permanentRedirect(`/events/${same[0].slug}`)
     }
     notFound()
+  }
+
+  // Not a show (merch bundle, parking, glamping...) or hidden by the listings check: no page of its own.
+  if (isListingAddon(event.title)) notFound()
+  {
+    const { data: hiddenRow } = await createPublicClient().from('listing_hides').select('event_id').eq('event_id', event.id).maybeSingle()
+    if (hiddenRow) notFound()
   }
 
   // Merged into another listing of the same show (src/lib/venueFamilyMerge.ts): send visitors and search engines

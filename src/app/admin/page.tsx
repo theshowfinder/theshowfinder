@@ -81,6 +81,8 @@ export default async function AdminTodayPage({ searchParams }: { searchParams: P
     newBySource.set(k, (newBySource.get(k) ?? 0) + 1)
   }
   const waiting = reviewCount + stReview + gbCheck
+  // Daily listings check (migration 124): missing table just reads as 0.
+  const { count: listingChecks } = await db.from('listing_quality_issues').select('id', { count: 'exact', head: true }).eq('status', 'open')
   const card = 'bg-white border border-slate-200 rounded-2xl p-5'
 
   return (
@@ -92,12 +94,13 @@ export default async function AdminTodayPage({ searchParams }: { searchParams: P
         </div>
         {pageError && <div className="rounded-xl border px-4 py-3 text-sm font-semibold bg-red-50 border-red-200 text-red-800">{pageError}</div>}
 
-        <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {([
             ['/admin/decisions', waiting, 'decisions waiting'],
             ['/admin/news?status=pending', inboxCount, 'news to review'],
             ['/admin/social', socialReady, 'social posts ready'],
             ['/admin/advertiser-applications', applications, 'advertiser applications'],
+            ['/admin/listing-check', listingChecks ?? 0, 'listings to check'],
           ] as Array<[string, number, string]>).map(([href, count, label]) => (
             <Link key={href} href={href} className={`${card} hover:border-slate-400 ${count > 0 ? 'border-amber-300 bg-amber-50' : ''}`}>
               <p className="text-3xl font-extrabold text-slate-900">{n(count)}</p>

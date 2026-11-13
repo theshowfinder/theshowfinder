@@ -78,7 +78,7 @@ export function withoutDuplicateIds<T extends { id: string }>(rows: T[], duplica
 
 /**
  * Ids (from `ids`) that event_canonical_map marks as folded into another
- * canonical event. On any lookup error returns an empty set, so a real event is
+ * canonical event, or that are in listing_hides. On any lookup error returns an empty set, so a real event is
  * never hidden because the map could not be read.
  */
 export async function fetchDuplicateIds(supabase: SupabaseClient, ids: string[]): Promise<Set<string>> {
@@ -94,6 +94,13 @@ export async function fetchDuplicateIds(supabase: SupabaseClient, ids: string[])
         .eq('is_canonical', false) as unknown as { data: { id: string }[] | null; error: unknown }
       if (error) return new Set()
       for (const r of data ?? []) dupes.add(r.id)
+      // Listings hidden by the daily listings check or from /admin/listing-check (migration 124).
+      // A failed read here only means hidden listings show, so it never blanks the list.
+      const { data: hiddenRows, error: hiddenError } = await supabase
+        .from('listing_hides')
+        .select('event_id')
+        .in('event_id', unique.slice(i, i + CHUNK)) as unknown as { data: { event_id: string }[] | null; error: unknown }
+      if (!hiddenError) for (const r of hiddenRows ?? []) dupes.add(r.event_id)
     }
   } catch {
     return new Set()

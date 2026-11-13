@@ -10,7 +10,7 @@
 
 const TEST_LISTING = /do not purchase/i
 // Not a ticket at all, whatever the event: merch bundles and the like.
-const NOT_A_TICKET = /(tickets? not included|merch(andise)? bundle|t-?shirt)/i
+const NOT_A_TICKET = /(tickets? not included|no ticket included|(does not|doesn'?t) include (the )?(event )?ticket|upgrades? only|gift card|merch(andise)? bundle|t-?shirt)/i
 // Only titles that look like a festival or a dated tour product are checked,
 // so a band called "Caravan" or "Cabin Boy" playing a normal gig is untouched.
 const FESTIVAL_LIKE = /(20[0-9]{2}|festival|fest\b|weekender|fayre)/i
