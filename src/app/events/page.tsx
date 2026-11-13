@@ -139,6 +139,7 @@ async function CityArtists({ city }: { city: string }) {
             key={artist.id}
             name={artist.name}
             slug={artist.slug}
+            href={`/artists/${artist.slug}/in/${encodeURIComponent(city)}`}
             image_url={artist.image_url}
             tour_name={artist.tour_name}
             onsale_date={artist.onsale_date}
