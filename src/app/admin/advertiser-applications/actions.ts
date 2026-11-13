@@ -12,6 +12,7 @@ import { geocodePostcode, newPin } from '@/lib/businessVouchers'
 import { tidyOffer } from '@/lib/businessOffers'
 import { sendAdvertiserWelcome } from '@/lib/advertiserEmails'
 import { gbp, FOUNDING_OFFER_KEY, FOUNDING_PRICES } from '@/lib/advertisingPackages'
+import { buildPartnerDraft } from '@/lib/socialAuto'
 
 const LOGO_BUCKET = 'business-logos'   // public (migration 094); advertiser-assets stays private
 
@@ -89,6 +90,16 @@ export async function approveApplicationAction(applicationId: string) {
   }
 
   await db.from('advertiser_applications').update({ status: 'approved', business_id: businessId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', app.id)
+
+  // A "featured partner" Social Pack to tag them in (businesses usually reshare). Draft only; never blocks approval.
+  if (businessId) {
+    try {
+      const draft = buildPartnerDraft({ businessId, name: app.business_name, city: app.city, nearVenue: null, offer: listing.offer_text ?? null })
+      await db.from('social_packs').upsert(draft, { onConflict: 'source_type,source_id,city_name', ignoreDuplicates: true })
+    } catch (err) {
+      console.error('[advertiser-approve] partner social pack failed', err)
+    }
+  }
 
   revalidatePath('/admin/advertiser-applications')
   revalidatePath('/admin/local-businesses')

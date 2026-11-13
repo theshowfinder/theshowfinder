@@ -59,7 +59,8 @@ describe('branded social-image route — approved photos only', () => {
   test('never builds a search URL or uses any other image source', () => {
     assert.ok(!content.includes('encodeURIComponent'))
     const srcs = [...content.matchAll(/<img\s+src=\{([^}]+)\}/g)].map(m => m[1].trim())
-    assert.deepEqual(srcs, ['background'])
+    // The single-act and the list layouts both use only the vetted background (approved photo or local image).
+    assert.deepEqual([...new Set(srcs)], ['background'])
     assert.ok(content.toLowerCase().includes('never scrapes or copies third-party article imagery'))
   })
 })

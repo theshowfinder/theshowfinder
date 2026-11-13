@@ -125,6 +125,56 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   ])
   const background = photo ?? concertBackground
 
+  // List posts (on sale this week, this weekend, featured partner): a heading and up to six rows instead of one act.
+  const list = Array.isArray(storedParams.list)
+    ? (storedParams.list as Array<{ title?: unknown; line?: unknown }>).filter(i => typeof i?.title === 'string').slice(0, format === 'vertical' ? 8 : 5)
+        .map(i => ({ title: String(i.title), line: typeof i.line === 'string' ? i.line : '' }))
+    : []
+  if (list.length) {
+    const perforationL = Array.from({ length: 27 }, (_, i) => i)
+    const rowTitle = list.length <= 3 ? 64 : 46
+    return new ImageResponse(
+      (
+        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative', backgroundColor: '#0B0B14', backgroundImage: `linear-gradient(160deg, ${theme.gradientFrom} 0%, ${theme.gradientTo} 100%)`, fontFamily: 'Inter' }}>
+          {background && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={background} alt="" width={width} height={height} style={{ position: 'absolute', top: 0, left: 0, width, height, objectFit: 'cover', opacity: 0.18 }} />
+          )}
+          <div style={{ position: 'absolute', top: 44, left: 48, right: 48, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 14, padding: '12px 20px' }}>
+              <span style={{ fontFamily: 'Anton', fontSize: 40, color: '#0B0B14', letterSpacing: 1 }}>THE</span>
+              <span style={{ fontFamily: 'Anton', fontSize: 40, color: SOCIAL_BRAND_RED, letterSpacing: 1 }}>SHOWFINDER</span>
+            </div>
+            <div style={{ display: 'flex', backgroundColor: theme.badgeBg, color: theme.badgeFg, fontWeight: 900, fontSize: 28, letterSpacing: 3, padding: '14px 24px', borderRadius: 12, transform: 'rotate(3deg)' }}>{theme.badgeLabel}</div>
+          </div>
+          <div style={{ position: 'absolute', top: 170, left: 56, right: 56, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', width: 120, height: 12, backgroundColor: theme.badgeBg, marginBottom: 20 }} />
+            <div style={{ display: 'flex', fontFamily: 'Anton', fontSize: headline.length <= 18 ? 96 : 76, lineHeight: 1.02, color: '#ffffff', textTransform: 'uppercase' }}>{headline}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', marginTop: 34 }}>
+              {list.map((item, i) => (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', padding: '11px 0', borderTop: i === 0 ? 'none' : '2px solid rgba(255,255,255,0.15)' }}>
+                  <span style={{ display: 'flex', fontFamily: 'Anton', fontSize: rowTitle, color: '#ffffff', textTransform: 'uppercase', lineHeight: 1.05 }}>{item.title}</span>
+                  {item.line && <span style={{ display: 'flex', fontWeight: 800, fontSize: 28, color: theme.accent, marginTop: 4 }}>{item.line}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ position: 'absolute', left: 0, bottom: 0, width, height: 130, backgroundColor: SOCIAL_BRAND_RED, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 56px' }}>
+            <div style={{ position: 'absolute', top: -9, left: 12, right: 12, display: 'flex', justifyContent: 'space-between' }}>
+              {perforationL.map(i => <div key={i} style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#0B0B14', display: 'flex' }} />)}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontWeight: 900, fontSize: 22, letterSpacing: 4, color: '#FFE3EA' }}>FIND TICKETS AT</span>
+              <span style={{ fontFamily: 'Anton', fontSize: 52, color: '#ffffff', letterSpacing: 1 }}>THESHOWFINDER.COM</span>
+            </div>
+            <div style={{ display: 'flex', backgroundColor: '#ffffff', color: SOCIAL_BRAND_RED, fontWeight: 900, fontSize: 26, padding: '14px 22px', borderRadius: 999 }}>{platform === 'facebook' ? 'SEARCH THESHOWFINDER' : 'LINK IN BIO ›'}</div>
+          </div>
+        </div>
+      ),
+      { width, height, fonts },
+    )
+  }
+
   const { title, detail } = splitSocialHeadline(headline)
   const titleSize = title.length <= 10 ? 170 : title.length <= 16 ? 130 : title.length <= 24 ? 100 : title.length <= 40 ? 78 : 62
   const photoHeight = format === 'vertical' ? 1450 : 640
@@ -195,7 +245,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             {perforation.map(i => <div key={i} style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#0B0B14', display: 'flex' }} />)}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontWeight: 900, fontSize: 22, letterSpacing: 4, color: '#FFE3EA' }}>COMPARE TICKETS AT</span>
+            <span style={{ fontWeight: 900, fontSize: 22, letterSpacing: 4, color: '#FFE3EA' }}>FIND TICKETS AT</span>
             <span style={{ fontFamily: 'Anton', fontSize: 52, color: '#ffffff', letterSpacing: 1 }}>THESHOWFINDER.COM</span>
           </div>
           <div style={{ display: 'flex', backgroundColor: '#ffffff', color: SOCIAL_BRAND_RED, fontWeight: 900, fontSize: 26, padding: '14px 22px', borderRadius: 999 }}>

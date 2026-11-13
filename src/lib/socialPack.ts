@@ -119,9 +119,9 @@ export function buildTikTokCaption(headline: string, context: string): string {
 // card reused for every story. Each kind gets its own two-colour gradient
 // and accent so the five templates read as genuinely different at a
 // glance, not relabelled copies of one design.
-export type SocialImageKind = 'tour_announcement' | 'onsale' | 'presale' | 'city_event' | 'tonight'
+export type SocialImageKind = 'tour_announcement' | 'onsale' | 'presale' | 'city_event' | 'tonight' | 'roundup' | 'weekend' | 'partner'
 
-const SOCIAL_IMAGE_KINDS: SocialImageKind[] = ['tour_announcement', 'onsale', 'presale', 'city_event', 'tonight']
+const SOCIAL_IMAGE_KINDS: SocialImageKind[] = ['tour_announcement', 'onsale', 'presale', 'city_event', 'tonight', 'roundup', 'weekend', 'partner']
 
 export function isSocialImageKind(value: unknown): value is SocialImageKind {
   return typeof value === 'string' && (SOCIAL_IMAGE_KINDS as string[]).includes(value)
@@ -156,6 +156,10 @@ export const SOCIAL_IMAGE_THEMES: Record<SocialImageKind, SocialImageTheme> = {
   presale:           { badgeLabel: 'PRESALE',        badgeBg: '#7C3AED',        badgeFg: '#ffffff', gradientFrom: '#1e1b4b', gradientTo: '#7C3AED', accent: '#c4b5fd' },
   city_event:        { badgeLabel: 'LIVE THIS MONTH', badgeBg: '#00B3A4',       badgeFg: '#ffffff', gradientFrom: '#0B0B14', gradientTo: '#0f3d3a', accent: '#5eead4' },
   tonight:           { badgeLabel: 'TONIGHT',        badgeBg: '#FF6A00',        badgeFg: '#ffffff', gradientFrom: '#0B0B14', gradientTo: '#9a3412', accent: '#fdba74' },
+  // List posts (13 Nov 2026, src/lib/socialAuto.ts): the week's on-sales, a city's weekend, a new featured partner.
+  roundup:           { badgeLabel: 'ON SALE THIS WEEK', badgeBg: '#FFD400',     badgeFg: '#111111', gradientFrom: '#0B0B14', gradientTo: '#7c2d12', accent: '#FFD400' },
+  weekend:           { badgeLabel: 'THIS WEEKEND',   badgeBg: '#00B3A4',        badgeFg: '#ffffff', gradientFrom: '#0B0B14', gradientTo: '#0f3d3a', accent: '#5eead4' },
+  partner:           { badgeLabel: 'FEATURED PARTNER', badgeBg: '#16A34A',      badgeFg: '#ffffff', gradientFrom: '#0B0B14', gradientTo: '#14532d', accent: '#86efac' },
 }
 
 // "CHVRCHES adds 2 new UK dates: tickets on sale now" -> big name "CHVRCHES" + line "Adds 2 new UK dates · Tickets on sale

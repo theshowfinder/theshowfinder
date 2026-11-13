@@ -136,6 +136,10 @@
       "schedule": "10 7,13,19 * * *"
     },
     {
+      "path": "/api/cron/social-auto",
+      "schedule": "40 6 * * *"
+    },
+    {
       "path": "/api/cron/founding-partners",
       "schedule": "20 9 * * *"
     },
