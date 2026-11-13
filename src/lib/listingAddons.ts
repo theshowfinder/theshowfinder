@@ -9,6 +9,8 @@
 // Pure module (no '@/' imports) so it runs under node --test.
 
 const TEST_LISTING = /do not purchase/i
+// Not a ticket at all, whatever the event: merch bundles and the like.
+const NOT_A_TICKET = /(tickets? not included|merch(andise)? bundle|t-?shirt)/i
 // Only titles that look like a festival or a dated tour product are checked,
 // so a band called "Caravan" or "Cabin Boy" playing a normal gig is untouched.
 const FESTIVAL_LIKE = /(20[0-9]{2}|festival|fest\b|weekender|fayre)/i
@@ -19,6 +21,6 @@ const REAL_SHOW = /\b(show|exhibition)\b/i
 export function isListingAddon(title: string | null | undefined): boolean {
   const t = (title ?? '').trim()
   if (!t) return false
-  if (TEST_LISTING.test(t)) return true
+  if (TEST_LISTING.test(t) || NOT_A_TICKET.test(t)) return true
   return FESTIVAL_LIKE.test(t) && ADDON_WORDS.test(t) && !REAL_SHOW.test(t)
 }

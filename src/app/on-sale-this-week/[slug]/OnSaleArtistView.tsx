@@ -349,7 +349,7 @@ export async function OnSaleArtistView({ slug, city = null }: { slug: string; ci
                   href={`/artists/${dbArtist.slug}`}
                   className="block text-center text-sm font-bold py-3 px-5 rounded-xl bg-slate-900 text-white hover:bg-slate-700 transition-colors"
                 >
-                  All {artistName} dates &amp; tickets →
+                  {`All ${artistName} dates & tickets →`}
                 </Link>
               )}
               <Link

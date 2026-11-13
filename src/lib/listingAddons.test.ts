@@ -14,6 +14,8 @@ test('festival add-ons and test listings are hidden', () => {
     'Lytham Festival - Robbie Williams - Transport',
     'Ben Portsmouth: This is Elvis 2027 Tour - Premium Upgrade',
     'QA Festival DO NOT PURCHASE - Souvenir',
+    'Moseley Shoals Commemorative Merch Bundle - Event ticket not included',
+    'QA Festival DO NOT PURCHASE - Event Lineup T-Shirt',
   ]) assert.equal(isListingAddon(t), true, t)
 })
 

@@ -9,6 +9,7 @@
 // events, which this module shapes into list rows.
 
 import { inferEventCategory } from './eventImages.ts'
+import { isListingAddon } from './listingAddons.ts'
 import type { EventCategory } from './types/database.ts'
 
 export interface ArtistEventRow {
@@ -59,7 +60,8 @@ export function toArtistEventRows(links: ArtistEventLink[] | null | undefined): 
   const rows: ArtistEventRow[] = []
   for (const link of links ?? []) {
     const e = link.events
-    if (!e || seen.has(e.id)) continue
+    // add-ons (merch bundles, parking, glamping...) are not dates: see listingAddons.ts
+    if (!e || seen.has(e.id) || isListingAddon(e.title)) continue
     seen.add(e.id)
     rows.push({
       id: e.id,

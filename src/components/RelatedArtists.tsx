@@ -21,7 +21,7 @@ function Strip({ title, href, hrefLabel, artists }: { title: string; href?: stri
         {href && <Link href={href} className="text-sm font-semibold underline text-slate-600 whitespace-nowrap">{hrefLabel} →</Link>}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {artists.map(a => <ArtistResultCard key={a.id} artist={a} />)}
+        {artists.map(a => <ArtistResultCard key={a.id} artist={a} href={a.href} />)}
       </div>
     </section>
   )
@@ -30,17 +30,20 @@ function Strip({ title, href, hrefLabel, artists }: { title: string; href?: stri
 // Artists with shows in a city over the next 90 days, with their row from artists_with_upcoming. Shared across every
 // page for an hour (unstable_cache): these strips are on every event, venue and tour page, and recomputing them per
 // render was a large share of the database's CPU (Supabase high-CPU warning, 7 Nov 2026).
-const cityArtistRows = unstable_cache(async (city: string): Promise<(RelatedArtist & { shows: number })[]> => {
+const cityArtistRows = unstable_cache(async (city: string): Promise<(RelatedArtist & { shows: number; firstEventSlug: string | null })[]> => {
   const supabase = createPublicClient()
   const now = new Date()
   const { data: events } = await supabase
-    .from('listed_events_with_venue').select('id')
+    .from('listed_events_with_venue').select('id, slug, start_date')
     .eq('venue_city', city)
     .gte('start_date', now.toISOString())
     .lte('start_date', new Date(now.getTime() + 90 * DAY).toISOString())
     .in('status', LIVE_EVENT_STATUSES)
-    .limit(600) as unknown as { data: { id: string }[] | null }
+    .order('start_date', { ascending: true })
+    .limit(600) as unknown as { data: { id: string; slug: string; start_date: string }[] | null }
   const ids = (events ?? []).map(e => e.id)
+  const order = new Map((events ?? []).map((e, i) => [e.id, i]))
+  const slugOf = new Map((events ?? []).map(e => [e.id, e.slug]))
   if (!ids.length) return []
   const links: { artist_id: string; event_id: string }[] = []
   for (let i = 0; i < ids.length; i += 200) {
@@ -56,14 +59,25 @@ const cityArtistRows = unstable_cache(async (city: string): Promise<(RelatedArti
     .from('artists_with_upcoming').select(VIEW_COLUMNS)
     .in('id', top.map(t => t.artistId)) as unknown as { data: RelatedArtist[] | null }
   const byId = new Map((rows ?? []).map(r => [r.id, r]))
-  return top.flatMap(t => { const r = byId.get(t.artistId); return r ? [{ ...r, shows: t.shows }] : [] })
-}, ['related-city-artists-v1'], { revalidate: 3600 })
+  // Each artist's soonest show in this city: the tile goes straight there, so clicking an act under
+  // "Artists playing in Derby" opens their Derby show, not their tour's first date elsewhere.
+  const firstEvent = new Map<string, string>()
+  for (const l of links) {
+    const cur = firstEvent.get(l.artist_id)
+    if (cur === undefined || (order.get(l.event_id) ?? 1e9) < (order.get(cur) ?? 1e9)) firstEvent.set(l.artist_id, l.event_id)
+  }
+  return top.flatMap(t => {
+    const r = byId.get(t.artistId)
+    const ev = firstEvent.get(t.artistId)
+    return r ? [{ ...r, shows: t.shows, firstEventSlug: ev ? slugOf.get(ev) ?? null : null }] : []
+  })
+}, ['related-city-artists-v2'], { revalidate: 3600 })
 
 export async function ArtistsInCity({ city, excludeArtistIds = [], limit = 6 }: { city: string; excludeArtistIds?: string[]; limit?: number }) {
   const skip = new Set(excludeArtistIds)
   const artists: RelatedArtist[] = (await cityArtistRows(city))
     .filter(r => !skip.has(r.id)).slice(0, limit)
-    .map(({ shows, ...r }) => ({ ...r, subtitle: cityShowsLabel(shows, city) }))
+    .map(({ shows, firstEventSlug, ...r }) => ({ ...r, subtitle: cityShowsLabel(shows, city), href: firstEventSlug ? `/events/${firstEventSlug}` : undefined }))
   if (artists.length < 2) return null
 
   const cityHref = cityPagePath(city)

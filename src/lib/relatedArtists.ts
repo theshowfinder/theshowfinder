@@ -11,6 +11,8 @@ export interface RelatedArtist {
   next_date: string | null
   /** Optional line shown instead of the default "N UK dates · next ...". */
   subtitle?: string
+  /** Where the tile links, when not the artist page (e.g. their show in this city). */
+  href?: string
 }
 
 // Tally headliner links into per-artist show counts for one city, busiest first.
