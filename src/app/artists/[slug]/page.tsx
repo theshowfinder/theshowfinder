@@ -13,7 +13,8 @@ import { TrackedTicketLink } from '@/components/TrackedTicketLink'
 import { jsonLdScript, buildBreadcrumbSchema, fallbackEventDescription, earliestOnSale, SITE_IMAGE_URL } from '@/lib/jsonld'
 import { isBareProviderHomepage } from '@/lib/intelligence'
 import { getArtistSeoAlias } from '@/lib/seoAliases'
-import NewsletterInline from '@/components/NewsletterInline'
+import ArtistAlertCard from '@/components/ArtistAlertCard'
+import { artistAlertCopy } from '@/lib/artistAlertCopy'
 import FollowButton from '@/components/FollowButton'
 import ShareButton from '@/components/ShareButton'
 import CalendarSubscribe from '@/components/CalendarSubscribe'
@@ -500,14 +501,16 @@ export default async function ArtistPage({ params }: PageProps) {
               </div>
             )}
 
+            {/* Mobile: the alert card sits straight after the dates (the sidebar copy is desktop only). */}
+            <div className="mt-8 lg:hidden">
+              <ArtistAlertCard slug={artist.slug} name={artist.name} source="artist" {...artistAlertCopy(artist.name, { hasDates: dateCount > 0 })} />
+            </div>
+
             <div className="mt-10 space-y-10">
               {nextShow?.venueCity && <ArtistsInCity city={nextShow.venueCity} excludeArtistIds={[artist.id]} />}
               <SimilarArtists genre={artist.genre} excludeArtistIds={[artist.id]} />
             </div>
 
-            <div className="mt-8">
-              <NewsletterInline source="artist" subject={artist.name} />
-            </div>
           </div>
 
           {/* Sidebar */}
@@ -596,6 +599,10 @@ export default async function ArtistPage({ params }: PageProps) {
                   Gigantic
                 </TrackedTicketLink>
               )}
+
+              <div className="hidden lg:block">
+                <ArtistAlertCard slug={artist.slug} name={artist.name} source="artist" {...artistAlertCopy(artist.name, { hasDates: dateCount > 0 })} />
+              </div>
 
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                 <h3 className="font-bold text-slate-900">Tour Info</h3>

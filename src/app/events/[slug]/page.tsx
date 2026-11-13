@@ -37,6 +37,8 @@ import ShareButton from '@/components/ShareButton'
 import { ArtistsInCity, SimilarArtists } from '@/components/RelatedArtists'
 import SaveButton from '@/components/SaveButton'
 import EventReminder from '@/components/EventReminder'
+import ArtistAlertCard from '@/components/ArtistAlertCard'
+import { artistAlertCopy } from '@/lib/artistAlertCopy'
 import { canRemind } from '@/lib/reminders'
 import { reissuedEventIds } from '@/lib/onsaleReissued'
 import { formatShareWhen } from '@/lib/shareText'
@@ -606,6 +608,10 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const saleDateUnreliable = (await reissuedEventIds(createPublicClient(), [event.id])).has(event.id)
   const remindable = !saleDateUnreliable && canRemind(event.onsale_date, event.status)
   const onSaleWhen = remindable ? formatShareWhen(event.onsale_date) : null
+  // Artist alerts: sold-out shows get the card at the top of the tickets column (the next best thing to a ticket);
+  // every other show with a headliner gets it in place of the plain newsletter box further down.
+  const alertArtist = headliners[0]?.artist?.slug ? { slug: headliners[0].artist.slug, name: headliners[0].artist.name } : null
+  const soldOutAlert = !!alertArtist && event.status === 'sold_out'
   const shareText = buildShareText({
     title: event.title,
     venueName: venue?.name ?? null,
@@ -1043,14 +1049,27 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               excludeArtistIds={headliners.map(h => h.artist?.id).filter((id): id is string => !!id)}
             />
 
-            <NewsletterInline
-              source="event"
-              subject={headliners[0]?.artist?.name ?? event.title}
-            />
+            {alertArtist && !soldOutAlert ? (
+              <ArtistAlertCard slug={alertArtist.slug} name={alertArtist.name} source="event" />
+            ) : !alertArtist ? (
+              <NewsletterInline
+                source="event"
+                subject={event.title}
+              />
+            ) : null}
           </div>
 
           {/* Right: tickets ─────────────────────────────────────── */}
           <div id="tickets" className="order-first lg:order-none space-y-5 lg:sticky lg:top-24 self-start scroll-mt-20">
+            {soldOutAlert && alertArtist && (
+              <ArtistAlertCard
+                slug={alertArtist.slug}
+                name={alertArtist.name}
+                source="event-sold-out"
+                {...artistAlertCopy(alertArtist.name, { soldOut: true })}
+              />
+            )}
+
             {remindable && (
               <EventReminder
                 slug={event.slug}
