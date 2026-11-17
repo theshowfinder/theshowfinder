@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { CITIES } from '@/lib/cities'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { validateSubmission, autoApproveCheck, MAX_SUBMISSIONS_PER_DAY, type BoostChoice } from '@/lib/organiserEvents'
-import { getOrCreateOrganiser, publishSubmission, createOrganiserCheckout, startDateIso, emailOrganiser, boostLink, promoterActive, SITE } from '@/lib/organiserPublish'
+import { getOrCreateOrganiser, publishSubmission, createOrganiserCheckout, startDateIso, emailOrganiser, boostLink, promoterActive, placeListing, SITE } from '@/lib/organiserPublish'
 import { resend, FROM_EMAIL } from '@/lib/resend'
 
 export const runtime = 'nodejs'
@@ -54,10 +54,12 @@ export async function POST(request: Request) {
       imageUrl = db.storage.from('event-images').getPublicUrl(path).data.publicUrl
     }
 
+    // Any UK town can list. It shows on the nearest of our city pages (Ilkeston -> Derby/Nottingham) when one is in reach.
+    const place = await placeListing(s.city, s.postcode, CITIES.map(c => c.name))
     const check = autoApproveCheck(s)
     const { data: sub, error } = await loose.from('event_submissions').insert({
       organiser_id: organiser.id, title: s.title, category: s.category, start_date: startDateIso(s), venue_name: s.venueName,
-      city: s.city, postcode: s.postcode, ticket_url: s.ticketUrl, price_from: s.priceFrom, description: s.description,
+      city: place.city, town: s.city, postcode: s.postcode, ticket_url: s.ticketUrl, price_from: s.priceFrom, description: s.description,
       image_url: imageUrl, review_reason: check.reason, boost: boost === 'none' ? null : boost,
     }).select('id, manage_token').single()
     if (error || !sub) throw new Error(`could not save the event: ${error?.message}`)
@@ -68,7 +70,7 @@ export async function POST(request: Request) {
       // Needs a look: tell Chris (one email per submission, with the reason).
       await resend.emails.send({
         from: FROM_EMAIL, to: 'hello@theshowfinder.com', subject: `Event listing to check: ${s.title}`,
-        text: `${s.organiserName} (${s.email}) listed "${s.title}" at ${s.venueName}, ${s.city} on ${s.date} ${s.time}.\nWhy it needs a look: ${check.reason}\nTicket link: ${s.ticketUrl}\n\nApprove or reject (one tap): ${SITE}/admin/event-submissions`,
+        text: `${s.organiserName} (${s.email}) listed "${s.title}" at ${s.venueName}, ${s.city} (${s.postcode}, shows on ${place.city}) on ${s.date} ${s.time}.\nWhy it needs a look: ${check.reason}\nTicket link: ${s.ticketUrl}\n\nApprove or reject (one tap): ${SITE}/admin/event-submissions`,
       }).catch(err => console.error('[list-your-event] admin email failed', err))
     }
 
@@ -76,7 +78,9 @@ export async function POST(request: Request) {
     await emailOrganiser(s.email, live ? `Your event is live: ${s.title}` : `We've got your event: ${s.title}`, [
       `Hi ${s.organiserName},`,
       live ? `Thanks for listing "${s.title}" on TheShowFinder. It's live now: ${live}` : `Thanks for listing "${s.title}" on TheShowFinder. We'll check it and it will usually be live within a day.`,
-      'Every listing shows on your city page, the venue page and in search, with a button straight to your ticket page.',
+      place.nearOf
+        ? `It shows on our ${place.city} page (the nearest of our city pages to ${place.nearOf}), the venue page and in search, with a button straight to your ticket page.`
+        : 'Every listing shows on your city page, the venue page and in search, with a button straight to your ticket page.',
       boost === 'none' && !promoterActive(organiser)
         ? `Want more people to see it? Boost it for £9.95 and it's featured at the top of your city page, in "This weekend", our social posts and the weekly email, right up to the night: ${boostLink(sub.id, sub.manage_token)}`
         : '',

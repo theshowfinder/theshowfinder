@@ -42,6 +42,7 @@ export interface SubmissionInput {
   date: string        // YYYY-MM-DD (UK date)
   time: string        // HH:MM (UK time)
   venueName: string
+  /** Town or city as the organiser typed it: any UK town, not only our 40 cities. */
   city: string
   postcode: string
   ticketUrl: string
@@ -58,14 +59,21 @@ export interface CleanSubmission {
   date: string
   time: string
   venueName: string
+  /** The town as typed (tidied), e.g. "Ilkeston"; one of our cities when it is one, spelt our way. */
   city: string
-  postcode: string | null
+  postcode: string
   ticketUrl: string
   priceFrom: number | null
   description: string | null
 }
 
 const clip = (s: string, n: number) => s.replace(/\s+/g, ' ').trim().slice(0, n)
+// UK postcode, loosely (the venue must be findable; postcodes.io checks it properly).
+const UK_POSTCODE = /^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i
+
+function titleCaseTown(t: string): string {
+  return t.toLowerCase().replace(/(^|[\s-])([a-z])/g, (_, a: string, b: string) => a + b.toUpperCase())
+}
 
 export function hostOf(url: string | null | undefined): string | null {
   try { return new URL(url ?? '').hostname.toLowerCase().replace(/^www\./, '') } catch { return null }
@@ -88,7 +96,9 @@ export function validateSubmission(input: SubmissionInput, cities: string[], now
   const email = input.email.trim().toLowerCase()
   const title = clip(input.title, 120)
   const venueName = clip(input.venueName, 100)
-  const city = cities.find(c => c.toLowerCase() === input.city.trim().toLowerCase())
+  const townRaw = clip(input.city, 60)
+  const city = cities.find(c => c.toLowerCase() === townRaw.toLowerCase()) ?? (townRaw.length >= 2 ? titleCaseTown(townRaw) : '')
+  const postcode = clip(input.postcode, 10).toUpperCase().replace(/^([A-Z0-9]+?)\s*(\d[A-Z]{2})$/, '$1 $2')
   const category = CATEGORY_CHOICES.find(c => c.value === input.category)?.value
   const ticketUrl = httpsUrl(input.ticketUrl)
   const website = input.website.trim() ? httpsUrl(input.website) : null
@@ -103,7 +113,8 @@ export function validateSubmission(input: SubmissionInput, cities: string[], now
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { ok: false, error: 'Please add the date.' }
   if (!/^\d{2}:\d{2}$/.test(input.time)) return { ok: false, error: 'Please add the start time.' }
   if (venueName.length < 2) return { ok: false, error: 'Please add the venue name.' }
-  if (!city) return { ok: false, error: 'Please choose the nearest city from the list.' }
+  if (!city || /https?:|www\./i.test(city)) return { ok: false, error: 'Please add the town or city the venue is in.' }
+  if (!UK_POSTCODE.test(postcode)) return { ok: false, error: 'Please add the venue’s postcode, so people can find it (for example DE7 5RP).' }
   if (!ticketUrl) return { ok: false, error: 'Please add the link where people buy tickets or book.' }
   if (input.website.trim() && !website) return { ok: false, error: 'That website address doesn’t look right.' }
   if (priceNum !== null && (!Number.isFinite(priceNum) || priceNum < 0 || priceNum > 5000)) return { ok: false, error: 'Please enter the ticket price as a number, for example 12.50, or leave it blank.' }
@@ -118,7 +129,7 @@ export function validateSubmission(input: SubmissionInput, cities: string[], now
     ok: true,
     value: {
       organiserName, email, website, title, category, date: input.date, time: input.time, venueName, city,
-      postcode: clip(input.postcode, 10).toUpperCase() || null, ticketUrl, priceFrom: priceNum, description,
+      postcode, ticketUrl, priceFrom: priceNum, description,
     },
   }
 }

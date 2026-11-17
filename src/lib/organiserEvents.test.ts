@@ -20,9 +20,18 @@ test('a good submission is tidied', () => {
   assert.equal(r.value.priceFrom, 15)
 })
 
+test('any UK town can list, not only our cities', () => {
+  const r = validateSubmission({ ...base, city: 'ilkeston', postcode: 'de75rp' }, cities, now)
+  assert.equal(r.ok, true)
+  if (!r.ok) return
+  assert.equal(r.value.city, 'Ilkeston')
+  assert.equal(r.value.postcode, 'DE7 5RP')
+})
+
 test('problems are explained', () => {
   assert.equal(validateSubmission({ ...base, date: '2026-01-01' }, cities, now).ok, false)
-  assert.equal(validateSubmission({ ...base, city: 'Atlantis' }, cities, now).ok, false)
+  assert.equal(validateSubmission({ ...base, city: '' }, cities, now).ok, false)
+  assert.equal(validateSubmission({ ...base, postcode: '' }, cities, now).ok, false)
   assert.equal(validateSubmission({ ...base, ticketUrl: 'not a link' }, cities, now).ok, false)
   assert.equal(validateSubmission({ ...base, title: 'Party https://spam.example' }, cities, now).ok, false)
   assert.equal(validateSubmission({ ...base, date: '2029-01-01' }, cities, now).ok, false)

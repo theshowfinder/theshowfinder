@@ -9,6 +9,8 @@ import { resend, FROM_EMAIL } from '@/lib/resend'
 import { cityPagePath } from '@/lib/cities'
 import { comparableVenue, overlap, slugify, londonToUtcIso } from '@/lib/feedImportRules'
 import { fallbackEventImage } from '@/lib/eventImages'
+import { geocodePostcode } from '@/lib/businessVouchers'
+import { nearestCity, SOURCE_REACH_KM } from '@/lib/localEventCity'
 import { BOOST_PRICE_GBP, PROMOTER_PRICE_GBP, organiserSlugBase, type CleanSubmission } from '@/lib/organiserEvents'
 import type { EventCategory } from '@/lib/types/database'
 import { buildBoostedEventDraft } from '@/lib/socialAuto'
@@ -44,7 +46,7 @@ export async function getOrCreateOrganiser(db: Db, s: Pick<CleanSubmission, 'ema
 }
 
 // The organiser's venue if we already list it in that city (names compared loosely), else a new venue.
-async function resolveVenue(db: Db, name: string, city: string, postcode: string | null): Promise<string> {
+async function resolveVenue(db: Db, name: string, city: string, postcode: string | null, town: string | null): Promise<string> {
   const { data } = await db.from('venues').select('id, name, postcode').ilike('city', city).limit(3000) as unknown as { data: { id: string; name: string; postcode: string | null }[] | null }
   const want = comparableVenue(name)
   const rows = data ?? []
@@ -56,7 +58,7 @@ async function resolveVenue(db: Db, name: string, city: string, postcode: string
     .sort((a, b) => b.score - a.score)[0]
   if (close) return close.v.id
   const { data: created, error } = await db.from('venues')
-    .insert({ name, city, address: name, postcode: postcode ?? '', slug: `${slugify(`${name} ${city}`)}-${short()}` } as never)
+    .insert({ name, city, address: town && town.toLowerCase() !== city.toLowerCase() ? `${name}, ${town}` : name, postcode: postcode ?? '', slug: `${slugify(`${name} ${town ?? city}`)}-${short()}` } as never)
     .select('id').single()
   if (error || !created) throw new Error(`could not save venue: ${error?.message}`)
   return (created as { id: string }).id
@@ -64,7 +66,7 @@ async function resolveVenue(db: Db, name: string, city: string, postcode: string
 
 interface SubmissionRow {
   id: string; organiser_id: string; title: string; category: string; start_date: string; venue_name: string; city: string
-  postcode: string | null; ticket_url: string; price_from: number | null; description: string | null; image_url: string | null
+  postcode: string | null; town: string | null; ticket_url: string; price_from: number | null; description: string | null; image_url: string | null
   status: string; event_id: string | null; boost: string | null; boost_paid_at: string | null; manage_token: string
 }
 
@@ -77,7 +79,7 @@ export async function publishSubmission(db: Db, submissionId: string): Promise<s
     return ev?.slug ?? null
   }
   const { data: org } = await loose(db).from('organisers').select('*').eq('id', sub.organiser_id).maybeSingle() as { data: OrganiserRow | null }
-  const venueId = await resolveVenue(db, sub.venue_name, sub.city, sub.postcode)
+  const venueId = await resolveVenue(db, sub.venue_name, sub.city, sub.postcode, sub.town)
   const featured = !!sub.boost_paid_at || promoterActive(org)
   const slug = `${slugify(sub.title) || 'event'}-${short()}`
   const { data: ev, error } = await db.from('events').insert({
@@ -191,6 +193,21 @@ export async function createOrganiserCheckout(opts: { kind: 'boost' | 'promoter'
   const json = await res.json() as { id?: string; url?: string; error?: { message?: string } }
   if (!res.ok || !json.url) throw new Error(json.error?.message || 'Payment page could not be opened.')
   return json.url
+}
+
+/**
+ * Which city page a listing shows on. Our 40 cities are listed as themselves; anywhere else (Ilkeston, a village hall)
+ * goes on the nearest of our cities by postcode when it is within reach, and otherwise stays under its own town:
+ * still on its event page, the venue page and in search, just not on a city page.
+ */
+export async function placeListing(town: string, postcode: string, cities: string[]): Promise<{ city: string; nearOf: string | null }> {
+  if (cities.some(c => c.toLowerCase() === town.toLowerCase())) return { city: town, nearOf: null }
+  const geo = await geocodePostcode(postcode)
+  if (geo) {
+    const near = nearestCity(geo.lat, geo.lng)
+    if (near.name && near.km <= SOURCE_REACH_KM) return { city: near.name, nearOf: town }
+  }
+  return { city: town, nearOf: null }
 }
 
 export function startDateIso(s: Pick<CleanSubmission, 'date' | 'time'>): string {

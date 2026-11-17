@@ -27,7 +27,7 @@ export function distanceKm(a: [number, number], b: [number, number]): number {
   return 2 * 6371 * Math.asin(Math.sqrt(h))
 }
 
-function nearestCity(lat: number, lng: number): { name: string; km: number } {
+export function nearestCity(lat: number, lng: number): { name: string; km: number } {
   let best = { name: '', km: Infinity }
   for (const [name, c] of Object.entries(CITY_CENTRES)) {
     const km = distanceKm([lat, lng], c)

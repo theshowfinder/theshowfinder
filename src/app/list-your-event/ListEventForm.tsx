@@ -53,13 +53,12 @@ export default function ListEventForm({ cities, initialCity }: { cities: string[
         </div>
         <div><label className={label} htmlFor="venue_name">Venue</label><input id="venue_name" name="venue_name" required maxLength={100} className={input} placeholder="e.g. The Old Bell Hotel" /></div>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className={label} htmlFor="city">Nearest city</label>
-            <select id="city" name="city" required className={input} defaultValue={initialCity ?? ''}>
-              <option value="" disabled>Choose…</option>
-              {cities.map(c => <option key={c} value={c}>{c}</option>)}
-            </select></div>
-          <div><label className={label} htmlFor="postcode">Venue postcode</label><input id="postcode" name="postcode" maxLength={10} className={input} placeholder="DE1 3AB" /></div>
+          <div><label className={label} htmlFor="city">Town or city</label>
+            <input id="city" name="city" required maxLength={60} list="tsf-cities" className={input} defaultValue={initialCity ?? ''} placeholder="e.g. Ilkeston" autoComplete="address-level2" />
+            <datalist id="tsf-cities">{cities.map(c => <option key={c} value={c} />)}</datalist></div>
+          <div><label className={label} htmlFor="postcode">Venue postcode</label><input id="postcode" name="postcode" required maxLength={10} className={input} placeholder="DE7 5RP" autoComplete="postal-code" /></div>
         </div>
+        <p className="text-xs text-slate-500 -mt-2">Anywhere in the UK. Events outside our city pages show on the nearest one, so people nearby still find them.</p>
         <div><label className={label} htmlFor="ticket_url">Where people buy tickets or book</label><input id="ticket_url" name="ticket_url" required className={input} placeholder="Your Eventbrite, Skiddle, Ticket Tailor or website link" /></div>
         <div><label className={label} htmlFor="price_from">Tickets from (£, optional)</label><input id="price_from" name="price_from" inputMode="decimal" className={input} placeholder="e.g. 12.50, or 0 if free" /></div>
         <div><label className={label} htmlFor="description">Tell people about it (optional)</label><textarea id="description" name="description" maxLength={1200} rows={4} className={`${input} py-3`} placeholder="Who’s playing, what to expect, dress code…" /></div>
