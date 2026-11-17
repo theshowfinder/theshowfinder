@@ -310,7 +310,8 @@ function buildProviders(event: Pick<EventDetail, 'slug' | 'title' | 'status' | '
   // compare resale. Plain links until those affiliate programmes approve us; the /out hop then wraps them with the
   // tracking template (VIAGOGO_ / STUBHUB_ / VIVIDSEATS_AFFILIATE_TEMPLATE) with no page change needed.
   // Not on local council / tourism listings (village fetes, workshops): resale sites never carry those.
-  const isLocal = event.category === 'local' || /_council$/.test(event.source ?? '')
+  // Also not on organiser listings ("List your event"): their tickets are only on the organiser's own page.
+  const isLocal = event.category === 'local' || event.source === 'organiser' || /_council$/.test(event.source ?? '')
   const q = encodeURIComponent(event.title.replace(/\s+[-–|:].*$/, '').trim() || event.title)
   const has = (name: string) => resale.some(r => r.name === name)
   if (isLocal) return { primary, resale }
