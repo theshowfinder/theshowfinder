@@ -567,7 +567,7 @@ export default function HomePage() {
           <Link href="/list-your-event" className="block rounded-2xl border-2 p-6 sm:p-8 hover:shadow-lg transition-shadow" style={{ borderColor: '#E8003D' }}>
             <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>Running an event?</p>
             <h2 className="text-2xl font-extrabold text-slate-900">Add your event free</h2>
-            <p className="mt-2 text-slate-600">Gigs, club nights, comedy, quizzes, family days: list it in two minutes, anywhere in the UK. Free tickets with a door scanner, or sell tickets for less than Eventbrite.</p>
+            <p className="mt-2 text-slate-600">Gigs, club nights, comedy, quizzes, family days: list it in two minutes, anywhere in the UK. Free tickets with a door scanner, or sell tickets with a low booking fee and keep your full ticket price.</p>
             <span className="mt-4 inline-flex rounded-xl px-5 py-3 text-sm font-extrabold text-white" style={{ backgroundColor: '#E8003D' }}>List your event →</span>
           </Link>
           <Link href="/advertise" className="block rounded-2xl border-2 border-slate-900 p-6 sm:p-8 hover:shadow-lg transition-shadow">

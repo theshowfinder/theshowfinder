@@ -521,7 +521,7 @@ export default async function CityPage({
           <Link href={`/list-your-event?city=${encodeURIComponent(cityName)}`} className="block rounded-2xl border-2 border-dashed border-slate-300 bg-white p-5 hover:border-slate-500 transition-colors">
             <p className="text-xs font-extrabold uppercase tracking-widest" style={{ color: '#E8003D' }}>Organising something in {cityName}?</p>
             <p className="mt-1 text-lg font-extrabold text-slate-900">List your gig, club night or event free →</p>
-            <p className="text-sm text-slate-600">Two minutes. Keep your own ticket link, use our free tickets, or sell tickets for less than Eventbrite. Boost it to the top of this page for £9.95.</p>
+            <p className="text-sm text-slate-600">Two minutes. Keep your own ticket link, use our free tickets, or sell tickets with a low booking fee. Boost it to the top of this page for £9.95.</p>
           </Link>
         </div>
 
