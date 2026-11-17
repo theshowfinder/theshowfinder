@@ -38,6 +38,13 @@ export const NAV_LINKS: NavLink[] = [
   { label: 'Family',   href: '/events?category=family'  },
 ]
 
+// For the people who make the site money: organisers listing events and local businesses advertising.
+// Shown as a slim bar above the main header on desktop and as their own section in the mobile menu.
+export const BUSINESS_LINKS: NavLink[] = [
+  { label: 'List your event', href: '/list-your-event' },
+  { label: 'Advertise',       href: '/advertise' },
+]
+
 // Scrolls to NewsletterSignup's section on the homepage (id="newsletter")
 // — on another page, following this link navigates home first, same as
 // any other cross-page anchor link.

@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { NAV_LINKS, PRIMARY_CTA, isAccountAuthHref } from './headerLinks.ts'
+import { NAV_LINKS, PRIMARY_CTA, BUSINESS_LINKS, isAccountAuthHref } from './headerLinks.ts'
 
 describe('isAccountAuthHref', () => {
   test('flags /login', () => {
@@ -64,5 +64,12 @@ describe('PRIMARY_CTA', () => {
 
   test('points at the newsletter signup section', () => {
     assert.equal(PRIMARY_CTA.href, '/#newsletter')
+  })
+})
+
+describe('BUSINESS_LINKS', () => {
+  test('organisers and advertisers can find us from every page', () => {
+    assert.deepEqual(BUSINESS_LINKS.map(l => l.href), ['/list-your-event', '/advertise'])
+    for (const link of BUSINESS_LINKS) assert.equal(isAccountAuthHref(link.href), false)
   })
 })

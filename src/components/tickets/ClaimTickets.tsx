@@ -45,7 +45,7 @@ export default function ClaimTickets({ eventTitle, types }: { eventTitle: string
   }
 
   return (
-    <div id="tickets" className="bg-white border-2 border-slate-900 rounded-2xl p-5 shadow-sm scroll-mt-24">
+    <div id="tickets" className="bg-white border-2 border-slate-900 rounded-2xl p-5 shadow-sm scroll-mt-24 md:scroll-mt-32">
       <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">{paid ? 'Tickets' : 'Free tickets'}</h3>
       {paid && <p className="text-2xl font-black text-slate-900">{gbpFromPence(type.pricePence)} <span className="text-sm font-semibold text-slate-500">+ {gbpFromPence(fee)} booking fee</span></p>}
       <p className="text-sm text-slate-600 mb-4">

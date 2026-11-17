@@ -265,7 +265,7 @@ export default async function NewsStoryPage({ params }: Props) {
         </div>
 
         <aside className="hidden lg:block">
-          <div className="sticky top-24">{alertBox('news-article', true)}</div>
+          <div className="sticky top-24 md:top-32">{alertBox('news-article', true)}</div>
         </aside>
       </div>
 

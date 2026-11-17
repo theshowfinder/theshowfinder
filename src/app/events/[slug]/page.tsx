@@ -1100,7 +1100,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           </div>
 
           {/* Right: tickets ─────────────────────────────────────── */}
-          <div id="tickets" className="order-first lg:order-none space-y-5 lg:sticky lg:top-24 self-start scroll-mt-20">
+          <div id="tickets" className="order-first lg:order-none space-y-5 lg:sticky lg:top-28 self-start scroll-mt-28">
             {soldOutAlert && alertArtist && (
               <ArtistAlertCard
                 slug={alertArtist.slug}

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { Bars3Icon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
-import { NAV_LINKS, PRIMARY_CTA } from '@/lib/headerLinks'
+import { NAV_LINKS, PRIMARY_CTA, BUSINESS_LINKS } from '@/lib/headerLinks'
 import SavedLink from '@/components/SavedLink'
 
 export default function Header() {
@@ -12,6 +12,15 @@ export default function Header() {
   const [query, setQuery] = useState('')
   return (
     <header className="sticky top-0 z-50 shadow-lg" style={{ backgroundColor: '#1A1A2E' }}>
+      {/* For organisers and businesses (desktop): a slim bar above the main nav */}
+      <div className="hidden md:block border-b border-white/10 bg-black/20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-end gap-5 h-8 items-center text-xs font-semibold">
+          <span className="text-white/40">For organisers &amp; businesses:</span>
+          {BUSINESS_LINKS.map(({ label, href }) => (
+            <Link key={label} href={href} className="text-white/75 hover:text-white transition-colors">{label === 'List your event' ? 'List your event free' : 'Advertise with us'}</Link>
+          ))}
+        </div>
+      </div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
 
@@ -115,6 +124,19 @@ export default function Header() {
             </Link>
           ))}
           <div className="pt-3 border-t border-white/10">
+            <p className="px-4 pb-1 text-xs font-bold uppercase tracking-widest text-white/40">For organisers &amp; businesses</p>
+            <div className="grid grid-cols-2 gap-2 pb-3">
+              {BUSINESS_LINKS.map(({ label, href }) => (
+                <Link
+                  key={label}
+                  href={href}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center justify-center px-3 py-3 rounded-lg text-sm font-bold text-white border border-white/20 hover:bg-white/10 transition-colors min-h-[48px] text-center"
+                >
+                  {label === 'List your event' ? 'List your event free' : 'Advertise with us'}
+                </Link>
+              ))}
+            </div>
             <Link
               href={PRIMARY_CTA.href}
               onClick={() => setMenuOpen(false)}

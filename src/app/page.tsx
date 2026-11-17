@@ -561,6 +561,24 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── FOR ORGANISERS & BUSINESSES ─────────────────────────── */}
+      <section className="bg-white py-10 sm:py-14">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid gap-4 md:grid-cols-2">
+          <Link href="/list-your-event" className="block rounded-2xl border-2 p-6 sm:p-8 hover:shadow-lg transition-shadow" style={{ borderColor: '#E8003D' }}>
+            <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>Running an event?</p>
+            <h2 className="text-2xl font-extrabold text-slate-900">Add your event free</h2>
+            <p className="mt-2 text-slate-600">Gigs, club nights, comedy, quizzes, family days: list it in two minutes, anywhere in the UK. Free tickets with a door scanner, or sell tickets for less than Eventbrite.</p>
+            <span className="mt-4 inline-flex rounded-xl px-5 py-3 text-sm font-extrabold text-white" style={{ backgroundColor: '#E8003D' }}>List your event →</span>
+          </Link>
+          <Link href="/advertise" className="block rounded-2xl border-2 border-slate-900 p-6 sm:p-8 hover:shadow-lg transition-shadow">
+            <p className="font-bold text-xs uppercase tracking-widest mb-1 text-slate-500">Local business?</p>
+            <h2 className="text-2xl font-extrabold text-slate-900">Advertise to people going out</h2>
+            <p className="mt-2 text-slate-600">Restaurants, bars, hotels and taxis: be seen on the city and event pages of people planning a night out near you.</p>
+            <span className="mt-4 inline-flex rounded-xl bg-slate-950 px-5 py-3 text-sm font-extrabold text-white">Advertise with us →</span>
+          </Link>
+        </div>
+      </section>
+
       {/* ── STATS BAND ──────────────────────────────────────────── */}
       <section className="py-10 sm:py-14" style={{ backgroundColor: '#1A1A2E' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
