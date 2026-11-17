@@ -5,9 +5,10 @@ import { fetchAllPages } from '@/lib/pagedFetch'
 import { CITIES } from '@/lib/cities'
 import { anchorCountFor, isVenueName, looksLikeChain, looksMultiSite, spreadAcrossCities } from '@/lib/outreach'
 import {
-  extractEmails, pickEmail, extractCompanyNumbers, extractCompanyNames, normCompanyName, isEmailableCompany,
+  extractEmails, pickEmail, extractCompanyNumbers, extractCompanyNames,
   categoryFromOsm, walkLabel, metresBetween, usefulLinks,
 } from '@/lib/outreachFind'
+import { fetchHtml, htmlText, verifyCompany } from '@/lib/siteContact'
 
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
@@ -27,46 +28,8 @@ type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 
 interface Candidate { key: string; city: string; name: string; tags: Record<string, string>; lat: number; lng: number; website: string; venue: string; metres: number; chain: boolean }
 
-async function fetchText(url: string, ms = 8000): Promise<string | null> {
-  try {
-    const r = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html' }, redirect: 'follow', signal: AbortSignal.timeout(ms) })
-    if (!r.ok || !(r.headers.get('content-type') ?? '').includes('html')) return null
-    return (await r.text()).slice(0, 600_000)
-  } catch { return null }
-}
-
-const textOf = (html: string) => html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&#160;/g, ' ').replace(/&amp;/g, '&').replace(/&#039;|&#39;|&rsquo;/g, "'").replace(/\s+/g, ' ')
-
-async function companiesHouse(path: string): Promise<Loose | null> {
-  const key = process.env.COMPANIES_HOUSE_API_KEY
-  if (!key) return null
-  try {
-    const r = await fetch(`https://api.company-information.service.gov.uk${path}`, {
-      headers: { Authorization: `Basic ${Buffer.from(`${key}:`).toString('base64')}` }, signal: AbortSignal.timeout(8000),
-    })
-    return r.ok ? await r.json() : null
-  } catch { return null }
-}
-
-/** Confirms the business's company with Companies House: by the number on its site, else by its exact registered name. */
-async function verifyCompany(numbers: string[], names: string[], siteText?: string): Promise<{ number: string; name: string } | null> {
-  // A number only counts when the company it belongs to is also named on the site, so a stray number (a booking
-  // system's, a web designer's) is never taken for the business's own company.
-  const onSite = siteText ? normCompanyName(siteText) : null
-  for (const n of numbers.slice(0, 3)) {
-    const c = await companiesHouse(`/company/${encodeURIComponent(n)}`)
-    if (isEmailableCompany(c) && (!onSite || onSite.includes(normCompanyName(c.company_name)))) return { number: c.company_number, name: c.company_name }
-  }
-  for (const name of names.slice(0, 3)) {
-    const s = await companiesHouse(`/search/companies?q=${encodeURIComponent(name)}&items_per_page=5`)
-    const hit = (s?.items ?? []).find((i: Loose) => normCompanyName(i.title) === normCompanyName(name) && i.company_status === 'active')
-    if (hit) {
-      const c = await companiesHouse(`/company/${encodeURIComponent(hit.company_number)}`)
-      if (isEmailableCompany(c)) return { number: c.company_number, name: c.company_name }
-    }
-  }
-  return null
-}
+const fetchText = (url: string, ms = 8000) => fetchHtml(url, UA, ms)
+const textOf = htmlText
 
 async function overpass(query: string, rounds = 2): Promise<Loose[]> {
   // Overpass servers are often busy (half the runs on 5-6 Nov found nothing): try three servers, twice round.
