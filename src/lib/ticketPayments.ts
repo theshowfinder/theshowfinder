@@ -148,11 +148,35 @@ export async function confirmFromSession(db: Db, session: Loose): Promise<boolea
   const { data: fresh, error } = await loose(db).rpc('confirm_paid_order', { p_order: orderId, p_session: session.id, p_intent: intent })
   if (error) throw new Error(error.message)
   if (fresh) {
+    await topUpOrganiser(db, orderId, intent).catch(err => console.error('[tickets] fee top-up failed', err))
     const { data: o } = await loose(db).from('ticket_orders').select('id, access_token').eq('id', orderId).maybeSingle()
     const order = o ? await loadOrder(db, o.id, o.access_token) : null
     if (order) await emailTickets(order)
   }
   return Boolean(fresh)
+}
+
+/**
+ * Where Stripe takes its card fee from the organiser's sale, our application fee was cut by the standard UK card fee.
+ * A foreign or premium card costs more, so once the payment is done we read Stripe's actual fee and give the
+ * difference back from our fee: the organiser always ends up with exactly their ticket price.
+ */
+async function topUpOrganiser(db: Db, orderId: string, intentId: string | null): Promise<void> {
+  if (!intentId) return
+  const { data: o } = await loose(db).from('ticket_orders').select('stripe_account_id, ticket_price_pence, quantity, total_pence').eq('id', orderId).maybeSingle()
+  if (!o?.stripe_account_id) return
+  const { data: org } = await loose(db).from('organisers').select('stripe_fees_collector').eq('stripe_account_id', o.stripe_account_id).maybeSingle()
+  if (org?.stripe_fees_collector !== 'stripe') return
+  const pi = await stripeTickets(`/payment_intents/${encodeURIComponent(intentId)}`, { account: o.stripe_account_id, params: { 'expand[]': 'latest_charge.balance_transaction' }, method: 'GET' })
+  const charge = pi?.latest_charge
+  const bt = charge?.balance_transaction
+  const feeId = typeof charge?.application_fee === 'string' ? charge.application_fee : charge?.application_fee?.id
+  if (!bt || !feeId) return
+  // What the organiser actually keeps = total - Stripe's fee - our fee; make it up to their ticket price.
+  const shortfall = o.ticket_price_pence * o.quantity - Number(bt.net)
+  const ourFee = Number(charge.application_fee_amount ?? 0)
+  const refund = Math.min(Math.max(shortfall, 0), ourFee)
+  if (refund > 0) await stripeTickets(`/application_fees/${encodeURIComponent(feeId)}/refunds`, { idempotencyKey: `tsf-topup-${orderId}`, params: { amount: refund, 'metadata[order_id]': orderId } })
 }
 
 /** For the tickets page: a pending order whose payment has gone through (if the webhook hasn't arrived yet). */
