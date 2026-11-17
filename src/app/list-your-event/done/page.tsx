@@ -62,7 +62,7 @@ export default async function ListingDonePage({ searchParams }: { searchParams: 
             {sub.organisers?.stripe_charges_enabled ? (
               <>
                 <p className="font-extrabold text-slate-900">✓ Payouts are set up</p>
-                <p className="mt-1 text-sm text-slate-600">{live ? 'Your tickets are on sale on your event page.' : 'Your tickets go on sale as soon as your listing is live.'} Your takings are paid to your bank the day after the event.</p>
+                <p className="mt-1 text-sm text-slate-600">{live ? 'Your tickets are on sale on your event page.' : 'Your tickets go on sale as soon as your listing is live.'} Stripe pays your takings into your bank, usually a few days after each sale. You can see every sale in your own Stripe dashboard.</p>
               </>
             ) : (
               <>

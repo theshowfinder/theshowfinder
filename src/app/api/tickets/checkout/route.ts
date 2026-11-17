@@ -25,10 +25,11 @@ export async function POST(request: Request) {
     const row = (Array.isArray(data) ? data[0] : data) as { order_id: string; access_token: string; unit_price: number; unit_fee: number; stripe_account: string } | undefined
     if (!row) throw new Error('no order returned')
     held = row
-    const { data: tt } = await db.from('ticket_types').select('name, events(title, slug)').eq('id', c.ticketTypeId).maybeSingle()
+    const { data: tt } = await db.from('ticket_types').select('name, events(title, slug, organisers(stripe_fees_collector))').eq('id', c.ticketTypeId).maybeSingle()
     const session = await createTicketCheckout({
       orderId: row.order_id, token: row.access_token, account: row.stripe_account, eventTitle: tt?.events?.title ?? 'Event', eventSlug: tt?.events?.slug ?? '',
       ticketName: tt?.name ?? 'Ticket', quantity: c.quantity, unitPrice: row.unit_price, unitFee: row.unit_fee, email: c.email,
+      stripeCollectsFees: tt?.events?.organisers?.stripe_fees_collector === 'stripe',
     })
     await db.from('ticket_orders').update({ stripe_session_id: session.id }).eq('id', row.order_id)
     return NextResponse.json({ ok: true, url: session.url })

@@ -94,7 +94,7 @@ export async function POST(request: Request) {
         ? `Selling tickets through TheShowFinder: set up your payouts with Stripe (takes about 5 minutes: your details and the bank account the money goes to). Your tickets go on sale as soon as that's done${live ? '' : ' and we have checked your listing'}: ${payoutsLink(sub.id, sub.manage_token)}`
         : '',
       s.paidPricePence
-        ? `Buyers pay your price plus our booking fee; you get your full ticket price. The money is paid to your bank the day after the event. On the night, scan tickets at the door with this link (keep it private): ${doorLink(sub.id, sub.manage_token)}`
+        ? `Buyers pay your price plus our booking fee; you get your full ticket price. Stripe pays the money into your bank, usually a few days after each sale (a little longer for your first payouts). On the night, scan tickets at the door with this link (keep it private): ${doorLink(sub.id, sub.manage_token)}`
         : '',
       s.freeCapacity
         ? `Your ${s.freeCapacity} free tickets are claimed on your event page. Each person gets a QR ticket by email. On the night, open this link on your phone to scan tickets at the door and see who's coming (keep it private): ${doorLink(sub.id, sub.manage_token)}`

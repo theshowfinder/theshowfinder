@@ -128,12 +128,12 @@ export default function ListEventForm({ cities, initialCity }: { cities: string[
 // You get your full ticket price; the buyer pays our booking fee on top (6% + 49p, all-in), compared with Eventbrite.
 function FeeNote({ price }: { price: string }) {
   const p = parsePricePence(price)
-  if (!p) return <p className="text-xs text-slate-500 -mt-1">You get your full ticket price. Buyers pay a booking fee of 6% + 49p a ticket (Eventbrite: 6.95% + 59p). Your takings are paid to your bank the day after the event.</p>
+  if (!p) return <p className="text-xs text-slate-500 -mt-1">You get your full ticket price. Buyers pay a booking fee of 6% + 49p a ticket (Eventbrite: 6.95% + 59p). Stripe pays your takings into your bank, usually a few days after each sale.</p>
   const fee = bookingFeePence(p)
   const eb = Math.round(p * 0.0695) + 59
   return (
     <p className="text-xs text-slate-600 -mt-1">
-      You get <strong>{gbpFromPence(p)}</strong> a ticket. Buyers pay {gbpFromPence(p + fee)} ({gbpFromPence(fee)} booking fee{eb > fee ? `, ${gbpFromPence(eb - fee)} less than Eventbrite’s` : ''}). Paid to your bank the day after the event. You set up payouts with Stripe after listing.
+      You get <strong>{gbpFromPence(p)}</strong> a ticket. Buyers pay {gbpFromPence(p + fee)} ({gbpFromPence(fee)} booking fee{eb > fee ? `, ${gbpFromPence(eb - fee)} less than Eventbrite’s` : ''}). Stripe pays it into your bank a few days after each sale. You set up payouts with Stripe after listing.
     </p>
   )
 }

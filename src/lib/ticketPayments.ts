@@ -1,7 +1,8 @@
 // Paid tickets through Stripe Connect. Each organiser has their own Stripe account (Stripe checks their identity and
 // holds their bank details); every sale is a payment on that account ("direct charge"), so the organiser is the
-// seller and TheShowFinder acts as their agent. Our booking fee comes to us as the application fee. Payouts to the
-// organiser are manual: cron ticket-payouts pays out each event's takings the day after it has happened.
+// seller and TheShowFinder acts as their agent. Our booking fee comes to us as the application fee. Stripe carries the
+// risk (Managed Risk: Stripe is the losses collector, Chris 17 Nov 2026), and pays organisers on its normal schedule;
+// TheShowFinder never holds organisers' money or carries their losses.
 // Uses STRIPE_TICKETS_SECRET_KEY (the sandbox key until we go live), separate from the Boost / Promoter key.
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -36,29 +37,48 @@ export async function stripeTickets<T = Loose>(path: string, opts: { method?: 'G
 
 type OrganiserForStripe = { id: string; email: string; name: string; website: string | null; stripe_account_id: string | null }
 
-/** The organiser's Stripe account, created the first time they set up payouts. */
+export const STRIPE_V2_VERSION = '2026-10-28.endive'
+
+/** Accounts v2 call (JSON body, versioned). */
+async function stripeV2<T = Loose>(path: string, body: unknown, idempotencyKey?: string): Promise<T> {
+  const key = process.env.STRIPE_TICKETS_SECRET_KEY
+  if (!key) throw new Error('Ticket payments are not set up yet.')
+  const headers: Record<string, string> = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'Stripe-Version': STRIPE_V2_VERSION }
+  if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey
+  const res = await fetch(`https://api.stripe.com${path}`, { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(20_000) })
+  const json = await res.json() as Loose
+  if (!res.ok) throw Object.assign(new Error(json?.error?.message ?? `Stripe ${res.status}`), { code: json?.error?.code })
+  return json as T
+}
+
+/**
+ * The organiser's own Stripe account (their own Stripe dashboard), created the first time they set up payouts.
+ * Stripe carries the losses. We ask for TheShowFinder to pay the card fees (so the organiser keeps their full ticket
+ * price and our booking fee covers the card fee); if Stripe won't allow that combination, Stripe takes its card fee
+ * from the sale and our application fee is reduced by the same amount instead (see createTicketCheckout).
+ */
 export async function ensureStripeAccount(db: Db, org: OrganiserForStripe): Promise<string> {
   if (org.stripe_account_id) return org.stripe_account_id
-  const acct = await stripeTickets<{ id: string }>('/accounts', {
-    idempotencyKey: `tsf-organiser-${org.id}`,
-    params: {
-      country: 'GB',
-      email: org.email,
-      'business_profile[name]': org.name,
-      'business_profile[url]': org.website ?? undefined,
-      'business_profile[mcc]': '7922',   // theatrical producers and ticket agencies
-      'business_profile[product_description]': 'Tickets for live events, sold through TheShowFinder',
-      'controller[fees][payer]': 'application',
-      'controller[losses][payments]': 'application',
-      'controller[requirement_collection]': 'stripe',
-      'controller[stripe_dashboard][type]': 'express',
-      'capabilities[card_payments][requested]': true,
-      'capabilities[transfers][requested]': true,
-      'settings[payouts][schedule][interval]': 'manual',
-      'metadata[organiser_id]': org.id,
-    },
+  const body = (feesCollector: 'application' | 'stripe') => ({
+    contact_email: org.email,
+    display_name: org.name,
+    dashboard: 'full',
+    identity: { country: 'gb' },
+    configuration: { merchant: { mcc: '7922', capabilities: { card_payments: { requested: true } } } },
+    defaults: { currency: 'gbp', responsibilities: { fees_collector: feesCollector, losses_collector: 'stripe' } },
+    metadata: { organiser_id: org.id },
+    include: ['defaults'],
   })
-  await loose(db).from('organisers').update({ stripe_account_id: acct.id }).eq('id', org.id)
+  let feesCollector: 'application' | 'stripe' = 'application'
+  let acct: { id: string }
+  try {
+    acct = await stripeV2<{ id: string }>('/v2/core/accounts', body('application'), `tsf-organiser-v2-${org.id}`)
+  } catch (err) {
+    console.error('[stripe] account with platform-paid fees refused, using Stripe-paid fees', err)
+    feesCollector = 'stripe'
+    acct = await stripeV2<{ id: string }>('/v2/core/accounts', body('stripe'), `tsf-organiser-v2s-${org.id}`)
+  }
+  await loose(db).from('organisers').update({ stripe_account_id: acct.id, stripe_fees_collector: feesCollector }).eq('id', org.id)
   return acct.id
 }
 
@@ -86,7 +106,11 @@ export async function refreshStripeAccount(db: Db, accountId: string, known?: Lo
 }
 
 /** The payment page for a held order, on the organiser's account, with our booking fee as the application fee. */
-export async function createTicketCheckout(o: { orderId: string; token: string; account: string; eventTitle: string; eventSlug: string; ticketName: string; quantity: number; unitPrice: number; unitFee: number; email: string }): Promise<{ id: string; url: string }> {
+export async function createTicketCheckout(o: { orderId: string; token: string; account: string; eventTitle: string; eventSlug: string; ticketName: string; quantity: number; unitPrice: number; unitFee: number; email: string; stripeCollectsFees?: boolean }): Promise<{ id: string; url: string }> {
+  // When Stripe takes its card fee from the organiser's sale, our application fee is cut by the standard UK card fee
+  // (1.5% + 20p of the total), so the organiser still ends up with their ticket price.
+  const total = (o.unitPrice + o.unitFee) * o.quantity
+  const applicationFee = o.stripeCollectsFees ? Math.max(0, o.unitFee * o.quantity - (Math.round(total * 0.015) + 20)) : o.unitFee * o.quantity
   const session = await stripeTickets<{ id: string; url: string }>('/checkout/sessions', {
     account: o.account,
     idempotencyKey: `tsf-order-${o.orderId}`,
@@ -100,7 +124,7 @@ export async function createTicketCheckout(o: { orderId: string; token: string; 
       'line_items[1][price_data][currency]': 'gbp',
       'line_items[1][price_data][unit_amount]': o.unitFee,
       'line_items[1][price_data][product_data][name]': 'Booking fee (TheShowFinder, incl. VAT)',
-      'payment_intent_data[application_fee_amount]': o.unitFee * o.quantity,
+      'payment_intent_data[application_fee_amount]': applicationFee,
       'payment_intent_data[description]': `${o.quantity} × ${o.ticketName}: ${o.eventTitle}`.slice(0, 250),
       'payment_intent_data[metadata][order_id]': o.orderId,
       'metadata[order_id]': o.orderId,
