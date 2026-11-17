@@ -20,7 +20,12 @@ async function getPromoter(slug: string): Promise<Promoter | null> {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const p = await getPromoter((await params).slug)
   if (!p) return { title: 'Promoter not found' }
+  // A promoter with nothing coming up is a thin page: still reachable, kept out of search until they list again.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { count } = await (createPublicClient() as any).from('events').select('id', { count: 'exact', head: true })
+    .eq('organiser_id', p.id).gte('start_date', new Date().toISOString()).in('status', LIVE_EVENT_STATUSES)
   return {
+    ...(count ? {} : { robots: { index: false, follow: true } }),
     title: `${p.name}: Upcoming Events & Tickets`,
     description: `Every upcoming ${p.name} event, with dates, venues and tickets.`,
     alternates: { canonical: `https://www.theshowfinder.com/promoters/${p.slug}` },

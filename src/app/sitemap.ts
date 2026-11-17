@@ -165,17 +165,37 @@ async function fetchArtistUpcomingCounts(supabase: DbClient, nowISO: string): Pr
   }
 }
 
+// Promoter pages (/promoters/[slug]) for organisers with at least one upcoming live listing. Empty ones stay out.
+async function fetchPromotersWithEvents(supabase: DbClient, nowISO: string): Promise<{ slug: string }[]> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from('events')
+      .select('organisers!inner(slug)')
+      .eq('source', 'organiser')
+      .gte('start_date', nowISO)
+      .in('status', LIVE_EVENT_STATUSES)
+      .limit(1000) as { data: { organisers: { slug: string } | null }[] | null; error: { message: string } | null }
+    if (error) throw new Error(error.message)
+    return [...new Set((data ?? []).map(r => r.organisers?.slug).filter((x): x is string => !!x))].map(slug => ({ slug }))
+  } catch (err) {
+    console.error('[sitemap] promoter lookup failed', err)
+    return []
+  }
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = createPublicClient()
   const now      = new Date().toISOString()
 
-  const [allEventRows, duplicateIds, venueRows, artistRows, westEndShows, artistCounts] = await Promise.all([
+  const [allEventRows, duplicateIds, venueRows, artistRows, westEndShows, artistCounts, promoterRows] = await Promise.all([
     fetchAllEvents(supabase, now),
     fetchDuplicateEventIds(supabase),
     fetchAllVenues(supabase),
     fetchAllArtists(supabase),
     fetchWestEndShows(supabase),
     fetchArtistUpcomingCounts(supabase, now),
+    fetchPromotersWithEvents(supabase, now),
   ])
 
   const staticPages: MetadataRoute.Sitemap = [
@@ -197,6 +217,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/new-tours`,           lastModified: new Date(), changeFrequency: 'daily', priority: 0.7 },
     { url: `${BASE}/insights`,            lastModified: new Date(), changeFrequency: 'weekly', priority: 0.6 },
     { url: `${BASE}/guides`,              changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${BASE}/list-your-event`,     changeFrequency: 'monthly', priority: 0.6 },
     ...GUIDES.map(g => ({ url: `${BASE}/guides/${g.slug}`, lastModified: new Date(`${g.updated}T12:00:00Z`), changeFrequency: 'monthly' as const, priority: 0.6 })),
   ]
 
@@ -225,7 +246,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const eventRows = duplicateIds ? allEventRows.filter(e => !duplicateIds.has(e.id)) : allEventRows
   // Council / tourism-board listings (workshops, markets, village events) stay on the site and city pages but are
   // left out of the sitemap, so Google's attention goes to shows people buy tickets for (3 Nov 2026).
-  const isLocalListing = (e: SlugUpdatedRow) => e.category === 'local' || /_council$/.test(e.source ?? '')
+  // Events listed by their own organiser ("List your event") always go in, whatever the category: a real event with a
+  // real ticket page, written by the people running it, and often the only page on the web for a small-town gig.
+  const isLocalListing = (e: SlugUpdatedRow) => e.source !== 'organiser' && (e.category === 'local' || /_council$/.test(e.source ?? ''))
   const repeatSlugs = repeatPerformanceSlugs(eventRows)
   // lastModified = when what the page shows last changed (migration 107), not when a sync last touched the row.
   const eventPages: MetadataRoute.Sitemap = eventRows.filter(e => !repeatSlugs.has(e.slug) && !isLocalListing(e)).map(e => ({
@@ -268,5 +291,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }))
     .filter(a => !getArtistSeoAlias(a.url.split('/').pop() ?? ''))
 
-  return [...staticPages, ...cityPages, ...cityThisWeekPages, ...cityThisWeekendPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
+  const promoterPages: MetadataRoute.Sitemap = promoterRows.map(p => ({
+    url:             `${BASE}/promoters/${p.slug}`,
+    changeFrequency: 'weekly' as const,
+    priority:        0.5,
+  }))
+
+  return [...staticPages, ...promoterPages, ...cityPages, ...cityThisWeekPages, ...cityThisWeekendPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
 }

@@ -15,6 +15,7 @@ import { BOOST_PRICE_GBP, PROMOTER_PRICE_GBP, organiserSlugBase, type CleanSubmi
 import type { EventCategory } from '@/lib/types/database'
 import { buildBoostedEventDraft } from '@/lib/socialAuto'
 import { formatShareWhen } from '@/lib/shareText'
+import { buildIndexNowPayload } from '@/lib/indexNow'
 
 type Db = ReturnType<typeof createAdminClient>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,6 +106,7 @@ export async function publishSubmission(db: Db, submissionId: string): Promise<s
   if (featured) await queueBoostSocialPost(db, ev.id)
   const cityPath = cityPagePath(sub.city)
   if (cityPath) revalidatePath(cityPath)
+  await pingIndexNow([`${SITE}/events/${ev.slug}`, ...(cityPath ? [`${SITE}${cityPath}`] : [])])
   return ev.slug
 }
 
@@ -200,6 +202,20 @@ export async function createOrganiserCheckout(opts: { kind: 'boost' | 'promoter'
  * goes on the nearest of our cities by postcode when it is within reach, and otherwise stays under its own town:
  * still on its event page, the venue page and in search, just not on a city page.
  */
+/** Tell Bing (and other IndexNow engines) about a new listing straight away, not at the next daily run. Never throws. */
+async function pingIndexNow(urls: string[]): Promise<void> {
+  try {
+    await fetch('https://api.indexnow.org/IndexNow', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify(buildIndexNowPayload(urls)),
+      signal: AbortSignal.timeout(4000),
+    })
+  } catch (err) {
+    console.error('[organiser] IndexNow ping failed', err)
+  }
+}
+
 export async function placeListing(town: string, postcode: string, cities: string[]): Promise<{ city: string; nearOf: string | null }> {
   if (cities.some(c => c.toLowerCase() === town.toLowerCase())) return { city: town, nearOf: null }
   const geo = await geocodePostcode(postcode)

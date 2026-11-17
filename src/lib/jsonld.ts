@@ -24,6 +24,8 @@ interface EventSchemaInput {
   performers?: string[]
   /** When tickets went (or go) on sale: the ISO start of the earliest public sale we know. Omitted when unknown. */
   validFrom?: string | null
+  /** Who put the event on, when we know it (events listed by their organiser). Otherwise the venue stands in. */
+  organizer?: { name: string; url?: string | null } | null
 }
 
 /** Site-wide share image, used only when an event has no picture of its own. */
@@ -125,7 +127,9 @@ export function buildEventSchema(input: EventSchemaInput) {
     // `url` is only added when the venues table actually has a website for
     // that venue (a real, looked-up fact) — never invented or filled with a
     // placeholder when it's missing, which is still the common case today.
-    organizer: input.venue
+    organizer: input.organizer
+      ? { '@type': 'Organization', name: input.organizer.name, ...(input.organizer.url ? { url: input.organizer.url } : {}) }
+      : input.venue
       ? {
           '@type': 'Organization',
           name:    input.venue.name,

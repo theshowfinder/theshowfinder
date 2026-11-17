@@ -560,6 +560,11 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   // Listed by its organiser ("List your event"): their own ticket page, shown like a local listing, never as "we hold tickets".
   const isOrganiserListing = event.source === 'organiser'
   const isLocalListing = isOrganiserListing || event.category === 'local' || /_council$/.test(event.source ?? '')
+  // Who listed it: named as the schema.org organizer and linked to their promoter page (crawl path for /promoters/*).
+  const promoter = isOrganiserListing
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? ((await (createPublicClient() as any).from('events').select('organisers(name, slug, website)').eq('id', event.id).maybeSingle())?.data?.organisers ?? null) as { name: string; slug: string; website: string | null } | null
+    : null
   const ownLink = event.own_ticket_url && !isGigsbergUrl(event.own_ticket_url) ? event.own_ticket_url : null
   const ownTicketUrl = isLocalListing ? null : ownLink
   // A merged council / tourism copy's page is kept in info_links: offered only when no seller sells this show.
@@ -670,6 +675,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     offerUrl:      canonicalUrl,
     validFrom:     saleDateUnreliable ? earliestOnSale(event.presale_start) : earliestOnSale(event.presale_start, event.public_onsale_start, event.onsale_date),
     performers:    headliners.map(h => h.artist?.name).filter((n): n is string => !!n),
+    organizer:     promoter ? { name: promoter.name, url: promoter.website ?? `https://www.theshowfinder.com/promoters/${promoter.slug}` } : null,
   })
   const breadcrumbSchema = buildBreadcrumbSchema([
     { name: 'Home',   url: 'https://www.theshowfinder.com' },
@@ -1241,6 +1247,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                 <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">{isOrganiserListing ? 'Tickets' : <>Event details &amp; booking</>}</h3>
                 <p className="text-xs text-slate-400 mb-4">{isOrganiserListing ? `Sold by the organiser on ${localListingHost}.` : `Listed by ${localListingHost}. Times, prices and how to book are on their page.`}</p>
+                {promoter && <p className="text-xs text-slate-500 -mt-3 mb-4">Listed by <a href={`/promoters/${promoter.slug}`} className="font-bold underline">{promoter.name}</a>. See all their events.</p>}
                 <TrackedTicketLink
                   href={monetisedOwnLink(localListingUrl, `evt-${event.slug}`) ?? localListingUrl}
                   provider={`Local listing (${localListingHost})`}
