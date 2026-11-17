@@ -516,6 +516,15 @@ export default async function CityPage({
         {/* ── NEWSLETTER (city-scoped) ── */}
         <div className="order-7"><CityNewsletterForm cityName={cityName} /></div>
 
+        {/* ── ORGANISERS: list your event (free, boost £9.95) ── */}
+        <div className="order-11">
+          <Link href={`/list-your-event?city=${encodeURIComponent(cityName)}`} className="block rounded-2xl border-2 border-dashed border-slate-300 bg-white p-5 hover:border-slate-500 transition-colors">
+            <p className="text-xs font-extrabold uppercase tracking-widest" style={{ color: '#E8003D' }}>Organising something in {cityName}?</p>
+            <p className="mt-1 text-lg font-extrabold text-slate-900">List your gig, club night or event free →</p>
+            <p className="text-sm text-slate-600">Two minutes, your tickets stay on your own page. Boost it to the top of this page for £9.95.</p>
+          </Link>
+        </div>
+
         {/* ── BROWSE BY TYPE ── */}
         <div className="order-10"><CityBrowse cityName={cityName} counts={categoryCounts} /></div>
 

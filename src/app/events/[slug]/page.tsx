@@ -556,7 +556,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   // Local events (council / tourism-board listings: Visit Bristol, Visit Leicester...) keep their listing page in
   // own_ticket_url. That is the organiser's information page, not tickets we hold, so it is never shown as
   // "Buy Direct": it gets a plain "Event details & booking" link below any real ticket sellers instead.
-  const isLocalListing = event.category === 'local' || /_council$/.test(event.source ?? '')
+  // Listed by its organiser ("List your event"): their own ticket page, shown like a local listing, never as "we hold tickets".
+  const isOrganiserListing = event.source === 'organiser'
+  const isLocalListing = isOrganiserListing || event.category === 'local' || /_council$/.test(event.source ?? '')
   const ownLink = event.own_ticket_url && !isGigsbergUrl(event.own_ticket_url) ? event.own_ticket_url : null
   const ownTicketUrl = isLocalListing ? null : ownLink
   // A merged council / tourism copy's page is kept in info_links: offered only when no seller sells this show.
@@ -760,7 +762,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                   className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm md:inline-flex md:gap-2 md:text-lg md:px-8 md:py-4 md:min-h-0 md:shadow-lg"
                   style={{ backgroundColor: '#E8003D' }}
                 >
-                  {localListingUrl ? 'Event details & booking ↓' : 'Get Tickets ↗'}
+                  {localListingUrl ? (isOrganiserListing ? 'Get Tickets ↓' : 'Event details & booking ↓') : 'Get Tickets ↗'}
                 </a>
               )}
             </div>
@@ -1236,8 +1238,8 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             {/* Local listing (council / tourism board): the organiser's page for times, prices and booking. */}
             {localListingUrl && !isCancelledOrPostponed && (
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">Event details &amp; booking</h3>
-                <p className="text-xs text-slate-400 mb-4">Listed by {localListingHost}. Times, prices and how to book are on their page.</p>
+                <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">{isOrganiserListing ? 'Tickets' : <>Event details &amp; booking</>}</h3>
+                <p className="text-xs text-slate-400 mb-4">{isOrganiserListing ? `Sold by the organiser on ${localListingHost}.` : `Listed by ${localListingHost}. Times, prices and how to book are on their page.`}</p>
                 <TrackedTicketLink
                   href={monetisedOwnLink(localListingUrl, `evt-${event.slug}`) ?? localListingUrl}
                   provider={`Local listing (${localListingHost})`}
@@ -1245,7 +1247,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                   context={event.slug}
                   className="flex items-center justify-between rounded-xl px-5 py-4 border-2 border-slate-900 text-slate-900 font-extrabold hover:bg-slate-50 transition-colors min-h-[56px]"
                 >
-                  <span>Open on {localListingHost}</span>
+                  <span>{isOrganiserListing ? `Get tickets on ${localListingHost}` : `Open on ${localListingHost}`}</span>
                   <span className="text-xl ml-3">↗</span>
                 </TrackedTicketLink>
               </div>

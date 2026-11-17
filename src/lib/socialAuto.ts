@@ -105,6 +105,17 @@ export function buildPartnerDraft(a: { businessId: string; name: string; city: s
   return withList(d, [{ title: a.name, line: `${a.nearVenue ? `Before the show at ${a.nearVenue}` : `On our ${a.city} page`}${a.offer ? ` · ${a.offer}` : ''}` }], headline)
 }
 
+/** A boosted organiser listing (paid "List your event" boost): one post for its city. */
+export function buildBoostedEventDraft(a: { eventId: string; title: string; whenLabel: string; venue: string; city: string; imageUrl: string | null; slug: string }): SocialPackDraft {
+  const headline = `${a.title}: ${a.whenLabel} in ${a.city}`
+  const context = `On at ${a.venue}, ${a.whenLabel}. Tickets and details on TheShowFinder.`
+  return buildSocialPackDraft({
+    sourceType: 'event', sourceId: a.eventId, cityName: a.city, headline, context,
+    destinationPath: `/events/${a.slug}`, hashtagSeed: [a.city, `What's On ${a.city}`, `${a.city} Events`, 'Support Local'],
+    kind: 'city_event', imageUrl: a.imageUrl, imageDateLabel: a.whenLabel,
+  })
+}
+
 /** Which two big cities get a weekend post this week (rotating through the top ten). */
 export function weekendCities(cityNames: string[], weekKey: string): string[] {
   const top = cityNames.slice(0, 10)

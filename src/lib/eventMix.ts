@@ -17,7 +17,12 @@ export interface MixEvent {
   venue_id?: string | null
   venue_name?: string | null
   category?: string | null
+  /** Paid boost / Promoter plan (organiser listings): always included, shown first. */
+  is_featured?: boolean | null
 }
+
+/** At most this many boosted listings lead any one list, so paid placements never crowd out the real line-up. */
+export const MAX_FEATURED_PER_LIST = 3
 
 // Venue / experience tickets that are not "a show on a night". Matched against
 // the title and the venue name.
@@ -145,6 +150,12 @@ export function mixEvents<T extends MixEvent>(pool: T[], options: MixOptions): T
   // attraction list (pool order), then fill the rest with real shows.
   const attractionSlots = Math.min(maxAttractions, attractions.length, limit)
   const realTarget = limit - attractionSlots
+  // Boosted listings (paid) go in first, a few at most.
+  const featured = real.filter(e => e.is_featured).slice(0, MAX_FEATURED_PER_LIST)
+  for (const e of featured) {
+    if (picked.length >= realTarget) break
+    take(e, false)
+  }
   for (const e of ordered) {
     if (picked.length >= realTarget) break
     take(e, true)
@@ -172,7 +183,9 @@ export function mixEvents<T extends MixEvent>(pool: T[], options: MixOptions): T
   }
 
   if (mode === 'week') {
-    return picked.sort((a, b) => a.start_date.localeCompare(b.start_date))
+    // Date order, with boosted listings at the top.
+    const feat = new Set(featured)
+    return picked.sort((a, b) => Number(feat.has(b)) - Number(feat.has(a)) || a.start_date.localeCompare(b.start_date))
   }
   // 'ranked': preserve incoming pool order.
   const rank = new Map(pool.map((e, i) => [e, i]))

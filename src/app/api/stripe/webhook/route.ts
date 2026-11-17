@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resend, FROM_EMAIL } from '@/lib/resend'
 import { PACKAGES, gbp, FOUNDING_OFFER_KEY, FOUNDING_TRIAL_DAYS, FOUNDING_PRICES } from '@/lib/advertisingPackages'
+import { applyBoost, setPromoterPlan, emailOrganiser, SITE } from '@/lib/organiserPublish'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -35,6 +36,13 @@ export async function POST(request: Request) {
   // Invoices carry the subscription's metadata under subscription_details (parent.subscription_details on newer API versions).
   const subMeta = ((object.subscription_details as { metadata?: Record<string, string> } | undefined)?.metadata
     ?? (object.parent as { subscription_details?: { metadata?: Record<string, string> } } | undefined)?.subscription_details?.metadata ?? {})
+  // "List your event" payments (src/lib/organiserPublish.ts): a Boost or the Promoter plan.
+  const organiserKind = metadata.kind || subMeta.kind
+  if (organiserKind === 'event_boost' || organiserKind === 'promoter_plan') {
+    await handleOrganiserPayment(event.type, object, { ...subMeta, ...metadata })
+    return NextResponse.json({ received: true })
+  }
+
   const applicationId = metadata.application_id || subMeta.application_id || (typeof object.client_reference_id === 'string' ? object.client_reference_id : '')
   if (!applicationId) return NextResponse.json({ received: true })
 
@@ -79,7 +87,7 @@ export async function POST(request: Request) {
           'Your listing is not live yet because all advertiser applications are manually reviewed.',
           '',
           'TheShowFinder',
-        ].join('\\n'),
+        ].join('\n'),
         html: `<p>Thanks for signing up for TheShowFinder advertising, ${application.business_name}.</p><p>${confirmed}</p><p><strong>What happens next:</strong></p><ul><li>We will review your details and uploaded assets.</li><li>We will contact you if anything else is needed.</li><li>Once approved, we will prepare and publish your listing.</li></ul><p>Your listing is not live yet because all advertiser applications are manually reviewed.</p><p>TheShowFinder</p>`,
       })
       if (emailError) {
@@ -107,4 +115,47 @@ export async function POST(request: Request) {
     }
   }
   return NextResponse.json({ received: true })
+}
+
+async function handleOrganiserPayment(type: string, object: Record<string, unknown>, meta: Record<string, string>) {
+  const db = createAdminClient()
+  const organiserId = meta.organiser_id
+  const submissionId = meta.submission_id
+  try {
+    if (type === 'checkout.session.completed' || type === 'checkout.session.async_payment_succeeded') {
+      if (meta.kind === 'event_boost' && submissionId) {
+        await applyBoost(db, submissionId)
+      } else if (meta.kind === 'promoter_plan' && organiserId) {
+        await setPromoterPlan(db, organiserId, true, {
+          customer: typeof object.customer === 'string' ? object.customer : null,
+          subscription: typeof object.subscription === 'string' ? object.subscription : null,
+          status: 'active',
+        })
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: sub } = submissionId ? await (db as any).from('event_submissions').select('status, title, review_reason, organisers(email, name)').eq('id', submissionId).maybeSingle() : { data: null }
+      const email = sub?.organisers?.email as string | undefined
+      if (email) {
+        await emailOrganiser(email, meta.kind === 'event_boost' ? `Boost confirmed: ${sub.title}` : 'Welcome to the TheShowFinder Promoter plan', [
+          `Hi ${sub.organisers?.name ?? 'there'},`,
+          meta.kind === 'event_boost'
+            ? `Thanks, your boost for "${sub.title}" is confirmed. ${sub.status === 'approved' ? 'It is featured now' : 'It will be featured as soon as the listing is live'}, right up to the night.`
+            : 'Thanks for joining the Promoter plan. Every event you list is now boosted automatically, and you have your own promoter page. List your next event any time: ' + `${SITE}/list-your-event`,
+          'Your receipt comes separately from Stripe. To cancel or change anything, just reply to this email.',
+          'Chris, TheShowFinder',
+        ])
+      }
+    } else if (type === 'customer.subscription.deleted' && meta.kind === 'promoter_plan' && organiserId) {
+      await setPromoterPlan(db, organiserId, false, { status: 'cancelled' })
+    } else if (type === 'invoice.payment_failed' && meta.kind === 'promoter_plan' && organiserId) {
+      // Stripe retries the card for a while; the plan only ends if the subscription is cancelled.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (db as any).from('organisers').update({ plan_status: 'past_due', updated_at: new Date().toISOString() }).eq('id', organiserId)
+    } else if (type === 'invoice.paid' && meta.kind === 'promoter_plan' && organiserId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (db as any).from('organisers').update({ plan: 'promoter', plan_status: 'active', updated_at: new Date().toISOString() }).eq('id', organiserId)
+    }
+  } catch (err) {
+    console.error('[stripe-webhook] organiser payment handling failed', err)
+  }
 }

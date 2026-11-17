@@ -163,6 +163,16 @@ export default function TermsPage() {
             </p>
           </section>
 
+          <section id="event-listings">
+            <h2 className="text-xl font-extrabold text-slate-900 mb-3">Event listings from organisers</h2>
+            <p className="text-slate-600 leading-relaxed mb-3">
+              Organisers can list their events on TheShowFinder for free at theshowfinder.com/list-your-event. You must be organising or promoting the event, and the details must be accurate. We check listings and may decline or remove any listing that is inaccurate, misleading, unlawful or not a real public event. Tickets are sold by the organiser on their own ticket page; TheShowFinder does not sell tickets for these events and is not responsible for them.
+            </p>
+            <p className="text-slate-600 leading-relaxed">
+              A <strong>Boost</strong> (£9.95 per event) features the event on TheShowFinder until the event date, including at the top of the city page and in lists such as &ldquo;This weekend&rdquo;, and it may be included in our social posts and weekly email. The <strong>Promoter plan</strong> (£19.95 a month) boosts every event the organiser lists and includes a promoter page; it renews monthly until cancelled, and you can cancel any time by emailing hello@theshowfinder.com. If we decline a boosted listing we refund the boost in full. Boosts are otherwise non-refundable once the listing is live.
+            </p>
+          </section>
+
           <section id="advertising">
             <h2 className="text-xl font-extrabold text-slate-900 mb-3">12. Advertising for local businesses</h2>
             <div className="space-y-3 text-slate-600 leading-relaxed">

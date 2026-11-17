@@ -14,8 +14,8 @@ export const dynamic = 'force-dynamic'
 // Automatic Social Packs, daily 06:40 UTC (src/lib/socialAuto.ts says what and when). Drafts only: Chris checks them in
 // /admin/social and schedules them in Meta Business Suite. ?dry=1 lists what would be made; ?day=mon|thu forces a day.
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
-type Row = { id: string; title: string; slug: string; start_date: string; venue_name: string | null; venue_city: string | null; venue_capacity: number | null; image_url: string | null; presale_start: string | null; public_onsale_start: string | null; onsale_date: string | null; category: string | null }
-const COLS = 'id, title, slug, start_date, venue_name, venue_city, venue_capacity, image_url, presale_start, public_onsale_start, onsale_date, category'
+type Row = { id: string; title: string; slug: string; start_date: string; venue_name: string | null; venue_city: string | null; venue_capacity: number | null; is_featured?: boolean | null; image_url: string | null; presale_start: string | null; public_onsale_start: string | null; onsale_date: string | null; category: string | null }
+const COLS = 'id, title, slug, start_date, venue_name, venue_city, venue_capacity, is_featured, image_url, presale_start, public_onsale_start, onsale_date, category'
 const NOT_A_SHOW = /\b(standard entry|entry ticket|admission|exhibition|museum|tour of|guided|parking|car park)\b/i
 
 const uk = (iso: string, o: Intl.DateTimeFormatOptions) => new Date(iso).toLocaleString('en-GB', { timeZone: 'Europe/London', ...o })
@@ -90,9 +90,11 @@ async function handleGet(request: Request) {
     const fri = new Date(now); fri.setUTCDate(fri.getUTCDate() + ((5 - fri.getUTCDay() + 7) % 7)); fri.setUTCHours(12, 0, 0, 0)
     const end = new Date(fri.getTime() + 3 * 86_400_000); end.setUTCHours(4, 0, 0, 0)
     for (const city of weekendCities(CITIES.map(c => c.name), week)) {
-      const list = (await rows(db.from(LISTED_EVENTS_VIEW).select(COLS).in('status', LIVE_EVENT_STATUSES).ilike('venue_city', city).gte('start_date', fri.toISOString()).lt('start_date', end.toISOString())))
-        .filter(big).sort(bySize)
-      const picks = onePerAct(list, 6).sort((a, b) => a.start_date.localeCompare(b.start_date))
+      const all = await rows(db.from(LISTED_EVENTS_VIEW).select(COLS).in('status', LIVE_EVENT_STATUSES).ilike('venue_city', city).gte('start_date', fri.toISOString()).lt('start_date', end.toISOString()))
+      const list = all.filter(big).sort(bySize)
+      // Boosted organiser listings (paid) are always in their city's weekend post, a couple at most.
+      const boosted = all.filter(r => r.is_featured).slice(0, 2)
+      const picks = onePerAct([...boosted, ...list.filter(r => !r.is_featured)], 6).sort((a, b) => a.start_date.localeCompare(b.start_date))
       if (picks.length < 3) { skipped.push(`This weekend in ${city}: only ${picks.length} shows`); continue }
       const items: ListItem[] = picks.map(r => ({ title: actName(displayTitle(r.title)), line: `${when(r.start_date)}${r.venue_name ? ` · ${r.venue_name}` : ''}` }))
       await save(buildWeekendDraft({ weekKey: week, city, items }), `This weekend in ${city} (${picks.length})`)
