@@ -18,7 +18,7 @@ export default async function ListYourEventPage({ searchParams }: { searchParams
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
           <p className="text-xs font-extrabold uppercase tracking-widest text-[#E8003D]">For promoters, venues and bands</p>
           <h1 className="mt-2 text-3xl sm:text-5xl font-extrabold leading-tight">Get your event in front of people looking for something to do</h1>
-          <p className="mt-4 text-lg text-white/80">TheShowFinder lists what’s on in 36 UK cities. Add your gig, club night, comedy show or local event in two minutes. It’s free, and your tickets stay on your own ticket page.</p>
+          <p className="mt-4 text-lg text-white/80">TheShowFinder lists what’s on in {CITIES.length} UK cities. Add your gig, club night, comedy show or local event in two minutes. It’s free, and your tickets stay on your own ticket page.</p>
           <ul className="mt-6 grid sm:grid-cols-3 gap-3 text-sm">
             <li className="rounded-2xl bg-white/10 p-4"><strong className="block text-base">Free listing</strong>Your city page, venue page and search</li>
             <li className="rounded-2xl bg-white/10 p-4"><strong className="block text-base">Boost £9.95</strong>Featured until the night, socials and the weekly email</li>
