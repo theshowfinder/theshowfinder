@@ -66,7 +66,7 @@ export default function ListEventForm({ cities, initialCity }: { cities: string[
           <p className={label}>How do people get tickets?</p>
           <input type="hidden" name="ticketing" value={ticketing} />
           <div className="grid sm:grid-cols-3 gap-2">
-            {([['link', 'On my own ticket site', 'Eventbrite, Skiddle, your website…'], ['paid', 'Sell tickets with TheShowFinder', 'Cheaper than Eventbrite. Paid to your bank after the event.'], ['free', 'Free tickets through TheShowFinder', 'QR tickets by email, scan them at the door. Free.']] as const).map(([v, t, b]) => (
+            {([['link', 'On my own ticket site', 'Eventbrite, Skiddle, your website…'], ['paid', 'Sell tickets with TheShowFinder', 'Lower fees than Eventbrite. Paid straight to your bank.'], ['free', 'Free tickets through TheShowFinder', 'QR tickets by email, scan them at the door. Free.']] as const).map(([v, t, b]) => (
               <button key={v} type="button" onClick={() => setTicketing(v)} aria-pressed={ticketing === v}
                 className={`text-left rounded-2xl border-2 p-3 ${ticketing === v ? 'border-[#E8003D] bg-red-50/40' : 'border-slate-200 bg-white'}`}>
                 <span className="block font-extrabold text-slate-900 text-sm">{t}</span>
@@ -128,12 +128,11 @@ export default function ListEventForm({ cities, initialCity }: { cities: string[
 // You get your full ticket price; the buyer pays our booking fee on top (6% + 49p, all-in), compared with Eventbrite.
 function FeeNote({ price }: { price: string }) {
   const p = parsePricePence(price)
-  if (!p) return <p className="text-xs text-slate-500 -mt-1">You get your full ticket price. Buyers pay a booking fee of 6% + 49p a ticket (Eventbrite: 6.95% + 59p). Stripe pays your takings into your bank, usually a few days after each sale.</p>
+  if (!p) return <p className="text-xs text-slate-500 -mt-1">You get your full ticket price. Buyers pay a booking fee of 6% + 49p a ticket, lower than Eventbrite. Stripe pays your takings into your bank, usually a few days after each sale.</p>
   const fee = bookingFeePence(p)
-  const eb = Math.round(p * 0.0695) + 59
   return (
     <p className="text-xs text-slate-600 -mt-1">
-      You get <strong>{gbpFromPence(p)}</strong> a ticket. Buyers pay {gbpFromPence(p + fee)} ({gbpFromPence(fee)} booking fee{eb > fee ? `, ${gbpFromPence(eb - fee)} less than Eventbrite’s` : ''}). Stripe pays it into your bank a few days after each sale. You set up payouts with Stripe after listing.
+      You get <strong>{gbpFromPence(p)}</strong> a ticket. Buyers pay {gbpFromPence(p + fee)} ({gbpFromPence(fee)} booking fee, lower than Eventbrite). Stripe pays it into your bank a few days after each sale. You set up payouts with Stripe after listing.
     </p>
   )
 }
