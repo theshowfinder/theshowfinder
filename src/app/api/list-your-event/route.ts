@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { CITIES } from '@/lib/cities'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { validateSubmission, autoApproveCheck, MAX_SUBMISSIONS_PER_DAY, type BoostChoice } from '@/lib/organiserEvents'
-import { getOrCreateOrganiser, publishSubmission, createOrganiserCheckout, startDateIso, emailOrganiser, boostLink, promoterActive, placeListing, SITE } from '@/lib/organiserPublish'
+import { getOrCreateOrganiser, publishSubmission, createOrganiserCheckout, startDateIso, emailOrganiser, boostLink, doorLink, promoterActive, placeListing, SITE } from '@/lib/organiserPublish'
 import { resend, FROM_EMAIL } from '@/lib/resend'
 
 export const runtime = 'nodejs'
@@ -28,6 +28,7 @@ export async function POST(request: Request) {
       title: str(form.get('title')), category: str(form.get('category')), date: str(form.get('date')), time: str(form.get('time')),
       venueName: str(form.get('venue_name')), city: str(form.get('city')), postcode: str(form.get('postcode')),
       ticketUrl: str(form.get('ticket_url')), priceFrom: str(form.get('price_from')), description: str(form.get('description')),
+      ticketing: str(form.get('ticketing')), freeCapacity: str(form.get('free_capacity')),
     }, CITIES.map(c => c.name))
     if (!checked.ok) return NextResponse.json({ error: checked.error }, { status: 400 })
     const s = checked.value
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
     const check = autoApproveCheck(s)
     const { data: sub, error } = await loose.from('event_submissions').insert({
       organiser_id: organiser.id, title: s.title, category: s.category, start_date: startDateIso(s), venue_name: s.venueName,
-      city: place.city, town: s.city, postcode: s.postcode, ticket_url: s.ticketUrl, price_from: s.priceFrom, description: s.description,
+      city: place.city, town: s.city, postcode: s.postcode, ticket_url: s.ticketUrl, free_capacity: s.freeCapacity, price_from: s.priceFrom, description: s.description,
       image_url: imageUrl, review_reason: check.reason, boost: boost === 'none' ? null : boost,
     }).select('id, manage_token').single()
     if (error || !sub) throw new Error(`could not save the event: ${error?.message}`)
@@ -70,7 +71,7 @@ export async function POST(request: Request) {
       // Needs a look: tell Chris (one email per submission, with the reason).
       await resend.emails.send({
         from: FROM_EMAIL, to: 'hello@theshowfinder.com', subject: `Event listing to check: ${s.title}`,
-        text: `${s.organiserName} (${s.email}) listed "${s.title}" at ${s.venueName}, ${s.city} (${s.postcode}, shows on ${place.city}) on ${s.date} ${s.time}.\nWhy it needs a look: ${check.reason}\nTicket link: ${s.ticketUrl}\n\nApprove or reject (one tap): ${SITE}/admin/event-submissions`,
+        text: `${s.organiserName} (${s.email}) listed "${s.title}" at ${s.venueName}, ${s.city} (${s.postcode}, shows on ${place.city}) on ${s.date} ${s.time}.\nWhy it needs a look: ${check.reason}\nTicket link: ${s.ticketUrl ?? `none (${s.freeCapacity} free tickets through us)`}\n\nApprove or reject (one tap): ${SITE}/admin/event-submissions`,
       }).catch(err => console.error('[list-your-event] admin email failed', err))
     }
 
@@ -79,10 +80,13 @@ export async function POST(request: Request) {
       `Hi ${s.organiserName},`,
       live ? `Thanks for listing "${s.title}" on TheShowFinder. It's live now: ${live}` : `Thanks for listing "${s.title}" on TheShowFinder. We'll check it and it will usually be live within a day.`,
       place.nearOf
-        ? `It shows on our ${place.city} page (the nearest of our city pages to ${place.nearOf}), the venue page and in search, with a button straight to your ticket page.`
-        : 'Every listing shows on your city page, the venue page and in search, with a button straight to your ticket page.',
+        ? `It shows on our ${place.city} page (the nearest of our city pages to ${place.nearOf}), the venue page and in search${s.freeCapacity ? '' : ', with a button straight to your ticket page'}.`
+        : `Every listing shows on your city page, the venue page and in search${s.freeCapacity ? '' : ', with a button straight to your ticket page'}.`,
       boost === 'none' && !promoterActive(organiser)
         ? `Want more people to see it? Boost it for £9.95 and it's featured at the top of your city page, in "This weekend", our social posts and the weekly email, right up to the night: ${boostLink(sub.id, sub.manage_token)}`
+        : '',
+      s.freeCapacity
+        ? `Your ${s.freeCapacity} free tickets are claimed on your event page. Each person gets a QR ticket by email. On the night, open this link on your phone to scan tickets at the door and see who's coming (keep it private): ${doorLink(sub.id, sub.manage_token)}`
         : '',
       'Any questions, just reply to this email.',
       'Chris, TheShowFinder',

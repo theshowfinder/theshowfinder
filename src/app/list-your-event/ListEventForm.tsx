@@ -11,6 +11,7 @@ export default function ListEventForm({ cities, initialCity }: { cities: string[
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [boost, setBoost] = useState<'none' | 'boost' | 'promoter'>('boost')
+  const [ticketing, setTicketing] = useState<'link' | 'free'>('link')
   const [startedAt] = useState(() => String(Date.now()))
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -59,8 +60,28 @@ export default function ListEventForm({ cities, initialCity }: { cities: string[
           <div><label className={label} htmlFor="postcode">Venue postcode</label><input id="postcode" name="postcode" required maxLength={10} className={input} placeholder="DE7 5RP" autoComplete="postal-code" /></div>
         </div>
         <p className="text-xs text-slate-500 -mt-2">Anywhere in the UK. Events outside our city pages show on the nearest one, so people nearby still find them.</p>
-        <div><label className={label} htmlFor="ticket_url">Where people buy tickets or book</label><input id="ticket_url" name="ticket_url" required className={input} placeholder="Your Eventbrite, Skiddle, Ticket Tailor or website link" /></div>
-        <div><label className={label} htmlFor="price_from">Tickets from (£, optional)</label><input id="price_from" name="price_from" inputMode="decimal" className={input} placeholder="e.g. 12.50, or 0 if free" /></div>
+        <div>
+          <p className={label}>How do people get tickets?</p>
+          <input type="hidden" name="ticketing" value={ticketing} />
+          <div className="grid sm:grid-cols-2 gap-2">
+            {([['link', 'On my own ticket site', 'Eventbrite, Skiddle, your website…'], ['free', 'Free tickets through TheShowFinder', 'QR tickets by email, scan them at the door. Free.']] as const).map(([v, t, b]) => (
+              <button key={v} type="button" onClick={() => setTicketing(v)} aria-pressed={ticketing === v}
+                className={`text-left rounded-2xl border-2 p-3 ${ticketing === v ? 'border-[#E8003D] bg-red-50/40' : 'border-slate-200 bg-white'}`}>
+                <span className="block font-extrabold text-slate-900 text-sm">{t}</span>
+                <span className="block text-xs text-slate-600 mt-0.5">{b}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        {ticketing === 'free' ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={label} htmlFor="free_capacity">How many tickets?</label><input id="free_capacity" name="free_capacity" type="number" min={1} max={5000} required inputMode="numeric" className={input} placeholder="e.g. 150" /></div>
+            <div><label className={label} htmlFor="ticket_url">Event web page <span className="font-normal text-slate-500">(optional)</span></label><input id="ticket_url" name="ticket_url" className={input} placeholder="Facebook event or website" /></div>
+          </div>
+        ) : (
+          <div><label className={label} htmlFor="ticket_url">Where people buy tickets or book</label><input id="ticket_url" name="ticket_url" required className={input} placeholder="Your Eventbrite, Skiddle, Ticket Tailor or website link" /></div>
+        )}
+        {ticketing === 'link' && <div><label className={label} htmlFor="price_from">Tickets from (£, optional)</label><input id="price_from" name="price_from" inputMode="decimal" className={input} placeholder="e.g. 12.50, or 0 if free" /></div>}
         <div><label className={label} htmlFor="description">Tell people about it (optional)</label><textarea id="description" name="description" maxLength={1200} rows={4} className={`${input} py-3`} placeholder="Who’s playing, what to expect, dress code…" /></div>
         <div><label className={label} htmlFor="image">Photo or poster (optional, JPG/PNG up to 5MB)</label><input id="image" name="image" type="file" accept="image/png,image/jpeg,image/webp" className="block w-full text-sm" /></div>
       </fieldset>

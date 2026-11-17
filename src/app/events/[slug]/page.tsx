@@ -59,6 +59,7 @@ import { dropDuplicateEvents } from '@/lib/listedEvents'
 import { isSeeTicketsRunPage } from '@/lib/seeTicketsWestEnd'
 import { isEventPast } from '@/lib/pastEvents'
 import { isListingAddon } from '@/lib/listingAddons'
+import ClaimTickets from '@/components/tickets/ClaimTickets'
 import { buildSiblingOffers, type SiblingEvent, type SiblingOffer } from '@/lib/eventOffers'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -565,6 +566,12 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ? ((await (createPublicClient() as any).from('events').select('organisers(name, slug, website)').eq('id', event.id).maybeSingle())?.data?.organisers ?? null) as { name: string; slug: string; website: string | null } | null
     : null
+  // Tickets through TheShowFinder (free for now): the box on the page claims them; what's left is fetched live.
+  const ourTicketTypes = isOrganiserListing
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? (((await (createPublicClient() as any).from('ticket_types').select('id, name, price_pence, max_per_order, sort').eq('event_id', event.id).order('sort'))?.data ?? []) as { id: string; name: string; price_pence: number; max_per_order: number }[])
+    : []
+  const hasOurTickets = ourTicketTypes.length > 0
   const ownLink = event.own_ticket_url && !isGigsbergUrl(event.own_ticket_url) ? event.own_ticket_url : null
   const ownTicketUrl = isLocalListing ? null : ownLink
   // A merged council / tourism copy's page is kept in info_links: offered only when no seller sells this show.
@@ -769,7 +776,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                   className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm md:inline-flex md:gap-2 md:text-lg md:px-8 md:py-4 md:min-h-0 md:shadow-lg"
                   style={{ backgroundColor: '#E8003D' }}
                 >
-                  {localListingUrl ? (isOrganiserListing ? 'Get Tickets ↓' : 'Event details & booking ↓') : 'Get Tickets ↗'}
+                  {hasOurTickets ? 'Get Free Tickets ↓' : localListingUrl ? (isOrganiserListing ? 'Get Tickets ↓' : 'Event details & booking ↓') : 'Get Tickets ↗'}
                 </a>
               )}
             </div>
@@ -1162,7 +1169,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 </p>
                 <p className="text-slate-500 text-sm mt-2">Check below for resale options</p>
               </div>
-            ) : primary.length === 0 && localListingUrl ? null : (
+            ) : primary.length === 0 && (localListingUrl || hasOurTickets) ? null : (
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                 <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-4">{event.tickets_url ? 'Official Tickets' : 'Ticket Marketplace'}</h3>
                 <div className="flex flex-col gap-3">
@@ -1240,6 +1247,11 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 Resale tickets may be priced above face value. Always check the seller&apos;s terms.
               </p>
             </div>
+            )}
+
+            {/* Free tickets through TheShowFinder: claim here, QR tickets by email. */}
+            {hasOurTickets && !isCancelledOrPostponed && !isEventPast(event.start_date) && (
+              <ClaimTickets eventTitle={event.title} types={ourTicketTypes.map(t => ({ id: t.id, name: t.name, maxPerOrder: t.max_per_order }))} />
             )}
 
             {/* Local listing (council / tourism board): the organiser's page for times, prices and booking. */}

@@ -67,7 +67,7 @@ async function resolveVenue(db: Db, name: string, city: string, postcode: string
 
 interface SubmissionRow {
   id: string; organiser_id: string; title: string; category: string; start_date: string; venue_name: string; city: string
-  postcode: string | null; town: string | null; ticket_url: string; price_from: number | null; description: string | null; image_url: string | null
+  postcode: string | null; town: string | null; ticket_url: string | null; free_capacity: number | null; price_from: number | null; description: string | null; image_url: string | null
   status: string; event_id: string | null; boost: string | null; boost_paid_at: string | null; manage_token: string
 }
 
@@ -102,6 +102,11 @@ export async function publishSubmission(db: Db, submissionId: string): Promise<s
     newly_announced: true,
   } as never).select('id, slug').single() as unknown as { data: { id: string; slug: string } | null; error: { message: string } | null }
   if (error || !ev) throw new Error(`could not create listing: ${error?.message}`)
+  // Free tickets through TheShowFinder: one ticket type; claims are checked and counted in claim_free_tickets().
+  if (sub.free_capacity) {
+    const { error: ttErr } = await loose(db).from('ticket_types').insert({ event_id: ev.id, name: 'Free ticket', price_pence: 0, capacity: sub.free_capacity })
+    if (ttErr) throw new Error(`could not set up tickets: ${ttErr.message}`)
+  }
   await loose(db).from('event_submissions').update({ status: 'approved', event_id: ev.id, reviewed_at: new Date().toISOString() }).eq('id', sub.id)
   if (featured) await queueBoostSocialPost(db, ev.id)
   const cityPath = cityPagePath(sub.city)
@@ -224,6 +229,11 @@ export async function placeListing(town: string, postcode: string, cities: strin
     if (near.name && near.km <= SOURCE_REACH_KM) return { city: near.name, nearOf: town }
   }
   return { city: town, nearOf: null }
+}
+
+/** The organiser's door scanner and attendee list, unlocked by the listing's private manage token. */
+export function doorLink(submissionId: string, token: string): string {
+  return `${SITE}/tickets/door?s=${submissionId}&t=${token}`
 }
 
 export function startDateIso(s: Pick<CleanSubmission, 'date' | 'time'>): string {

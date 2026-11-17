@@ -47,3 +47,16 @@ test('known ticket sites go live straight away; others wait for a look', () => {
   assert.equal(autoApproveCheck({ ...ok.value, title: 'Festival 2027 - Car Parking' }).approve, false)
   assert.equal(hostOf('https://www.Eventbrite.co.uk/e/1'), 'eventbrite.co.uk')
 })
+
+test('free tickets through TheShowFinder need no ticket link', () => {
+  const free = validateSubmission({ ...base, ticketUrl: '', ticketing: 'free', freeCapacity: '150' }, cities, now)
+  assert.ok(free.ok)
+  if (free.ok) {
+    assert.equal(free.value.freeCapacity, 150)
+    assert.equal(free.value.ticketUrl, null)
+    assert.equal(free.value.priceFrom, 0)
+    assert.equal(autoApproveCheck(free.value).approve, true)
+  }
+  assert.equal(validateSubmission({ ...base, ticketUrl: '', ticketing: 'free', freeCapacity: '0' }, cities, now).ok, false)
+  assert.equal(validateSubmission({ ...base, ticketUrl: '', ticketing: 'link' }, cities, now).ok, false)
+})

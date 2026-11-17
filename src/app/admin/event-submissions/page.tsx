@@ -6,7 +6,7 @@ import { approveSubmissionAction, rejectSubmissionAction } from './actions'
 export const dynamic = 'force-dynamic'
 
 type Row = {
-  id: string; title: string; category: string; start_date: string; venue_name: string; city: string; town: string | null; postcode: string | null; ticket_url: string
+  id: string; title: string; category: string; start_date: string; venue_name: string; city: string; town: string | null; postcode: string | null; ticket_url: string | null; free_capacity: number | null
   description: string | null; image_url: string | null; review_reason: string | null; boost: string | null; boost_paid_at: string | null; created_at: string
   organisers: { name: string; email: string; website: string | null; plan: string } | null
 }
@@ -21,7 +21,7 @@ export default async function EventSubmissionsPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const loose = db as any
   const { data, error } = await loose.from('event_submissions')
-    .select('id, title, category, start_date, venue_name, city, town, postcode, ticket_url, description, image_url, review_reason, boost, boost_paid_at, created_at, organisers(name, email, website, plan)')
+    .select('id, title, category, start_date, venue_name, city, town, postcode, ticket_url, free_capacity, description, image_url, review_reason, boost, boost_paid_at, created_at, organisers(name, email, website, plan)')
     .eq('status', 'pending').order('created_at', { ascending: true }).limit(100)
   const rows = (data ?? []) as Row[]
   const { count: liveCount } = await loose.from('event_submissions').select('id', { count: 'exact', head: true }).eq('status', 'approved')
@@ -47,7 +47,8 @@ export default async function EventSubmissionsPage() {
               {r.review_reason && <p className="text-xs font-extrabold uppercase tracking-widest text-amber-700">{r.review_reason}</p>}
               <p className="font-extrabold text-slate-900">{r.title}{r.boost_paid_at && <span className="ml-2 text-xs rounded-full bg-green-100 text-green-800 px-2 py-0.5">BOOST PAID</span>}</p>
               <p className="text-sm text-slate-600">{when(r.start_date)} · {r.venue_name}, {r.town ?? r.city}{r.postcode ? ` ${r.postcode}` : ''}{r.town && r.town !== r.city ? ` (shows on ${r.city})` : ''} · {r.category}</p>
-              <p className="text-sm"><a href={r.ticket_url} target="_blank" rel="noopener noreferrer nofollow" className="underline break-all">{r.ticket_url}</a></p>
+              {r.ticket_url && <p className="text-sm"><a href={r.ticket_url} target="_blank" rel="noopener noreferrer nofollow" className="underline break-all">{r.ticket_url}</a></p>}
+              {r.free_capacity && <p className="text-sm font-semibold">{r.free_capacity} free tickets through TheShowFinder</p>}
               {r.description && <p className="text-sm text-slate-600 whitespace-pre-line">{r.description}</p>}
               {r.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element

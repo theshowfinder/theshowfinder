@@ -27,20 +27,29 @@ test('root layout does not set a site-wide canonical', () => {
 // through its metadata helper).
 const NO_CANONICAL = [/\/admin\//, /\/login\/page\.tsx$/, /\/signup\/page\.tsx$/, /\/saved\/page\.tsx$/]
 // Pages whose metadata is built by a shared helper that sets the canonical.
-const HELPER_PAGES = [/\/venues\/\[slug\]\/page\.tsx$/, /\/venues\/\[slug\]\/p\/\[n\]\/page\.tsx$/, /\/on-sale-this-week\/\[slug\]\/page\.tsx$/, /\/on-sale-this-week\/\[slug\]\/in\/\[city\]\/page\.tsx$/]
+const HELPER_PAGES = [/\/venues\/\[slug\]\/page\.tsx$/, /\/venues\/\[slug\]\/p\/\[n\]\/page\.tsx$/, /\/on-sale-this-week\/\[slug\]\/page\.tsx$/, /\/on-sale-this-week\/\[slug\]\/in\/\[city\]\/page\.tsx$/, /\/artists\/\[slug\]\/page\.tsx$/, /\/artists\/\[slug\]\/in\/\[city\]\/page\.tsx$/]
 
 test('every public page sets its own canonical', () => {
   const missing = walk(APP).filter(f => {
     const rel = f.replace(APP, '')
     if (NO_CANONICAL.some(r => r.test(rel))) return false
     if (HELPER_PAGES.some(r => r.test(rel))) return false
-    return !/canonical/.test(readFileSync(f, 'utf8'))
+    const src = readFileSync(f, 'utf8')
+    // A private page that tells search engines not to index it needs no canonical.
+    // A page that only redirects has nothing to canonicalise.
+    if (!/export\s+(const\s+metadata|async\s+function\s+generateMetadata)/.test(src) && /redirect\(/.test(src) && !/<[A-Za-z]/.test(src)) return false
+    if (/robots\s*:\s*\{\s*index\s*:\s*false/.test(src)) return false
+    return !/canonical/.test(src)
   })
   assert.deepEqual(missing.map(f => f.replace(APP, '')), [])
 })
 
 test('on-sale tour metadata helper sets a canonical', () => {
   assert.match(readFileSync(join(APP, 'on-sale-this-week', '[slug]', 'OnSaleArtistView.tsx'), 'utf8'), /canonical/)
+})
+
+test('artist metadata helper sets a canonical', () => {
+  assert.match(readFileSync(join(APP, 'artists', '[slug]', 'ArtistPageView.tsx'), 'utf8'), /canonical/)
 })
 
 test('venue metadata helper sets a canonical', () => {

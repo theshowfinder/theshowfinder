@@ -48,6 +48,10 @@ export interface SubmissionInput {
   ticketUrl: string
   priceFrom: string
   description: string
+  /** 'free' = free tickets through TheShowFinder (no ticket link needed); anything else = their own ticket link. */
+  ticketing?: string
+  /** How many free tickets, when ticketing is 'free'. */
+  freeCapacity?: string
 }
 
 export interface CleanSubmission {
@@ -62,9 +66,12 @@ export interface CleanSubmission {
   /** The town as typed (tidied), e.g. "Ilkeston"; one of our cities when it is one, spelt our way. */
   city: string
   postcode: string
-  ticketUrl: string
+  /** Their own ticket page; null when people get free tickets through us instead. */
+  ticketUrl: string | null
   priceFrom: number | null
   description: string | null
+  /** Free tickets through TheShowFinder: how many. Null when they sell on their own ticket site. */
+  freeCapacity: number | null
 }
 
 const clip = (s: string, n: number) => s.replace(/\s+/g, ' ').trim().slice(0, n)
@@ -115,7 +122,11 @@ export function validateSubmission(input: SubmissionInput, cities: string[], now
   if (venueName.length < 2) return { ok: false, error: 'Please add the venue name.' }
   if (!city || /https?:|www\./i.test(city)) return { ok: false, error: 'Please add the town or city the venue is in.' }
   if (!UK_POSTCODE.test(postcode)) return { ok: false, error: 'Please add the venue’s postcode, so people can find it (for example DE7 5RP).' }
-  if (!ticketUrl) return { ok: false, error: 'Please add the link where people buy tickets or book.' }
+  const free = input.ticketing === 'free'
+  const freeCapacity = free ? Number(String(input.freeCapacity ?? '').replace(/[,\s]/g, '')) : null
+  if (free && (!Number.isInteger(freeCapacity) || (freeCapacity as number) < 1 || (freeCapacity as number) > 5000)) return { ok: false, error: 'Please say how many free tickets there are (1 to 5,000).' }
+  if (!free && !ticketUrl) return { ok: false, error: 'Please add the link where people buy tickets or book.' }
+  if (free && input.ticketUrl.trim() && !ticketUrl) return { ok: false, error: 'That event link doesn’t look right. Leave it blank if you don’t have one.' }
   if (input.website.trim() && !website) return { ok: false, error: 'That website address doesn’t look right.' }
   if (priceNum !== null && (!Number.isFinite(priceNum) || priceNum < 0 || priceNum > 5000)) return { ok: false, error: 'Please enter the ticket price as a number, for example 12.50, or leave it blank.' }
 
@@ -129,7 +140,7 @@ export function validateSubmission(input: SubmissionInput, cities: string[], now
     ok: true,
     value: {
       organiserName, email, website, title, category, date: input.date, time: input.time, venueName, city,
-      postcode, ticketUrl, priceFrom: priceNum, description,
+      postcode, ticketUrl, priceFrom: free ? 0 : priceNum, description, freeCapacity: free ? freeCapacity : null,
     },
   }
 }
@@ -143,7 +154,8 @@ export function autoApproveCheck(s: CleanSubmission): { approve: boolean; reason
   const host = hostOf(s.ticketUrl)
   const own = hostOf(s.website)
   const known = !!host && (KNOWN_TICKET_HOSTS.some(h => host === h || host.endsWith(`.${h}`)) || (!!own && host === own))
-  if (!known) return { approve: false, reason: `Ticket link goes to ${host ?? 'an unknown site'}, not a ticket site we know` }
+  // Free tickets through us need no outside ticket link; an extra info link must still be one we recognise.
+  if (!known && !(s.freeCapacity && !s.ticketUrl)) return { approve: false, reason: `Ticket link goes to ${host ?? 'an unknown site'}, not a ticket site we know` }
   if (isListingAddon(s.title)) return { approve: false, reason: 'Title looks like an add-on (parking, merch, upgrade), not an event' }
   const links = (s.description ?? '').match(/https?:\/\/|www\./gi)?.length ?? 0
   if (links > 2) return { approve: false, reason: 'Description has a lot of web links' }

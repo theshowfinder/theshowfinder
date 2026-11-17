@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Your event listing', robots: { index: false, follow: false } }
 
 type Sub = {
-  id: string; title: string; status: string; boost_paid_at: string | null; start_date: string; manage_token: string
+  id: string; title: string; status: string; boost_paid_at: string | null; start_date: string; manage_token: string; free_capacity: number | null
   events: { slug: string } | null
   organisers: { plan: string; plan_status: string | null } | null
 }
@@ -23,7 +23,7 @@ export default async function ListingDonePage({ searchParams }: { searchParams: 
   if (s && t && /^[0-9a-f-]{36}$/.test(s)) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (createAdminClient() as any).from('event_submissions')
-      .select('id, title, status, boost_paid_at, start_date, manage_token, events(slug), organisers(plan, plan_status)')
+      .select('id, title, status, boost_paid_at, start_date, manage_token, free_capacity, events(slug), organisers(plan, plan_status)')
       .eq('id', s).eq('manage_token', t).maybeSingle()
     sub = data as Sub | null
   }
@@ -48,6 +48,17 @@ export default async function ListingDonePage({ searchParams }: { searchParams: 
           {paid && (live ? ' Your boost is on: it’s featured from now until the night.' : ' Your boost starts as soon as the listing goes live.')}
         </p>
         {live && <Link href={`/events/${sub.events!.slug}`} className="mt-5 inline-flex rounded-xl bg-slate-950 px-5 py-3 text-sm font-extrabold text-white">See your listing →</Link>}
+
+        {live && sub.free_capacity && (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <p className="font-extrabold text-slate-900">Your {sub.free_capacity} free tickets are on</p>
+            <p className="mt-1 text-sm text-slate-600">People claim them on your event page and get a QR ticket by email. On the night, open your door scanner on your phone. It’s also in your email. Keep it private.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link href={`/tickets/door?s=${sub.id}&t=${sub.manage_token}`} className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-extrabold text-white">Door scanner</Link>
+              <a href={`/api/tickets/attendees?s=${sub.id}&t=${sub.manage_token}`} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-extrabold text-slate-900">Attendee list</a>
+            </div>
+          </div>
+        )}
 
         {!boosted && future && sub.status !== 'rejected' && (
           <div className="mt-8 rounded-2xl border-2 p-5" style={{ borderColor: '#E8003D' }}>
