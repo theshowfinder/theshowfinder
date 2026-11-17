@@ -164,6 +164,10 @@
       "schedule": "40 3 * * *"
     },
     {
+      "path": "/api/cron/ticket-payouts",
+      "schedule": "10 6 * * *"
+    },
+    {
       "path": "/api/cron/organiser-find",
       "schedule": "50 7,9,11,13,15 * * 1-5"
     },

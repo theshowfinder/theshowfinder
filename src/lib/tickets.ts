@@ -27,7 +27,7 @@ export function claimErrorMessage(raw: string | null | undefined): string {
   if (m.includes('already_have')) return 'You already have the most tickets one person can get for this event. Check your email for them.'
   if (m.includes('too_many')) return 'That’s more tickets than one person can get for this event.'
   if (m.includes('not_on_sale')) return 'Tickets for this event aren’t available right now.'
-  if (m.includes('not_free') || m.includes('not_found')) return 'That ticket isn’t available.'
+  if (m.includes('not_free') || m.includes('not_paid') || m.includes('not_found')) return 'That ticket isn’t available.'
   return 'Something went wrong. Please try again.'
 }
 
@@ -59,4 +59,38 @@ export function attendeesCsv(rows: { name: string; email: string; ticket: string
   }
   const head = ['Name', 'Email', 'Ticket', 'Code', 'Ordered', 'Checked in'].map(cell).join(',')
   return [head, ...rows.map(r => [r.name, r.email, r.ticket, formatTicketCode(r.code), r.ordered, r.checkedIn ?? ''].map(cell).join(','))].join('\r\n') + '\r\n'
+}
+
+// ── Paid tickets ──────────────────────────────────────────────────────────────────────────────────────────────────
+// Booking fee per ticket, paid by the buyer, all-in (VAT and card processing included): 6% + 49p (Chris, 17 Nov 2026).
+// The same sum is in SQL reserve_paid_tickets() (migration 130); change both together.
+export const FEE_PERCENT = 6
+export const FEE_FIXED_PENCE = 49
+export const MIN_PRICE_PENCE = 100
+export const MAX_PRICE_PENCE = 100_000
+
+export function bookingFeePence(pricePence: number): number {
+  return Math.round(pricePence * FEE_PERCENT / 100) + FEE_FIXED_PENCE
+}
+
+export function orderTotals(pricePence: number, quantity: number): { ticketsPence: number; feePence: number; totalPence: number } {
+  const fee = bookingFeePence(pricePence)
+  return { ticketsPence: pricePence * quantity, feePence: fee * quantity, totalPence: (pricePence + fee) * quantity }
+}
+
+/** UK VAT inside a VAT-inclusive amount (20%): one sixth. */
+export function vatInside(pence: number): number {
+  return Math.round(pence / 6)
+}
+
+export function gbpFromPence(pence: number): string {
+  return `£${(pence / 100).toFixed(2)}`
+}
+
+/** "12.50" / "£12" / "12" -> 1250; null when it isn't a price we sell tickets at (£1 to £1,000). */
+export function parsePricePence(raw: string): number | null {
+  const s = String(raw ?? '').replace(/[£,\s]/g, '')
+  if (!/^\d+(\.\d{1,2})?$/.test(s)) return null
+  const p = Math.round(Number(s) * 100)
+  return p >= MIN_PRICE_PENCE && p <= MAX_PRICE_PENCE ? p : null
 }

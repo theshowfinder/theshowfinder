@@ -27,6 +27,7 @@ const short = () => randomBytes(4).toString('hex')
 export interface OrganiserRow {
   id: string; email: string; name: string; slug: string; website: string | null
   plan: string; plan_status: string | null; stripe_customer_id: string | null; stripe_subscription_id: string | null
+  stripe_account_id?: string | null; stripe_charges_enabled?: boolean; paid_tickets_approved?: boolean
 }
 
 export function promoterActive(o: Pick<OrganiserRow, 'plan' | 'plan_status'> | null | undefined): boolean {
@@ -67,7 +68,7 @@ async function resolveVenue(db: Db, name: string, city: string, postcode: string
 
 interface SubmissionRow {
   id: string; organiser_id: string; title: string; category: string; start_date: string; venue_name: string; city: string
-  postcode: string | null; town: string | null; ticket_url: string | null; free_capacity: number | null; price_from: number | null; description: string | null; image_url: string | null
+  postcode: string | null; town: string | null; ticket_url: string | null; free_capacity: number | null; paid_price_pence: number | null; paid_capacity: number | null; price_from: number | null; description: string | null; image_url: string | null
   status: string; event_id: string | null; boost: string | null; boost_paid_at: string | null; manage_token: string
 }
 
@@ -105,6 +106,11 @@ export async function publishSubmission(db: Db, submissionId: string): Promise<s
   // Free tickets through TheShowFinder: one ticket type; claims are checked and counted in claim_free_tickets().
   if (sub.free_capacity) {
     const { error: ttErr } = await loose(db).from('ticket_types').insert({ event_id: ev.id, name: 'Free ticket', price_pence: 0, capacity: sub.free_capacity })
+    if (ttErr) throw new Error(`could not set up tickets: ${ttErr.message}`)
+  }
+  // Paid tickets: on sale as soon as the organiser's Stripe account can take payments (refreshStripeAccount).
+  if (sub.paid_price_pence && sub.paid_capacity) {
+    const { error: ttErr } = await loose(db).from('ticket_types').insert({ event_id: ev.id, name: 'Ticket', price_pence: sub.paid_price_pence, capacity: sub.paid_capacity, active: !!org?.stripe_charges_enabled })
     if (ttErr) throw new Error(`could not set up tickets: ${ttErr.message}`)
   }
   await loose(db).from('event_submissions').update({ status: 'approved', event_id: ev.id, reviewed_at: new Date().toISOString() }).eq('id', sub.id)
@@ -232,6 +238,10 @@ export async function placeListing(town: string, postcode: string, cities: strin
 }
 
 /** The organiser's door scanner and attendee list, unlocked by the listing's private manage token. */
+export function payoutsLink(submissionId: string, token: string): string {
+  return `${SITE}/api/organisers/stripe-connect?s=${submissionId}&t=${token}`
+}
+
 export function doorLink(submissionId: string, token: string): string {
   return `${SITE}/tickets/door?s=${submissionId}&t=${token}`
 }

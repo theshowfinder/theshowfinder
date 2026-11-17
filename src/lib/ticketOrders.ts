@@ -2,7 +2,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resend, FROM_EMAIL } from '@/lib/resend'
 import { formatShareWhen } from '@/lib/shareText'
-import { formatTicketCode } from '@/lib/tickets'
+import { formatTicketCode, gbpFromPence, vatInside } from '@/lib/tickets'
 
 export const SITE = 'https://www.theshowfinder.com'
 
@@ -12,6 +12,7 @@ const loose = (db: Db) => db as any
 
 export type LoadedOrder = {
   id: string; buyer_name: string; buyer_email: string; quantity: number; status: string; access_token: string; created_at: string
+  ticketPricePence: number; feePence: number; totalPence: number; organiserName: string | null
   event: { id: string; title: string; slug: string; start_date: string; status: string; venue: { name: string; city: string; postcode: string | null } | null }
   ticketType: { name: string }
   tickets: { code: string; checked_in_at: string | null }[]
@@ -25,16 +26,22 @@ export function orderLink(orderId: string, token: string): string {
 export async function loadOrder(db: Db, orderId: string, token: string): Promise<LoadedOrder | null> {
   if (!/^[0-9a-f-]{36}$/i.test(orderId) || !/^[0-9a-f]{32}$/i.test(token)) return null
   const { data } = await loose(db).from('ticket_orders')
-    .select('id, buyer_name, buyer_email, quantity, status, access_token, created_at, ticket_types(name), events(id, title, slug, start_date, status, venues(name, city, postcode)), tickets(code, checked_in_at, created_at)')
+    .select('id, buyer_name, buyer_email, quantity, status, access_token, created_at, ticket_price_pence, fee_pence, total_pence, ticket_types(name), events(id, title, slug, start_date, status, venues(name, city, postcode), organisers(name)), tickets(code, checked_in_at, created_at)')
     .eq('id', orderId).eq('access_token', token).maybeSingle()
   if (!data || !data.events) return null
   const ev = data.events
   return {
     id: data.id, buyer_name: data.buyer_name, buyer_email: data.buyer_email, quantity: data.quantity, status: data.status, access_token: data.access_token, created_at: data.created_at,
+    ticketPricePence: data.ticket_price_pence ?? 0, feePence: data.fee_pence ?? 0, totalPence: data.total_pence ?? 0, organiserName: ev.organisers?.name ?? null,
     event: { id: ev.id, title: ev.title, slug: ev.slug, start_date: ev.start_date, status: ev.status, venue: ev.venues ?? null },
     ticketType: { name: data.ticket_types?.name ?? 'Ticket' },
     tickets: [...(data.tickets ?? [])].sort((a: { created_at: string; code: string }, b: { created_at: string; code: string }) => a.created_at.localeCompare(b.created_at) || a.code.localeCompare(b.code)),
   }
+}
+
+/** "Paid £32.78: 2 × £15.00 tickets (sold by X) + £2.78 TheShowFinder booking fee (incl. £0.46 VAT)." */
+export function paidSummary(o: Pick<LoadedOrder, 'quantity' | 'ticketPricePence' | 'feePence' | 'totalPence' | 'organiserName'>): string {
+  return `Paid ${gbpFromPence(o.totalPence)}: ${o.quantity} × ${gbpFromPence(o.ticketPricePence)} ticket${o.quantity === 1 ? '' : 's'} (sold by ${o.organiserName ?? 'the organiser'}) + ${gbpFromPence(o.feePence)} TheShowFinder booking fee (incl. ${gbpFromPence(vatInside(o.feePence))} VAT).`
 }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -52,6 +59,7 @@ export async function emailTickets(o: LoadedOrder): Promise<void> {
     [when, where].filter(Boolean).join(' · '),
     `Open your tickets on your phone and show the QR code at the door: ${link}`,
     ...o.tickets.map((t, i) => `Ticket ${i + 1}: ${formatTicketCode(t.code)}`),
+    ...(o.totalPence > 0 ? [paidSummary(o)] : []),
     `Event details: ${SITE}/events/${o.event.slug}`,
     'Can’t go any more? Just reply to this email and we’ll let the organiser know, so someone else can have your place.',
     'TheShowFinder',
@@ -68,9 +76,10 @@ export async function emailTickets(o: LoadedOrder): Promise<void> {
     <p style="margin:0 0 16px;color:#475569">${esc([when, where].filter(Boolean).join(' · '))}</p>
     <p style="margin:0 0 16px"><a href="${link}" style="display:inline-block;background:#E8003D;color:#fff;font-weight:bold;text-decoration:none;padding:12px 20px;border-radius:12px">Open my ${n === 1 ? 'ticket' : 'tickets'}</a></p>
     ${ticketsHtml}
+    ${o.totalPence > 0 ? `<p style="margin:16px 0 12px;color:#475569;font-size:13px">${esc(paidSummary(o))}</p>` : ''}
     <p style="margin:16px 0 12px;color:#475569">Show the QR code at the door, on your phone or printed. Each code works once.</p>
     <p style="margin:0 0 12px;color:#475569">Can’t go any more? Just reply to this email and we’ll let the organiser know, so someone else can have your place.</p>
-    <p style="margin:0;color:#94A3B8;font-size:12px">Free tickets through TheShowFinder · <a href="${SITE}/events/${o.event.slug}">Event details</a></p>
+    <p style="margin:0;color:#94A3B8;font-size:12px">${o.totalPence > 0 ? `Sold by ${esc(o.organiserName ?? 'the organiser')} through TheShowFinder` : 'Free tickets through TheShowFinder'} · <a href="${SITE}/events/${o.event.slug}">Event details</a></p>
   </div>`
   const { error } = await resend.emails.send({ from: FROM_EMAIL, to: o.buyer_email, subject, text, html })
   if (error) console.error('[tickets] email failed', error)

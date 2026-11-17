@@ -28,6 +28,7 @@ export const JOB_EXPECTATIONS: Record<string, { label: string; maxHoursSinceSucc
   'festival-lineups':          { label: 'Festival line-ups',             maxHoursSinceSuccess: 30 },
   'listing-check':             { label: 'Listings check',                maxHoursSinceSuccess: 30 },
   'organiser-boosts':          { label: 'Organiser boosts',              maxHoursSinceSuccess: 30 },
+  'ticket-payouts':            { label: 'Organiser ticket payouts',      maxHoursSinceSuccess: 30 },
   'organiser-find':            { label: 'Organiser finder (weekdays)',   maxHoursSinceSuccess: 80 },
   'news-alerts':               { label: 'Just-announced alerts',         maxHoursSinceSuccess: 16 },
   'health-check':              { label: 'Health check (this alert job)', maxHoursSinceSuccess: 14 },

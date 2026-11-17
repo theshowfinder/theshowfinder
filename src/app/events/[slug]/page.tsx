@@ -580,9 +580,12 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   // Tickets through TheShowFinder (free for now): the box on the page claims them; what's left is fetched live.
   const ourTicketTypes = isOrganiserListing
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? (((await (createPublicClient() as any).from('ticket_types').select('id, name, price_pence, max_per_order, sort').eq('event_id', event.id).order('sort'))?.data ?? []) as { id: string; name: string; price_pence: number; max_per_order: number }[])
+    ? (((await (createPublicClient() as any).from('ticket_types').select('id, name, price_pence, max_per_order, sort, active').eq('event_id', event.id).order('sort'))?.data ?? []) as { id: string; name: string; price_pence: number; max_per_order: number; active: boolean }[])
     : []
+  // Paid tickets wait until the organiser's Stripe account can take payments (then active).
+  const onSaleTypes = ourTicketTypes.filter(t => t.active)
   const hasOurTickets = ourTicketTypes.length > 0
+  const ourTicketsPaid = ourTicketTypes.some(t => t.price_pence > 0)
   const ownLink = event.own_ticket_url && !isGigsbergUrl(event.own_ticket_url) ? event.own_ticket_url : null
   const ownTicketUrl = isLocalListing ? null : ownLink
   // A merged council / tourism copy's page is kept in info_links: offered only when no seller sells this show.
@@ -787,7 +790,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                   className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm md:inline-flex md:gap-2 md:text-lg md:px-8 md:py-4 md:min-h-0 md:shadow-lg"
                   style={{ backgroundColor: '#E8003D' }}
                 >
-                  {hasOurTickets ? 'Get Free Tickets ↓' : localListingUrl ? (isOrganiserListing ? 'Get Tickets ↓' : 'Event details & booking ↓') : 'Get Tickets ↗'}
+                  {hasOurTickets ? (ourTicketsPaid ? 'Get Tickets ↓' : 'Get Free Tickets ↓') : localListingUrl ? (isOrganiserListing ? 'Get Tickets ↓' : 'Event details & booking ↓') : 'Get Tickets ↗'}
                 </a>
               )}
             </div>
@@ -1262,7 +1265,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
             {/* Free tickets through TheShowFinder: claim here, QR tickets by email. */}
             {hasOurTickets && !isCancelledOrPostponed && !isEventPast(event.start_date) && (
-              <ClaimTickets eventTitle={event.title} types={ourTicketTypes.map(t => ({ id: t.id, name: t.name, maxPerOrder: t.max_per_order }))} />
+              onSaleTypes.length > 0
+                ? <ClaimTickets eventTitle={event.title} types={onSaleTypes.map(t => ({ id: t.id, name: t.name, maxPerOrder: t.max_per_order, pricePence: t.price_pence }))} />
+                : <div id="tickets" className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm"><h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">Tickets</h3><p className="text-sm text-slate-600">Tickets go on sale here soon.</p></div>
             )}
 
             {/* Local listing (council / tourism board): the organiser's page for times, prices and booking. */}

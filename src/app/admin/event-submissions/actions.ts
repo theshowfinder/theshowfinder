@@ -3,22 +3,28 @@
 import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { publishSubmission, emailOrganiser, boostLink, SITE } from '@/lib/organiserPublish'
+import { publishSubmission, emailOrganiser, boostLink, payoutsLink, SITE } from '@/lib/organiserPublish'
 
 export async function approveSubmissionAction(formData: FormData) {
   await requireAdmin()
   const id = String(formData.get('id') ?? '')
   if (!id) return
   const db = createAdminClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pre = await (db as any).from('event_submissions').select('organiser_id, paid_price_pence').eq('id', id).maybeSingle()
+  // Approving an organiser's paid-ticket event approves them for paid tickets from now on.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (pre.data?.paid_price_pence) await (db as any).from('organisers').update({ paid_tickets_approved: true }).eq('id', pre.data.organiser_id)
   const slug = await publishSubmission(db, id)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: sub } = await (db as any).from('event_submissions').select('title, manage_token, boost_paid_at, organisers(email, name, plan, plan_status)').eq('id', id).maybeSingle()
+  const { data: sub } = await (db as any).from('event_submissions').select('title, manage_token, boost_paid_at, paid_price_pence, organisers(email, name, plan, plan_status, stripe_charges_enabled)').eq('id', id).maybeSingle()
   const o = sub?.organisers
   if (o?.email && slug) {
     const boosted = !!sub.boost_paid_at || (o.plan === 'promoter' && o.plan_status === 'active')
     await emailOrganiser(o.email, `Your event is live: ${sub.title}`, [
       `Hi ${o.name},`,
       `Good news: "${sub.title}" is now live on TheShowFinder: ${SITE}/events/${slug}`,
+      sub.paid_price_pence && !o.stripe_charges_enabled ? `Your tickets go on sale as soon as you've set up payouts with Stripe (about 5 minutes): ${payoutsLink(id, sub.manage_token)}` : '',
       boosted ? 'Your boost is on, so it is featured right up to the night.' : `Want more people to see it? Boost it for £9.95: ${boostLink(id, sub.manage_token)}`,
       'Chris, TheShowFinder',
     ])

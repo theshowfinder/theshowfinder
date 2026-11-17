@@ -4,6 +4,7 @@
 // on city pages, "This weekend", social posts and the weekly email.
 // Pure module (no '@/' imports) so it runs under node --test.
 
+import { parsePricePence } from './tickets.ts'
 import { isListingAddon } from './listingAddons.ts'
 
 export const BOOST_PRICE_GBP = 9.95
@@ -48,10 +49,13 @@ export interface SubmissionInput {
   ticketUrl: string
   priceFrom: string
   description: string
-  /** 'free' = free tickets through TheShowFinder (no ticket link needed); anything else = their own ticket link. */
+  /** 'free' / 'paid' = tickets through TheShowFinder (no ticket link needed); anything else = their own ticket link. */
   ticketing?: string
   /** How many free tickets, when ticketing is 'free'. */
   freeCapacity?: string
+  /** Ticket price and how many, when ticketing is 'paid'. */
+  paidPrice?: string
+  paidCapacity?: string
 }
 
 export interface CleanSubmission {
@@ -72,6 +76,9 @@ export interface CleanSubmission {
   description: string | null
   /** Free tickets through TheShowFinder: how many. Null when they sell on their own ticket site. */
   freeCapacity: number | null
+  /** Paid tickets through TheShowFinder: price in pence and how many. Null otherwise. */
+  paidPricePence: number | null
+  paidCapacity: number | null
 }
 
 const clip = (s: string, n: number) => s.replace(/\s+/g, ' ').trim().slice(0, n)
@@ -123,10 +130,15 @@ export function validateSubmission(input: SubmissionInput, cities: string[], now
   if (!city || /https?:|www\./i.test(city)) return { ok: false, error: 'Please add the town or city the venue is in.' }
   if (!UK_POSTCODE.test(postcode)) return { ok: false, error: 'Please add the venue’s postcode, so people can find it (for example DE7 5RP).' }
   const free = input.ticketing === 'free'
+  const paid = input.ticketing === 'paid'
+  const paidPricePence = paid ? parsePricePence(input.paidPrice ?? '') : null
+  const paidCapacity = paid ? Number(String(input.paidCapacity ?? '').replace(/[,\s]/g, '')) : null
+  if (paid && !paidPricePence) return { ok: false, error: 'Please enter the ticket price, between £1 and £1,000 (for example 12.50).' }
+  if (paid && (!Number.isInteger(paidCapacity) || (paidCapacity as number) < 1 || (paidCapacity as number) > 10000)) return { ok: false, error: 'Please say how many tickets you are selling (1 to 10,000).' }
   const freeCapacity = free ? Number(String(input.freeCapacity ?? '').replace(/[,\s]/g, '')) : null
   if (free && (!Number.isInteger(freeCapacity) || (freeCapacity as number) < 1 || (freeCapacity as number) > 5000)) return { ok: false, error: 'Please say how many free tickets there are (1 to 5,000).' }
-  if (!free && !ticketUrl) return { ok: false, error: 'Please add the link where people buy tickets or book.' }
-  if (free && input.ticketUrl.trim() && !ticketUrl) return { ok: false, error: 'That event link doesn’t look right. Leave it blank if you don’t have one.' }
+  if (!free && !paid && !ticketUrl) return { ok: false, error: 'Please add the link where people buy tickets or book.' }
+  if ((free || paid) && input.ticketUrl.trim() && !ticketUrl) return { ok: false, error: 'That event link doesn’t look right. Leave it blank if you don’t have one.' }
   if (input.website.trim() && !website) return { ok: false, error: 'That website address doesn’t look right.' }
   if (priceNum !== null && (!Number.isFinite(priceNum) || priceNum < 0 || priceNum > 5000)) return { ok: false, error: 'Please enter the ticket price as a number, for example 12.50, or leave it blank.' }
 
@@ -140,7 +152,8 @@ export function validateSubmission(input: SubmissionInput, cities: string[], now
     ok: true,
     value: {
       organiserName, email, website, title, category, date: input.date, time: input.time, venueName, city,
-      postcode, ticketUrl, priceFrom: free ? 0 : priceNum, description, freeCapacity: free ? freeCapacity : null,
+      postcode, ticketUrl, priceFrom: free ? 0 : paid ? (paidPricePence as number) / 100 : priceNum, description, freeCapacity: free ? freeCapacity : null,
+      paidPricePence: paid ? paidPricePence : null, paidCapacity: paid ? paidCapacity : null,
     },
   }
 }
@@ -155,7 +168,7 @@ export function autoApproveCheck(s: CleanSubmission): { approve: boolean; reason
   const own = hostOf(s.website)
   const known = !!host && (KNOWN_TICKET_HOSTS.some(h => host === h || host.endsWith(`.${h}`)) || (!!own && host === own))
   // Free tickets through us need no outside ticket link; an extra info link must still be one we recognise.
-  if (!known && !(s.freeCapacity && !s.ticketUrl)) return { approve: false, reason: `Ticket link goes to ${host ?? 'an unknown site'}, not a ticket site we know` }
+  if (!known && !((s.freeCapacity || s.paidPricePence) && !s.ticketUrl)) return { approve: false, reason: `Ticket link goes to ${host ?? 'an unknown site'}, not a ticket site we know` }
   if (isListingAddon(s.title)) return { approve: false, reason: 'Title looks like an add-on (parking, merch, upgrade), not an event' }
   const links = (s.description ?? '').match(/https?:\/\/|www\./gi)?.length ?? 0
   if (links > 2) return { approve: false, reason: 'Description has a lot of web links' }

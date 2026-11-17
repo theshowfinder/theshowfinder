@@ -60,3 +60,16 @@ test('free tickets through TheShowFinder need no ticket link', () => {
   assert.equal(validateSubmission({ ...base, ticketUrl: '', ticketing: 'free', freeCapacity: '0' }, cities, now).ok, false)
   assert.equal(validateSubmission({ ...base, ticketUrl: '', ticketing: 'link' }, cities, now).ok, false)
 })
+
+test('paid tickets through TheShowFinder', () => {
+  const paid = validateSubmission({ ...base, ticketUrl: '', ticketing: 'paid', paidPrice: '£12.50', paidCapacity: '200' }, cities, now)
+  assert.ok(paid.ok)
+  if (paid.ok) {
+    assert.equal(paid.value.paidPricePence, 1250)
+    assert.equal(paid.value.paidCapacity, 200)
+    assert.equal(paid.value.priceFrom, 12.5)
+    assert.equal(paid.value.freeCapacity, null)
+  }
+  assert.equal(validateSubmission({ ...base, ticketUrl: '', ticketing: 'paid', paidPrice: '0.20', paidCapacity: '200' }, cities, now).ok, false)
+  assert.equal(validateSubmission({ ...base, ticketUrl: '', ticketing: 'paid', paidPrice: '10', paidCapacity: '' }, cities, now).ok, false)
+})

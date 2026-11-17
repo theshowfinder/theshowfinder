@@ -166,11 +166,22 @@ export default function TermsPage() {
           <section id="event-listings">
             <h2 className="text-xl font-extrabold text-slate-900 mb-3">Event listings from organisers</h2>
             <p className="text-slate-600 leading-relaxed mb-3">
-              Organisers can list their events on TheShowFinder for free at theshowfinder.com/list-your-event. You must be organising or promoting the event, and the details must be accurate. We check listings and may decline or remove any listing that is inaccurate, misleading, unlawful or not a real public event. Tickets are sold by the organiser on their own ticket page; TheShowFinder does not sell tickets for these events and is not responsible for them.
+              Organisers can list their events on TheShowFinder for free at theshowfinder.com/list-your-event. You must be organising or promoting the event, and the details must be accurate. We check listings and may decline or remove any listing that is inaccurate, misleading, unlawful or not a real public event. Unless the organiser sells tickets through TheShowFinder (below), tickets are sold by the organiser on their own ticket page; TheShowFinder does not sell tickets for those events and is not responsible for them.
             </p>
             <p className="text-slate-600 leading-relaxed">
               A <strong>Boost</strong> (£9.95 per event) features the event on TheShowFinder until the event date, including at the top of the city page and in lists such as &ldquo;This weekend&rdquo;, and it may be included in our social posts and weekly email. The <strong>Promoter plan</strong> (£19.95 a month) boosts every event the organiser lists and includes a promoter page; it renews monthly until cancelled, and you can cancel any time by emailing hello@theshowfinder.com. If we decline a boosted listing we refund the boost in full. Boosts are otherwise non-refundable once the listing is live.
             </p>
+          </section>
+
+          <section id="tickets">
+            <h2 className="text-xl font-extrabold text-slate-900 mb-3">Tickets sold through TheShowFinder</h2>
+            <div className="space-y-3 text-slate-600 leading-relaxed">
+              <p><b>Who sells the ticket.</b> Some organisers sell or give away tickets through TheShowFinder. The organiser is the seller and is responsible for the event; TheShowFinder sells the tickets as the organiser&rsquo;s agent. Payments are taken by Stripe on the organiser&rsquo;s behalf.</p>
+              <p><b>Booking fee.</b> For paid tickets, the buyer pays the ticket price plus a TheShowFinder booking fee of 6% of the ticket price plus 49p per ticket. The fee includes VAT and is shown before you pay. Free tickets have no fee.</p>
+              <p><b>Your tickets.</b> Tickets are sent by email as QR codes and can also be opened from the link in that email. Each code can be used once at the door. Keep your tickets private: anyone with the code can use it.</p>
+              <p><b>Refunds.</b> If an event is cancelled, you get a full refund, including the booking fee. If an event is moved, or for any other request, refunds are at the organiser&rsquo;s discretion; email hello@theshowfinder.com and we will pass it on. Your rights under consumer law are not affected; the 14-day cancellation right for online purchases does not apply to tickets for events on a specific date.</p>
+              <p><b>Organisers.</b> Organisers selling tickets set up a Stripe account for payouts and agree to Stripe&rsquo;s terms. The organiser receives their full ticket price; the booking fee goes to TheShowFinder. Takings are paid to the organiser&rsquo;s bank the day after the event, so that buyers can be refunded if an event is cancelled. Organisers must honour every valid ticket and tell us at once if an event is cancelled or changed. We check an organiser&rsquo;s first paid event before tickets go on sale and may remove any listing or stop sales at any time.</p>
+            </div>
           </section>
 
           <section id="advertising">
