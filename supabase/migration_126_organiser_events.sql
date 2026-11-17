@@ -22,6 +22,8 @@ alter table public.organisers enable row level security;
 -- Public promoter pages read name, slug, bio, logo and links; email and Stripe ids are only read by the server.
 drop policy if exists "Public read promoter organisers" on public.organisers;
 create policy "Public read promoter organisers" on public.organisers for select to anon, authenticated using (plan = 'promoter' and plan_status = 'active');
+-- Email and Stripe ids must never be readable from the browser: no table-wide access, only these columns.
+revoke all on public.organisers from anon, authenticated;
 grant select (id, name, slug, website, bio, logo_url, instagram, facebook, plan, plan_status) on public.organisers to anon, authenticated;
 grant select, insert, update, delete on public.organisers to service_role;
 
@@ -44,13 +46,14 @@ create table if not exists public.event_submissions (
   boost              text check (boost in ('boost', 'promoter')),
   boost_paid_at      timestamptz,
   stripe_session_id  text,
-  manage_token       text not null default encode(gen_random_bytes(16), 'hex'),
+  manage_token       text not null default replace(gen_random_uuid()::text, '-', ''),
   created_at         timestamptz not null default now(),
   reviewed_at        timestamptz
 );
 create index if not exists event_submissions_pending_idx on public.event_submissions (created_at) where status = 'pending';
 create index if not exists event_submissions_organiser_idx on public.event_submissions (organiser_id);
 alter table public.event_submissions enable row level security;
+revoke all on public.event_submissions from anon, authenticated;
 grant select, insert, update, delete on public.event_submissions to service_role;
 
 -- Which listings came from an organiser, and until when a paid boost keeps them featured.
