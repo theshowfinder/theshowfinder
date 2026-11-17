@@ -355,13 +355,24 @@ function fmtPrice(from: number | null, to: number | null, currency: string) {
 
 // ── Metadata ────────────────────────────────────────────────────────────────
 
+/**
+ * The town to show for a venue. Organiser listings outside our 40 cities sit on the nearest city page (venue.city =
+ * Nottingham) but the venue is really in its own town, saved in the address as "Venue Name, Ilkeston".
+ */
+function venueTownFor(venue: { name: string; city: string; address?: string | null } | null | undefined, source: string | null | undefined): string | null {
+  if (!venue) return null
+  const prefix = `${venue.name}, `
+  if (source === 'organiser' && venue.address?.startsWith(prefix) && venue.address.length > prefix.length) return venue.address.slice(prefix.length)
+  return venue.city
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
   const event    = await getEvent(slug)
   if (!event) return { title: 'Event Not Found' }
 
   const venue     = event.venue
-  const venueStr  = venue ? venueLabel(venue.name, venue.city) : null
+  const venueStr  = venue ? venueLabel(venue.name, venueTownFor(venue, event.source)) : null
   const dateStr   = new Date(event.start_date).toLocaleDateString('en-GB', { timeZone: 'Europe/London',
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
@@ -676,7 +687,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     description:   event.description,
     image:         imageUrl,
     status:        event.status,
-    venue:         event.venue,
+    venue:         event.venue ? { ...event.venue, city: venueTownFor(event.venue, event.source) ?? event.venue.city } : event.venue,
     priceFrom:     event.price_from,
     priceCurrency: event.currency,
     offerUrl:      canonicalUrl,
@@ -739,7 +750,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 text-white/80 text-sm mb-8">
             <span className="flex items-center gap-2">📅 <span>{fmtDate(event.start_date)}</span></span>
-            {event.venue && <span className="flex items-center gap-2">📍 <span>{venueLabel(event.venue.name, event.venue.city)}</span></span>}
+            {event.venue && <span className="flex items-center gap-2">📍 <span>{venueLabel(event.venue.name, venueTownFor(event.venue, event.source))}</span></span>}
             {priceLabel && <span className="flex items-center gap-2">💷 <span className="font-bold text-white">{priceLabel}</span>{priceSourceLabel && <span className="text-white/60 text-xs">{priceSourceLabel} price{event.tickets_url && priceSourceLabel !== 'Ticketmaster' ? ' guide' : ''}</span>}</span>}
           </div>
 
