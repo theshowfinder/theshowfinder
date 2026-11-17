@@ -43,18 +43,8 @@ describe('Advertise page — advertise@theshowfinder.com retirement', () => {
     assert.ok(!content.includes(RETIRED_ADDRESS), 'advertise page should not reference advertise@theshowfinder.com')
   })
 
-  test('the mailto link points at hello@', () => {
-    assert.ok(content.includes(`mailto:${CURRENT_ADDRESS}`), 'advertise page should have a mailto: link to hello@theshowfinder.com')
-  })
-
-  test('the visible email text reads hello@theshowfinder.com', () => {
-    // Appears twice in the source: once in the mailto: href, once as the
-    // link's visible text — JSX renders the text node on its own
-    // indented line, so this checks occurrence count rather than exact
-    // ">address<" adjacency.
-    const occurrences = content.split(CURRENT_ADDRESS).length - 1
-    assert.ok(occurrences >= 2, 'expected hello@theshowfinder.com to appear at least twice (href + visible text)')
-  })
+  // Since 27 Oct 2026 the advertise page signs businesses up itself (/advertise/onboard) and shows no email address,
+  // so only the retirement check above applies to it.
 
   test('the page wording and URL are untouched by the email swap', () => {
     assert.ok(content.includes('Advertise with TheShowFinder'), 'page heading/title wording should be unchanged')

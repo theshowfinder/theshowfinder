@@ -37,7 +37,7 @@ describe('digestLink', () => {
 
 describe('digestSubject', () => {
   test('leads with the top on-sale act and counts the rest', () => {
-    assert.equal(digestSubject({ ...empty, onSale: [item(1), item(2), item(3)] }), 'Act 1 on sale + 2 more on sale this week')
+    assert.equal(digestSubject({ ...empty, onSale: [item(1), item(2), item(3)] }), 'Act 1 on sale + 2 more this week')
   })
   test('single act', () => {
     assert.equal(digestSubject({ ...empty, onSale: [item(1)] }), 'Act 1 on sale this week')
