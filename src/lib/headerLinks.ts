@@ -40,10 +40,11 @@ export const NAV_LINKS: NavLink[] = [
 
 // For the people who make the site money: organisers listing events and local businesses advertising.
 // Shown as a slim bar above the main header on desktop and as their own section in the mobile menu.
+// Each link's own wording is here (the header shows `label` as written), so a new link can't borrow another's name.
 export const BUSINESS_LINKS: NavLink[] = [
-  { label: 'List your event', href: '/list-your-event' },
-  { label: 'Sell tickets',    href: '/sell-tickets' },
-  { label: 'Advertise',       href: '/advertise' },
+  { label: 'List your event free', href: '/list-your-event' },
+  { label: 'Sell tickets',         href: '/sell-tickets' },
+  { label: 'Advertise with us',    href: '/advertise' },
 ]
 
 // Scrolls to NewsletterSignup's section on the homepage (id="newsletter")

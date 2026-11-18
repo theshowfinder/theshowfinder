@@ -17,7 +17,7 @@ export default function Header() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-end gap-5 h-8 items-center text-xs font-semibold">
           <span className="text-white/40">For organisers &amp; businesses:</span>
           {BUSINESS_LINKS.map(({ label, href }) => (
-            <Link key={label} href={href} className="text-white/75 hover:text-white transition-colors">{label === 'List your event' ? 'List your event free' : 'Advertise with us'}</Link>
+            <Link key={label} href={href} className="text-white/75 hover:text-white transition-colors">{label}</Link>
           ))}
         </div>
       </div>
@@ -125,7 +125,7 @@ export default function Header() {
           ))}
           <div className="pt-3 border-t border-white/10">
             <p className="px-4 pb-1 text-xs font-bold uppercase tracking-widest text-white/40">For organisers &amp; businesses</p>
-            <div className="grid grid-cols-2 gap-2 pb-3">
+            <div className="grid grid-cols-3 gap-2 pb-3">
               {BUSINESS_LINKS.map(({ label, href }) => (
                 <Link
                   key={label}
@@ -133,7 +133,7 @@ export default function Header() {
                   onClick={() => setMenuOpen(false)}
                   className="flex items-center justify-center px-3 py-3 rounded-lg text-sm font-bold text-white border border-white/20 hover:bg-white/10 transition-colors min-h-[48px] text-center"
                 >
-                  {label === 'List your event' ? 'List your event free' : 'Advertise with us'}
+                  {label}
                 </Link>
               ))}
             </div>

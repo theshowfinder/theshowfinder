@@ -70,6 +70,9 @@ describe('PRIMARY_CTA', () => {
 describe('BUSINESS_LINKS', () => {
   test('organisers and advertisers can find us from every page', () => {
     assert.deepEqual(BUSINESS_LINKS.map(l => l.href), ['/list-your-event', '/sell-tickets', '/advertise'])
+    // every link has its own label, and Advertise is the one that goes to /advertise
+    assert.equal(new Set(BUSINESS_LINKS.map(l => l.label)).size, BUSINESS_LINKS.length)
+    assert.equal(BUSINESS_LINKS.find(l => /advertise/i.test(l.label))?.href, '/advertise')
     for (const link of BUSINESS_LINKS) assert.equal(isAccountAuthHref(link.href), false)
   })
 })
