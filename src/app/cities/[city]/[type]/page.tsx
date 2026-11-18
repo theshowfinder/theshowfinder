@@ -1,6 +1,7 @@
 // "{Type} in {City}" pages (/cities/Coventry/concerts, see src/lib/cityTypeSeo.ts) and seasonal pages
 // (/cities/Leeds/panto, /christmas, /new-years-eve, see src/lib/citySeasonSeo.ts) and month pages
-// (/cities/Leeds/december-2026, see src/lib/cityMonthSeo.ts).
+// (/cities/Leeds/december-2026, see src/lib/cityMonthSeo.ts) and music genre pages
+// (/cities/Manchester/metal-gigs, see src/lib/cityGenreSeo.ts).
 export const revalidate = 21600
 export const maxDuration = 60
 
@@ -25,6 +26,7 @@ import {
 import {
   parseMonthSlug, monthState, monthWindow, upcomingMonths, spreadAcrossDays, monthTitle, monthH1, monthDescription, monthFaqs, categorySummary, type CityMonth,
 } from '@/lib/cityMonthSeo'
+import { CITY_GENRES, genreBySlug, genreForArtistGenre, type CityGenre } from '@/lib/cityGenreSeo'
 
 export async function generateStaticParams() {
   return []
@@ -32,12 +34,28 @@ export async function generateStaticParams() {
 
 type Row = EventWithVenue & { venue_slug?: string | null }
 
-type Kind = { t?: CityType; s?: Season; m?: CityMonth }
+type Kind = { t?: CityType; s?: Season; m?: CityMonth; g?: CityGenre }
 
-async function loadRows(cityName: string, c: Kind): Promise<Row[]> {
+// Genre pages each event belongs to, from its artists' genres. Chunked so the request URL stays short.
+async function genresByEvent(ids: string[]): Promise<Map<string, Set<string>>> {
+  const supabase = createPublicClient()
+  const out = new Map<string, Set<string>>()
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data } = await (supabase.from('event_artists').select('event_id, artists(genre)').in('event_id', ids.slice(i, i + 150)) as unknown as Promise<{ data: Array<{ event_id: string; artists: { genre: string | null } | null }> | null }>)
+    for (const r of data ?? []) {
+      const g = genreForArtistGenre(r.artists?.genre)
+      if (!g) continue
+      if (!out.has(r.event_id)) out.set(r.event_id, new Set())
+      out.get(r.event_id)!.add(g.slug)
+    }
+  }
+  return out
+}
+
+async function loadRows(cityName: string, c: Kind): Promise<{ rows: Row[]; genreShows: Map<string, number> }> {
   const supabase = createPublicClient()
   const w = c.s ? seasonWindow(c.s) : c.m ? monthWindow(c.m) : { from: new Date().toISOString(), to: null }
-  const max = c.t ? 800 : 4000
+  const max = c.t && !c.g ? 800 : 4000
   const rows: Row[] = []
   // Pages of 1000 (the API's row cap), so a busy city's month or season is not cut short.
   for (let from = 0; from < max; from += 1000) {
@@ -48,18 +66,32 @@ async function loadRows(cityName: string, c: Kind): Promise<Row[]> {
     rows.push(...(data ?? []))
     if (!data || data.length < 1000) break
   }
-  const kept = c.s ? rows.filter(r => matchesSeason(c.s!, r)) : rows
+  let kept = c.s ? rows.filter(r => matchesSeason(c.s!, r)) : rows
   const dupes = await fetchDuplicateIds(supabase, kept.map(r => r.id))
-  return kept.filter(r => !dupes.has(r.id))
+  kept = kept.filter(r => !dupes.has(r.id))
+  // Concert and genre pages: count shows per genre (for the genre links), then keep this genre's.
+  const genreShows = new Map<string, number>()
+  if (c.t?.category === 'concert') {
+    const byEvent = await genresByEvent(kept.map(r => r.id))
+    const seen = new Map<string, Set<string>>()
+    for (const r of kept) for (const g of byEvent.get(r.id) ?? []) {
+      if (!seen.has(g)) seen.set(g, new Set())
+      seen.get(g)!.add(`${r.title.trim().toLowerCase()}|${r.venue_id}`)
+    }
+    for (const [g, set] of seen) genreShows.set(g, set.size)
+    if (c.g) kept = kept.filter(r => byEvent.get(r.id)?.has(c.g!.slug))
+  }
+  return { rows: kept, genreShows }
 }
 
 function resolve(cityParam: string, typeParam: string) {
   const requested = decodeURIComponent(cityParam)
   const city = CITIES.find(c => c.name.toLowerCase() === requested.toLowerCase())
-  const t = cityTypeBySlug(typeParam)
+  const genre = genreBySlug(typeParam)
+  const t = cityTypeBySlug(typeParam) ?? genre
   const season = t ? undefined : seasonBySlug(typeParam)
   const month = t || season ? null : parseMonthSlug(typeParam)
-  return { requested, city, t, season, month }
+  return { requested, city, t, season, month, genre }
 }
 
 function facts(cityName: string, rows: Row[]) {
@@ -92,10 +124,10 @@ function facts(cityName: string, rows: Row[]) {
 
 export async function generateMetadata({ params }: { params: Promise<{ city: string; type: string }> }): Promise<Metadata> {
   const { city, type } = await params
-  const { city: c, t, season, month } = resolve(city, type)
+  const { city: c, t, season, month, genre } = resolve(city, type)
   const m = month && monthState(month) === 'live' ? month : undefined
   if (!c || (!t && !season && !m)) return { title: 'Not found' }
-  const rows = await loadRows(c.name, { t, s: season, m })
+  const { rows } = await loadRows(c.name, { t, s: season, m, g: genre })
   const { f, summary } = facts(c.name, rows)
   const title = t ? cityTypeTitle(c.name, t) : season ? seasonTitle(c.name, season) : monthTitle(c.name, m!)
   const description = t ? cityTypeDescription(c.name, t, f.count, f.venueNames) : season ? seasonDescription(c.name, season, f.count, f.venueNames) : monthDescription(c.name, m!, f.count, summary, f.venueNames)
@@ -110,7 +142,7 @@ export async function generateMetadata({ params }: { params: Promise<{ city: str
 
 export default async function CityTypePage({ params }: { params: Promise<{ city: string; type: string }> }) {
   const { city, type } = await params
-  const { requested, city: c, t: typeMatch, season, month } = resolve(city, type)
+  const { requested, city: c, t: typeMatch, season, month, genre } = resolve(city, type)
   if (!c || (!typeMatch && !season && !month)) notFound()
   const cityName = c.name
   // A month that has gone sends people to this month; more than a year ahead has no page yet.
@@ -120,7 +152,8 @@ export default async function CityTypePage({ params }: { params: Promise<{ city:
   const slug = typeMatch ? typeMatch.slug : season ? season.slug : m!.slug
   if (requested !== cityName || type !== slug) redirect(`/cities/${encodeURIComponent(cityName)}/${slug}`)
 
-  const rows = await loadRows(cityName, { t: typeMatch, s: season, m })
+  const { rows, genreShows } = await loadRows(cityName, { t: typeMatch, s: season, m, g: genre })
+  const genreLinks = CITY_GENRES.filter(x => (genreShows.get(x.slug) ?? 0) >= MIN_INDEXABLE || x.slug === genre?.slug)
   const { runs, venueNames, f, summary, busiestDay } = facts(cityName, rows)
   const shown = m ? spreadAcrossDays(runs, 90) : runs.slice(0, 60)
   // A season page reads like a type page: same layout, its own words.
@@ -189,7 +222,7 @@ export default async function CityTypePage({ params }: { params: Promise<{ city:
         <nav aria-label={`More in ${cityName}`} className="flex flex-wrap gap-2">
           {CITY_TYPES.map(x => (
             <Link key={x.slug} href={cityTypePath(cityName, x)} aria-current={x.slug === t.slug ? 'page' : undefined}
-              className={`px-4 py-2 rounded-full text-sm font-bold border min-h-[40px] flex items-center ${x.slug === t.slug ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'}`}>
+              className={`px-4 py-2 rounded-full text-sm font-bold border min-h-[40px] flex items-center ${x.slug === t.slug || (genre && x.category === 'concert') ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'}`}>
               {x.emoji} {x.label}
             </Link>
           ))}
@@ -206,6 +239,16 @@ export default async function CityTypePage({ params }: { params: Promise<{ city:
           </nav>
         )}
 
+        {genreLinks.length > 0 && (
+          <nav aria-label={`Gigs in ${cityName} by genre`} className="flex flex-wrap gap-2 -mt-6">
+            {genreLinks.map(x => (
+              <Link key={x.slug} href={`/cities/${encodeURIComponent(cityName)}/${x.slug}`} aria-current={x.slug === slug ? 'page' : undefined}
+                className={`px-3 py-1.5 rounded-full text-sm font-semibold border min-h-[36px] flex items-center ${x.slug === slug ? 'bg-[#E8003D] text-white border-[#E8003D]' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'}`}>
+                {x.emoji} {x.label}
+              </Link>
+            ))}
+          </nav>
+        )}
         {m && (
           <nav aria-label={`${cityName} by month`} className="flex gap-2 overflow-x-auto pb-1 -mt-6">
             {upcomingMonths().map(x => (
@@ -234,7 +277,7 @@ export default async function CityTypePage({ params }: { params: Promise<{ city:
           <p className="text-sm text-slate-600">Showing {shown.length} of {runs.length} shows across {m.label}, a few from each day.</p>
         )}
         {typeMatch && runs.length > shown.length && (
-          <p className="text-sm text-slate-600">Showing the next {shown.length} of {runs.length}. <Link href={`/events?category=${t.category}&city=${encodeURIComponent(cityName)}`} className="font-semibold underline">See them all</Link></p>
+          <p className="text-sm text-slate-600">Showing the next {shown.length} of {runs.length}. <Link href={genre ? `/cities/${encodeURIComponent(cityName)}/concerts` : `/events?category=${t.category}&city=${encodeURIComponent(cityName)}`} className="font-semibold underline">{genre ? `All gigs in ${cityName}` : 'See them all'}</Link></p>
         )}
 
         {venueNames.length > 0 && (

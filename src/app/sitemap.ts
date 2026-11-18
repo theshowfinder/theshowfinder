@@ -2,6 +2,7 @@ import { GUIDES } from '@/lib/guides'
 import { CITY_TYPES, MIN_INDEXABLE, cityTypeUrl } from '@/lib/cityTypeSeo'
 import { SEASONS, seasonWindow, matchesSeason } from '@/lib/citySeasonSeo'
 import { upcomingMonths, monthWindow } from '@/lib/cityMonthSeo'
+import { CITY_GENRES, genreForArtistGenre } from '@/lib/cityGenreSeo'
 import type { MetadataRoute } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
 import { getArtistSeoAlias, getEventSeoAlias } from '@/lib/seoAliases'
@@ -32,7 +33,7 @@ const PAGE_SIZE = 1000
 
 type VenueRow       = { id: string; slug: string; city: string | null }
 type ArtistRow      = { id: string; slug: string; name: string | null; is_featured: boolean | null }
-type SlugUpdatedRow = { id: string; slug: string; title: string; created_at: string; page_changed_at: string | null; venue_id: string | null; start_date: string; category: string; source: string | null }
+type SlugUpdatedRow = { id: string; slug: string; title: string; created_at: string; page_changed_at: string | null; venue_id: string | null; start_date: string; category: string; source: string | null; event_artists?: Array<{ artists: { genre: string | null } | null }> | null }
 type DbClient       = ReturnType<typeof createPublicClient>
 
 async function fetchAllEvents(supabase: DbClient, nowISO: string): Promise<SlugUpdatedRow[]> {
@@ -49,7 +50,7 @@ async function fetchAllEvents(supabase: DbClient, nowISO: string): Promise<SlugU
       const from = i * PAGE_SIZE
       return supabase
         .from('events')
-        .select('id, slug, title, created_at, page_changed_at, venue_id, start_date, category, source')
+        .select('id, slug, title, created_at, page_changed_at, venue_id, start_date, category, source, event_artists(artists(genre))')
         .gte('start_date', nowISO)
         // Cancelled / postponed shows are not sitemap material.
         .in('status', LIVE_EVENT_STATUSES)
@@ -349,11 +350,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .filter(x => (monthShows.get(`${city.name.toLowerCase()}|${x.m.slug}`)?.size ?? 0) >= MIN_INDEXABLE)
     .map(x => ({ url: `${BASE}/cities/${encodeURIComponent(city.name)}/${x.m.slug}`, changeFrequency: 'daily' as const, priority: 0.7 })))
 
+  // Genre pages (/cities/Manchester/metal-gigs): concerts whose artists carry that genre, 5+ shows.
+  const genreShows = new Map<string, Set<string>>()
+  for (const e of eventRows) {
+    if (e.category !== 'concert') continue
+    const c = e.venue_id ? venueCity.get(e.venue_id) : null
+    if (!c) continue
+    for (const g of new Set((e.event_artists ?? []).map(a => genreForArtistGenre(a.artists?.genre)?.slug).filter(Boolean))) {
+      const k = `${c}|${g}`
+      if (!genreShows.has(k)) genreShows.set(k, new Set())
+      genreShows.get(k)!.add(`${e.title.trim().toLowerCase()}|${e.venue_id}`)
+    }
+  }
+  const cityGenrePages: MetadataRoute.Sitemap = CITIES.flatMap(city => CITY_GENRES
+    .filter(g => (genreShows.get(`${city.name.toLowerCase()}|${g.slug}`)?.size ?? 0) >= MIN_INDEXABLE)
+    .map(g => ({ url: `${BASE}/cities/${encodeURIComponent(city.name)}/${g.slug}`, changeFrequency: 'daily' as const, priority: 0.7 })))
+
   const promoterPages: MetadataRoute.Sitemap = promoterRows.map(p => ({
     url:             `${BASE}/promoters/${p.slug}`,
     changeFrequency: 'weekly' as const,
     priority:        0.5,
   }))
 
-  return [...staticPages, ...promoterPages, ...cityPages, ...cityTypePages, ...citySeasonPages, ...cityMonthPages, ...cityThisWeekPages, ...cityThisWeekendPages, ...cityTonightPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
+  return [...staticPages, ...promoterPages, ...cityPages, ...cityTypePages, ...citySeasonPages, ...cityMonthPages, ...cityGenrePages, ...cityThisWeekPages, ...cityThisWeekendPages, ...cityTonightPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
 }
