@@ -59,6 +59,7 @@ import { dropDuplicateEvents } from '@/lib/listedEvents'
 import { isSeeTicketsRunPage } from '@/lib/seeTicketsWestEnd'
 import { isEventPast } from '@/lib/pastEvents'
 import { isListingAddon } from '@/lib/listingAddons'
+import { parseDoorsTime } from '@/lib/doorsTime'
 import ClaimTickets from '@/components/tickets/ClaimTickets'
 import { buildSiblingOffers, type SiblingEvent, type SiblingOffer } from '@/lib/eventOffers'
 
@@ -150,6 +151,8 @@ const getEvent = cache(async (slug: string): Promise<EventDetail | null> => {
   const event = data as unknown as EventDetail
   event.details = event.details ?? null
   if (event.venue) event.venue.details = event.venue.details ?? null
+  // The feed rarely fills doors_time, but the listing text often says it ("DOORS: 19:00 START: 20:00").
+  event.doors_time = event.doors_time ?? parseDoorsTime(`${event.description ?? ''} ${event.details ? JSON.stringify(event.details) : ''}`, event.start_date)
 
   // Ticketmaster's UK feed almost never supplies a price. When this event is
   // matched to a See Tickets listing, use that listing's face-value minimum so

@@ -1,3 +1,4 @@
+import { parseDoorsTime } from './doorsTime.ts'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildFallbackDescription, cleanSourceDescription } from '@/lib/eventDescription'
 import { isKnownWestEndShow } from '@/lib/seeTicketsWestEnd'
@@ -657,7 +658,7 @@ async function upsertEvent(
     tickets_url:         tmEvent.url     ?? null,
     status:              mapStatus(tmEvent),
     ticketmaster_id:     tmEvent.id,
-    doors_time:          tmEvent.doorsTimes?.dateTime ?? null,
+    doors_time:          tmEvent.doorsTimes?.dateTime ?? parseDoorsTime(sourceText, startDate),
     details:             extractEventDetails(tmEvent),
   }
 
