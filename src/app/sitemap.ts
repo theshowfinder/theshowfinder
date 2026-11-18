@@ -1,4 +1,5 @@
 import { GUIDES } from '@/lib/guides'
+import { CITY_TYPES, MIN_INDEXABLE, cityTypeUrl } from '@/lib/cityTypeSeo'
 import type { MetadataRoute } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
 import { getArtistSeoAlias, getEventSeoAlias } from '@/lib/seoAliases'
@@ -27,7 +28,7 @@ const BASE = 'https://www.theshowfinder.com'
 // setting to fix, it's all done from the query side.
 const PAGE_SIZE = 1000
 
-type VenueRow       = { id: string; slug: string }
+type VenueRow       = { id: string; slug: string; city: string | null }
 type ArtistRow      = { id: string; slug: string; name: string | null; is_featured: boolean | null }
 type SlugUpdatedRow = { id: string; slug: string; title: string; created_at: string; page_changed_at: string | null; venue_id: string | null; start_date: string; category: string; source: string | null }
 type DbClient       = ReturnType<typeof createPublicClient>
@@ -97,7 +98,7 @@ async function fetchAllVenues(supabase: DbClient): Promise<VenueRow[]> {
       const from = i * PAGE_SIZE
       return supabase
         .from('venues')
-        .select('id, slug')
+        .select('id, slug, city')
         .not('slug', 'is', null)
         .range(from, from + PAGE_SIZE - 1) as unknown as Promise<{ data: VenueRow[] | null }>
     }),
@@ -291,11 +292,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }))
     .filter(a => !getArtistSeoAlias(a.url.split('/').pop() ?? ''))
 
+  // "{Type} in {City}" pages (/cities/Coventry/concerts) with enough upcoming shows to be worth indexing:
+  // counted as distinct shows (title + venue), so a long theatre run counts once, matching the page.
+  const venueCity = new Map(venueRows.map(v => [v.id, (v.city ?? '').toLowerCase()]))
+  const typeShows = new Map<string, Set<string>>()
+  for (const e of eventRows) {
+    const c = e.venue_id ? venueCity.get(e.venue_id) : null
+    if (!c) continue
+    const k = `${c}|${e.category}`
+    if (!typeShows.has(k)) typeShows.set(k, new Set())
+    typeShows.get(k)!.add(`${e.title.trim().toLowerCase()}|${e.venue_id}`)
+  }
+  const cityTypePages: MetadataRoute.Sitemap = CITIES.flatMap(city => CITY_TYPES
+    .filter(t => (typeShows.get(`${city.name.toLowerCase()}|${t.category}`)?.size ?? 0) >= MIN_INDEXABLE)
+    .map(t => ({ url: cityTypeUrl(city.name, t), changeFrequency: 'daily' as const, priority: 0.8 })))
+
   const promoterPages: MetadataRoute.Sitemap = promoterRows.map(p => ({
     url:             `${BASE}/promoters/${p.slug}`,
     changeFrequency: 'weekly' as const,
     priority:        0.5,
   }))
 
-  return [...staticPages, ...promoterPages, ...cityPages, ...cityThisWeekPages, ...cityThisWeekendPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
+  return [...staticPages, ...promoterPages, ...cityPages, ...cityTypePages, ...cityThisWeekPages, ...cityThisWeekendPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
 }

@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { BROWSE_CATEGORIES } from '@/lib/eventPools'
+import { cityTypeByCategory, cityTypePath } from '@/lib/cityTypeSeo'
 
 const LABELS: Record<string, { label: string; emoji: string }> = {
   concert: { label: 'Concerts', emoji: '🎵' },
@@ -22,7 +23,7 @@ export default function CityBrowse({ cityName, counts }: { cityName: string; cou
       {shown.map(c => (
         <Link
           key={c}
-          href={`/events?category=${c}&city=${encodeURIComponent(cityName)}`}
+          href={(() => { const t = cityTypeByCategory(c); return t ? cityTypePath(cityName, t) : `/events?category=${c}&city=${encodeURIComponent(cityName)}` })()}
           className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:shadow-sm transition min-h-[44px]"
         >
           <span aria-hidden="true">{LABELS[c].emoji}</span>
