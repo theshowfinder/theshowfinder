@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { bookingFeePence, gbpFromPence } from '@/lib/tickets'
+import { SELL_PAGES } from '@/lib/sellTicketsPages'
 
 // "Sell tickets with TheShowFinder": the organiser pitch, and the page we want found for "sell tickets online".
 // Fee figures come from bookingFeePence, so this page stays right if the fee changes. No other companies named.
@@ -111,6 +112,18 @@ export default function SellTicketsPage() {
             </li>
           ))}
         </ol>
+      </section>
+
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-12">
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">What are you selling tickets for?</h2>
+        <ul className="mt-5 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {SELL_PAGES.map(x => (
+            <li key={x.slug}><Link href={`/sell-tickets/${x.slug}`} className="block h-full rounded-2xl bg-white border border-slate-200 p-4 hover:border-slate-400">
+              <span className="block text-xs font-extrabold uppercase tracking-widest text-[#E8003D]">{x.kicker}</span>
+              <span className="mt-1 block font-extrabold text-slate-900">{x.h1} →</span>
+            </Link></li>
+          ))}
+        </ul>
       </section>
 
       <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-12">

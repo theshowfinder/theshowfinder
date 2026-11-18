@@ -3,6 +3,7 @@ import { CITY_TYPES, MIN_INDEXABLE, cityTypeUrl } from '@/lib/cityTypeSeo'
 import { SEASONS, seasonWindow, matchesSeason } from '@/lib/citySeasonSeo'
 import { upcomingMonths, monthWindow } from '@/lib/cityMonthSeo'
 import { CITY_GENRES, genreForArtistGenre } from '@/lib/cityGenreSeo'
+import { SELL_PAGES } from '@/lib/sellTicketsPages'
 import type { MetadataRoute } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
 import { getArtistSeoAlias, getEventSeoAlias } from '@/lib/seoAliases'
@@ -223,6 +224,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/guides`,              changeFrequency: 'monthly', priority: 0.5 },
     { url: `${BASE}/list-your-event`,     changeFrequency: 'monthly', priority: 0.6 },
     { url: `${BASE}/sell-tickets`,        changeFrequency: 'monthly', priority: 0.7 },
+    ...SELL_PAGES.map(p => ({ url: `${BASE}/sell-tickets/${p.slug}`, changeFrequency: 'monthly' as const, priority: 0.6 })),
     ...GUIDES.map(g => ({ url: `${BASE}/guides/${g.slug}`, lastModified: new Date(`${g.updated}T12:00:00Z`), changeFrequency: 'monthly' as const, priority: 0.6 })),
   ]
 
