@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
-import { LINK_DAILY_LIMIT, LINK_FOLLOW_UP_DAYS } from '@/lib/linkOutreach'
+import { LINK_FOLLOW_UP_DAYS, LINK_START_PER_DAY, LINK_MAX_PER_DAY, LINK_ZOHO_PER_DAY } from '@/lib/linkOutreach'
 import { LINK_SELECT, draftFor, linkDb } from '@/lib/linkOutreachSend'
 import PendingButton from '@/components/admin/PendingButton'
 import { approveAction, setLinkStatusAction, addLinkContactAction } from './actions'
@@ -14,7 +14,7 @@ type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 const STATUSES: Array<[string, string]> = [
   ['ready', 'Ready to approve'], ['approved', 'Approved, waiting to send'], ['sent', 'Sent'], ['followed_up', 'Followed up'],
   ['replied', 'Replied'], ['linked', 'Linking to us'], ['no_email', 'No email found'], ['no_site', 'No website found'],
-  ['skipped', 'Skipped'], ['declined', 'Not interested'], ['unsubscribed', 'Unsubscribed'], ['failed', 'Failed'],
+  ['skipped', 'Skipped'], ['declined', 'Not interested'], ['unsubscribed', 'Unsubscribed'], ['bounced', 'Bounced'], ['failed', 'Failed'],
 ]
 const day = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' }) : ''
 const input = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm'
@@ -37,7 +37,7 @@ export default async function BacklinksPage({ searchParams }: { searchParams: Pr
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold text-slate-900">Backlinks outreach</h1>
-        <p className="text-sm text-slate-600">Venues we list, organisers and press, offered something useful that comes with a link back to us. Nothing is sent until you approve it. Sends weekdays 9am to 5pm, up to {LINK_DAILY_LIMIT} a day, with one follow-up after {LINK_FOLLOW_UP_DAYS} days. Sites that start linking to us are found automatically.</p>
+        <p className="text-sm text-slate-600">Venues we list, organisers and press, offered something useful that comes with a link back to us. Nothing is sent until you approve it. Sends weekdays 9am to 5pm: {LINK_START_PER_DAY} a day to start, rising each weekday to {LINK_MAX_PER_DAY}, plus up to {LINK_ZOHO_PER_DAY} from your Zoho mailbox, with one follow-up after {LINK_FOLLOW_UP_DAYS} days. Bounces or a spam complaint pause it automatically. Sites that start linking to us are found automatically.</p>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[['Emailed', emailed], ['Replied', counts.get('replied') ?? 0], ['Linking to us', counts.get('linked') ?? 0], ['Ready to approve', counts.get('ready') ?? 0]].map(([l, n]) => (

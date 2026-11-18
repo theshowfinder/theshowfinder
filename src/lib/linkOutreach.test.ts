@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildLinkEmail, isOwnSite, linksToUs, pagesToCheck, inSendingHours, domainOf, type LinkProspect } from './linkOutreach.ts'
+import { buildLinkEmail, isOwnSite, linksToUs, pagesToCheck, inSendingHours, domainOf, linkResendLimit, type LinkProspect } from './linkOutreach.ts'
 
 const venue: LinkProspect = { id: '1', kind: 'venue', name: 'The Leadmill', city: 'Sheffield', website: 'https://leadmill.co.uk', email: 'info@leadmill.co.uk', contact_name: null, shows: 23, page_url: 'https://www.theshowfinder.com/venues/the-leadmill-sheffield', pitch: 'widget', unsubscribe_token: 'abc', venue_slug: 'the-leadmill-sheffield' }
 
@@ -39,4 +39,11 @@ test('sending hours: weekdays 9 to 5 UK', () => {
   assert.equal(inSendingHours(new Date('2026-11-18T10:00:00Z')), true)    // Wed 10:00
   assert.equal(inSendingHours(new Date('2026-11-21T10:00:00Z')), false)   // Sat
   assert.equal(inSendingHours(new Date('2026-11-18T18:00:00Z')), false)   // 18:00
+})
+
+test('daily sending ramps up on weekdays to the maximum', () => {
+  assert.equal(linkResendLimit(null), 30)
+  assert.equal(linkResendLimit('2026-11-19T09:00:00Z', new Date('2026-11-19T15:00:00Z')), 30)   // first day
+  assert.equal(linkResendLimit('2026-11-19T09:00:00Z', new Date('2026-11-23T15:00:00Z')), 50)   // Thu, Fri, Mon
+  assert.equal(linkResendLimit('2026-11-19T09:00:00Z', new Date('2027-01-19T15:00:00Z')), 150)
 })

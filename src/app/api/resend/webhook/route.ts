@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   const to = (Array.isArray(event.data?.to) ? event.data?.to[0] : event.data?.to) ?? ''
   let { data: p } = await db.from('outreach_prospects').select('id, business_name, email').eq('resend_id', emailId).maybeSingle()
   if (!p && to) ({ data: p } = await db.from('outreach_prospects').select('id, business_name, email').ilike('email', to).not('sent_at', 'is', null).maybeSingle())
-  if (!p) return NextResponse.json({ received: true, outreach: false })
+  if (!p) return linkOutreachEvent(db, event, emailId, to)
   const now = new Date().toISOString()
 
   if (event.type === 'email.complained') {
@@ -63,6 +63,33 @@ export async function POST(request: Request) {
   if ((count ?? 0) >= 3) {
     await db.from('outreach_settings').update({ resend_paused_until: new Date(Date.now() + 20 * 3_600_000).toISOString(), pause_reason: `${count} bounced outreach emails in 24 hours`, updated_at: now }).eq('id', 1)
     await alert('Outreach paused for today: bounces', `${count} outreach emails bounced in the last 24 hours (latest: ${p.business_name}, ${p.email}). Resend outreach is paused until tomorrow and restarts on its own.`)
+  }
+  return NextResponse.json({ received: true })
+}
+
+/** Bounces and spam complaints on backlink outreach emails (link_prospects): same brake as advertiser outreach. */
+async function linkOutreachEvent(db: Loose, event: { type?: string; data?: { bounce?: { type?: string } } }, emailId: string, to: string) {
+  let { data: l } = await db.from('link_prospects').select('id, name, email').eq('resend_id', emailId).maybeSingle()
+  if (!l && to) ({ data: l } = await db.from('link_prospects').select('id, name, email').ilike('email', to).not('sent_at', 'is', null).limit(1).maybeSingle())
+  if (!l) return NextResponse.json({ received: true, outreach: false })
+  const now = new Date().toISOString()
+  if (event.type === 'email.complained') {
+    await db.from('link_prospects').update({ status: 'unsubscribed', notes: 'Marked our email as spam (Resend complaint)', updated_at: now }).eq('id', l.id)
+    await db.from('outreach_settings').update({ resend_paused_until: '2100-01-01T00:00:00Z', pause_reason: `Spam complaint from ${l.name} (${l.email}), backlink outreach`, updated_at: now }).eq('id', 1)
+    await alert('Outreach paused: spam complaint', `${l.name} (${l.email}) marked a backlink outreach email as spam.\n\nResend outreach (advertisers and backlinks) is paused to protect the site's own emails. Zoho carries on.\nResume when you're ready: https://www.theshowfinder.com/admin/outreach`)
+    return NextResponse.json({ received: true, paused: true })
+  }
+  if (event.data?.bounce?.type && event.data.bounce.type !== 'Permanent') return NextResponse.json({ received: true })
+  await db.from('link_prospects').update({ status: 'bounced', last_error: 'Email bounced (address does not exist)', updated_at: now }).eq('id', l.id)
+  const since = new Date(Date.now() - 86_400_000).toISOString()
+  const [{ count: a }, { count: b }] = await Promise.all([
+    db.from('outreach_prospects').select('id', { count: 'exact', head: true }).eq('status', 'bounced').gte('updated_at', since),
+    db.from('link_prospects').select('id', { count: 'exact', head: true }).eq('status', 'bounced').gte('updated_at', since),
+  ])
+  const total = (a ?? 0) + (b ?? 0)
+  if (total >= 4) {
+    await db.from('outreach_settings').update({ resend_paused_until: new Date(Date.now() + 20 * 3_600_000).toISOString(), pause_reason: `${total} bounced outreach emails in 24 hours`, updated_at: now }).eq('id', 1)
+    await alert('Outreach paused for today: bounces', `${total} outreach emails bounced in the last 24 hours (latest: ${l.name}, ${l.email}). Resend outreach is paused until tomorrow and restarts on its own.`)
   }
   return NextResponse.json({ received: true })
 }

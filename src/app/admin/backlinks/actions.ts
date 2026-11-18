@@ -22,7 +22,7 @@ export async function approveAction(form: FormData) {
   if (!all) q = q.in('id', ids)
   const { data } = await q.select('id')
   revalidatePath('/admin/backlinks')
-  back(`Approved ${data?.length ?? 0}. They go out on weekdays 9am to 5pm, up to 25 a day.`)
+  back(`Approved ${data?.length ?? 0}. They go out on weekdays between 9am and 5pm, more each day as sending builds up.`)
 }
 
 export async function setLinkStatusAction(form: FormData) {

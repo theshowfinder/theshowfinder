@@ -4,7 +4,21 @@
 // Nothing is sent until Chris approves it in /admin/backlinks. Pure module (no '@/' imports) for node --test.
 
 export const SITE = 'https://www.theshowfinder.com'
-export const LINK_DAILY_LIMIT = 25          // first emails + follow-ups per weekday
+// Daily sending grows as the mail reputation builds: 30 on the first weekday of sending, +10 each weekday after, up to
+// 150 (Resend) plus up to 20 from Chris's Zoho mailbox. Bounces and spam complaints still stop it (the outreach brake).
+export const LINK_START_PER_DAY = 30
+export const LINK_STEP_PER_DAY = 10
+export const LINK_MAX_PER_DAY = 150
+export const LINK_ZOHO_PER_DAY = 20
+export const LINK_DAILY_LIMIT = LINK_MAX_PER_DAY + LINK_ZOHO_PER_DAY
+
+/** Today's Resend limit: weekdays since the first email was sent, ramping up to the maximum. */
+export function linkResendLimit(firstSentIso: string | null, now: Date = new Date()): number {
+  if (!firstSentIso) return LINK_START_PER_DAY
+  let weekdays = 0
+  for (let d = new Date(firstSentIso); d < now; d = new Date(d.getTime() + 86_400_000)) if (d.getUTCDay() !== 0 && d.getUTCDay() !== 6) weekdays++
+  return Math.min(LINK_MAX_PER_DAY, LINK_START_PER_DAY + LINK_STEP_PER_DAY * Math.max(0, weekdays - 1))
+}
 export const LINK_FOLLOW_UP_DAYS = 7
 export const LINK_FROM = 'Chris at TheShowFinder <partners@theshowfinder.com>'
 export const LINK_REPLY_TO = 'hello@theshowfinder.com'

@@ -67,3 +67,17 @@ export async function sendOutreachEmailZoho(p: Prospect, kind: OutreachKind, sho
     return { ok: false, error: msg.slice(0, 300), fatal }
   }
 }
+
+/** A plain email from Chris's Zoho mailbox (used by backlink outreach). */
+export async function zohoSendPlain(m: { to: string; subject: string; text: string; headers?: Record<string, string> }): Promise<SendResult> {
+  if (!zohoConfigured()) return { ok: false, error: 'Zoho is not set up (ZOHO_SMTP_USER / ZOHO_SMTP_PASS)', fatal: true }
+  const user = process.env.ZOHO_SMTP_USER!
+  try {
+    const info = await zoho().sendMail({ from: process.env.ZOHO_FROM || `Chris at TheShowFinder <${user}>`, to: m.to, replyTo: process.env.ZOHO_FROM || user, subject: m.subject, text: m.text, headers: m.headers })
+    return { ok: true, id: info.messageId }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    const fatal = !/recipient|mailbox unavailable|user unknown|no such user|550 5\.1\.1/i.test(msg)
+    return { ok: false, error: msg.slice(0, 300), fatal }
+  }
+}

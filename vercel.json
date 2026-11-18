@@ -81,11 +81,11 @@
     },
     {
       "path": "/api/cron/link-find",
-      "schedule": "25 7-16 * * 1-5"
+      "schedule": "*/15 7-21 * * *"
     },
     {
       "path": "/api/cron/link-send",
-      "schedule": "*/20 8-16 * * 1-5"
+      "schedule": "*/10 8-16 * * 1-5"
     },
     {
       "path": "/api/cron/link-check",

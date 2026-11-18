@@ -7,13 +7,13 @@ import { buildLinkEmail, domainOf, isOwnSite, SITE, type LinkProspect } from '@/
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
 
-// Backlink outreach, finding side (vercel.json: hourly on weekdays). Each run takes the busiest venues we list that
+// Backlink outreach, finding side (vercel.json: every 15 minutes, 07:00-21:00 every day). Each run takes the busiest venues we list that
 // haven't been looked at (link_venue_targets: 3+ upcoming shows), finds the venue's own website on OpenStreetMap's
 // place search (our venue "website" is only its Ticketmaster page), reads it for a general email, and drafts the email.
 // Then organisers from the organiser finder that have a website. Drafts wait as "ready" for Chris in /admin/backlinks;
 // nothing is sent from here. ?dry=1 reports without writing.
 const UA = 'TheShowFinderBot/1.0 (+https://www.theshowfinder.com/widgets; partners@theshowfinder.com)'
-const VENUES_PER_RUN = 8
+const VENUES_PER_RUN = 10
 const ORGANISERS_PER_RUN = 4
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 
