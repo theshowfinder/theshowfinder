@@ -30,6 +30,7 @@ export async function POST(request: Request) {
       ticketUrl: str(form.get('ticket_url')), priceFrom: str(form.get('price_from')), description: str(form.get('description')),
       ticketing: str(form.get('ticketing')), freeCapacity: str(form.get('free_capacity')),
       paidPrice: str(form.get('paid_price')), paidCapacity: str(form.get('paid_capacity')),
+      ticketPlan: (() => { try { const j = JSON.parse(str(form.get('ticket_plan')) || 'null'); return j && typeof j === 'object' ? j : null } catch { return null } })(),
     }, CITIES.map(c => c.name))
     if (!checked.ok) return NextResponse.json({ error: checked.error }, { status: 400 })
     const s = checked.value
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
       : baseCheck
     const { data: sub, error } = await loose.from('event_submissions').insert({
       organiser_id: organiser.id, title: s.title, category: s.category, start_date: startDateIso(s), venue_name: s.venueName,
-      city: place.city, town: s.city, postcode: s.postcode, ticket_url: s.ticketUrl, free_capacity: s.freeCapacity, paid_price_pence: s.paidPricePence, paid_capacity: s.paidCapacity, price_from: s.priceFrom, description: s.description,
+      city: place.city, town: s.city, postcode: s.postcode, ticket_url: s.ticketUrl, free_capacity: s.freeCapacity, paid_price_pence: s.paidPricePence, paid_capacity: s.paidCapacity, ticket_plan: s.ticketPlan, price_from: s.priceFrom, description: s.description,
       image_url: imageUrl, review_reason: check.reason, boost: boost === 'none' ? null : boost,
     }).select('id, manage_token').single()
     if (error || !sub) throw new Error(`could not save the event: ${error?.message}`)

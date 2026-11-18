@@ -6,7 +6,8 @@ import { approveSubmissionAction, rejectSubmissionAction } from './actions'
 export const dynamic = 'force-dynamic'
 
 type Row = {
-  id: string; title: string; category: string; start_date: string; venue_name: string; city: string; town: string | null; postcode: string | null; ticket_url: string | null; free_capacity: number | null
+  id: string; title: string; category: string; start_date: string; venue_name: string; city: string; town: string | null; postcode: string | null; ticket_url: string | null; free_capacity: number | null; paid_price_pence: number | null; paid_capacity: number | null
+  ticket_plan: { types: { name: string; price_pence: number; capacity: number; sales_end: string | null }[]; codes: { code: string; percent_off: number | null; amount_off_pence: number | null; max_uses: number | null }[] } | null
   description: string | null; image_url: string | null; review_reason: string | null; boost: string | null; boost_paid_at: string | null; created_at: string
   organisers: { name: string; email: string; website: string | null; plan: string } | null
 }
@@ -21,7 +22,7 @@ export default async function EventSubmissionsPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const loose = db as any
   const { data, error } = await loose.from('event_submissions')
-    .select('id, title, category, start_date, venue_name, city, town, postcode, ticket_url, free_capacity, description, image_url, review_reason, boost, boost_paid_at, created_at, organisers(name, email, website, plan)')
+    .select('id, title, category, start_date, venue_name, city, town, postcode, ticket_url, free_capacity, paid_price_pence, paid_capacity, ticket_plan, description, image_url, review_reason, boost, boost_paid_at, created_at, organisers(name, email, website, plan)')
     .eq('status', 'pending').order('created_at', { ascending: true }).limit(100)
   const rows = (data ?? []) as Row[]
   const { count: liveCount } = await loose.from('event_submissions').select('id', { count: 'exact', head: true }).eq('status', 'approved')
@@ -49,6 +50,19 @@ export default async function EventSubmissionsPage() {
               <p className="text-sm text-slate-600">{when(r.start_date)} · {r.venue_name}, {r.town ?? r.city}{r.postcode ? ` ${r.postcode}` : ''}{r.town && r.town !== r.city ? ` (shows on ${r.city})` : ''} · {r.category}</p>
               {r.ticket_url && <p className="text-sm"><a href={r.ticket_url} target="_blank" rel="noopener noreferrer nofollow" className="underline break-all">{r.ticket_url}</a></p>}
               {r.free_capacity && <p className="text-sm font-semibold">{r.free_capacity} free tickets through TheShowFinder</p>}
+              {r.paid_price_pence && (
+                <div className="text-sm">
+                  <p className="font-semibold">Paid tickets through TheShowFinder:</p>
+                  <ul className="list-disc pl-5">
+                    {(r.ticket_plan?.types ?? [{ name: 'Ticket', price_pence: r.paid_price_pence, capacity: r.paid_capacity ?? 0, sales_end: null }]).map(t => (
+                      <li key={t.name}>{t.name}: £{(t.price_pence / 100).toFixed(2)} × {t.capacity}{t.sales_end ? ` (until ${t.sales_end.slice(0, 10)})` : ''}</li>
+                    ))}
+                    {(r.ticket_plan?.codes ?? []).map(c => (
+                      <li key={c.code}>Code {c.code}: {c.percent_off ? `${c.percent_off}% off` : `£${((c.amount_off_pence ?? 0) / 100).toFixed(2)} off`}{c.max_uses ? `, ${c.max_uses} tickets` : ''}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {r.description && <p className="text-sm text-slate-600 whitespace-pre-line">{r.description}</p>}
               {r.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element

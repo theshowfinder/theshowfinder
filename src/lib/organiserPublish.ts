@@ -68,7 +68,7 @@ async function resolveVenue(db: Db, name: string, city: string, postcode: string
 
 interface SubmissionRow {
   id: string; organiser_id: string; title: string; category: string; start_date: string; venue_name: string; city: string
-  postcode: string | null; town: string | null; ticket_url: string | null; free_capacity: number | null; paid_price_pence: number | null; paid_capacity: number | null; price_from: number | null; description: string | null; image_url: string | null
+  postcode: string | null; town: string | null; ticket_url: string | null; free_capacity: number | null; paid_price_pence: number | null; paid_capacity: number | null; ticket_plan?: { types: Array<{ name: string; price_pence: number; capacity: number; sales_end: string | null }>; codes: Array<{ code: string; percent_off: number | null; amount_off_pence: number | null; max_uses: number | null; expires_at: string | null }> } | null; price_from: number | null; description: string | null; image_url: string | null
   status: string; event_id: string | null; boost: string | null; boost_paid_at: string | null; manage_token: string
 }
 
@@ -109,9 +109,18 @@ export async function publishSubmission(db: Db, submissionId: string): Promise<s
     if (ttErr) throw new Error(`could not set up tickets: ${ttErr.message}`)
   }
   // Paid tickets: on sale as soon as the organiser's Stripe account can take payments (refreshStripeAccount).
+  // Several types (Early bird, Standard, VIP) and discount codes come from the ticket builder (ticket_plan, migration 132).
   if (sub.paid_price_pence && sub.paid_capacity) {
-    const { error: ttErr } = await loose(db).from('ticket_types').insert({ event_id: ev.id, name: 'Ticket', price_pence: sub.paid_price_pence, capacity: sub.paid_capacity, active: !!org?.stripe_charges_enabled })
+    const planTypes = sub.ticket_plan?.types?.length ? sub.ticket_plan.types : [{ name: 'Ticket', price_pence: sub.paid_price_pence, capacity: sub.paid_capacity, sales_end: null }]
+    const { error: ttErr } = await loose(db).from('ticket_types').insert(planTypes.map((t, i) => ({
+      event_id: ev.id, name: t.name, price_pence: t.price_pence, capacity: t.capacity, sales_end: t.sales_end, sort: i, active: !!org?.stripe_charges_enabled,
+    })))
     if (ttErr) throw new Error(`could not set up tickets: ${ttErr.message}`)
+    const codes = sub.ticket_plan?.codes ?? []
+    if (codes.length) {
+      const { error: dcErr } = await loose(db).from('discount_codes').insert(codes.map(c => ({ event_id: ev.id, code: c.code, percent_off: c.percent_off, amount_off_pence: c.amount_off_pence, max_uses: c.max_uses, expires_at: c.expires_at })))
+      if (dcErr) throw new Error(`could not set up discount codes: ${dcErr.message}`)
+    }
   }
   await loose(db).from('event_submissions').update({ status: 'approved', event_id: ev.id, reviewed_at: new Date().toISOString() }).eq('id', sub.id)
   if (featured) await queueBoostSocialPost(db, ev.id)

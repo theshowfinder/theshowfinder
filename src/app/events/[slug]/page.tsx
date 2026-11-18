@@ -580,7 +580,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   // Tickets through TheShowFinder (free for now): the box on the page claims them; what's left is fetched live.
   const ourTicketTypes = isOrganiserListing
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? (((await (createPublicClient() as any).from('ticket_types').select('id, name, price_pence, max_per_order, sort, active').eq('event_id', event.id).order('sort'))?.data ?? []) as { id: string; name: string; price_pence: number; max_per_order: number; active: boolean }[])
+    ? (((await (createPublicClient() as any).from('ticket_types').select('id, name, price_pence, max_per_order, sort, active, sales_end').eq('event_id', event.id).order('sort'))?.data ?? []) as { id: string; name: string; price_pence: number; max_per_order: number; active: boolean; sales_end: string | null }[])
     : []
   // Paid tickets wait until the organiser's Stripe account can take payments (then active).
   const onSaleTypes = ourTicketTypes.filter(t => t.active)
@@ -1266,7 +1266,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             {/* Free tickets through TheShowFinder: claim here, QR tickets by email. */}
             {hasOurTickets && !isCancelledOrPostponed && !isEventPast(event.start_date) && (
               onSaleTypes.length > 0
-                ? <ClaimTickets eventTitle={event.title} types={onSaleTypes.map(t => ({ id: t.id, name: t.name, maxPerOrder: t.max_per_order, pricePence: t.price_pence }))} />
+                ? <ClaimTickets eventTitle={event.title} types={onSaleTypes.map(t => ({ id: t.id, name: t.name, maxPerOrder: t.max_per_order, pricePence: t.price_pence, salesEnd: t.sales_end }))} />
                 : <div id="tickets" className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm"><h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400 mb-1">Tickets</h3><p className="text-sm text-slate-600">Tickets go on sale here soon.</p></div>
             )}
 

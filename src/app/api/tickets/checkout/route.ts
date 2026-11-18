@@ -20,7 +20,8 @@ export async function POST(request: Request) {
     const checked = validateClaim({ ticketTypeId: String(body.ticketTypeId ?? ''), name: String(body.name ?? ''), email: String(body.email ?? ''), quantity: String(body.quantity ?? '') })
     if (!checked.ok) return NextResponse.json({ error: checked.error }, { status: 400 })
     const c = checked.value
-    const { data, error } = await db.rpc('reserve_paid_tickets', { p_type: c.ticketTypeId, p_name: c.name, p_email: c.email, p_qty: c.quantity })
+    const code = typeof body.code === 'string' ? body.code.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20) : ''
+    const { data, error } = await db.rpc('reserve_paid_tickets', { p_type: c.ticketTypeId, p_name: c.name, p_email: c.email, p_qty: c.quantity, p_code: code || null })
     if (error) return NextResponse.json({ error: claimErrorMessage(error.message) }, { status: 409 })
     const row = (Array.isArray(data) ? data[0] : data) as { order_id: string; access_token: string; unit_price: number; unit_fee: number; stripe_account: string } | undefined
     if (!row) throw new Error('no order returned')
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
       orderId: row.order_id, token: row.access_token, account: row.stripe_account, eventTitle: tt?.events?.title ?? 'Event', eventSlug: tt?.events?.slug ?? '',
       ticketName: tt?.name ?? 'Ticket', quantity: c.quantity, unitPrice: row.unit_price, unitFee: row.unit_fee, email: c.email,
       stripeCollectsFees: tt?.events?.organisers?.stripe_fees_collector === 'stripe',
+      discountCode: code || null,
     })
     await db.from('ticket_orders').update({ stripe_session_id: session.id }).eq('id', row.order_id)
     return NextResponse.json({ ok: true, url: session.url })

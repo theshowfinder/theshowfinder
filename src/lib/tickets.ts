@@ -23,6 +23,8 @@ export function validateClaim(input: ClaimInput, maxPerOrder = 20): { ok: true; 
 /** The database raises short codes; this is what the person sees. */
 export function claimErrorMessage(raw: string | null | undefined): string {
   const m = String(raw ?? '')
+  if (m.includes('bad_code')) return 'That discount code isn’t valid for this event, or it has ended.'
+  if (m.includes('code_used_up')) return 'That discount code has been used up. Try fewer tickets, or buy without it.'
   if (m.includes('sold_out')) return 'Sorry, there aren’t enough tickets left for that many. Try fewer.'
   if (m.includes('already_have')) return 'You already have the most tickets one person can get for this event. Check your email for them.'
   if (m.includes('too_many')) return 'That’s more tickets than one person can get for this event.'

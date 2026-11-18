@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { CATEGORY_CHOICES, BOOST_PRICE_GBP, PROMOTER_PRICE_GBP } from '@/lib/organiserEvents'
-import { bookingFeePence, gbpFromPence, parsePricePence } from '@/lib/tickets'
+import TicketBuilder from './TicketBuilder'
 
 const input = 'w-full min-h-[48px] px-4 rounded-xl border border-slate-300 text-base bg-white'
 const label = 'block text-sm font-bold text-slate-800 mb-1'
@@ -13,7 +13,6 @@ export default function ListEventForm({ cities, initialCity, initialTicketing }:
   const [error, setError] = useState<string | null>(null)
   const [boost, setBoost] = useState<'none' | 'boost' | 'promoter'>('boost')
   const [ticketing, setTicketing] = useState<'link' | 'paid' | 'free'>(initialTicketing ?? 'link')
-  const [price, setPrice] = useState('')
   const [startedAt] = useState(() => String(Date.now()))
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -77,11 +76,7 @@ export default function ListEventForm({ cities, initialCity, initialTicketing }:
         </div>
         {ticketing === 'paid' && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className={label} htmlFor="paid_price">Ticket price (£)</label><input id="paid_price" name="paid_price" required inputMode="decimal" className={input} placeholder="e.g. 12.50" value={price} onChange={e => setPrice(e.target.value)} /></div>
-              <div><label className={label} htmlFor="paid_capacity">How many tickets?</label><input id="paid_capacity" name="paid_capacity" type="number" min={1} max={10000} required inputMode="numeric" className={input} placeholder="e.g. 200" /></div>
-            </div>
-            <FeeNote price={price} />
+            <TicketBuilder />
             <div><label className={label} htmlFor="ticket_url">Event web page <span className="font-normal text-slate-500">(optional)</span></label><input id="ticket_url" name="ticket_url" className={input} placeholder="Facebook event or website" /></div>
           </div>
         )}
@@ -122,17 +117,5 @@ export default function ListEventForm({ cities, initialCity, initialTicketing }:
         {busy ? 'Saving…' : boost === 'none' ? 'List my event free' : 'Continue to payment'}
       </button>
     </form>
-  )
-}
-
-// You get your full ticket price; the buyer pays our booking fee on top (6% + 49p, all-in), shown in pounds for their price.
-function FeeNote({ price }: { price: string }) {
-  const p = parsePricePence(price)
-  if (!p) return <p className="text-xs text-slate-500 -mt-1">You keep 100% of your ticket price. Buyers pay a small booking fee on top, shown before they pay. Stripe pays your takings into your bank, usually a few days after each sale.</p>
-  const fee = bookingFeePence(p)
-  return (
-    <p className="text-xs text-slate-600 -mt-1">
-      You get <strong>{gbpFromPence(p)}</strong> a ticket. Buyers pay {gbpFromPence(p + fee)} including a {gbpFromPence(fee)} booking fee. Stripe pays it into your bank a few days after each sale. You set up payouts with Stripe after listing.
-    </p>
   )
 }

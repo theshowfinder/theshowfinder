@@ -5,6 +5,7 @@
 // Pure module (no '@/' imports) so it runs under node --test.
 
 import { parsePricePence } from './tickets.ts'
+import { validateTicketPlan, cheapestPence, type RawTicketPlan, type TicketPlan } from './ticketPlan.ts'
 import { isListingAddon } from './listingAddons.ts'
 
 export const BOOST_PRICE_GBP = 9.95
@@ -56,6 +57,8 @@ export interface SubmissionInput {
   /** Ticket price and how many, when ticketing is 'paid'. */
   paidPrice?: string
   paidCapacity?: string
+  /** Several ticket types and discount codes (the form's ticket builder). Takes over from paidPrice/paidCapacity. */
+  ticketPlan?: RawTicketPlan | null
 }
 
 export interface CleanSubmission {
@@ -79,6 +82,8 @@ export interface CleanSubmission {
   /** Paid tickets through TheShowFinder: price in pence and how many. Null otherwise. */
   paidPricePence: number | null
   paidCapacity: number | null
+  /** Ticket types and discount codes for paid tickets (null for a single type set by paidPrice, or no paid tickets). */
+  ticketPlan: TicketPlan | null
 }
 
 const clip = (s: string, n: number) => s.replace(/\s+/g, ' ').trim().slice(0, n)
@@ -131,8 +136,17 @@ export function validateSubmission(input: SubmissionInput, cities: string[], now
   if (!UK_POSTCODE.test(postcode)) return { ok: false, error: 'Please add the venue’s postcode, so people can find it (for example DE7 5RP).' }
   const free = input.ticketing === 'free'
   const paid = input.ticketing === 'paid'
-  const paidPricePence = paid ? parsePricePence(input.paidPrice ?? '') : null
-  const paidCapacity = paid ? Number(String(input.paidCapacity ?? '').replace(/[,\s]/g, '')) : null
+  // The ticket builder (several types, discount codes) when it was used; otherwise the single price and number.
+  let plan: TicketPlan | null = null
+  if (paid && input.ticketPlan) {
+    const startGuess = /^\d{4}-\d{2}-\d{2}$/.test(input.date) && /^\d{2}:\d{2}$/.test(input.time) ? new Date(`${input.date}T${input.time}:00Z`).toISOString() : new Date(now.getTime() + 365 * 86_400_000).toISOString()
+    const checkedPlan = validateTicketPlan(input.ticketPlan, startGuess, now)
+    if (!checkedPlan.ok) return { ok: false, error: checkedPlan.error }
+    plan = checkedPlan.value
+  }
+  const planFirst = plan ? plan.types.find(t => t.price_pence === cheapestPence(plan!)) ?? plan.types[0] : null
+  const paidPricePence = paid ? (planFirst ? planFirst.price_pence : parsePricePence(input.paidPrice ?? '')) : null
+  const paidCapacity = paid ? (planFirst ? planFirst.capacity : Number(String(input.paidCapacity ?? '').replace(/[,\s]/g, ''))) : null
   if (paid && !paidPricePence) return { ok: false, error: 'Please enter the ticket price, between £1 and £1,000 (for example 12.50).' }
   if (paid && (!Number.isInteger(paidCapacity) || (paidCapacity as number) < 1 || (paidCapacity as number) > 10000)) return { ok: false, error: 'Please say how many tickets you are selling (1 to 10,000).' }
   const freeCapacity = free ? Number(String(input.freeCapacity ?? '').replace(/[,\s]/g, '')) : null
@@ -154,6 +168,7 @@ export function validateSubmission(input: SubmissionInput, cities: string[], now
       organiserName, email, website, title, category, date: input.date, time: input.time, venueName, city,
       postcode, ticketUrl, priceFrom: free ? 0 : paid ? (paidPricePence as number) / 100 : priceNum, description, freeCapacity: free ? freeCapacity : null,
       paidPricePence: paid ? paidPricePence : null, paidCapacity: paid ? paidCapacity : null,
+      ticketPlan: paid ? plan : null,
     },
   }
 }

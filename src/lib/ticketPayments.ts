@@ -106,7 +106,7 @@ export async function refreshStripeAccount(db: Db, accountId: string, known?: Lo
 }
 
 /** The payment page for a held order, on the organiser's account, with our booking fee as the application fee. */
-export async function createTicketCheckout(o: { orderId: string; token: string; account: string; eventTitle: string; eventSlug: string; ticketName: string; quantity: number; unitPrice: number; unitFee: number; email: string; stripeCollectsFees?: boolean }): Promise<{ id: string; url: string }> {
+export async function createTicketCheckout(o: { orderId: string; token: string; account: string; eventTitle: string; eventSlug: string; ticketName: string; quantity: number; unitPrice: number; unitFee: number; email: string; stripeCollectsFees?: boolean; discountCode?: string | null }): Promise<{ id: string; url: string }> {
   // When Stripe takes its card fee from the organiser's sale, our application fee is cut by the standard UK card fee
   // (1.5% + 20p of the total), so the organiser still ends up with their ticket price.
   const total = (o.unitPrice + o.unitFee) * o.quantity
@@ -119,7 +119,7 @@ export async function createTicketCheckout(o: { orderId: string; token: string; 
       'line_items[0][quantity]': o.quantity,
       'line_items[0][price_data][currency]': 'gbp',
       'line_items[0][price_data][unit_amount]': o.unitPrice,
-      'line_items[0][price_data][product_data][name]': `${o.ticketName}: ${o.eventTitle}`.slice(0, 250),
+      'line_items[0][price_data][product_data][name]': `${o.ticketName}${o.discountCode ? ` (code ${o.discountCode})` : ''}: ${o.eventTitle}`.slice(0, 250),
       'line_items[1][quantity]': o.quantity,
       'line_items[1][price_data][currency]': 'gbp',
       'line_items[1][price_data][unit_amount]': o.unitFee,
