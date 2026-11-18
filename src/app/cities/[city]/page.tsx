@@ -49,6 +49,7 @@ import { cityFeedPath } from '@/lib/calendarFeeds'
 import { getNearbyAreas, getNeighbourCities, areasWithEvents, nearbyIntroSentence } from '@/lib/nearbyAreas'
 import CityBrowse from '@/components/CityBrowse'
 import { SEASONS, inSeason } from '@/lib/citySeasonSeo'
+import { upcomingMonths } from '@/lib/cityMonthSeo'
 import CityTicketSources from '@/components/CityTicketSources'
 import { excludePreviouslyShown } from '@/lib/cityDisplayRows'
 import CityMorningEdition from '@/components/CityMorningEdition'
@@ -538,6 +539,16 @@ export default async function CityPage({
             </nav>
           )}
           <CityBrowse cityName={cityName} counts={categoryCounts} />
+          <nav aria-label={`What's on in ${cityName} by month`} className="mt-4">
+            <h2 className="text-sm font-extrabold uppercase tracking-widest text-slate-500 mb-2">What&apos;s on by month</h2>
+            <div className="flex flex-wrap gap-2">
+              {upcomingMonths().slice(0, 6).map(x => (
+                <Link key={x.slug} href={`/cities/${encodeURIComponent(cityName)}/${x.slug}`} className="px-4 py-2 rounded-full text-sm font-bold border bg-white text-slate-700 border-slate-200 hover:border-slate-400 min-h-[40px] flex items-center">
+                  {x.label}
+                </Link>
+              ))}
+            </div>
+          </nav>
         </div>
 
         {/* ── TONIGHT (hidden completely when there are no valid events) ── */}

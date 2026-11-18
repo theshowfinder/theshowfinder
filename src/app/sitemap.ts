@@ -1,6 +1,7 @@
 import { GUIDES } from '@/lib/guides'
 import { CITY_TYPES, MIN_INDEXABLE, cityTypeUrl } from '@/lib/cityTypeSeo'
 import { SEASONS, seasonWindow, matchesSeason } from '@/lib/citySeasonSeo'
+import { upcomingMonths, monthWindow } from '@/lib/cityMonthSeo'
 import type { MetadataRoute } from 'next'
 import { createPublicClient } from '@/lib/supabase/public'
 import { getArtistSeoAlias, getEventSeoAlias } from '@/lib/seoAliases'
@@ -326,11 +327,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .filter(x => (seasonShows.get(`${city.name.toLowerCase()}|${x.slug}`)?.size ?? 0) >= MIN_INDEXABLE)
     .map(x => ({ url: `${BASE}/cities/${encodeURIComponent(city.name)}/${x.slug}`, changeFrequency: 'daily' as const, priority: 0.8 })))
 
+  // Month pages (/cities/Leeds/december-2026) for the next 12 months with 5+ shows.
+  const months = upcomingMonths().map(m => ({ m, w: monthWindow(m) }))
+  const monthShows = new Map<string, Set<string>>()
+  for (const e of eventRows) {
+    const hit = months.find(x => e.start_date >= x.w.from && e.start_date < x.w.to)
+    const c = hit && e.venue_id ? venueCity.get(e.venue_id) : null
+    if (!hit || !c) continue
+    const k = `${c}|${hit.m.slug}`
+    if (!monthShows.has(k)) monthShows.set(k, new Set())
+    monthShows.get(k)!.add(`${e.title.trim().toLowerCase()}|${e.venue_id}`)
+  }
+  const cityMonthPages: MetadataRoute.Sitemap = CITIES.flatMap(city => months
+    .filter(x => (monthShows.get(`${city.name.toLowerCase()}|${x.m.slug}`)?.size ?? 0) >= MIN_INDEXABLE)
+    .map(x => ({ url: `${BASE}/cities/${encodeURIComponent(city.name)}/${x.m.slug}`, changeFrequency: 'daily' as const, priority: 0.7 })))
+
   const promoterPages: MetadataRoute.Sitemap = promoterRows.map(p => ({
     url:             `${BASE}/promoters/${p.slug}`,
     changeFrequency: 'weekly' as const,
     priority:        0.5,
   }))
 
-  return [...staticPages, ...promoterPages, ...cityPages, ...cityTypePages, ...citySeasonPages, ...cityThisWeekPages, ...cityThisWeekendPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
+  return [...staticPages, ...promoterPages, ...cityPages, ...cityTypePages, ...citySeasonPages, ...cityMonthPages, ...cityThisWeekPages, ...cityThisWeekendPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
 }
