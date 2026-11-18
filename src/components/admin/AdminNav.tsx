@@ -11,7 +11,7 @@ const TABS: Array<{ label: string; href: string; pages: Array<[string, string]> 
   { label: 'Imports', href: '/admin/feeds', pages: [['/admin/feeds', 'Feeds & matching'], ['/admin/ticketmaster', 'Ticketmaster'], ['/admin/gigsberg', 'Gigsberg'], ['/admin/see-tickets', 'See Tickets'], ['/admin/unmatched', 'Unmatched'], ['/admin/local-events', 'Local listings']] },
   { label: 'Content', href: '/admin/news', pages: [['/admin/news', 'News inbox'], ['/admin/social', 'Social posts']] },
   { label: 'Advertisers', href: '/admin/advertiser-applications', pages: [['/admin/advertiser-applications', 'Applications'], ['/admin/local-businesses', 'Businesses'], ['/admin/outreach', 'Outreach'], ['/admin/event-submissions', 'Organiser listings'], ['/admin/organisers', 'Organisers to contact'], ['/admin/ticket-sales', 'Ticket sales']] },
-  { label: 'Audience', href: '/admin/subscribers', pages: [['/admin/subscribers', 'Subscribers'], ['/admin/newsletter', 'Newsletter']] },
+  { label: 'Audience', href: '/admin/subscribers', pages: [['/admin/subscribers', 'Subscribers'], ['/admin/newsletter', 'Newsletter'], ['/admin/backlinks', 'Backlinks']] },
 ]
 
 const under = (path: string, href: string) => href === '/admin' ? path === '/admin' : path === href || path.startsWith(href + '/')

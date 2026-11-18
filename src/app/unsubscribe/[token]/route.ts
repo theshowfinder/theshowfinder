@@ -11,7 +11,9 @@ async function unsubscribe(token: string): Promise<boolean> {
   const db = createAdminClient() as any // eslint-disable-line @typescript-eslint/no-explicit-any
   const now = new Date().toISOString()
   const { data } = await db.from('outreach_prospects').update({ status: 'unsubscribed', unsubscribed_at: now, updated_at: now }).eq('unsubscribe_token', token).select('id')
-  return !!data?.length
+  // Backlink outreach (migration 134) uses the same link format.
+  const { data: link } = await db.from('link_prospects').update({ status: 'unsubscribed', updated_at: now }).eq('unsubscribe_token', token).select('id')
+  return !!data?.length || !!link?.length
 }
 
 const shell = (body: string) => new NextResponse(
@@ -26,7 +28,7 @@ const page = (ok: boolean) => shell(ok
   : '<p>This link is not valid any more. If you would still like us to stop emailing you, reply to our email with "unsubscribe".</p>')
 
 export async function GET() {
-  return shell('<p>Stop receiving emails from TheShowFinder about featuring your business?</p>' +
+  return shell('<p>Stop receiving emails from TheShowFinder?</p>' +
     '<form method="post"><input type="hidden" name="confirm" value="1"><button type="submit" style="background:#E8003D;color:#fff;border:0;border-radius:10px;padding:12px 18px;font-weight:bold;font-size:15px;cursor:pointer">Unsubscribe</button></form>')
 }
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {

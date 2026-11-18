@@ -80,6 +80,18 @@
       "schedule": "45 14 * * *"
     },
     {
+      "path": "/api/cron/link-find",
+      "schedule": "25 7-16 * * 1-5"
+    },
+    {
+      "path": "/api/cron/link-send",
+      "schedule": "*/20 8-16 * * 1-5"
+    },
+    {
+      "path": "/api/cron/link-check",
+      "schedule": "40 5 * * *"
+    },
+    {
       "path": "/api/cron/indexnow",
       "schedule": "10 * * * *"
     },
