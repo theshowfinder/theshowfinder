@@ -48,6 +48,7 @@ import CalendarSubscribe from '@/components/CalendarSubscribe'
 import { cityFeedPath } from '@/lib/calendarFeeds'
 import { getNearbyAreas, getNeighbourCities, areasWithEvents, nearbyIntroSentence } from '@/lib/nearbyAreas'
 import CityBrowse from '@/components/CityBrowse'
+import { SEASONS, inSeason } from '@/lib/citySeasonSeo'
 import CityTicketSources from '@/components/CityTicketSources'
 import { excludePreviouslyShown } from '@/lib/cityDisplayRows'
 import CityMorningEdition from '@/components/CityMorningEdition'
@@ -526,7 +527,18 @@ export default async function CityPage({
         </div>
 
         {/* ── BROWSE BY TYPE ── */}
-        <div className="order-10"><CityBrowse cityName={cityName} counts={categoryCounts} /></div>
+        <div className="order-10">
+          {inSeason() && (
+            <nav aria-label={`${cityName} this season`} className="mb-4 flex flex-wrap gap-2">
+              {SEASONS.map(x => (
+                <Link key={x.slug} href={`/cities/${encodeURIComponent(cityName)}/${x.slug}`} className="px-4 py-2 rounded-full text-sm font-bold border bg-white text-slate-700 border-slate-200 hover:border-slate-400 min-h-[40px] flex items-center">
+                  {x.emoji} {x.label} in {cityName}
+                </Link>
+              ))}
+            </nav>
+          )}
+          <CityBrowse cityName={cityName} counts={categoryCounts} />
+        </div>
 
         {/* ── TONIGHT (hidden completely when there are no valid events) ── */}
         {tonightEvents.length > 0 && (

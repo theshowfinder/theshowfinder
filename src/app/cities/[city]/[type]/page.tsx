@@ -1,4 +1,5 @@
-// "{Type} in {City}" pages, e.g. /cities/Coventry/concerts: see src/lib/cityTypeSeo.ts for why they exist.
+// "{Type} in {City}" pages (/cities/Coventry/concerts, see src/lib/cityTypeSeo.ts) and seasonal pages
+// (/cities/Leeds/panto, /christmas, /new-years-eve, see src/lib/citySeasonSeo.ts).
 export const revalidate = 21600
 export const maxDuration = 60
 
@@ -13,10 +14,13 @@ import { CITY_CENTRES } from '@/lib/localEventCity'
 import { jsonLdScript, buildBreadcrumbSchema, buildItemListSchema } from '@/lib/jsonld'
 import { buildCityCollectionSchema } from '@/lib/citySeo'
 import {
-  CITY_TYPES, MIN_INDEXABLE, cityTypeBySlug, cityTypePath, cityTypeUrl, cityTypeTitle, cityTypeH1, cityTypeDescription,
+  CITY_TYPES, MIN_INDEXABLE, cityTypeBySlug, cityTypePath, cityTypeTitle, cityTypeH1, cityTypeDescription,
   cityTypeFaqs, groupRuns, weekendDatesLondon, type CityType,
 } from '@/lib/cityTypeSeo'
 import type { EventWithVenue } from '@/lib/types/database'
+import {
+  SEASONS, seasonBySlug, seasonWindow, matchesSeason, seasonTitle, seasonH1, seasonDescription, seasonFaqs, inSeason, type Season,
+} from '@/lib/citySeasonSeo'
 
 export async function generateStaticParams() {
   return []
@@ -24,18 +28,14 @@ export async function generateStaticParams() {
 
 type Row = EventWithVenue & { venue_slug?: string | null }
 
-async function loadRows(cityName: string, t: CityType): Promise<Row[]> {
+async function loadRows(cityName: string, c: { t?: CityType; s?: Season }): Promise<Row[]> {
   const supabase = createPublicClient()
-  const { data } = await supabase
-    .from('listed_events_with_venue')
-    .select('*')
-    .eq('category', t.category)
-    .ilike('venue_city', cityName)
-    .gte('start_date', new Date().toISOString())
-    .in('status', LIVE_EVENT_STATUSES)
-    .order('start_date', { ascending: true })
-    .limit(800) as unknown as { data: Row[] | null }
-  const rows = data ?? []
+  let q = supabase.from('listed_events_with_venue').select('*').ilike('venue_city', cityName).in('status', LIVE_EVENT_STATUSES)
+  if (c.t) q = q.eq('category', c.t.category).gte('start_date', new Date().toISOString())
+  if (c.s) { const w = seasonWindow(c.s); q = q.gte('start_date', w.from).lt('start_date', w.to) }
+  const { data } = await (q.order('start_date', { ascending: true }).limit(c.s ? 2000 : 800) as unknown as Promise<{ data: Row[] | null }>)
+  let rows = data ?? []
+  if (c.s) rows = rows.filter(r => matchesSeason(c.s!, r))
   const dupes = await fetchDuplicateIds(supabase, rows.map(r => r.id))
   return rows.filter(r => !dupes.has(r.id))
 }
@@ -44,7 +44,8 @@ function resolve(cityParam: string, typeParam: string) {
   const requested = decodeURIComponent(cityParam)
   const city = CITIES.find(c => c.name.toLowerCase() === requested.toLowerCase())
   const t = cityTypeBySlug(typeParam)
-  return { requested, city, t }
+  const season = t ? undefined : seasonBySlug(typeParam)
+  return { requested, city, t, season }
 }
 
 function facts(cityName: string, rows: Row[]) {
@@ -70,13 +71,13 @@ function facts(cityName: string, rows: Row[]) {
 
 export async function generateMetadata({ params }: { params: Promise<{ city: string; type: string }> }): Promise<Metadata> {
   const { city, type } = await params
-  const { city: c, t } = resolve(city, type)
-  if (!c || !t) return { title: 'Not found' }
-  const rows = await loadRows(c.name, t)
+  const { city: c, t, season } = resolve(city, type)
+  if (!c || (!t && !season)) return { title: 'Not found' }
+  const rows = await loadRows(c.name, { t, s: season })
   const { f } = facts(c.name, rows)
-  const title = cityTypeTitle(c.name, t)
-  const description = cityTypeDescription(c.name, t, f.count, f.venueNames)
-  const canonical = cityTypeUrl(c.name, t)
+  const title = t ? cityTypeTitle(c.name, t) : seasonTitle(c.name, season!)
+  const description = t ? cityTypeDescription(c.name, t, f.count, f.venueNames) : seasonDescription(c.name, season!, f.count, f.venueNames)
+  const canonical = `https://www.theshowfinder.com/cities/${encodeURIComponent(c.name)}/${t ? t.slug : season!.slug}`
   return {
     title, description,
     alternates: { canonical },
@@ -87,16 +88,26 @@ export async function generateMetadata({ params }: { params: Promise<{ city: str
 
 export default async function CityTypePage({ params }: { params: Promise<{ city: string; type: string }> }) {
   const { city, type } = await params
-  const { requested, city: c, t } = resolve(city, type)
-  if (!c || !t) notFound()
+  const { requested, city: c, t: typeMatch, season } = resolve(city, type)
+  if (!c || (!typeMatch && !season)) notFound()
   const cityName = c.name
-  if (requested !== cityName || type !== t.slug) redirect(cityTypePath(cityName, t))
+  const slug = typeMatch ? typeMatch.slug : season!.slug
+  if (requested !== cityName || type !== slug) redirect(`/cities/${encodeURIComponent(cityName)}/${slug}`)
 
-  const rows = await loadRows(cityName, t)
+  const rows = await loadRows(cityName, { t: typeMatch, s: season })
   const { runs, venueNames, f } = facts(cityName, rows)
   const shown = runs.slice(0, 60)
-  const faqs = cityTypeFaqs(cityName, t, f)
-  const url = cityTypeUrl(cityName, t)
+  // A season page reads like a type page: same layout, its own words.
+  const fmt = (iso: string) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(iso))
+  const t: CityType = typeMatch ?? { slug: season!.slug, category: '', label: season!.label, plural: season!.plural, singular: season!.singular, emoji: season!.emoji }
+  const faqs = typeMatch ? cityTypeFaqs(cityName, typeMatch, f) : seasonFaqs(cityName, season!, {
+    count: f.count, venueNames, priceFrom: f.priceFrom,
+    firstWhen: runs[0] ? fmt(runs[0].first.start_date) : null,
+    lastWhen: runs.length ? fmt(runs.reduce((m, g) => g.last > m ? g.last : m, runs[0].last)) : null,
+  })
+  const h1 = typeMatch ? cityTypeH1(cityName, typeMatch) : seasonH1(cityName, season!)
+  const descriptionText = typeMatch ? cityTypeDescription(cityName, typeMatch, f.count, venueNames) : seasonDescription(cityName, season!, f.count, venueNames)
+  const url = `https://www.theshowfinder.com/cities/${encodeURIComponent(cityName)}/${slug}`
   const cityUrl = `https://www.theshowfinder.com/cities/${encodeURIComponent(cityName)}`
 
   // Other types in this city, and this type in the nearest cities: the links that tie the pages together.
@@ -113,7 +124,7 @@ export default async function CityTypePage({ params }: { params: Promise<{ city:
     { name: t.label, url },
   ])
   const itemList = buildItemListSchema(shown.slice(0, 20).map(g => ({ name: g.first.title, url: `https://www.theshowfinder.com/events/${g.first.slug}` })))
-  const collection = buildCityCollectionSchema({ cityName, url, name: cityTypeH1(cityName, t), description: cityTypeDescription(cityName, t, f.count, venueNames) })
+  const collection = buildCityCollectionSchema({ cityName, url, name: h1, description: descriptionText })
   const faqSchema = faqs.length ? {
     '@context': 'https://schema.org', '@type': 'FAQPage',
     mainEntity: faqs.map(x => ({ '@type': 'Question', name: x.q, acceptedAnswer: { '@type': 'Answer', text: x.a } })),
@@ -132,7 +143,7 @@ export default async function CityTypePage({ params }: { params: Promise<{ city:
             <Link href="/" className="hover:text-white/70">Home</Link>{' / '}
             <Link href={`/cities/${encodeURIComponent(cityName)}`} className="hover:text-white/70">{cityName}</Link>{' / '}{t.label}
           </nav>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-2"><span aria-hidden="true">{t.emoji} </span>{cityTypeH1(cityName, t)}</h1>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-2"><span aria-hidden="true">{t.emoji} </span>{h1}</h1>
           <p className="text-white/60 text-sm max-w-2xl">
             {f.count > 0
               ? `${f.count} upcoming ${f.count === 1 ? t.singular : t.plural}${venueNames.length ? ` at venues including ${venueNames.slice(0, 3).join(', ')}` : ''}. Updated every day.`
@@ -151,6 +162,16 @@ export default async function CityTypePage({ params }: { params: Promise<{ city:
           ))}
           <Link href={`/cities/${encodeURIComponent(cityName)}/this-weekend`} className="px-4 py-2 rounded-full text-sm font-bold border bg-white text-slate-700 border-slate-200 hover:border-slate-400 min-h-[40px] flex items-center">This weekend</Link>
         </nav>
+        {(inSeason() || season) && (
+          <nav aria-label={`${cityName} this season`} className="flex flex-wrap gap-2 -mt-6">
+            {SEASONS.map(x => (
+              <Link key={x.slug} href={`/cities/${encodeURIComponent(cityName)}/${x.slug}`} aria-current={x.slug === slug ? 'page' : undefined}
+                className={`px-4 py-2 rounded-full text-sm font-bold border min-h-[40px] flex items-center ${x.slug === slug ? 'bg-[#E8003D] text-white border-[#E8003D]' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'}`}>
+                {x.emoji} {x.label}
+              </Link>
+            ))}
+          </nav>
+        )}
 
         {shown.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -165,7 +186,7 @@ export default async function CityTypePage({ params }: { params: Promise<{ city:
             <Link href={`/cities/${encodeURIComponent(cityName)}`} className="inline-block font-bold text-white px-6 py-3 rounded-xl" style={{ backgroundColor: '#E8003D' }}>See everything on in {cityName}</Link>
           </div>
         )}
-        {runs.length > shown.length && (
+        {typeMatch && runs.length > shown.length && (
           <p className="text-sm text-slate-600">Showing the next {shown.length} of {runs.length}. <Link href={`/events?category=${t.category}&city=${encodeURIComponent(cityName)}`} className="font-semibold underline">See them all</Link></p>
         )}
 
@@ -195,13 +216,13 @@ export default async function CityTypePage({ params }: { params: Promise<{ city:
           <section>
             <h2 className="text-lg font-extrabold text-slate-900 mb-2">{t.label} near {cityName}</h2>
             <div className="flex flex-wrap gap-x-5 gap-y-2">
-              {nearby.map(n => <Link key={n} href={cityTypePath(n, t)} className="text-sm font-semibold hover:underline" style={{ color: '#026CDF' }}>{t.label} in {n} →</Link>)}
+              {nearby.map(n => <Link key={n} href={`/cities/${encodeURIComponent(n)}/${slug}`} className="text-sm font-semibold hover:underline" style={{ color: '#026CDF' }}>{t.label} in {n} →</Link>)}
             </div>
           </section>
         )}
 
         <Link href="/list-your-event" className="block rounded-2xl border-2 border-dashed border-slate-300 bg-white p-5 hover:border-slate-500">
-          <p className="text-xs font-extrabold uppercase tracking-widest" style={{ color: '#E8003D' }}>Putting on {t.slug === 'sport' ? 'an event' : `a ${t.singular}`} in {cityName}?</p>
+          <p className="text-xs font-extrabold uppercase tracking-widest" style={{ color: '#E8003D' }}>Putting on {typeMatch && t.slug !== 'sport' ? `a ${t.singular}` : 'an event'} in {cityName}?</p>
           <p className="mt-1 text-lg font-extrabold text-slate-900">List it free →</p>
         </Link>
       </div>
