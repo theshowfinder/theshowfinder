@@ -42,6 +42,7 @@ export const NAV_LINKS: NavLink[] = [
 // Shown as a slim bar above the main header on desktop and as their own section in the mobile menu.
 export const BUSINESS_LINKS: NavLink[] = [
   { label: 'List your event', href: '/list-your-event' },
+  { label: 'Sell tickets',    href: '/sell-tickets' },
   { label: 'Advertise',       href: '/advertise' },
 ]
 

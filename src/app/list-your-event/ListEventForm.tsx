@@ -8,11 +8,11 @@ import { bookingFeePence, gbpFromPence, parsePricePence } from '@/lib/tickets'
 const input = 'w-full min-h-[48px] px-4 rounded-xl border border-slate-300 text-base bg-white'
 const label = 'block text-sm font-bold text-slate-800 mb-1'
 
-export default function ListEventForm({ cities, initialCity }: { cities: string[]; initialCity?: string }) {
+export default function ListEventForm({ cities, initialCity, initialTicketing }: { cities: string[]; initialCity?: string; initialTicketing?: 'paid' | 'free' }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [boost, setBoost] = useState<'none' | 'boost' | 'promoter'>('boost')
-  const [ticketing, setTicketing] = useState<'link' | 'paid' | 'free'>('link')
+  const [ticketing, setTicketing] = useState<'link' | 'paid' | 'free'>(initialTicketing ?? 'link')
   const [price, setPrice] = useState('')
   const [startedAt] = useState(() => String(Date.now()))
 
@@ -66,7 +66,7 @@ export default function ListEventForm({ cities, initialCity }: { cities: string[
           <p className={label}>How do people get tickets?</p>
           <input type="hidden" name="ticketing" value={ticketing} />
           <div className="grid sm:grid-cols-3 gap-2">
-            {([['link', 'On my own ticket site', 'Link to wherever you already sell'], ['paid', 'Sell tickets with TheShowFinder', 'Low booking fee. You keep your full ticket price.'], ['free', 'Free tickets through TheShowFinder', 'QR tickets by email, scan them at the door. Free.']] as const).map(([v, t, b]) => (
+            {([['link', 'On my own ticket site', 'Link to wherever you already sell'], ['paid', 'Sell tickets with TheShowFinder', 'You keep 100% of your ticket price, paid as you sell.'], ['free', 'Free tickets through TheShowFinder', 'QR tickets by email, scan them at the door. Free.']] as const).map(([v, t, b]) => (
               <button key={v} type="button" onClick={() => setTicketing(v)} aria-pressed={ticketing === v}
                 className={`text-left rounded-2xl border-2 p-3 ${ticketing === v ? 'border-[#E8003D] bg-red-50/40' : 'border-slate-200 bg-white'}`}>
                 <span className="block font-extrabold text-slate-900 text-sm">{t}</span>
@@ -128,7 +128,7 @@ export default function ListEventForm({ cities, initialCity }: { cities: string[
 // You get your full ticket price; the buyer pays our booking fee on top (6% + 49p, all-in), shown in pounds for their price.
 function FeeNote({ price }: { price: string }) {
   const p = parsePricePence(price)
-  if (!p) return <p className="text-xs text-slate-500 -mt-1">You get your full ticket price. Buyers pay a small booking fee on top, shown before they pay. Stripe pays your takings into your bank, usually a few days after each sale.</p>
+  if (!p) return <p className="text-xs text-slate-500 -mt-1">You keep 100% of your ticket price. Buyers pay a small booking fee on top, shown before they pay. Stripe pays your takings into your bank, usually a few days after each sale.</p>
   const fee = bookingFeePence(p)
   return (
     <p className="text-xs text-slate-600 -mt-1">
