@@ -576,6 +576,7 @@ export default async function CityPage({
             {tonightEvents.length > 7 && (
               <p className="mt-2 text-xs text-slate-500">{tonightEvents.length} shows tonight · scroll the list to see them all</p>
             )}
+            <Link href={`/cities/${encodeURIComponent(cityName)}/tonight`} className="mt-3 inline-block text-sm font-semibold hover:underline" style={{ color: '#026CDF' }}>Everything on in {cityName} tonight →</Link>
           </section>
         )}
 

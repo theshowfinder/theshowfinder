@@ -239,6 +239,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority:        0.7,
   }))
 
+  // Tonight pages: every city, like This weekend (the list changes daily, the page is always useful).
+  const cityTonightPages: MetadataRoute.Sitemap = CITIES.map(city => ({
+    url:             `${BASE}/cities/${encodeURIComponent(city.name)}/tonight`,
+    changeFrequency: 'daily' as const,
+    priority:        0.7,
+  }))
+
   const cityThisWeekendPages: MetadataRoute.Sitemap = CITIES.map(city => ({
     url:             `${BASE}/cities/${encodeURIComponent(city.name)}/this-weekend`,
     changeFrequency: 'daily' as const,
@@ -348,5 +355,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority:        0.5,
   }))
 
-  return [...staticPages, ...promoterPages, ...cityPages, ...cityTypePages, ...citySeasonPages, ...cityMonthPages, ...cityThisWeekPages, ...cityThisWeekendPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
+  return [...staticPages, ...promoterPages, ...cityPages, ...cityTypePages, ...citySeasonPages, ...cityMonthPages, ...cityThisWeekPages, ...cityThisWeekendPages, ...cityTonightPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
 }
