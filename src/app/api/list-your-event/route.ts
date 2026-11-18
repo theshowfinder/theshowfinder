@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { CITIES } from '@/lib/cities'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { validateSubmission, autoApproveCheck, MAX_SUBMISSIONS_PER_DAY, type BoostChoice } from '@/lib/organiserEvents'
+import { dashboardUrl } from '@/lib/organiserDashboard'
 import { getOrCreateOrganiser, publishSubmission, createOrganiserCheckout, startDateIso, emailOrganiser, boostLink, doorLink, payoutsLink, promoterActive, placeListing, SITE } from '@/lib/organiserPublish'
 import { resend, FROM_EMAIL } from '@/lib/resend'
 
@@ -99,6 +100,9 @@ export async function POST(request: Request) {
         : '',
       s.freeCapacity
         ? `Your ${s.freeCapacity} free tickets are claimed on your event page. Each person gets a QR ticket by email. On the night, open this link on your phone to scan tickets at the door and see who's coming (keep it private): ${doorLink(sub.id, sub.manage_token)}`
+        : '',
+      s.freeCapacity || s.paidPricePence
+        ? `Your organiser dashboard, to see sales, add ticket types and discount codes, email your ticket holders and get a ticket button for your website (keep it private): ${dashboardUrl(organiser.id)}`
         : '',
       'Any questions, just reply to this email.',
       'Chris, TheShowFinder',

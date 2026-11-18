@@ -63,7 +63,7 @@ export default function SellTicketsPage() {
             <Link href="/list-your-event?ticketing=paid" className="inline-flex items-center min-h-[52px] px-6 rounded-full bg-[#E8003D] font-extrabold text-white hover:bg-[#c40033]">Start selling tickets →</Link>
             <Link href="/list-your-event?ticketing=free" className="inline-flex items-center min-h-[52px] px-6 rounded-full border-2 border-white/40 font-bold hover:border-white">Free event? Free tickets</Link>
           </div>
-          <p className="mt-4 text-sm text-white/60">No contract. No monthly fee. Set up in two minutes.</p>
+          <p className="mt-4 text-sm text-white/60">No contract. No monthly fee. Set up in two minutes. Already listed? <Link href="/organiser" className="underline text-white/80">Manage your events</Link>.</p>
         </div>
       </section>
 

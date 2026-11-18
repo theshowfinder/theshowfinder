@@ -4,12 +4,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import BoostButtons from '../BoostButtons'
 import { promoterActive } from '@/lib/organiserPublish'
 import { refreshStripeAccount } from '@/lib/ticketPayments'
+import { dashboardUrl } from '@/lib/organiserDashboard'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Your event listing', robots: { index: false, follow: false } }
 
 type Sub = {
-  id: string; title: string; status: string; boost_paid_at: string | null; start_date: string; manage_token: string; free_capacity: number | null; paid_price_pence: number | null
+  id: string; organiser_id: string; title: string; status: string; boost_paid_at: string | null; start_date: string; manage_token: string; free_capacity: number | null; paid_price_pence: number | null
   events: { slug: string } | null
   organisers: { plan: string; plan_status: string | null; stripe_account_id: string | null; stripe_charges_enabled: boolean } | null
 }
@@ -24,7 +25,7 @@ export default async function ListingDonePage({ searchParams }: { searchParams: 
   if (s && t && /^[0-9a-f-]{36}$/.test(s)) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (createAdminClient() as any).from('event_submissions')
-      .select('id, title, status, boost_paid_at, start_date, manage_token, free_capacity, paid_price_pence, events(slug), organisers(plan, plan_status, stripe_account_id, stripe_charges_enabled)')
+      .select('id, organiser_id, title, status, boost_paid_at, start_date, manage_token, free_capacity, paid_price_pence, events(slug), organisers(plan, plan_status, stripe_account_id, stripe_charges_enabled)')
       .eq('id', s).eq('manage_token', t).maybeSingle()
     sub = data as Sub | null
     // Back from Stripe's sign-up pages: read their account now, so tickets go on sale straight away.
@@ -74,6 +75,7 @@ export default async function ListingDonePage({ searchParams }: { searchParams: 
             <div className="mt-3 flex flex-wrap gap-2">
               <Link href={`/tickets/door?s=${sub.id}&t=${sub.manage_token}`} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-extrabold text-slate-900">Door scanner</Link>
               <a href={`/api/tickets/attendees?s=${sub.id}&t=${sub.manage_token}`} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-extrabold text-slate-900">Attendee list</a>
+              <a href={dashboardUrl(sub.organiser_id).replace('https://www.theshowfinder.com', '')} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-extrabold text-slate-900">Your dashboard</a>
             </div>
           </div>
         )}

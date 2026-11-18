@@ -142,6 +142,8 @@ export default function Footer() {
               <li><Link href="/about"     className="hover:text-white transition-colors">About</Link></li>
               <li><Link href="/contact"   className="hover:text-white transition-colors">Contact</Link></li>
               <li><Link href="/list-your-event" className="hover:text-white transition-colors">List your event free</Link></li>
+              <li><Link href="/sell-tickets" className="hover:text-white transition-colors">Sell tickets</Link></li>
+              <li><Link href="/organiser" className="hover:text-white transition-colors">Organiser sign in</Link></li>
               <li><Link href="/advertise/onboard" className="hover:text-white transition-colors">Advertise with us</Link></li>
               <li><Link href="/widgets"   className="hover:text-white transition-colors">Free gigs widget</Link></li>
               <li><Link href="/calendars" className="hover:text-white transition-colors">Gig calendar feeds</Link></li>

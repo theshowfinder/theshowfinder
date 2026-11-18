@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { dashboardUrl } from '@/lib/organiserDashboard'
 import { publishSubmission, emailOrganiser, boostLink, payoutsLink, SITE } from '@/lib/organiserPublish'
 
 export async function approveSubmissionAction(formData: FormData) {
@@ -17,7 +18,7 @@ export async function approveSubmissionAction(formData: FormData) {
   if (pre.data?.paid_price_pence) await (db as any).from('organisers').update({ paid_tickets_approved: true }).eq('id', pre.data.organiser_id)
   const slug = await publishSubmission(db, id)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: sub } = await (db as any).from('event_submissions').select('title, manage_token, boost_paid_at, paid_price_pence, organisers(email, name, plan, plan_status, stripe_charges_enabled)').eq('id', id).maybeSingle()
+  const { data: sub } = await (db as any).from('event_submissions').select('title, manage_token, boost_paid_at, paid_price_pence, free_capacity, organiser_id, organisers(email, name, plan, plan_status, stripe_charges_enabled)').eq('id', id).maybeSingle()
   const o = sub?.organisers
   if (o?.email && slug) {
     const boosted = !!sub.boost_paid_at || (o.plan === 'promoter' && o.plan_status === 'active')
@@ -26,6 +27,7 @@ export async function approveSubmissionAction(formData: FormData) {
       `Good news: "${sub.title}" is now live on TheShowFinder: ${SITE}/events/${slug}`,
       sub.paid_price_pence && !o.stripe_charges_enabled ? `Your tickets go on sale as soon as you've set up payouts with Stripe (about 5 minutes): ${payoutsLink(id, sub.manage_token)}` : '',
       boosted ? 'Your boost is on, so it is featured right up to the night.' : `Want more people to see it? Boost it for £9.95: ${boostLink(id, sub.manage_token)}`,
+      sub.paid_price_pence || sub.free_capacity ? `Manage your tickets, discount codes and ticket holders in your dashboard (keep it private): ${dashboardUrl(sub.organiser_id)}` : '',
       'Chris, TheShowFinder',
     ])
   }
