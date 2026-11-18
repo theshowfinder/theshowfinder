@@ -4,7 +4,9 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
-import { setOrganiserStatusAction } from './actions'
+import { setOrganiserStatusAction, approveOrganisersAction } from './actions'
+import { buildTicketEmail, TICKET_OUTREACH_PER_DAY, TICKET_FOLLOW_UP_DAYS } from '@/lib/ticketOutreach'
+import { ticketsStripeReady, ticketsTestMode } from '@/lib/ticketPayments'
 
 // People who sell event tickets, found by cron organiser-find on public event listings, with the best way to
 // reach each one: an email from their own website, or their Instagram / Facebook.
@@ -14,9 +16,10 @@ type Row = {
   sample_event: string | null; sample_event_url: string | null; sample_venue: string | null; next_event_date: string | null
   website: string | null; facebook: string | null; instagram: string | null; email: string | null; phone: string | null
   company_name: string | null; company_number: string | null; company_type: string; contact_route: string; status: string; profile_url: string | null; notes: string | null
+  unsubscribe_token: string; sent_at: string | null
 }
 const ROUTES: Array<[string, string]> = [['email', 'Email found'], ['social', 'Instagram / Facebook only'], ['none', 'No contact found'], ['pending', 'Still being checked']]
-const STATUSES: Array<[string, string]> = [['new', 'New'], ['contacted', 'Contacted'], ['replied', 'Replied'], ['listed', 'Listed with us'], ['not_interested', 'Not interested'], ['unsubscribed', 'Unsubscribed']]
+const STATUSES: Array<[string, string]> = [['new', 'New'], ['approved', 'Approved, waiting to send'], ['contacted', 'Emailed'], ['followed_up', 'Followed up'], ['replied', 'Replied'], ['listed', 'Listed with us'], ['not_interested', 'Not interested'], ['unsubscribed', 'Unsubscribed'], ['bounced', 'Bounced']]
 
 export default async function OrganisersPage({ searchParams }: { searchParams: Promise<{ route?: string; city?: string; status?: string }> }) {
   await requireAdmin()
@@ -39,6 +42,7 @@ export default async function OrganisersPage({ searchParams }: { searchParams: P
     if (r.contact_route === 'email' && r.company_type === 'ltd') ltd++
   }
   const list = (rows ?? []) as Row[]
+  const paidLive = ticketsStripeReady() && !ticketsTestMode()
   const href = (o: Record<string, string>) => `/admin/organisers?${new URLSearchParams({ route, status, ...(city ? { city } : {}), ...o }).toString()}`
   const chip = (on: boolean) => `px-3 py-1.5 rounded-full text-sm font-semibold border ${on ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'}`
 
@@ -67,6 +71,16 @@ export default async function OrganisersPage({ searchParams }: { searchParams: P
             <button className="ml-2 text-sm font-semibold underline">Show</button>
           </form>
         </div>
+        {route === 'email' && status === 'new' && list.length > 0 && (
+          <form id="approve" action={approveOrganisersAction} className="rounded-2xl border-2 border-slate-900 bg-white p-4 space-y-2">
+            <p className="font-extrabold text-slate-900">Ticket-selling outreach</p>
+            <p className="text-sm text-slate-600">Tick the organisers to email, or approve everyone here with an email. They go out on weekdays 9am to 5pm, up to {TICKET_OUTREACH_PER_DAY} a day, with one follow-up after {TICKET_FOLLOW_UP_DAYS} days. {paidLive ? 'Paid tickets are live, so the email leads with selling tickets.' : 'Paid tickets are not live yet, so the email offers free listings and free tickets only; it switches to selling tickets automatically once Stripe is live.'} Open a draft below to read it.</p>
+            <div className="flex flex-wrap gap-2">
+              <button className="rounded-lg bg-[#E8003D] px-4 py-2 text-sm font-extrabold text-white">Approve ticked</button>
+              <button name="all" value="1" className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-900">Approve all with an email</button>
+            </div>
+          </form>
+        )}
         {route === 'email' && <p className="text-xs text-slate-500">{ltd} of {counts.get('email') ?? 0} with an email are limited companies confirmed with Companies House.</p>}
 
         <div className="space-y-2">
@@ -74,8 +88,12 @@ export default async function OrganisersPage({ searchParams }: { searchParams: P
           {list.map(r => (
             <div key={r.id} className="bg-white border border-slate-200 rounded-2xl p-4 grid gap-2 md:grid-cols-[1.4fr_1.2fr_auto]">
               <div>
+                {r.email && r.status === 'new' && <label className="mr-2 inline-flex"><input type="checkbox" name="id" value={r.id} form="approve" className="h-4 w-4" /></label>}
                 <p className="font-extrabold text-slate-900">{r.profile_url ? <a href={r.profile_url} target="_blank" rel="noopener noreferrer" className="hover:underline">{r.name ?? 'Unnamed organiser'}</a> : r.name ?? 'Unnamed organiser'}</p>
                 <p className="text-xs text-slate-500">{r.city}{r.towns?.length ? ` · ${r.towns.slice(0, 4).join(', ')}` : ''} · {r.events_seen} upcoming seen{r.total_events ? ` · ${r.total_events} run in total` : ''}{r.attendees_hosted ? ` · ${r.attendees_hosted} attendees` : ''}</p>
+                {r.email && (r.status === 'new' || r.status === 'approved') && (() => { const d = buildTicketEmail({ ...r, unsubscribe_token: r.unsubscribe_token }, 'first', paidLive); return (
+                  <details className="mt-2"><summary className="text-xs font-semibold underline cursor-pointer">Read the email</summary><p className="mt-2 text-xs font-bold">{d.subject}</p><pre className="mt-1 whitespace-pre-wrap font-sans text-xs text-slate-700 bg-slate-50 rounded-lg p-2">{d.text}</pre></details>
+                ) })()}
                 {r.sample_event && <p className="text-xs text-slate-600 mt-1">e.g. {r.sample_event_url ? <a href={r.sample_event_url} target="_blank" rel="noopener noreferrer" className="underline">{r.sample_event}</a> : r.sample_event}{r.sample_venue ? ` at ${r.sample_venue}` : ''}{r.next_event_date ? ` (${r.next_event_date})` : ''}</p>}
               </div>
               <div className="text-sm space-y-0.5 break-all">

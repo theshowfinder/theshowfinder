@@ -71,7 +71,7 @@ export async function POST(request: Request) {
 async function linkOutreachEvent(db: Loose, event: { type?: string; data?: { bounce?: { type?: string } } }, emailId: string, to: string) {
   let { data: l } = await db.from('link_prospects').select('id, name, email').eq('resend_id', emailId).maybeSingle()
   if (!l && to) ({ data: l } = await db.from('link_prospects').select('id, name, email').ilike('email', to).not('sent_at', 'is', null).limit(1).maybeSingle())
-  if (!l) return NextResponse.json({ received: true, outreach: false })
+  if (!l) return organiserOutreachEvent(db, event, emailId)
   const now = new Date().toISOString()
   if (event.type === 'email.complained') {
     await db.from('link_prospects').update({ status: 'unsubscribed', notes: 'Marked our email as spam (Resend complaint)', updated_at: now }).eq('id', l.id)
@@ -91,5 +91,21 @@ async function linkOutreachEvent(db: Loose, event: { type?: string; data?: { bou
     await db.from('outreach_settings').update({ resend_paused_until: new Date(Date.now() + 20 * 3_600_000).toISOString(), pause_reason: `${total} bounced outreach emails in 24 hours`, updated_at: now }).eq('id', 1)
     await alert('Outreach paused for today: bounces', `${total} outreach emails bounced in the last 24 hours (latest: ${l.name}, ${l.email}). Resend outreach is paused until tomorrow and restarts on its own.`)
   }
+  return NextResponse.json({ received: true })
+}
+
+/** Bounces and spam complaints on ticket-selling outreach (organiser_prospects): same brake. */
+async function organiserOutreachEvent(db: Loose, event: { type?: string; data?: { bounce?: { type?: string } } }, emailId: string) {
+  const { data: o } = emailId ? await db.from('organiser_prospects').select('id, name, email').eq('resend_id', emailId).maybeSingle() : { data: null }
+  if (!o) return NextResponse.json({ received: true, outreach: false })
+  const now = new Date().toISOString()
+  if (event.type === 'email.complained') {
+    await db.from('organiser_prospects').update({ status: 'unsubscribed', notes: 'Marked our email as spam (Resend complaint)' }).eq('id', o.id)
+    await db.from('outreach_settings').update({ resend_paused_until: '2100-01-01T00:00:00Z', pause_reason: `Spam complaint from ${o.name} (${o.email}), ticket outreach`, updated_at: now }).eq('id', 1)
+    await alert('Outreach paused: spam complaint', `${o.name} (${o.email}) marked a ticket-selling email as spam.\n\nResend outreach is paused to protect the site's own emails.\nResume when you're ready: https://www.theshowfinder.com/admin/outreach`)
+    return NextResponse.json({ received: true, paused: true })
+  }
+  if (event.data?.bounce?.type && event.data.bounce.type !== 'Permanent') return NextResponse.json({ received: true })
+  await db.from('organiser_prospects').update({ status: 'bounced', last_error: 'Email bounced (address does not exist)' }).eq('id', o.id)
   return NextResponse.json({ received: true })
 }

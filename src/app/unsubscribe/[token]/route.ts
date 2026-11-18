@@ -13,7 +13,8 @@ async function unsubscribe(token: string): Promise<boolean> {
   const { data } = await db.from('outreach_prospects').update({ status: 'unsubscribed', unsubscribed_at: now, updated_at: now }).eq('unsubscribe_token', token).select('id')
   // Backlink outreach (migration 134) uses the same link format.
   const { data: link } = await db.from('link_prospects').update({ status: 'unsubscribed', updated_at: now }).eq('unsubscribe_token', token).select('id')
-  return !!data?.length || !!link?.length
+  const { data: org } = await db.from('organiser_prospects').update({ status: 'unsubscribed' }).eq('unsubscribe_token', token).select('id')
+  return !!data?.length || !!link?.length || !!org?.length
 }
 
 const shell = (body: string) => new NextResponse(

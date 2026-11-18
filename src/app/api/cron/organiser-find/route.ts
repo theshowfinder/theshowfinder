@@ -40,9 +40,11 @@ async function handleGet(request: Request) {
 
   // 1. Search: cities never searched first (biggest first), then the longest ago, once a week at most.
   const forced = params.get('city')
+  // ?mode=enrich (every 20 minutes): skip the searching and only read profiles and websites, to clear the backlog.
+  const enrichOnly = params.get('mode') === 'enrich'
   const { data: log } = await db.from('organiser_search_log').select('city, searched_at')
   const lastSearched = new Map<string, number>(((log ?? []) as Array<{ city: string; searched_at: string }>).map(r => [r.city, Date.parse(r.searched_at)]))
-  const due = forced
+  const due = enrichOnly ? [] : forced
     ? [cityNames.find(c => c.toLowerCase() === forced.toLowerCase()) ?? forced]
     : [...cityNames.filter(c => !lastSearched.has(c)),
        ...cityNames.filter(c => lastSearched.has(c) && (lastSearched.get(c) ?? 0) < Date.now() - RESEARCH_AFTER_DAYS * 86_400_000)

@@ -22,6 +22,7 @@ export const JOB_EXPECTATIONS: Record<string, { label: string; maxHoursSinceSucc
   'refresh-listings':          { label: 'Refresh listings',              maxHoursSinceSuccess: 18 },
   'merge-duplicates':          { label: 'Merge duplicate listings',      maxHoursSinceSuccess: 18 },
   'geocode-venues':            { label: 'Venue map positions',           maxHoursSinceSuccess: 30 },
+  'ticket-outreach':           { label: 'Ticket-selling outreach sender', maxHoursSinceSuccess: 80 },
   'link-find':                 { label: 'Backlink outreach finder',      maxHoursSinceSuccess: 80 },
   'link-send':                 { label: 'Backlink outreach sender',      maxHoursSinceSuccess: 80 },
   'link-check':                { label: 'Backlink checker',              maxHoursSinceSuccess: 30 },

@@ -10,11 +10,10 @@ export const dynamic = 'force-dynamic'
 // Backlink outreach, finding side (vercel.json: every 15 minutes, 07:00-21:00 every day). Each run takes the busiest venues we list that
 // haven't been looked at (link_venue_targets: 3+ upcoming shows), finds the venue's own website on OpenStreetMap's
 // place search (our venue "website" is only its Ticketmaster page), reads it for a general email, and drafts the email.
-// Then organisers from the organiser finder that have a website. Drafts wait as "ready" for Chris in /admin/backlinks;
+// Venues only (organisers get ticket-selling outreach instead). Drafts wait as "ready" for Chris in /admin/backlinks;
 // nothing is sent from here. ?dry=1 reports without writing.
 const UA = 'TheShowFinderBot/1.0 (+https://www.theshowfinder.com/widgets; partners@theshowfinder.com)'
 const VENUES_PER_RUN = 10
-const ORGANISERS_PER_RUN = 4
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 
 /** The venue's own website from OpenStreetMap (Nominatim, with extratags), matched by name near its location. */
@@ -78,22 +77,7 @@ async function handleGet(request: Request) {
     if (!dry) await db.from('link_prospects').insert({ ...row, status: 'ready', subject: draft.subject })
   }
 
-  // Organisers found by the organiser finder that have their own website.
-  if (Date.now() - started < 35_000) {
-    const { data: done } = await db.from('link_prospects').select('organiser_prospect_id').not('organiser_prospect_id', 'is', null).limit(5000)
-    const seen = new Set(((done ?? []) as Loose[]).map(r => r.organiser_prospect_id))
-    const { data: orgs } = await db.from('organiser_prospects').select('id, name, city, website, email, sample_event, total_events').not('website', 'is', null).order('total_events', { ascending: false, nullsFirst: false }).limit(300)
-    for (const o of ((orgs ?? []) as Loose[]).filter(o => !seen.has(o.id) && isOwnSite(o.website)).slice(0, ORGANISERS_PER_RUN)) {
-      if (Date.now() - started > 48_000) break
-      const row: Loose = { kind: 'organiser', name: o.name, city: o.city, organiser_prospect_id: o.id, website: o.website, domain: domainOf(o.website), pitch: 'listings', notes: o.sample_event ? `Sample event: ${o.sample_event}` : null }
-      const email = o.email || (await readSiteContact(o.website, o.city ?? '', UA)).email
-      if (!email || await suppressed(db, email)) { report.push({ ...row, status: 'no_email' }); if (!dry) await db.from('link_prospects').insert({ ...row, status: 'no_email' }); continue }
-      row.email = email
-      const draft = buildLinkEmail({ ...row, id: '', contact_name: null, shows: null, page_url: null, unsubscribe_token: '{token}', sample_event: o.sample_event } as LinkProspect, 'first')
-      report.push({ ...row, status: 'ready', subject: draft.subject })
-      if (!dry) await db.from('link_prospects').insert({ ...row, status: 'ready', subject: draft.subject })
-    }
-  }
+  // Organisers are not contacted here: selling tickets has its own outreach (cron ticket-outreach, /admin/organisers).
   return NextResponse.json({ success: true, dry, found: report.length, ready: report.filter(r => r.status === 'ready').length, report: report.map(r => ({ kind: r.kind, name: r.name, status: r.status, website: r.website ?? null, email: r.email ?? null })) })
 }
 

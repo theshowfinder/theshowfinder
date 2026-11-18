@@ -80,6 +80,14 @@
       "schedule": "45 14 * * *"
     },
     {
+      "path": "/api/cron/ticket-outreach",
+      "schedule": "5,25,45 8-16 * * 1-5"
+    },
+    {
+      "path": "/api/cron/organiser-find?mode=enrich",
+      "schedule": "10,30 * * * *"
+    },
+    {
       "path": "/api/cron/link-find",
       "schedule": "*/15 7-21 * * *"
     },
