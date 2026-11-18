@@ -66,6 +66,7 @@ export const metadata: Metadata = {
   manifest: '/site.webmanifest',
   other: {
     'impact-site-verification': 'c168f3c5-519c-42fa-a56a-61a670276ba4',
+    'msvalidate.01': '14418F11A2A43F82EF1996A78904440D',   // Bing Webmaster Tools
   },
   verification: {
     google: 'M3c6R_aFiZNIgqVpjNK4npRvuim9F5IqSULCgjDFOWI',
