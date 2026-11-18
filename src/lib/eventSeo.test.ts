@@ -4,7 +4,7 @@ import { eventSeoTitle, eventSeoDescription } from './eventSeo.ts'
 
 test('set times in the title for shows in the next 30 days, when it fits', () => {
   assert.equal(eventSeoTitle({ title: 'Jalen Ngonda', venueStr: 'O2 Academy Brixton, London', venueName: 'O2 Academy Brixton', shortDate: '14 Nov 2026', daysAway: 3 }),
-    'Jalen Ngonda, O2 Academy Brixton: Set Times – 14 Nov 2026')
+    'Jalen Ngonda: Set Times & Tickets – 14 Nov 2026')
   assert.equal(eventSeoTitle({ title: 'Westlife', venueStr: 'SSE Arena, Belfast', venueName: 'SSE Arena', shortDate: '20 Nov 2026', daysAway: 8 }),
     'Westlife, SSE Arena: Set Times – 20 Nov 2026')
   assert.equal(eventSeoTitle({ title: 'Westlife', venueStr: 'SSE Arena, Belfast', shortDate: '20 Jun 2027', daysAway: 220 }), 'Westlife at SSE Arena, Belfast – 20 Jun 2027')

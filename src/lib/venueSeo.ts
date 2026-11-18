@@ -45,14 +45,23 @@ export function venueSeoDescription(input: {
   const shows = `${upcomingCount} upcoming show${upcomingCount === 1 ? '' : 's'}`
   const tail = ' Find tickets in one place.'
   const unique = [...new Set(input.nextTitles.map(t => t.trim()).filter(Boolean))]
+  let text = `What's on at ${name}, ${city}: ${shows}.${tail}`
   for (let n = Math.min(3, unique.length); n >= 0; n--) {
     const acts = n > 0 ? `, including ${joinNatural(unique.slice(0, n))}` : ''
     const cap = capacity ? ` (capacity ${capacity.toLocaleString('en-GB')})` : ''
-    const text = `What's on at ${name}, ${city}${cap}: ${shows}${acts}.${tail}`
-    if (text.length <= limit) return text
+    const t = `What's on at ${name}, ${city}${cap}: ${shows}${acts}.${tail}`
+    if (t.length <= limit) { text = t; break }
   }
-  return `What's on at ${name}, ${city}: ${shows}.${tail}`.slice(0, limit)
+  // Bing flags descriptions under ~120 characters: add what the page really gives, while it fits.
+  for (const extra of [' Dates, start times and prices, updated daily.', ' Plus how to get there and what else is on nearby.', ' Updated daily.']) {
+    if (text.length >= VENUE_DESC_MIN) break
+    if ((text + extra).length <= limit) text += extra
+  }
+  return text.slice(0, limit)
 }
+
+/** Below this, search engines treat a description as too short. */
+export const VENUE_DESC_MIN = 120
 
 export interface VenueSchemaInput {
   name: string

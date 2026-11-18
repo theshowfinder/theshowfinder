@@ -37,6 +37,14 @@ type ArtistRow      = { id: string; slug: string; name: string | null; is_featur
 type SlugUpdatedRow = { id: string; slug: string; title: string; created_at: string; page_changed_at: string | null; venue_id: string | null; start_date: string; category: string; source: string | null; event_artists?: Array<{ artists: { genre: string | null } | null }> | null }
 type DbClient       = ReturnType<typeof createPublicClient>
 
+// Published news stories from the last year (tour announcements): Bing flagged them as missing (Nov 2026).
+async function fetchNewsStories(supabase: DbClient): Promise<{ slug: string; published_at: string | null }[]> {
+  const since = new Date(Date.now() - 365 * 86_400_000).toISOString()
+  const { data, error } = await (supabase.from('news_stories').select('slug, published_at').eq('status', 'published')
+    .gte('published_at', since).order('published_at', { ascending: false }).limit(3000) as unknown as Promise<{ data: { slug: string; published_at: string | null }[] | null; error: unknown }>)
+  return error ? [] : data ?? []
+}
+
 async function fetchAllEvents(supabase: DbClient, nowISO: string): Promise<SlugUpdatedRow[]> {
   const { count } = await supabase
     .from('events')
@@ -193,7 +201,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = createPublicClient()
   const now      = new Date().toISOString()
 
-  const [allEventRows, duplicateIds, venueRows, artistRows, westEndShows, artistCounts, promoterRows] = await Promise.all([
+  const [allEventRows, duplicateIds, venueRows, artistRows, westEndShows, artistCounts, promoterRows, newsRows] = await Promise.all([
     fetchAllEvents(supabase, now),
     fetchDuplicateEventIds(supabase),
     fetchAllVenues(supabase),
@@ -201,6 +209,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     fetchWestEndShows(supabase),
     fetchArtistUpcomingCounts(supabase, now),
     fetchPromotersWithEvents(supabase, now),
+    fetchNewsStories(supabase),
   ])
 
   const staticPages: MetadataRoute.Sitemap = [
@@ -368,11 +377,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .filter(g => (genreShows.get(`${city.name.toLowerCase()}|${g.slug}`)?.size ?? 0) >= MIN_INDEXABLE)
     .map(g => ({ url: `${BASE}/cities/${encodeURIComponent(city.name)}/${g.slug}`, changeFrequency: 'daily' as const, priority: 0.7 })))
 
+  const newsPages: MetadataRoute.Sitemap = newsRows.map(n => ({
+    url: `${BASE}/news/${n.slug}`,
+    ...(n.published_at ? { lastModified: new Date(n.published_at) } : {}),
+    changeFrequency: 'weekly' as const,
+    priority: 0.6,
+  }))
+
   const promoterPages: MetadataRoute.Sitemap = promoterRows.map(p => ({
     url:             `${BASE}/promoters/${p.slug}`,
     changeFrequency: 'weekly' as const,
     priority:        0.5,
   }))
 
-  return [...staticPages, ...promoterPages, ...cityPages, ...cityTypePages, ...citySeasonPages, ...cityMonthPages, ...cityGenrePages, ...cityThisWeekPages, ...cityThisWeekendPages, ...cityTonightPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
+  return [...staticPages, ...newsPages, ...promoterPages, ...cityPages, ...cityTypePages, ...citySeasonPages, ...cityMonthPages, ...cityGenrePages, ...cityThisWeekPages, ...cityThisWeekendPages, ...cityTonightPages, ...westEndShowPages, ...eventPages, ...venuePages, ...artistPages]
 }

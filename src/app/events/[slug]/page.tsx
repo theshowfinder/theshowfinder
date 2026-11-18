@@ -912,7 +912,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                         <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-extrabold text-white overflow-hidden" style={{ backgroundColor: '#E8003D' }}>
                           {artistPhotoUrl(artist.name, artist.image_url) ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={artistPhotoUrl(artist.name, artist.image_url) ?? ''} alt="" className="h-full w-full object-cover object-top" />
+                            <img src={artistPhotoUrl(artist.name, artist.image_url) ?? ''} alt={artist.name} className="h-full w-full object-cover object-top" />
                           ) : artist.name[0]}
                         </div>
                         <div>

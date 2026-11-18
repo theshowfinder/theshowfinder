@@ -7,13 +7,27 @@
 //  • the description leads with the facts people want: date, doors, start, support.
 // Nothing invented: only times and acts we hold.
 
-/** The root layout appends " | TheShowFinder" (16 chars); keep our part to about 60. */
-const TITLE_BUDGET = 60
+/** The root layout appends " | TheShowFinder" (16 chars); Bing flags titles over 70, so our part stays within 54. */
+const TITLE_BUDGET = 54
 const DESC_BUDGET = 158
 export const SET_TIMES_WINDOW_DAYS = 30
 
+/** A title that never runs past the budget: the venue goes first, then the event name is cut at a word. */
+function fitTitle(a: { title: string; venueStr: string | null; venueName?: string | null; shortDate: string }): string {
+  const tries = [
+    a.venueStr ? `${a.title} at ${a.venueStr} – ${a.shortDate}` : null,
+    a.venueName ? `${a.title} at ${a.venueName} – ${a.shortDate}` : null,
+    `${a.title} – ${a.shortDate}`,
+  ].filter((o): o is string => Boolean(o))
+  const fits = tries.find(o => o.length <= TITLE_BUDGET)
+  if (fits) return fits
+  const room = TITLE_BUDGET - ` – ${a.shortDate}`.length - 1
+  const cut = a.title.slice(0, room).replace(/[\s,:;–-]+\S*$/, '').trim() || a.title.slice(0, room)
+  return `${cut}… – ${a.shortDate}`
+}
+
 export function eventSeoTitle(a: { title: string; venueStr: string | null; venueName?: string | null; shortDate: string; daysAway: number }): string {
-  const base = a.venueStr ? `${a.title} at ${a.venueStr} – ${a.shortDate}` : `${a.title} – ${a.shortDate}`
+  const base = fitTitle(a)
   if (a.daysAway < 0 || a.daysAway > SET_TIMES_WINDOW_DAYS) return base
   const options = [
     a.venueStr ? `${a.title}, ${a.venueStr}: Set Times & Tickets – ${a.shortDate}` : null,

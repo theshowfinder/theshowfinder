@@ -40,3 +40,9 @@ test('Place schema only includes known facts', () => {
   assert.equal(full.maximumAttendeeCapacity, 3000)
   assert.deepEqual(full.sameAs, ['https://v.example'])
 })
+
+test('venue descriptions are long enough for Bing (120+), never over 160', async () => {
+  const { venueSeoDescription, VENUE_DESC_MIN } = await import('./venueSeo.ts')
+  const d = venueSeoDescription({ name: 'The Attic', city: 'Bristol', capacity: null, upcomingCount: 1, nextTitles: ['Quiz Night'] })
+  assert.ok(d.length >= VENUE_DESC_MIN && d.length <= 160, `${d.length}: ${d}`)
+})

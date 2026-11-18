@@ -26,7 +26,7 @@ export default function BeforeTheShow({ businesses, city, eventId, venue, wide =
             <div key={b.id} className="rounded-xl border border-slate-200 p-4">
               <div className="flex items-center gap-3">
                 {b.logo_url ? (
-                  <Image src={b.logo_url} alt="" width={40} height={40} unoptimized className="h-10 w-10 rounded-lg bg-slate-100 object-cover" />
+                  <Image src={b.logo_url} alt={b.name ?? ""} width={40} height={40} unoptimized className="h-10 w-10 rounded-lg bg-slate-100 object-cover" />
                 ) : (
                   <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 font-extrabold text-white">{b.name.slice(0, 1).toUpperCase()}</span>
                 )}

@@ -22,7 +22,7 @@ export const JOB_EXPECTATIONS: Record<string, { label: string; maxHoursSinceSucc
   'refresh-listings':          { label: 'Refresh listings',              maxHoursSinceSuccess: 18 },
   'merge-duplicates':          { label: 'Merge duplicate listings',      maxHoursSinceSuccess: 18 },
   'geocode-venues':            { label: 'Venue map positions',           maxHoursSinceSuccess: 30 },
-  'indexnow':                  { label: 'IndexNow pings',                maxHoursSinceSuccess: 30 },
+  'indexnow':                  { label: 'IndexNow pings',                maxHoursSinceSuccess: 4 },
   'event-reminders':           { label: 'Event reminders',               maxHoursSinceSuccess: 30 },
   'follow-alerts':             { label: 'Follow alerts',                 maxHoursSinceSuccess: 30 },
   'festival-lineups':          { label: 'Festival line-ups',             maxHoursSinceSuccess: 30 },
