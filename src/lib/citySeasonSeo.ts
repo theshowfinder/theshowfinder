@@ -49,7 +49,8 @@ const londonDate = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone:
 
 /** Does a listing belong on this season's page? (Window already applied by the query.) */
 export function matchesSeason(s: Season, row: { title: string; category: string; start_date: string }, now: Date = new Date()): boolean {
-  if (s.slug === 'panto') return (row.category === 'theatre' || row.category === 'family') && PANTO.test(row.title) && !NOT_PANTO.test(row.title)
+  // 'local' too: most pantos reach us from council and tourist-board listings, not the big ticket sites.
+  if (s.slug === 'panto') return (row.category === 'theatre' || row.category === 'family' || row.category === 'local') && PANTO.test(row.title) && !NOT_PANTO.test(row.title)
   if (s.slug === 'christmas') return CHRISTMAS.test(row.title) && !NYE.test(row.title)
   // New Year's Eve: anything on the night of 31 Dec (from 6pm) to 6am on 1 Jan, or billed as a NYE event.
   const y = seasonYear(now)

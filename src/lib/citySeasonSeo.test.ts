@@ -20,6 +20,7 @@ test('panto: real pantos, not ballets or films', () => {
   assert.equal(r('Jack and the Beanstalk', 'family'), true)
   assert.equal(r('Cinderella - Northern Ballet'), false)
   assert.equal(r('Aladdin', 'concert'), false)
+  assert.equal(r('Aladdin (Pantomime) - Relaxed Performance', 'local'), true)
 })
 
 test('christmas and new year', () => {
