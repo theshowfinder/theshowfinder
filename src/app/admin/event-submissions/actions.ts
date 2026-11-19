@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { dashboardUrl } from '@/lib/organiserDashboard'
-import { publishSubmission, emailOrganiser, boostLink, payoutsLink, SITE } from '@/lib/organiserPublish'
+import { publishSubmission, emailOrganiser, boostLink, payoutsLink, queueBoostSocialPost, SITE } from '@/lib/organiserPublish'
 
 export async function approveSubmissionAction(formData: FormData) {
   await requireAdmin()
@@ -53,4 +53,21 @@ export async function rejectSubmissionAction(formData: FormData) {
     ].filter(Boolean))
   }
   revalidatePath('/admin/event-submissions')
+}
+
+/** Feature a live listing free until its date (or take it off): for promoters we want to win. Queues the social post draft too. */
+export async function giftFeatureAction(formData: FormData) {
+  await requireAdmin()
+  const eventId = String(formData.get('event_id') ?? '')
+  const on = formData.get('on') === '1'
+  if (!eventId) return
+  const db = createAdminClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: ev } = await (db as any).from('events').select('start_date').eq('id', eventId).maybeSingle()
+  if (!ev) return
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (db as any).from('events').update({ is_featured: on, boost_until: on ? ev.start_date : null }).eq('id', eventId)
+  if (on) await queueBoostSocialPost(db, eventId)
+  revalidatePath('/admin/event-submissions')
+  revalidatePath('/')
 }

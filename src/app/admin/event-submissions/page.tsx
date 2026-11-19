@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { approveSubmissionAction, rejectSubmissionAction } from './actions'
+import { approveSubmissionAction, rejectSubmissionAction, giftFeatureAction } from './actions'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +10,11 @@ type Row = {
   ticket_plan: { types: { name: string; price_pence: number; capacity: number; sales_end: string | null }[]; codes: { code: string; percent_off: number | null; amount_off_pence: number | null; max_uses: number | null }[] } | null
   description: string | null; image_url: string | null; review_reason: string | null; boost: string | null; boost_paid_at: string | null; created_at: string
   organisers: { name: string; email: string; website: string | null; plan: string } | null
+}
+
+type LiveRow = {
+  id: string; title: string; start_date: string; city: string; boost_paid_at: string | null
+  organisers: { name: string } | null; events: { id: string; slug: string; is_featured: boolean; boost_until: string | null } | null
 }
 
 function when(iso: string) {
@@ -27,6 +32,10 @@ export default async function EventSubmissionsPage() {
   const rows = (data ?? []) as Row[]
   const { count: liveCount } = await loose.from('event_submissions').select('id', { count: 'exact', head: true }).eq('status', 'approved')
   const { count: paidBoosts } = await loose.from('event_submissions').select('id', { count: 'exact', head: true }).not('boost_paid_at', 'is', null)
+  const { data: liveData } = await loose.from('event_submissions')
+    .select('id, title, start_date, city, boost_paid_at, organisers(name), events(id, slug, is_featured, boost_until)')
+    .eq('status', 'approved').gte('start_date', new Date().toISOString()).order('reviewed_at', { ascending: false, nullsFirst: false }).limit(20)
+  const live = (liveData ?? []) as LiveRow[]
   const { count: promoters } = await loose.from('organisers').select('id', { count: 'exact', head: true }).eq('plan', 'promoter').eq('plan_status', 'active')
 
   return (
@@ -77,6 +86,28 @@ export default async function EventSubmissionsPage() {
             </li>
           ))}
         </ul>
+        <section className="space-y-2">
+          <h2 className="text-lg font-bold text-slate-900">Live organiser listings</h2>
+          <p className="text-sm text-slate-600">Feature one free to help a promoter we want to keep: top of its city page until the night, plus a social post draft in Admin → Social.</p>
+          <ul className="space-y-2">
+            {live.map(l => (
+              <li key={l.id} className="bg-white rounded-xl border border-slate-200 p-3 flex flex-wrap items-center gap-3">
+                <div className="flex-1 min-w-[200px]">
+                  {l.events ? <a href={`/events/${l.events.slug}`} className="font-semibold text-slate-900 underline">{l.title}</a> : <span className="font-semibold">{l.title}</span>}
+                  <p className="text-xs text-slate-500">{when(l.start_date)} · {l.city}{l.organisers ? ` · ${l.organisers.name}` : ''}{l.boost_paid_at ? ' · paid boost' : ''}</p>
+                </div>
+                {l.events && (
+                  <form action={giftFeatureAction}>
+                    <input type="hidden" name="event_id" value={l.events.id} />
+                    <input type="hidden" name="on" value={l.events.is_featured ? '0' : '1'} />
+                    <button className={`min-h-[40px] px-4 rounded-xl text-sm font-bold ${l.events.is_featured ? 'bg-slate-200 text-slate-800' : 'bg-amber-500 text-white'}`}>{l.events.is_featured ? 'Featured ✓ (turn off)' : 'Feature free'}</button>
+                  </form>
+                )}
+              </li>
+            ))}
+            {live.length === 0 && <li className="text-sm text-slate-500">No upcoming organiser listings yet.</li>}
+          </ul>
+        </section>
       </main>
     </div>
   )
