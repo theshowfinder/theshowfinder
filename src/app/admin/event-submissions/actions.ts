@@ -17,6 +17,15 @@ export async function approveSubmissionAction(formData: FormData) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (pre.data?.paid_price_pence) await (db as any).from('organisers').update({ paid_tickets_approved: true }).eq('id', pre.data.organiser_id)
   const slug = await publishSubmission(db, id)
+  // A repeat event: approving one date approves all its dates still waiting.
+  const otherSlugs: string[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: me } = await (db as any).from('event_submissions').select('series_id').eq('id', id).maybeSingle()
+  if (me?.series_id) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: sibs } = await (db as any).from('event_submissions').select('id').eq('series_id', me.series_id).eq('status', 'pending').neq('id', id).order('start_date')
+    for (const sib of (sibs ?? []) as { id: string }[]) { const x = await publishSubmission(db, sib.id); if (x) otherSlugs.push(x) }
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: sub } = await (db as any).from('event_submissions').select('title, manage_token, boost_paid_at, paid_price_pence, free_capacity, organiser_id, organisers(email, name, plan, plan_status, stripe_charges_enabled)').eq('id', id).maybeSingle()
   const o = sub?.organisers
@@ -25,6 +34,7 @@ export async function approveSubmissionAction(formData: FormData) {
     await emailOrganiser(o.email, `Your event is live: ${sub.title}`, [
       `Hi ${o.name},`,
       `Good news: "${sub.title}" is now live on TheShowFinder: ${SITE}/events/${slug}`,
+      otherSlugs.length ? `Your other dates are live too:\n${otherSlugs.map(x => `${SITE}/events/${x}`).join('\n')}` : '',
       sub.paid_price_pence && !o.stripe_charges_enabled ? `Your tickets go on sale as soon as you've set up payouts with Stripe (about 5 minutes): ${payoutsLink(id, sub.manage_token)}` : '',
       boosted ? 'Your boost is on, so it is featured right up to the night.' : `Want more people to see it? Boost it for £9.95: ${boostLink(id, sub.manage_token)}`,
       sub.paid_price_pence || sub.free_capacity ? `Manage your tickets, discount codes and ticket holders in your dashboard (keep it private): ${dashboardUrl(sub.organiser_id)}` : '',

@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { CATEGORY_CHOICES, BOOST_PRICE_GBP, PROMOTER_PRICE_GBP } from '@/lib/organiserEvents'
 import TicketBuilder from './TicketBuilder'
+import RepeatDates from './RepeatDates'
 
 const input = 'w-full min-h-[48px] px-4 rounded-xl border border-slate-300 text-base bg-white'
 const label = 'block text-sm font-bold text-slate-800 mb-1'
@@ -14,6 +15,8 @@ export default function ListEventForm({ cities, initialCity, initialTicketing }:
   const [boost, setBoost] = useState<'none' | 'boost' | 'promoter'>('boost')
   const [ticketing, setTicketing] = useState<'link' | 'paid' | 'free'>(initialTicketing ?? 'link')
   const [startedAt] = useState(() => String(Date.now()))
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('19:30')
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -50,9 +53,10 @@ export default function ListEventForm({ cities, initialCity, initialTicketing }:
             {CATEGORY_CHOICES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select></div>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className={label} htmlFor="date">Date</label><input id="date" name="date" type="date" required className={input} /></div>
-          <div><label className={label} htmlFor="time">Start time</label><input id="time" name="time" type="time" required className={input} defaultValue="19:30" /></div>
+          <div><label className={label} htmlFor="date">Date</label><input id="date" name="date" type="date" required className={input} value={date} onChange={e => setDate(e.target.value)} /></div>
+          <div><label className={label} htmlFor="time">Start time</label><input id="time" name="time" type="time" required className={input} value={time} onChange={e => setTime(e.target.value)} /></div>
         </div>
+        <RepeatDates date={date} time={time} />
         <div><label className={label} htmlFor="venue_name">Venue</label><input id="venue_name" name="venue_name" required maxLength={100} className={input} placeholder="e.g. The Old Bell Hotel" /></div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className={label} htmlFor="city">Town or city</label>

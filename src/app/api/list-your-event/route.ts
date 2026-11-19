@@ -5,6 +5,7 @@ import { validateSubmission, autoApproveCheck, MAX_SUBMISSIONS_PER_DAY, type Boo
 import { dashboardUrl } from '@/lib/organiserDashboard'
 import { getOrCreateOrganiser, publishSubmission, createOrganiserCheckout, startDateIso, emailOrganiser, boostLink, doorLink, payoutsLink, promoterActive, placeListing, SITE } from '@/lib/organiserPublish'
 import { resend, FROM_EMAIL } from '@/lib/resend'
+import { parseExtraDates, shiftIsoByDates } from '@/lib/repeatDates'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     const startedAt = Number(str(form.get('started_at')))
     if (Number.isFinite(startedAt) && startedAt > 0 && Date.now() - startedAt < 4000) return NextResponse.json({ error: 'Please check the form and try again.' }, { status: 400 })
 
-    const checked = validateSubmission({
+    const input = {
       organiserName: str(form.get('organiser_name')), email: str(form.get('email')), website: str(form.get('website')),
       title: str(form.get('title')), category: str(form.get('category')), date: str(form.get('date')), time: str(form.get('time')),
       venueName: str(form.get('venue_name')), city: str(form.get('city')), postcode: str(form.get('postcode')),
@@ -32,9 +33,16 @@ export async function POST(request: Request) {
       ticketing: str(form.get('ticketing')), freeCapacity: str(form.get('free_capacity')),
       paidPrice: str(form.get('paid_price')), paidCapacity: str(form.get('paid_capacity')),
       ticketPlan: (() => { try { const j = JSON.parse(str(form.get('ticket_plan')) || 'null'); return j && typeof j === 'object' ? j : null } catch { return null } })(),
-    }, CITIES.map(c => c.name))
+    }
+    const checked = validateSubmission(input, CITIES.map(c => c.name))
     if (!checked.ok) return NextResponse.json({ error: checked.error }, { status: 400 })
     const s = checked.value
+    // Repeat dates: each is checked like the first (not in the past, not too far ahead) and becomes its own listing.
+    const extras = parseExtraDates(str(form.get('extra_dates')), s.date, s.time)
+    for (const x of extras) {
+      const c = validateSubmission({ ...input, date: x.date, time: x.time }, CITIES.map(c => c.name))
+      if (!c.ok) return NextResponse.json({ error: `${x.date.split('-').reverse().join('/')}: ${c.error}` }, { status: 400 })
+    }
     const boostAsked = str(form.get('boost')) as BoostChoice
     const boost: BoostChoice = boostAsked === 'boost' || boostAsked === 'promoter' ? boostAsked : 'none'
     if (str(form.get('terms')) !== 'yes') return NextResponse.json({ error: 'Please confirm the listing terms.' }, { status: 400 })
@@ -46,7 +54,7 @@ export async function POST(request: Request) {
 
     const since = new Date(Date.now() - 86_400_000).toISOString()
     const { count } = await loose.from('event_submissions').select('id', { count: 'exact', head: true }).eq('organiser_id', organiser.id).gte('created_at', since)
-    if ((count ?? 0) >= MAX_SUBMISSIONS_PER_DAY) return NextResponse.json({ error: 'That is a lot of events for one day. Email hello@theshowfinder.com and we will add the rest for you.' }, { status: 429 })
+    if ((count ?? 0) + extras.length >= MAX_SUBMISSIONS_PER_DAY) return NextResponse.json({ error: 'That is a lot of events for one day. Email hello@theshowfinder.com and we will add the rest for you.' }, { status: 429 })
 
     let imageUrl: string | null = null
     const image = form.get('image')
@@ -65,19 +73,36 @@ export async function POST(request: Request) {
     const check = s.paidPricePence && !organiser.paid_tickets_approved && baseCheck.approve
       ? { approve: false, reason: 'First paid-ticket event from this organiser: check it is real before it goes on sale' }
       : baseCheck
+    const seriesId = extras.length ? crypto.randomUUID() : null
+    const row = {
+      organiser_id: organiser.id, title: s.title, category: s.category, venue_name: s.venueName,
+      city: place.city, town: s.city, postcode: s.postcode, ticket_url: s.ticketUrl, free_capacity: s.freeCapacity, paid_price_pence: s.paidPricePence, paid_capacity: s.paidCapacity, price_from: s.priceFrom, description: s.description,
+      image_url: imageUrl, review_reason: check.reason, ...(seriesId ? { series_id: seriesId } : {}),
+    }
     const { data: sub, error } = await loose.from('event_submissions').insert({
-      organiser_id: organiser.id, title: s.title, category: s.category, start_date: startDateIso(s), venue_name: s.venueName,
-      city: place.city, town: s.city, postcode: s.postcode, ticket_url: s.ticketUrl, free_capacity: s.freeCapacity, paid_price_pence: s.paidPricePence, paid_capacity: s.paidCapacity, ticket_plan: s.ticketPlan, price_from: s.priceFrom, description: s.description,
-      image_url: imageUrl, review_reason: check.reason, boost: boost === 'none' ? null : boost,
+      ...row, start_date: startDateIso(s), ticket_plan: s.ticketPlan, boost: boost === 'none' ? null : boost,
     }).select('id, manage_token').single()
     if (error || !sub) throw new Error(`could not save the event: ${error?.message}`)
+    // The other dates: same listing, its own date; each ticket type's "on sale until" moves with its date.
+    const extraIds: string[] = []
+    if (extras.length) {
+      const { data: more, error: moreErr } = await loose.from('event_submissions').insert(extras.map(x => ({
+        ...row, start_date: startDateIso(x),
+        ticket_plan: s.ticketPlan ? { ...s.ticketPlan, types: s.ticketPlan.types.map(t => ({ ...t, sales_end: shiftIsoByDates(t.sales_end, s.date, x.date) })) } : null,
+      }))).select('id, start_date').order('start_date')
+      if (moreErr) throw new Error(`could not save the other dates: ${moreErr.message}`)
+      extraIds.push(...((more ?? []) as { id: string }[]).map(m => m.id))
+    }
 
     let slug: string | null = null
-    if (check.approve) slug = await publishSubmission(db, sub.id)
-    else {
+    const extraSlugs: string[] = []
+    if (check.approve) {
+      slug = await publishSubmission(db, sub.id)
+      for (const id of extraIds) { const x = await publishSubmission(db, id); if (x) extraSlugs.push(x) }
+    } else {
       // Needs a look: tell Chris (one email per submission, with the reason).
       await resend.emails.send({
-        from: FROM_EMAIL, to: 'hello@theshowfinder.com', subject: `Event listing to check: ${s.title}`,
+        from: FROM_EMAIL, to: 'hello@theshowfinder.com', subject: `Event listing to check: ${s.title}${extras.length ? ` (${extras.length + 1} dates)` : ''}`,
         text: `${s.organiserName} (${s.email}) listed "${s.title}" at ${s.venueName}, ${s.city} (${s.postcode}, shows on ${place.city}) on ${s.date} ${s.time}.\nWhy it needs a look: ${check.reason}\nTicket link: ${s.ticketUrl ?? (s.paidPricePence ? `none (${s.paidCapacity} paid tickets at £${(s.paidPricePence / 100).toFixed(2)} through us)` : `none (${s.freeCapacity} free tickets through us)`)}\n\nApprove or reject (one tap): ${SITE}/admin/event-submissions`,
       }).catch(err => console.error('[list-your-event] admin email failed', err))
     }
@@ -85,7 +110,8 @@ export async function POST(request: Request) {
     const live = slug ? `${SITE}/events/${slug}` : null
     await emailOrganiser(s.email, live ? `Your event is live: ${s.title}` : `We've got your event: ${s.title}`, [
       `Hi ${s.organiserName},`,
-      live ? `Thanks for listing "${s.title}" on TheShowFinder. It's live now: ${live}` : `Thanks for listing "${s.title}" on TheShowFinder. We'll check it and it will usually be live within a day.`,
+      live ? `Thanks for listing "${s.title}" on TheShowFinder. It's live now: ${live}` : `Thanks for listing "${s.title}" on TheShowFinder${extras.length ? ` (all ${extras.length + 1} dates)` : ''}. We'll check it and it will usually be live within a day.`,
+      live && extraSlugs.length ? `Your other dates are live too:\n${extraSlugs.map(x => `${SITE}/events/${x}`).join('\n')}` : '',
       place.nearOf
         ? `It shows on our ${place.city} page (the nearest of our city pages to ${place.nearOf}), the venue page and in search${s.freeCapacity || s.paidPricePence ? '' : ', with a button straight to your ticket page'}.`
         : `Every listing shows on your city page, the venue page and in search${s.freeCapacity || s.paidPricePence ? '' : ', with a button straight to your ticket page'}.`,
