@@ -42,7 +42,7 @@ export function seasonWindow(s: Season, now: Date = new Date()): { from: string;
 
 const PANTO = /\b(panto|pantomime|cinderella|aladdin|jack and the beanstalk|snow white|peter pan|sleeping beauty|dick whittington|beauty and the beast|mother goose|goldilocks|robin hood|puss in boots|babes in the wood|rapunzel)\b/i
 const NOT_PANTO = /\b(ballet|opera|film|screening|cinema|tribute|disney on ice|musical)\b/i
-const CHRISTMAS = /\b(christmas|xmas|santa|festive|carol|carols|winter wonderland|grotto|nutcracker|yule|mistletoe|elf|elves|reindeer|winterfest|christmas market|lights trail|light trail)\b/i
+const CHRISTMAS = /\b(christmas|xmas|santa|festive|carol|carols|winter wonderland|grotto|nutcracker|yule|mistletoe|elf|elves|reindeer|winterfest|christmas market|lights trail|light trail|boxing day)\b/i
 const NYE = /\b(new year'?s? eve|nye|hogmanay|new year party|new years party)\b/i
 
 const londonDate = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).format(new Date(iso))

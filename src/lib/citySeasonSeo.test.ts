@@ -24,6 +24,7 @@ test('panto: real pantos, not ballets or films', () => {
 
 test('christmas and new year', () => {
   assert.equal(matchesSeason(xmas, { title: 'Christmas Carols by Candlelight', category: 'concert', start_date: '2026-12-15T19:00:00Z' }, nov), true)
+  assert.equal(matchesSeason(xmas, { title: 'Partyard x EMBC Boxing Day Rave', category: 'concert', start_date: '2026-12-26T21:00:00Z' }, nov), true)
   assert.equal(matchesSeason(xmas, { title: 'Arctic Monkeys', category: 'concert', start_date: '2026-12-15T19:00:00Z' }, nov), false)
   assert.equal(matchesSeason(nye, { title: 'Club Night', category: 'concert', start_date: '2026-12-31T21:00:00Z' }, nov), true)
   assert.equal(matchesSeason(nye, { title: 'Club Night', category: 'concert', start_date: '2026-12-31T13:00:00Z' }, nov), false)

@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { eventImageUrl, teamImageFor, teamFixtureImage, artistPhotoUrl, cardImageUrl } from './eventImages.ts'
+import { fallbackEventImage, eventImageUrl, teamImageFor, teamFixtureImage, artistPhotoUrl, cardImageUrl } from './eventImages.ts'
 
 const DERBY = '/event-fallbacks/teams/derby-county.jpg'
 
@@ -39,4 +39,9 @@ test('list cards use the smaller Ticketmaster size, other pictures unchanged', (
   assert.equal(cardImageUrl(`${base}_TABLET_LANDSCAPE_LARGE_16_9.jpg`), `${base}_RETINA_PORTRAIT_16_9.jpg`)
   assert.equal(cardImageUrl(`${base}_CUSTOM.jpg`), `${base}_CUSTOM.jpg`)
   assert.equal(cardImageUrl('/event-fallbacks/concert.webp'), '/event-fallbacks/concert.webp')
+})
+
+test('a Boxing Day rave is a concert, not boxing', () => {
+  assert.equal(fallbackEventImage('concert', 'Grotty Gathering: Partyard x EMBC Boxing Day Rave'), '/event-fallbacks/concert.webp')
+  assert.equal(fallbackEventImage('concert', 'Boxing: Fight Night Live'), '/event-fallbacks/sports.webp')
 })
