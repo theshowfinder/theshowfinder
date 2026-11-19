@@ -787,6 +787,18 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 >
                   {primary[0].name === 'Gigsberg' ? 'View tickets on Gigsberg ↗' : 'Get Tickets ↗'}
                 </TrackedTicketLink>
+              ) : isOrganiserListing && !hasOurTickets && localListingUrl ? (
+                // Listed by its organiser with their own ticket page (Skiddle, Fatsoma...): straight there, not down the page.
+                <TrackedTicketLink
+                  href={localListingUrl}
+                  provider={localListingHost ?? 'organiser'}
+                  section="hero_cta"
+                  context={event.slug}
+                  className="flex-none text-white font-extrabold px-6 py-3.5 rounded-xl hover:opacity-90 transition-opacity min-h-[52px] flex items-center text-sm md:inline-flex md:gap-2 md:text-lg md:px-8 md:py-4 md:min-h-0 md:shadow-lg"
+                  style={{ backgroundColor: '#E8003D' }}
+                >
+                  Get Tickets ↗
+                </TrackedTicketLink>
               ) : (
                 <a
                   href="#tickets"
