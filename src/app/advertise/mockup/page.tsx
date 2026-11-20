@@ -65,7 +65,7 @@ export default async function AdvertisingMockupPage({
       onSale={onSale}
       preview={prospect ? { name: prospect.business_name, category: prospect.category } : null}
       refCode={prospect ? params.ref! : ''}
-      founding={Boolean(prospect) && foundingOfferOpen()}
+      founding={foundingOfferOpen()}
     />
   )
 }

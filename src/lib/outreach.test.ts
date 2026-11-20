@@ -90,7 +90,7 @@ test('A/B subjects: venue, category, length, and follow-ups reply to the subject
   assert.equal(shortVenue('Utilita Arena Birmingham', 'Birmingham'), 'Utilita Arena')
   const long = { ...p, business_name: 'The Very Long Named Restaurant and Cocktail Lounge', near_venue: 'Glasgow Royal Concert Hall', city: 'Glasgow' }
   for (const v of ['A', 'B'] as const) assert.ok(outreachSubject(long, v).length <= 60, outreachSubject(long, v))
-  assert.ok(['A', 'B'].includes(subjectVariantFor('3f2a9c1e-0000-4000-8000-00000000000b', new Date('2027-02-01T00:00:00Z'))))
+  assert.ok(['C', 'D'].includes(subjectVariantFor('3f2a9c1e-0000-4000-8000-00000000000b', new Date('2027-02-01T00:00:00Z'))))
   // follow-up to a business emailed with version B
   assert.equal(buildOutreachEmail({ ...p, status: 'sent', sent_at: '2026-11-13T08:00:00Z', subject_variant: 'B' }, 'follow_up').subject, "Re: 3 spots next to Co-op Live's shows. One for The Blue Door?")
   // follow-up to a business emailed before the A/B test keeps the old subject
@@ -127,16 +127,19 @@ test('every city gets a turn: fewest-so-far cities first, more venues searched i
   assert.equal(anchorCountFor('Nowhere', names), 6)
 })
 
-test('founding partner offer: in the emails until 31 Dec 2026, gone after', () => {
-  const before = new Date('2026-12-01T10:00:00Z'), after = new Date('2027-01-02T10:00:00Z')
-  const e = buildOutreachEmail(p, 'first', { now: before })
-  assert.match(e.text, /FOUNDING PARTNER OFFER \(until 31 December\): your first month is free/)
+test('pricing reset (20 Nov 2026): first month free then £9.95, no capitals, no strike-through', () => {
+  const now = new Date('2026-12-01T10:00:00Z')
+  const e = buildOutreachEmail(p, 'first', { now })
+  assert.match(e.text, /It costs nothing for the first month\. After that it's £9\.95 a month, and you can cancel any time/)
+  assert.doesNotMatch(e.text, /FOUNDING PARTNER OFFER|normally £|24\.95|44\.95/)
   assert.match(e.html, /Your first month <span[^>]*>FREE<\/span>/)
-  assert.match(e.text, /cancel any time/)
-  assert.doesNotMatch(buildOutreachEmail(p, 'first', { now: after }).text, /first month is free/)
-  assert.match(buildOutreachEmail(p, 'first', { now: after }).text, /Introductory rates start at £29\.95 a month/)
-  const f = buildOutreachEmail({ ...p, status: 'sent', sent_at: '2026-11-13T08:00:00Z', subject_variant: 'A' }, 'follow_up', { now: before })
-  assert.match(f.text, /FOUNDING PARTNER OFFER \(until 31 December\)/)
+  assert.doesNotMatch(e.html, /line-through|31 DECEMBER/)
+  // the offer comes after the pitch, not straight after "Hi there,"
+  assert.ok(e.text.indexOf('It costs nothing') > e.text.indexOf('Places like The Blue Door'))
+  const later = buildOutreachEmail(p, 'first', { now: new Date('2027-06-01T10:00:00Z') })
+  assert.match(later.text, /first month/)
+  const f = buildOutreachEmail({ ...p, status: 'sent', sent_at: '2026-11-13T08:00:00Z', subject_variant: 'A' }, 'follow_up', { now })
+  assert.match(f.text, /£9\.95 a month/)
   assert.match(f.text, /Start The Blue Door's free month/)
 })
 
@@ -148,10 +151,10 @@ test('offer subjects (C/D) while the founding offer is open; A/B after', async (
   const long = { ...p, business_name: 'The Very Long Named Restaurant and Cocktail Lounge', near_venue: 'Glasgow Royal Concert Hall', city: 'Glasgow' }
   for (const v of ['C', 'D'] as const) assert.ok(outreachSubject(long, v).length <= 60, outreachSubject(long, v))
   assert.ok(['C', 'D'].includes(subjectVariantFor('abc', new Date('2026-12-01T00:00:00Z'))))
-  assert.ok(['A', 'B'].includes(subjectVariantFor('abc', new Date('2027-01-05T00:00:00Z'))))
+  assert.ok(['C', 'D'].includes(subjectVariantFor('abc', new Date('2027-01-05T00:00:00Z'))))   // the free month never ends now
   const e = buildOutreachEmail(p, 'first', { now: new Date('2026-12-01T00:00:00Z') })
   assert.match(e.subject, /free/i)
-  assert.match(e.text, /£24\.95 a month for a Featured spot \(normally £44\.95\)/)
+  assert.match(e.text, /£9\.95 a month/)
   // a business first emailed with C gets "Re:" the same subject
   assert.equal(buildOutreachEmail({ ...p, status: 'sent', sent_at: '2026-11-13T08:00:00Z', subject_variant: 'C' }, 'follow_up').subject, "Re: Free month for The Blue Door beside Co-op Live's shows")
 })
@@ -159,10 +162,8 @@ test('offer subjects (C/D) while the founding offer is open; A/B after', async (
 test('founding-offer update email to businesses emailed before the offer', () => {
   const show = { title: 'Example Band', when: 'Sat 21 Nov, 19:30', venue: 'Co-op Live', imageUrl: 'https://s1.ticketm.net/x.jpg', url: 'https://www.theshowfinder.com/events/x' }
   const u = buildOutreachEmail({ ...p, status: 'sent', sent_at: '2026-11-05T08:00:00Z', subject_variant: null }, 'offer_update', { show, now: new Date('2026-11-20T08:00:00Z') })
-  assert.equal(u.subject, 'Update: a free first month for The Blue Door')
-  assert.match(u.text, /A quick update since I last emailed about The Blue Door: we've just launched a founding partner offer/)
-  assert.match(u.text, /£24\.95 a month for a Featured spot \(normally £44\.95\)/)
-  assert.match(u.text, /until 31 December/)
+  assert.equal(u.subject, 'The Blue Door: now £9.95 a month, first month free')
+  assert.match(u.text, /A quick update since I last emailed about The Blue Door: we've made it much simpler\. Your first month is free, then it's just £9\.95 a month/)
   assert.match(u.text, /Start The Blue Door's free month: https:\/\/www\.theshowfinder\.com\/p\/abc123/)
   assert.match(u.text, /For example, The Blue Door would be on the page for Example Band at Co-op Live/)
   assert.doesNotMatch(u.text, /Here's how it would look:/)

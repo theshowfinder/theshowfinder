@@ -5,7 +5,6 @@ import { listingCategory } from '@/lib/advertiserCategory'
 import { tidyOffer, tidyPostcode } from '@/lib/businessOffers'
 import { geocodePostcode } from '@/lib/businessVouchers'
 import { AREA_RADIUS_M, FEATURED_PER_AREA, STANDARD_PER_AREA, countWithinArea } from '@/lib/localPlacements'
-import { prospectByRef } from '@/lib/outreachProspect'
 import { gbp, foundingOfferOpen, FOUNDING_OFFER_KEY, FOUNDING_TRIAL_DAYS, FOUNDING_PRICES } from '@/lib/advertisingPackages'
 
 export const runtime = 'nodejs'
@@ -62,12 +61,12 @@ async function createCheckoutSession({
   const params = new URLSearchParams()
   params.set('mode', 'subscription')
   if (founding && !priceId.startsWith('price_')) {
-    // Founding price (£24.95 / £14.95 a month), made at checkout so no extra Stripe price has to be set up. A Stripe
+    // Monthly price (£9.95 Featured / £4.95 Standard), made at checkout so no extra Stripe price has to be set up. A Stripe
     // price id in STRIPE_FEATURED_FOUNDING_PRICE_ID / STRIPE_STANDARD_FOUNDING_PRICE_ID is used instead when set.
     params.set('line_items[0][price_data][currency]', 'gbp')
     params.set('line_items[0][price_data][unit_amount]', String(Math.round(FOUNDING_PRICES[packageKey] * 100)))
     params.set('line_items[0][price_data][recurring][interval]', 'month')
-    params.set('line_items[0][price_data][product_data][name]', `TheShowFinder ${packageKey === 'featured' ? 'Featured placement' : 'Standard listing'} (founding partner price)`)
+    params.set('line_items[0][price_data][product_data][name]', `TheShowFinder ${packageKey === 'featured' ? 'Featured placement' : 'Standard listing'} `)
   } else {
     params.set('line_items[0][price]', priceId)
   }
@@ -96,7 +95,7 @@ async function createCheckoutSession({
     params.set('subscription_data[metadata][offer]', FOUNDING_OFFER_KEY)
     params.set('subscription_data[trial_period_days]', String(FOUNDING_TRIAL_DAYS))
     params.set('payment_method_collection', 'always')
-    params.set('custom_text[submit][message]', `Founding partner offer: nothing to pay for your first ${FOUNDING_TRIAL_DAYS} days, then your founding price of ${gbp(FOUNDING_PRICES[packageKey])} a month, kept for as long as you stay. Cancel any time by emailing hello@theshowfinder.com. theshowfinder.com/terms#advertising`)
+    params.set('custom_text[submit][message]', `Nothing to pay for your first ${FOUNDING_TRIAL_DAYS} days, then ${gbp(FOUNDING_PRICES[packageKey])} a month, kept at that price for as long as you stay. Cancel any time by emailing hello@theshowfinder.com. theshowfinder.com/terms#advertising`)
   } else {
     params.set('custom_text[submit][message]', billing === 'monthly'
       ? '12-month subscription: 12 monthly payments. Renews for a further 12 months unless cancelled at least 30 days before the end of the term. theshowfinder.com/terms#advertising'
@@ -130,7 +129,8 @@ export async function POST(request: Request) {
     const offerText = tidyOffer(text(form.get('offer_text')))
     const ref = text(form.get('ref'))
     // Founding partner offer: only for a real outreach link, checked here (not trusted from the form), before 31 Dec.
-    const founding = Boolean(ref) && foundingOfferOpen() && Boolean(await prospectByRef(ref))
+    // Every sign-up gets the first month free then the monthly price, cancel any time (pricing reset, 20 Nov 2026).
+    const founding = foundingOfferOpen()
     const termAgreed = text(form.get('term_agreed')) === 'yes'
     const logo = form.get('logo')
     const assets = form.getAll('assets').filter(value => value instanceof File) as File[]

@@ -23,7 +23,7 @@ export default async function AdvertiserOnboardingPage({
     <main className="min-h-screen bg-[#F5F5F0] px-4 py-10 sm:px-6 sm:py-16">
       <div className="mx-auto max-w-6xl">
         <AdvertiserOnboardingForm initialCity={prospect?.city ?? params.city ?? ''} initialPackage={initialPackage} refCode={refCode}
-          initialBusinessName={prospect?.business_name ?? ''} initialEmail={prospect?.email ?? ''} initialContactName={prospect?.contact_name ?? ''} initialCategory={prospect?.category ?? ''} founding={Boolean(prospect) && foundingOfferOpen()} />
+          initialBusinessName={prospect?.business_name ?? ''} initialEmail={prospect?.email ?? ''} initialContactName={prospect?.contact_name ?? ''} initialCategory={prospect?.category ?? ''} founding={foundingOfferOpen()} />
       </div>
     </main>
   )

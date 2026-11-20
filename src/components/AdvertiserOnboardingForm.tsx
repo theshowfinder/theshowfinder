@@ -8,8 +8,8 @@ type PackageKey = 'featured' | 'standard'
 type BillingKey = 'monthly' | 'yearly'
 
 const PACKAGES = {
-  featured: { label: 'Featured placement', price: '£44.95 per month · 12-month subscription', detail: 'On every show page within walking distance of you, right under the ticket buttons, plus the top of your area in the city guide. Includes a QR voucher offer and promotion on our social channels.' },
-  standard: { label: 'Standard listing', price: '£29.95 per month · 12-month subscription', detail: 'A listing in the local guide on your city page, with your offer and booking link.' },
+  featured: { label: 'Featured placement', price: '£9.95 a month · first month free · cancel any time', detail: 'On every show page within walking distance of you, right under the ticket buttons, plus the top of your area in the city guide. Includes a QR voucher offer and promotion on our social channels.' },
+  standard: { label: 'Standard listing', price: '£4.95 a month · first month free · cancel any time', detail: 'A listing in the local guide on your city page, with your offer and booking link.' },
 } as const
 
 export default function AdvertiserOnboardingForm({ initialCity = '', initialPackage = 'featured', refCode = '', initialBusinessName = '', initialEmail = '', initialContactName = '', initialCategory = '', founding = false }: { initialCity?: string; initialPackage?: PackageKey; refCode?: string; initialBusinessName?: string; initialEmail?: string; initialContactName?: string; initialCategory?: string; founding?: boolean }) {
@@ -80,7 +80,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
     <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
       <aside className="rounded-3xl bg-slate-950 p-7 text-white sm:p-9">
         <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-rose-300">Advertiser onboarding</p>
-        {founding && <p className="mt-4 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-extrabold">Founding partner offer: your first month is free, then a founding price that stays yours for as long as you stay. Monthly, cancel any time.</p>}
+        {founding && <p className="mt-4 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-extrabold">Your first month is free, then a low monthly price that stays the same for as long as you stay. No contract, cancel any time.</p>}
         <h1 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">Get your business in front of people planning a night out.</h1>
         <p className="mt-4 text-sm leading-relaxed text-white/70">Choose your city and placement, send us your details and upload your marketing assets. We will confirm availability, arrange payment and prepare your listing.</p>
         <div className="mt-8 space-y-4 text-sm">
@@ -119,7 +119,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
               ))}
             </div>
             {founding ? (
-              <p className="mt-7 rounded-xl bg-rose-50 px-4 py-3 text-sm text-slate-700"><b>Billing:</b> nothing to pay for your first {FOUNDING_TRIAL_DAYS} days. After that your founding price of {gbp(FOUNDING_PRICES[packageKey])} a month (normally {gbp(PACKAGE_PRICES[packageKey].monthly)}), kept for as long as you stay. Cancel any time.</p>
+              <p className="mt-7 rounded-xl bg-rose-50 px-4 py-3 text-sm text-slate-700"><b>Billing:</b> nothing to pay for your first {FOUNDING_TRIAL_DAYS} days. After that {gbp(FOUNDING_PRICES[packageKey])} a month, kept at that price for as long as you stay. Cancel any time.</p>
             ) : (
             <label className="mt-7 block text-sm font-bold text-slate-700">Billing
               <select value={billing} onChange={event => setBilling(event.target.value as BillingKey)} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3">
@@ -164,7 +164,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
             <h2 className="text-2xl font-extrabold text-slate-900">Review your application</h2>
             <p className="mt-2 text-sm text-slate-500">Check the details below, then continue to secure your placement through Stripe. Your listing will remain pending until we review and approve it.</p>
             <div className="mt-7 rounded-2xl bg-slate-50 p-5 text-sm text-slate-700">
-              <p><b>City:</b> {city}</p><p><b>Package:</b> {PACKAGES[packageKey].label} ({founding ? foundingPriceLine(packageKey) : PACKAGES[packageKey].price})</p>{founding ? <><p><b>Billing:</b> first {FOUNDING_TRIAL_DAYS} days free, then {gbp(FOUNDING_PRICES[packageKey])} a month (founding price)</p><p><b>Term:</b> monthly, cancel any time</p></> : <><p><b>Billing:</b> {billing === 'monthly' ? `12 monthly payments of ${gbp(PACKAGE_PRICES[packageKey].monthly)}` : `${gbp(PACKAGE_PRICES[packageKey].yearly)} paid upfront for 12 months (you save ${gbp(yearlySaving(packageKey))})`}</p><p><b>Term:</b> 12-month subscription</p></>}<p><b>Business:</b> {businessName}</p><p><b>Contact:</b> {contactName} · {email}</p><p><b>Postcode:</b> {postcode || 'Not supplied'}</p><p><b>Offer:</b> {offer || 'None'}</p><p><b>Logo:</b> {logoFile?.name ?? 'Not supplied'}</p><p><b>Marketing files:</b> {assetFiles.length || 'None'}</p>
+              <p><b>City:</b> {city}</p><p><b>Package:</b> {PACKAGES[packageKey].label} ({founding ? foundingPriceLine(packageKey) : PACKAGES[packageKey].price})</p>{founding ? <><p><b>Billing:</b> first {FOUNDING_TRIAL_DAYS} days free, then {gbp(FOUNDING_PRICES[packageKey])} a month</p><p><b>Term:</b> monthly, cancel any time</p></> : <><p><b>Billing:</b> {billing === 'monthly' ? `12 monthly payments of ${gbp(PACKAGE_PRICES[packageKey].monthly)}` : `${gbp(PACKAGE_PRICES[packageKey].yearly)} paid upfront for 12 months (you save ${gbp(yearlySaving(packageKey))})`}</p><p><b>Term:</b> 12-month subscription</p></>}<p><b>Business:</b> {businessName}</p><p><b>Contact:</b> {contactName} · {email}</p><p><b>Postcode:</b> {postcode || 'Not supplied'}</p><p><b>Offer:</b> {offer || 'None'}</p><p><b>Logo:</b> {logoFile?.name ?? 'Not supplied'}</p><p><b>Marketing files:</b> {assetFiles.length || 'None'}</p>
             </div>
             <label className="mt-6 flex items-start gap-3 text-sm text-slate-700">
               <input type="checkbox" checked={agreedTerm} onChange={event => { setAgreedTerm(event.target.checked); if (event.target.checked) setError('') }} className="mt-1 h-4 w-4 shrink-0" />

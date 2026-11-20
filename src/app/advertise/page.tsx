@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { CITIES } from '@/lib/cities'
-import { gbp, yearlySaving } from '@/lib/advertisingPackages'
+import { gbp, PACKAGES } from '@/lib/advertisingPackages'
 
 export const metadata: Metadata = {
   title: 'Advertise your local business | TheShowFinder',
@@ -26,27 +26,24 @@ const featuredBenefits = (showPages: string) => [
   'Only three Featured places around each venue',
 ]
 
-function PackageCard({ name, monthly, annual, saving, benefits, featured = false, href }: {
+function PackageCard({ name, monthly, benefits, featured = false, href }: {
   name: string
   monthly: string
-  annual: string
-  saving: string
   benefits: string[]
   featured?: boolean
   href: string
 }) {
   return (
     <div className={`relative rounded-3xl border bg-white p-7 shadow-sm ${featured ? 'border-rose-300 ring-2 ring-rose-100' : 'border-slate-200'}`}>
-      <span className="absolute left-5 top-5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-emerald-800">Introductory city rate</span>
+      <span className="absolute left-5 top-5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-emerald-800">First month free</span>
       {featured && <span className="absolute right-5 top-5 rounded-full bg-rose-600 px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-white">Top position</span>}
       <p className="mb-2 text-sm font-extrabold uppercase tracking-widest text-rose-600">{name}</p>
       <div className="mb-1 flex items-end gap-2">
         <span className="text-4xl font-black tracking-tight text-slate-950">{monthly}</span>
         <span className="pb-1 text-sm text-slate-500">per month</span>
       </div>
-      <p className="mb-1 text-sm font-extrabold text-slate-800">12-month subscription</p>
-      <p className="mb-2 text-sm font-semibold text-slate-500">or {annual} paid upfront for the year</p>
-      <p className="mb-6 text-sm font-extrabold text-emerald-700">Save {saving} by paying for the year upfront · price protected while subscribed</p>
+      <p className="mb-1 text-sm font-extrabold text-slate-800">Monthly, no contract, cancel any time</p>
+      <p className="mb-6 text-sm font-extrabold text-emerald-700">Your first month is free · price kept for as long as you stay</p>
       <ul className="space-y-3">
         {benefits.map(benefit => (
           <li key={benefit} className="flex gap-3 text-sm leading-relaxed text-slate-600">
@@ -116,21 +113,21 @@ export default async function AdvertisePage({ searchParams }: { searchParams: Pr
         </div>
 
         <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-950">
-          These are introductory city rates for the first available placements. Once the nine Manchester positions are filled, or the introductory period ends, pricing will be reviewed. Joining now secures the displayed rate while your subscription remains active. All placements are a 12-month subscription, paid monthly or upfront.
+          Your first month is free. After that it is {gbp(PACKAGES.standard.monthly)} or {gbp(PACKAGES.featured.monthly)} a month, kept at that price for as long as you stay. No contract: cancel any time by email and you won&apos;t be charged again.
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <PackageCard name="Standard" monthly="£29.95" annual="£299.95" saving={gbp(yearlySaving('standard'))} benefits={standardBenefits} href={onboardingUrl('standard')} />
-          <PackageCard name="Featured" monthly="£44.95" annual="£449.95" saving={gbp(yearlySaving('featured'))} benefits={featuredBenefits(showPages)} featured href={onboardingUrl('featured')} />
+          <PackageCard name="Standard" monthly={gbp(PACKAGES.standard.monthly)} benefits={standardBenefits} href={onboardingUrl('standard')} />
+          <PackageCard name="Featured" monthly={gbp(PACKAGES.featured.monthly)} benefits={featuredBenefits(showPages)} featured href={onboardingUrl('featured')} />
         </div>
 
         <div className="mt-12 rounded-3xl bg-rose-600 p-8 text-white shadow-lg sm:flex sm:items-center sm:justify-between sm:p-10">
           <div className="max-w-2xl">
-            <h2 className="text-2xl font-black sm:text-3xl">Secure your city placement at the introductory rate</h2>
-            <p className="mt-2 leading-relaxed text-rose-50">Choose your city and package, add your offer and pay securely by card. We check your details and put you live, usually within one working day.</p>
+            <h2 className="text-2xl font-black sm:text-3xl">Try it free for a month</h2>
+            <p className="mt-2 leading-relaxed text-rose-50">Choose your city and package and add your offer. Nothing to pay for 30 days, then {gbp(PACKAGES.featured.monthly)} a month for Featured. We check your details and put you live, usually within one working day.</p>
           </div>
           <Link href={onboardingUrl('featured')} className="mt-6 inline-flex shrink-0 items-center justify-center rounded-xl bg-white px-6 py-3.5 text-sm font-extrabold text-rose-600 transition-transform hover:-translate-y-0.5 sm:ml-8 sm:mt-0">
-            Secure your placement →
+            Start your free month →
           </Link>
         </div>
       </section>

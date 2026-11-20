@@ -2,14 +2,14 @@
 export const PACKAGES = {
   standard: {
     name: 'Standard listing',
-    monthly: 29.95,
-    yearly: 299.95,
+    monthly: 4.95,
+    yearly: 49.50,
     summary: 'A strong business listing in the local guide on your city page.',
   },
   featured: {
     name: 'Featured placement',
-    monthly: 44.95,
-    yearly: 449.95,
+    monthly: 9.95,
+    yearly: 99.50,
     summary: 'One of only three premium spaces: priority city placement plus a "Before the show" spot on event pages in your city.',
   },
 } as const
@@ -38,10 +38,14 @@ export const yearlySaving = (key: PackageKey) => Math.round((PACKAGES[key].month
 // stay, monthly, cancel any time (no 12-month term). The card is taken at checkout and Stripe starts charging after
 // FOUNDING_TRIAL_DAYS. Shown on the outreach emails (subject too), the mock-up page, the sign-up form, Stripe checkout,
 // the confirmation, live and three-week emails and /terms (section 12).
-export const FOUNDING_OFFER_ENDS = '2026-12-31T23:59:59Z'
+// Pricing reset (Chris, 20 Nov 2026): "a no-brainer decision; better 200 paying £9.95 than nobody paying". Every
+// business now gets this deal, not only outreach links: Featured £9.95, Standard £4.95 a month, first month free with
+// the card taken up front, monthly, cancel any time, no 12-month term. The founding names are kept so the checkout,
+// webhook and emails keep working; the offer simply never ends.
+export const FOUNDING_OFFER_ENDS = '2099-12-31T23:59:59Z'
 export const FOUNDING_TRIAL_DAYS = 30
 export const FOUNDING_OFFER_KEY = 'founding_free_month'
-export const FOUNDING_PRICES: Record<PackageKey, number> = { featured: 24.95, standard: 14.95 }
+export const FOUNDING_PRICES: Record<PackageKey, number> = { featured: PACKAGES.featured.monthly, standard: PACKAGES.standard.monthly }
 export const foundingOfferOpen = (now: Date = new Date()) => now.getTime() <= Date.parse(FOUNDING_OFFER_ENDS)
-export const FOUNDING_SUMMARY = 'First month free, then a founding price kept for as long as you stay. Cancel any time.'
-export const foundingPriceLine = (key: PackageKey) => `First month free, then ${gbp(FOUNDING_PRICES[key])} a month (normally ${gbp(PACKAGES[key].monthly)}) · cancel any time`
+export const FOUNDING_SUMMARY = 'First month free, then a low monthly price kept for as long as you stay. Cancel any time.'
+export const foundingPriceLine = (key: PackageKey) => `First month free, then ${gbp(FOUNDING_PRICES[key])} a month · cancel any time`

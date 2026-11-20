@@ -1,7 +1,7 @@
 // Advertiser outreach emails (admin → Advertisers → Outreach). Short, local, honest: what the site is, where they
 // would appear, the founding offer, and how to stop hearing from us. No visitor or click numbers, ever.
 
-import { foundingOfferOpen } from './advertisingPackages.ts'
+import { foundingOfferOpen, gbp, FOUNDING_PRICES } from './advertisingPackages.ts'
 
 const SITE = 'https://www.theshowfinder.com'
 export const OUTREACH_FROM = 'TheShowFinder <partners@theshowfinder.com>'
@@ -253,8 +253,8 @@ function previewHtml(p: Prospect, show: OutreachShow | undefined): string {
 export type OutreachKind = 'first' | 'follow_up' | 'offer_update'
 
 export function offerUpdateSubject(p: Pick<Prospect, 'business_name'>): string {
-  const s = `Update: a free first month for ${p.business_name}`
-  return s.length <= 60 ? s : 'Update: a free first month on TheShowFinder'
+  const s = `${p.business_name}: now ${gbp(FOUNDING_PRICES.featured)} a month, first month free`
+  return s.length <= 60 ? s : `Now ${gbp(FOUNDING_PRICES.featured)} a month, first month free`
 }
 
 /** A personal message in the same visual email (warm leads, e.g. someone who replied): own subject, greeting and words. */
@@ -276,7 +276,7 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
     : kind === 'offer_update'
     ? [
         hi,
-        `A quick update since I last emailed about ${b}: we've just launched a founding partner offer for a small number of ${p.city} businesses (details above).`,
+        `A quick update since I last emailed about ${b}: we've made it much simpler. Your first month is free, then it's just ${gbp(FOUNDING_PRICES.featured)} a month, with no contract.`,
         `You'd sit right under the ticket buttons on every show ${venue ? `at ${venue} and the venues around it` : `near you in ${p.city}`}, at the moment people decide where to ${visitPhrase(p.category)}. Here's how it would look:`,
       ]
     : kind === 'first'
@@ -291,7 +291,7 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
         `Just checking this reached you. We'd still love to have ${b} on our ${p.city} page${venue ? ` and on the shows at ${venue}` : ''}. There are only three Featured places around each venue, and here's how yours would look:`,
       ]
   // While the founding offer is open it leads the email (the box under the banner); the text below doesn't repeat it.
-  const offerLine = founding ? '' : ' Introductory rates start at £29.95 a month.'
+  const offerLine = founding ? '' : ` Prices start at ${gbp(FOUNDING_PRICES.standard)} a month.`
   const outro = personal
     ? (personal.afterPreview ?? [])
     : kind === 'first'
@@ -305,15 +305,16 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
 
   // The plain version (also what the Zoho mailbox sends) has no preview card, so it says it in words instead.
   const plainIntro = kind === 'follow_up' ? intro : intro.map(l => l.replace(/ (Roughly like this|Here's how it would look):$/, ''))
-  const offerText = `FOUNDING PARTNER OFFER (until 31 December): your first month is free, then £24.95 a month for a Featured spot (normally £44.95). That price is locked for as long as you stay. No contract, cancel any time.`
+  const offerText = `It costs nothing for the first month. After that it's ${gbp(FOUNDING_PRICES.featured)} a month, and you can cancel any time with one email.`
   const text = [
-    ...(founding ? [plainIntro[0], '', offerText, '', ...plainIntro.slice(1).flatMap(l => [l, ''])] : plainIntro.flatMap(l => [l, ''])),
+    ...plainIntro.flatMap(l => [l, '']),
     ...(show ? [kind === 'offer_update'
       ? `For example, ${b} would be on the page for ${show.title} at ${show.venue} (${show.when}).`
       : kind === 'first'
       ? `For example, on the page for ${show.title} at ${show.venue} (${show.when}), ${b} would sit right under the ticket buttons.`
       : `Next at ${show.venue}: ${show.title}, ${show.when}`, ''] : []),
     ...outro.flatMap(l => [l, '']),
+    ...(founding ? [offerText, ''] : []),
     `${button}: ${offerUrl(p)}`,
     '',
     'Chris',
@@ -325,7 +326,7 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
   ].join('\n')
 
   const preheader = founding
-    ? `Your first month free, then £24.95 a month (normally £44.95), locked in. Here's how ${b} would look beside every show ${venue ? `at ${venue}` : `in ${p.city}`}.`
+    ? `First month free, then ${gbp(FOUNDING_PRICES.featured)} a month, cancel any time. Here's how ${b} would look beside every show ${venue ? `at ${venue}` : `in ${p.city}`}.`
     : `We feature three local places beside every show ${venue ? `at ${venue}` : `in ${p.city}`}. Here's how ${b} would look.`
   const banner = cityBannerUrl(p.city)
   const buttonHtml = `
@@ -337,9 +338,9 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
 <tr><td style="padding:16px 24px 0" bgcolor="#ffffff">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFF0F4" style="border:2px solid ${BRAND};border-radius:12px">
 <tr><td style="padding:18px 20px;font-family:Arial,Helvetica,sans-serif" bgcolor="#FFF0F4">
-  <p style="margin:0 0 6px;font-size:11px;letter-spacing:1.5px;font-weight:bold;color:${BRAND}">FOUNDING PARTNER OFFER &middot; UNTIL 31 DECEMBER</p>
+  <p style="margin:0 0 6px;font-size:11px;letter-spacing:1.5px;font-weight:bold;color:${BRAND}">TRY IT FREE</p>
   <p style="margin:0 0 6px;font-size:26px;line-height:1.15;font-weight:bold;color:${INK}">Your first month <span style="color:${BRAND}">FREE</span></p>
-  <p style="margin:0 0 10px;font-size:16px;color:${INK}">Then <b>£24.95 a month</b> <span style="color:${GREY};text-decoration:line-through">£44.95</span> for a Featured spot</p>
+  <p style="margin:0 0 10px;font-size:16px;color:${INK}">Then just <b>${gbp(FOUNDING_PRICES.featured)} a month</b> for a Featured spot</p>
   <p style="margin:0 0 14px;font-size:13px;line-height:1.6;color:${INK}">&#10003; Price locked for as long as you stay<br>&#10003; No contract, cancel any time<br>&#10003; Only 3 Featured spots around each venue</p>
   <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="${BRAND}" style="border-radius:8px">
     <a href="${offerUrl(p)}" style="display:inline-block;padding:11px 18px;font-size:14px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:8px;background:${BRAND}">Claim your free month &rarr;</a>
