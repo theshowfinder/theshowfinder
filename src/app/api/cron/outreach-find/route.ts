@@ -5,7 +5,7 @@ import { fetchAllPages } from '@/lib/pagedFetch'
 import { CITIES } from '@/lib/cities'
 import { anchorCountFor, isVenueName, looksLikeChain, looksMultiSite, spreadAcrossCities } from '@/lib/outreach'
 import {
-  extractEmails, pickEmail, extractCompanyNumbers, extractCompanyNames,
+  extractEmails, pickEmail, advertEmailProblem, extractCompanyNumbers, extractCompanyNames,
   categoryFromOsm, walkLabel, metresBetween, usefulLinks,
 } from '@/lib/outreachFind'
 import { fetchHtml, htmlText, verifyCompany } from '@/lib/siteContact'
@@ -247,6 +247,7 @@ async function handleGet(request: Request) {
     if (!home && !email) result = 'fetch_failed'
     else if (!email) result = 'no_email'
     else if (seenEmails.has(email)) result = 'duplicate'
+    else if (advertEmailProblem(email)) result = 'wrong_inbox'   // booking desk, big chain or institution: not worth a pitch
     else {
       const group = c.chain || looksLikeChain({ name: c.name, website: c.website, email }) || looksMultiSite(textOf(home ?? ''), c.city)
       const numbers = extractCompanyNumbers(text), names = extractCompanyNames(text)
@@ -254,8 +255,9 @@ async function handleGet(request: Request) {
       // Until the Companies House key is added, the business's own website stating a limited company AND a company
       // number is taken as enough (both are legally required on a company's site); anything less waits for a person.
       const siteStated = !hasKey && numbers.length > 0 && names.length > 0
-      // Every business with a real business inbox is emailed (Chris, 5 Nov 2026); company_type records how sure we are.
-      result = 'approved'
+      // Every independent business with a real business inbox is emailed (Chris, 5 Nov 2026); company_type records how
+      // sure we are. Chains and multi-site groups wait for a person (Admin → Outreach): head office decides, not a branch.
+      result = group ? 'to_check' : 'approved'
       const address = [c.tags['addr:housenumber'], c.tags['addr:street'], c.tags['addr:postcode']].filter(Boolean).join(' ') || null
       row = {
         business_name: c.name, category: categoryFromOsm(c.tags), city: c.city, email, website: c.website, address,

@@ -51,6 +51,28 @@ export function pickEmail(emails: string[], website: string, city: string, osmEm
   return pool.sort((a, b) => score(a) - score(b) || a.length - b.length)[0]
 }
 
+// ── Who an ADVERTISING email should never go to (Chris, 20 Nov 2026: "a lot going to emails to book a table") ──
+// A table-booking or front-desk inbox is read by whoever takes reservations, not the owner; a big chain, hotel group,
+// university, council or cathedral won't buy a local listing from a cold email. Those prospects are skipped.
+const BOOKING_INBOX = /(book|reserv|table|dine|dining|stay|reception|front-?desk|frontoffice|groups?$|functions?|part(y|ies)|privatedining|events?$|guest|concierge|host$)/i
+const INSTITUTION_DOMAIN = /\.(ac|gov|nhs|sch|police|mod)\.uk$|cathedral|university|council|nationaltrust|english-heritage|church/i
+const CHAIN_DOMAINS = new Set([
+  'hilton.com', 'accor.com', 'marriott.com', 'ihg.com', 'premierinn.com', 'travelodge.co.uk', 'maldronhotels.com', 'numastays.com',
+  'nativeplaces.com', 'doylecollection.com', 'radissonhotels.com', 'bestwestern.co.uk', 'hyatt.com', 'wyndhamhotels.com', 'leonardo-hotels.com',
+  'marstons.co.uk', 'fullers.co.uk', 'greeneking.co.uk', 'stonegategroup.co.uk', 'jdwetherspoon.co.uk', 'mbplc.com', 'youngs.co.uk',
+  'nandos.co.uk', 'wagamama.com', 'pizzaexpress.com', 'zizzi.co.uk', 'prezzo.co.uk', 'thecosyclub.co.uk', 'cosyclub.co.uk', 'browns-restaurants.co.uk',
+  'allbarone.co.uk', 'revolution-bars.co.uk', 'brewdog.com', 'thealchemist.uk.com', 'turtlebay.co.uk', 'bills-website.co.uk', 'gourmetburgerkitchen.com',
+])
+
+/** Why an address is wrong for an advertising pitch, or null when it's fine. */
+export function advertEmailProblem(email: string): string | null {
+  const [local = '', domain = ''] = email.toLowerCase().split('@')
+  if (BOOKING_INBOX.test(local)) return 'booking inbox'
+  if (INSTITUTION_DOMAIN.test(domain)) return 'institution'
+  if (CHAIN_DOMAINS.has(domain) || [...CHAIN_DOMAINS].some(d => domain.endsWith('.' + d))) return 'big chain'
+  return null
+}
+
 /** Company numbers written on the site ("Company No. 08651758", "Registered in Scotland SC123456"). */
 export function extractCompanyNumbers(text: string): string[] {
   const out = new Set<string>()

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { decodeCfEmail, extractEmails, pickEmail, extractCompanyNumbers, extractCompanyNames, normCompanyName, isEmailableCompany, usefulLinks, walkLabel } from './outreachFind.ts'
+import { advertEmailProblem, decodeCfEmail, extractEmails, pickEmail, extractCompanyNumbers, extractCompanyNames, normCompanyName, isEmailableCompany, usefulLinks, walkLabel } from './outreachFind.ts'
 
 test('decodes Cloudflare-protected emails', () => {
   // "a@b.co" xor 0x12
@@ -44,4 +44,17 @@ test('never picks another branch\'s inbox', () => {
 test('legal / data-protection inboxes are never picked (Tim Hortons, Roxy Ball Room, 9 Nov 2026)', () => {
   assert.equal(pickEmail(['thgdpr@timhortons.co.uk'], 'https://www.timhortons.co.uk', 'Birmingham'), null)
   assert.equal(pickEmail(['dataprotection@roxyleisure.co.uk', 'birmingham@roxyleisure.co.uk'], 'https://www.roxyleisure.co.uk', 'Birmingham'), 'birmingham@roxyleisure.co.uk')
+})
+
+test('advertising never goes to booking desks, chains or institutions', () => {
+  assert.equal(advertEmailProblem('reservations@thebocardo.co.uk'), 'booking inbox')
+  assert.equal(advertEmailProblem('bookings@pub.co.uk'), 'booking inbox')
+  assert.equal(advertEmailProblem('manchesterbookings@cosyclub.co.uk'), 'booking inbox')
+  assert.equal(advertEmailProblem('reception@townhousemanchester.com'), 'booking inbox')
+  assert.equal(advertEmailProblem('gfal@leeds.ac.uk'), 'institution')
+  assert.equal(advertEmailProblem('cafe@stmaryscathedral.org.uk'), 'institution')
+  assert.equal(advertEmailProblem('info.belfastcity@maldronhotels.com'), 'big chain')
+  assert.equal(advertEmailProblem('info@thepudding-pantry.co.uk'), null)
+  assert.equal(advertEmailProblem('hello@burgerboi.co.uk'), null)
+  assert.equal(advertEmailProblem('hello@thehostel.co.uk'), null)
 })

@@ -14,6 +14,7 @@ import { canEmail, subjectVariantFor, looksLikeChain, spreadAcrossCities, DAILY_
 import { sendOutreachEmail, sendOutreachEmailZoho, zohoConfigured, type SendResult } from '@/lib/outreachSend'
 import { loadOutreachShow } from '@/lib/outreachShow'
 import { foundingOfferOpen } from '@/lib/advertisingPackages'
+import { advertEmailProblem } from '@/lib/outreachFind'
 
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 export type Channel = 'resend' | 'zoho'
@@ -79,7 +80,8 @@ export async function runOutreachSend(channel: Channel, perRun: number, opts: { 
   for (const r of sentRows) sentByCity.set(r.city, (sentByCity.get(r.city) ?? 0) + 1)
   const busy = await venueShows(db, [...new Set(firsts.map(f => f.near_venue).filter((v): v is string => Boolean(v)))])
   const isChain = (r: Prospect) => looksLikeChain({ name: r.business_name, email: r.email })
-  const ordered = [...firsts].sort((a, b) => Number(isChain(a)) - Number(isChain(b)) || (busy.get(b.near_venue ?? '') ?? 0) - (busy.get(a.near_venue ?? '') ?? 0))
+  // Never pitch a booking desk, a big chain or an institution, even if it was approved before that rule (20 Nov 2026).
+  const ordered = [...firsts].filter(f => !f.email || !advertEmailProblem(f.email)).sort((a, b) => Number(isChain(a)) - Number(isChain(b)) || (busy.get(b.near_venue ?? '') ?? 0) - (busy.get(a.near_venue ?? '') ?? 0))
   const queue: Array<{ p: Prospect; kind: OutreachKind }> = [
     ...((follows ?? []) as Prospect[]).map(p => ({ p, kind: 'follow_up' as const })),
     ...updates.map(p => ({ p, kind: 'offer_update' as const })),
