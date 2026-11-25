@@ -16,6 +16,10 @@ type Application = {
   email: string
   phone: string | null
   website_url: string | null
+  description: string | null
+  offer_text: string | null
+  booking_url: string | null
+  postcode: string | null
   status: string
   payment_status: string
   offer?: string | null
@@ -31,8 +35,15 @@ type Application = {
 export default async function AdvertiserApplicationsPage() {
   await requireAdmin()
   const db = createAdminClient()
-  const { data } = await db.from('advertiser_applications').select('id,city,package,business_name,category,contact_name,email,phone,website_url,status,payment_status,billing,logo_path,asset_paths,created_at,business_id,offer,trial_ends_at,stripe_subscription_id').order('created_at', { ascending: false }) as unknown as { data: Application[] | null }
+  const { data } = await db.from('advertiser_applications').select('id,city,package,business_name,category,contact_name,email,phone,website_url,description,offer_text,booking_url,postcode,status,payment_status,billing,logo_path,asset_paths,created_at,business_id,offer,trial_ends_at,stripe_subscription_id').order('created_at', { ascending: false }) as unknown as { data: Application[] | null }
   const applications = data ?? []
+  // Logo and photos sit in the private advertiser-assets bucket: signed links, valid for an hour, so Chris can look before approving.
+  const allPaths = applications.flatMap(a => [a.logo_path, ...(a.asset_paths ?? [])]).filter((p): p is string => Boolean(p))
+  const signed = new Map<string, string>()
+  if (allPaths.length) {
+    const { data: urls } = await db.storage.from('advertiser-assets').createSignedUrls(allPaths, 3600)
+    for (const u of urls ?? []) if (u.path && u.signedUrl) signed.set(u.path, u.signedUrl)
+  }
   // Founding partner offer (first month free): who signed up, who is in the free month, who now pays, who left.
   const founding = applications.filter(a => a.offer === FOUNDING_OFFER_KEY && a.stripe_subscription_id)
   const inTrial = founding.filter(a => a.payment_status === 'trial')
@@ -61,12 +72,26 @@ export default async function AdvertiserApplicationsPage() {
               <thead className="border-b border-slate-100 bg-slate-50 text-slate-600"><tr><th className="px-4 py-3">Business</th><th className="px-4 py-3">City</th><th className="px-4 py-3">Package</th><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Assets</th><th className="px-4 py-3">Action</th></tr></thead>
               <tbody>{applications.map(application => (
                 <tr key={application.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-4 py-4"><p className="font-bold text-slate-900">{application.business_name}</p><p className="text-xs text-slate-500">{application.category}</p>{application.website_url && <a href={application.website_url} className="text-xs text-rose-600 hover:underline">{application.website_url}</a>}</td>
+                  <td className="px-4 py-4"><p className="font-bold text-slate-900">{application.business_name}</p><p className="text-xs text-slate-500">{application.category}</p>{application.website_url && <a href={application.website_url} className="text-xs text-rose-600 hover:underline">{application.website_url}</a>}{application.postcode && <p className="text-xs text-slate-500">{application.postcode}</p>}{application.offer_text && <p className="mt-2 text-xs font-semibold text-amber-800">🎟️ Offer: {application.offer_text}</p>}{application.booking_url && <a href={application.booking_url} className="block text-xs text-rose-600 hover:underline">Booking link</a>}{application.description && <p className="mt-2 max-w-xs text-xs text-slate-600">{application.description}</p>}</td>
                   <td className="px-4 py-4 text-slate-700">{application.city}</td>
                   <td className="px-4 py-4"><span className={`rounded-full px-2 py-1 text-xs font-bold ${application.package === 'featured' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>{application.package}</span><p className="mt-1 text-xs text-slate-500">{application.billing ?? '—'} · Payment: {application.payment_status === 'trial' ? 'free month (card saved)' : application.payment_status}</p></td>
                   <td className="px-4 py-4"><p className="font-semibold text-slate-800">{application.contact_name}</p><a href={`mailto:${application.email}`} className="text-xs text-rose-600 hover:underline">{application.email}</a>{application.phone && <p className="text-xs text-slate-500">{application.phone}</p>}</td>
                   <td className="px-4 py-4"><span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-bold text-blue-700">{application.status}</span><p className="mt-1 text-xs text-slate-400">{new Date(application.created_at).toLocaleDateString('en-GB')}</p></td>
-                  <td className="px-4 py-4 text-xs text-slate-600">{application.logo_path ? 'Logo' : 'No logo'}{application.asset_paths?.length ? ` + ${application.asset_paths.length} files` : ''}</td>
+                  <td className="px-4 py-4 text-xs text-slate-600">
+                    {!application.logo_path && !application.asset_paths?.length && 'None'}
+                    <div className="flex max-w-[220px] flex-wrap gap-2">
+                      {[application.logo_path, ...(application.asset_paths ?? [])].filter((p): p is string => Boolean(p)).map((path, i) => {
+                        const url = signed.get(path)
+                        const label = path === application.logo_path ? 'Logo' : `Photo ${i}`
+                        return url ? (
+                          <a key={path} href={url} target="_blank" rel="noopener noreferrer" title={label} className="block">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt={label} className="h-14 w-14 rounded border border-slate-200 object-cover" />
+                          </a>
+                        ) : <span key={path}>{label}</span>
+                      })}
+                    </div>
+                  </td>
                   <td className="px-4 py-4 text-xs">
                     {application.business_id ? (
                       <Link href="/admin/local-businesses" className="font-bold text-green-700 hover:underline">Published · manage →</Link>
