@@ -22,7 +22,13 @@ function BusinessCard({ business, featured, where }: { business: LocalBusiness; 
   const content = (
     <article className={`group h-full overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${featured ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200'}`}>
       <div className={`flex items-center justify-between p-5 ${featured ? 'min-h-36 bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950' : 'min-h-28 bg-gradient-to-br from-slate-100 to-slate-200'}`}>
-        <span className={featured ? 'text-5xl' : 'text-4xl'} aria-hidden="true">{category.icon}</span>
+        {business.logo_url ? (
+          // The advertiser's own logo (public business-logos bucket), on a white tile so any logo colour reads.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={business.logo_url} alt={`${business.name} logo`} loading="lazy" className={`${featured ? 'h-24 w-24' : 'h-16 w-16'} rounded-xl bg-white object-contain p-1.5 shadow-sm`} />
+        ) : (
+          <span className={featured ? 'text-5xl' : 'text-4xl'} aria-hidden="true">{category.icon}</span>
+        )}
         <span className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider ${featured ? 'bg-white text-rose-600' : 'bg-white/90 text-slate-600'}`}>
           {featured ? 'Featured partner' : 'Local listing'}
         </span>

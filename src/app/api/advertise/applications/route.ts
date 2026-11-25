@@ -5,6 +5,7 @@ import { listingCategory } from '@/lib/advertiserCategory'
 import { tidyOffer, tidyPostcode } from '@/lib/businessOffers'
 import { geocodePostcode } from '@/lib/businessVouchers'
 import { AREA_RADIUS_M, FEATURED_PER_AREA, STANDARD_PER_AREA, countWithinArea } from '@/lib/localPlacements'
+import { resend, FROM_EMAIL } from '@/lib/resend'
 import { gbp, foundingOfferOpen, FOUNDING_OFFER_KEY, FOUNDING_TRIAL_DAYS, FOUNDING_PRICES } from '@/lib/advertisingPackages'
 
 export const runtime = 'nodejs'
@@ -234,6 +235,41 @@ export async function POST(request: Request) {
         asset_paths: uploadedPaths.filter(path => !path.includes('/logo-')),
         updated_at: new Date().toISOString(),
       }).eq('id', application.id)
+    }
+
+    // Tell Chris straight away (before the card step, so he hears even if they don't finish Stripe checkout),
+    // with everything they sent and 7-day links to the logo and photos in the private advertiser-assets bucket.
+    try {
+      const links: string[] = []
+      if (uploadedPaths.length) {
+        const { data: urls } = await db.storage.from('advertiser-assets').createSignedUrls(uploadedPaths, 7 * 24 * 3600)
+        for (const u of urls ?? []) if (u.signedUrl) links.push(`${u.path?.includes('/logo-') ? 'Logo' : 'Photo'}: ${u.signedUrl}`)
+      }
+      const pkgName = packageKey === 'featured' ? 'Featured' : 'Standard'
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: 'hello@theshowfinder.com',
+        replyTo: email,
+        subject: `New advertiser application: ${businessName} (${city}, ${pkgName})`,
+        text: [
+          `${businessName} has applied for a ${pkgName} listing in ${city}${founding ? ' (founding offer: first month free)' : ''}.`,
+          'They are now being sent to Stripe to add their card. If they do not finish, payment stays "pending".',
+          '',
+          `Contact: ${contactName}, ${email}${phone ? `, ${phone}` : ''}`,
+          `Category: ${category}`,
+          `Postcode: ${postcode || '-'}`,
+          `Website: ${websiteUrl || '-'}`,
+          `Booking link: ${bookingUrl || '-'}`,
+          `Customer offer: ${offerText || '-'}`,
+          `Description: ${description || '-'}`,
+          '',
+          links.length ? `Uploads (links work for 7 days):\n${links.join('\n')}` : 'Uploads: none',
+          '',
+          'Review and approve: https://www.theshowfinder.com/admin/advertiser-applications',
+        ].join('\n'),
+      })
+    } catch (err) {
+      console.error('[advertiser-onboarding] notification email failed', err)
     }
 
     // Came from an outreach email (/p/<ref>): mark the business as onboarding so it gets no follow-up.
