@@ -440,6 +440,7 @@ export interface Database {
           package: 'standard' | 'featured'
           status: 'pending' | 'active' | 'paused' | 'cancelled'
           logo_url: string | null
+          photo_urls: string[]
           address: string | null
           postcode: string | null
           active_until: string | null
@@ -463,6 +464,7 @@ export interface Database {
           package?: 'standard' | 'featured'
           status?: 'pending' | 'active' | 'paused' | 'cancelled'
           logo_url?: string | null
+          photo_urls?: string[]
           address?: string | null
           postcode?: string | null
           active_until?: string | null

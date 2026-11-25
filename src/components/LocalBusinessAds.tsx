@@ -22,36 +22,59 @@ function BusinessCard({ business, featured, where }: { business: LocalBusiness; 
   const category = CATEGORY_DETAILS[business.category]
   const content = (
     <article className={`group h-full overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${featured ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200'}`}>
-      <div className={`flex items-center justify-between p-5 ${featured ? 'min-h-36 bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950' : 'min-h-28 bg-gradient-to-br from-slate-100 to-slate-200'}`}>
-        {business.logo_url ? (
-          // The advertiser's own logo (public business-logos bucket), on a white tile so any logo colour reads.
+      {/* Banner: the business's own photo (migration 139), else our brand gradient (Featured) or grey (Standard). */}
+      <Link href={`/partners/${business.id}`} aria-label={`More about ${business.name}`} className={`relative block ${featured ? 'h-48 bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950' : 'h-32 bg-gradient-to-br from-slate-100 to-slate-200'}`}>
+        {business.photo_urls?.[0] && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={business.logo_url} alt={`${business.name} logo`} loading="lazy" className={`${featured ? 'h-24 w-24' : 'h-16 w-16'} rounded-xl bg-white object-contain p-1.5 shadow-sm`} />
-        ) : (
-          <span className={featured ? 'text-5xl' : 'text-4xl'} aria-hidden="true">{category.icon}</span>
+          <img src={business.photo_urls[0]} alt={business.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
         )}
-        <span className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider ${featured ? 'bg-white text-rose-600' : 'bg-white/90 text-slate-600'}`}>
+        {business.photo_urls?.[0] && <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />}
+        {!business.logo_url && !business.photo_urls?.[0] && <span className={`absolute left-5 top-5 ${featured ? 'text-5xl' : 'text-4xl'}`} aria-hidden="true">{category.icon}</span>}
+        <span className={`absolute right-3 top-3 rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider shadow ${featured ? 'bg-white text-rose-600' : 'bg-white/90 text-slate-600'}`}>
           {featured ? 'Featured partner' : 'Local listing'}
         </span>
-      </div>
-      <div className={featured ? 'p-6' : 'p-5'}>
-        <p className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">{category.label}</p>
+      </Link>
+      <div className={featured ? 'px-6 pb-6' : 'px-5 pb-5'}>
+        <div className={`flex items-end gap-4 ${business.logo_url ? (featured ? '-mt-14' : '-mt-10') : 'pt-5'}`}>
+          {business.logo_url && (
+            // The advertiser's own logo on a white tile, overlapping the banner like a profile picture.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={business.logo_url} alt={`${business.name} logo`} loading="lazy" className={`${featured ? 'h-28 w-28' : 'h-20 w-20'} relative shrink-0 rounded-2xl border-4 border-white bg-white object-contain p-1.5 shadow-lg`} />
+          )}
+          <div className="min-w-0 pb-1">
+            <h3 className="text-xl font-extrabold leading-snug text-slate-900"><Link href={`/partners/${business.id}`} className="hover:text-rose-600">{business.name}</Link></h3>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400">{category.label}</p>
+          </div>
+        </div>
         {where && where.length > 0 && (
-          <ul className="mb-3 flex flex-wrap gap-1.5">
+          <ul className="mt-3 flex flex-wrap gap-1.5">
             {where.map(w => <li key={w} className="rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-bold text-rose-700">📍 {w}</li>)}
           </ul>
         )}
-        <h3 className="mb-1 text-lg font-extrabold leading-snug text-slate-900 group-hover:text-rose-600">{business.name}</h3>
-        {business.description && <p className="whitespace-pre-line text-sm leading-relaxed text-slate-500">{business.description}</p>}
-        {business.offer_text && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900">🎟️ {business.offer_text}</p>}
+        {business.description && <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-500">{business.description}</p>}
+        {(business.photo_urls?.length ?? 0) > 1 && (
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {business.photo_urls!.slice(1, 4).map(url => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={url} src={url} alt={business.name} loading="lazy" className="aspect-square w-full rounded-lg object-cover" />
+            ))}
+          </div>
+        )}
+        {business.offer_text && (
+          <div className="mt-4 rounded-xl border-2 border-dashed border-amber-400 bg-amber-50 px-4 py-3">
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-amber-700">🎟️ Show-goer offer</p>
+            <p className="mt-0.5 text-base font-extrabold leading-snug text-amber-950">{business.offer_text}</p>
+          </div>
+        )}
         <div className="mt-4 flex flex-wrap gap-2 text-sm font-bold">
           {business.offer_text && (
             <form method="post" action={`/offer/${business.id}`}>
-              <button className="rounded-lg bg-rose-600 px-3 py-2 text-white hover:bg-rose-700">Get voucher</button>
+              <button className="rounded-xl bg-rose-600 px-5 py-3 text-base text-white shadow-sm hover:bg-rose-700">Get your voucher</button>
             </form>
           )}
           {safeWebsite(business.booking_url) && <a href={`/out/biz/${business.id}?k=booking`} target="_blank" rel="sponsored noopener" className="rounded-lg border border-slate-300 px-3 py-2 text-slate-800 hover:border-slate-500">Book a table</a>}
           {safeWebsite(business.website_url) && <a href={`/out/biz/${business.id}?k=website`} target="_blank" rel="sponsored noopener" className="px-1 py-2 text-rose-600 hover:underline">Visit website <span aria-hidden="true">→</span></a>}
+          <Link href={`/partners/${business.id}`} className="px-1 py-2 text-slate-700 hover:underline">More about {business.name} <span aria-hidden="true">→</span></Link>
         </div>
       </div>
     </article>

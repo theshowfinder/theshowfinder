@@ -441,6 +441,7 @@ export async function setLocalBusinessPackageAction(id: string, city: string, pk
   await checkAuth()
   const db = createAdminClient()
   await db.from('local_businesses').update({ package: pkg, is_sponsored: pkg === 'featured', updated_at: new Date().toISOString() } as never).eq('id', id)
+  revalidatePath(`/partners/${id}`)
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(city))
   revalidatePath('/events/[slug]', 'page')   // show pages show nearby Featured partners: no stale listing after a change
@@ -465,6 +466,7 @@ export async function updateLocalBusinessOfferAction(id: string, city: string, f
   const { data: acc } = await db.from('local_business_accounts').select('redeem_pin').eq('business_id', id).maybeSingle()
   if (acc && !acc.redeem_pin) await db.from('local_business_accounts').update({ redeem_pin: newPin() }).eq('business_id', id)
   if (!acc) await db.from('local_business_accounts').insert({ business_id: id, contact_email: 'hello@theshowfinder.com', redeem_pin: newPin(), notes: 'Added from admin; no advertiser contact yet' })
+  revalidatePath(`/partners/${id}`)
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(city))
   revalidatePath('/events/[slug]', 'page')   // show pages show nearby Featured partners: no stale listing after a change

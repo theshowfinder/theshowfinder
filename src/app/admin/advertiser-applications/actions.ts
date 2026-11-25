@@ -27,6 +27,20 @@ async function publicLogoUrl(db: any, applicationId: string, logoPath: string | 
   return db.storage.from(LOGO_BUCKET).getPublicUrl(name).data.publicUrl as string
 }
 
+/** Copies the advertiser's uploaded photos (images only, not PDFs) to the public bucket; returns their public URLs. */
+async function publicPhotoUrls(db: any, applicationId: string, assetPaths: string[] | null): Promise<string[]> {
+  const urls: string[] = []
+  for (const path of (assetPaths ?? []).filter(p => /\.(jpe?g|png|webp)$/i.test(p)).slice(0, 5)) {
+    const { data: file, error } = await db.storage.from('advertiser-assets').download(path)
+    if (error || !file) { console.error('[advertiser-approve] photo download failed', error?.message); continue }
+    const name = `${applicationId}/${path.split('/').pop()}`
+    const { error: upErr } = await db.storage.from(LOGO_BUCKET).upload(name, file, { contentType: file.type || 'image/jpeg', upsert: true, cacheControl: '86400' })
+    if (upErr) { console.error('[advertiser-approve] photo upload failed', upErr.message); continue }
+    urls.push(db.storage.from(LOGO_BUCKET).getPublicUrl(name).data.publicUrl as string)
+  }
+  return urls
+}
+
 export async function approveApplicationAction(applicationId: string) {
   await requireAdmin()
   const db: any = createAdminClient()
@@ -34,6 +48,7 @@ export async function approveApplicationAction(applicationId: string) {
   if (error || !app) throw new Error(`application not found: ${error?.message ?? applicationId}`)
 
   const logo_url = await publicLogoUrl(db, app.id, app.logo_path)
+  const photo_urls = await publicPhotoUrls(db, app.id, app.asset_paths)
   const place = await geocodePostcode(app.postcode)
   const listing = {
     city: app.city,
@@ -48,6 +63,7 @@ export async function approveApplicationAction(applicationId: string) {
     booking_url: app.booking_url ?? null,
     updated_at: new Date().toISOString(),
     ...(logo_url ? { logo_url } : {}),
+    ...(photo_urls.length ? { photo_urls } : {}),
     ...(place ? { postcode: place.postcode, lat: place.lat, lng: place.lng } : {}),
   }
 
@@ -102,6 +118,7 @@ export async function approveApplicationAction(applicationId: string) {
   }
 
   revalidatePath('/admin/advertiser-applications')
+  if (businessId) revalidatePath(`/partners/${businessId}`)
   revalidatePath('/admin/local-businesses')
   revalidatePath('/cities/' + encodeURIComponent(app.city))
   // Venue pages cache for a week: rebuild them so a new Featured partner shows on the venues near it.
@@ -114,3 +131,4 @@ export async function rejectApplicationAction(applicationId: string) {
   await db.from('advertiser_applications').update({ status: 'rejected', updated_at: new Date().toISOString() }).eq('id', applicationId)
   revalidatePath('/admin/advertiser-applications')
 }
+

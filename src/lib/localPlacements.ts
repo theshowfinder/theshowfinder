@@ -10,6 +10,8 @@ export interface Placement {
   description: string | null
   website_url: string | null
   logo_url: string | null
+  /** The business's own photos (public URLs, migration 139); the first is the card banner. */
+  photo_urls?: string[] | null
   address: string | null
   postcode: string | null
   package: 'standard' | 'featured'
@@ -20,7 +22,7 @@ export interface Placement {
   lng: number | null
 }
 
-export const PLACEMENT_COLUMNS = 'id, city, name, category, description, website_url, logo_url, address, postcode, package, offer_text, booking_url, lat, lng'
+export const PLACEMENT_COLUMNS = 'id, city, name, category, description, website_url, logo_url, photo_urls, address, postcode, package, offer_text, booking_url, lat, lng'
 
 /** How many featured businesses one show page shows. */
 export const PER_PAGE = 3
