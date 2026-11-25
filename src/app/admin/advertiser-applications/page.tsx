@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { FOUNDING_OFFER_KEY } from '@/lib/advertisingPackages'
 import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { approveApplicationAction, rejectApplicationAction } from './actions'
+import { approveApplicationAction, deleteRejectedApplicationAction, rejectApplicationAction } from './actions'
 
 type Application = {
   id: string
@@ -96,7 +96,16 @@ export default async function AdvertiserApplicationsPage() {
                     {application.business_id ? (
                       <Link href="/admin/local-businesses" className="font-bold text-green-700 hover:underline">Published · manage →</Link>
                     ) : application.status === 'rejected' ? (
-                      <span className="text-slate-400">Rejected</span>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-slate-400">Rejected</span>
+                        {/* Two clicks: open, then confirm. Permanent: removes the application and its uploaded files. */}
+                        <details>
+                          <summary className="cursor-pointer text-red-600 hover:underline">Delete</summary>
+                          <form action={deleteRejectedApplicationAction.bind(null, application.id)} className="mt-1">
+                            <button className="rounded-lg bg-red-600 px-3 py-1.5 font-bold text-white hover:bg-red-700">Delete permanently</button>
+                          </form>
+                        </details>
+                      </div>
                     ) : (
                       <div className="flex flex-col gap-2">
                         <form action={approveApplicationAction.bind(null, application.id)}>

@@ -132,3 +132,16 @@ export async function rejectApplicationAction(applicationId: string) {
   revalidatePath('/admin/advertiser-applications')
 }
 
+// Chris's clear-out for test sign-ups (25 Nov 2026): permanently deletes a REJECTED application that never became a
+// listing, with its uploaded files. Approved or published applications can't be deleted here (pause the listing instead).
+export async function deleteRejectedApplicationAction(applicationId: string) {
+  await requireAdmin()
+  const db: any = createAdminClient()
+  const { data: app } = await db.from('advertiser_applications').select('id, status, business_id, logo_path, asset_paths').eq('id', applicationId).maybeSingle()
+  if (!app || app.status !== 'rejected' || app.business_id) throw new Error('Only rejected applications that never went live can be deleted')
+  const files = [app.logo_path, ...(Array.isArray(app.asset_paths) ? app.asset_paths : [])].filter(Boolean)
+  if (files.length) await db.storage.from('advertiser-assets').remove(files)
+  const { error } = await db.from('advertiser_applications').delete().eq('id', applicationId).eq('status', 'rejected').is('business_id', null)
+  if (error) throw new Error(`delete application: ${error.message}`)
+  revalidatePath('/admin/advertiser-applications')
+}
