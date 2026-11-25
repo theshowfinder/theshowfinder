@@ -45,7 +45,7 @@ export default function BeforeTheShow({ businesses, city, eventId, venue, wide =
                   <p className="mt-0.5 text-base font-extrabold leading-snug text-amber-950">{b.offer_text}</p>
                 </div>
               )}
-              {b.description && <p className="mt-3 line-clamp-2 text-sm leading-snug text-slate-600">{b.description}</p>}
+              {b.description && <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-600">{b.description}</p>}
               <div className="mt-4 flex flex-wrap items-center gap-2 text-sm font-bold">
                 {b.offer_text && (
                   <form method="post" action={eventId ? `/offer/${b.id}?e=${eventId}` : `/offer/${b.id}`}>

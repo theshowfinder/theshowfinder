@@ -36,7 +36,7 @@ function BusinessCard({ business, featured, where }: { business: LocalBusiness; 
       <div className={featured ? 'p-6' : 'p-5'}>
         <p className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">{category.label}{where ? <span className="normal-case tracking-normal font-semibold text-rose-600"> · {where}</span> : null}</p>
         <h3 className="mb-1 text-lg font-extrabold leading-snug text-slate-900 group-hover:text-rose-600">{business.name}</h3>
-        {business.description && <p className="line-clamp-3 text-sm leading-relaxed text-slate-500">{business.description}</p>}
+        {business.description && <p className="whitespace-pre-line text-sm leading-relaxed text-slate-500">{business.description}</p>}
         {business.offer_text && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900">🎟️ {business.offer_text}</p>}
         <div className="mt-4 flex flex-wrap gap-2 text-sm font-bold">
           {business.offer_text && (
