@@ -93,7 +93,8 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
         </div>
       </aside>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-9">
+      {/* From a personal outreach link, phones show the form first (details already filled in) and the intro after it. */}
+      <section className={`rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-9 ${refCode ? 'order-first lg:order-none' : ''}`}>
         <div className="mb-8 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-slate-400">
           {[1, 2, 3].map(number => <span key={number} className={`rounded-full px-3 py-1 ${step === number ? 'bg-slate-950 text-white' : step > number ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100'}`}>{number}</span>)}
         </div>
