@@ -4,11 +4,12 @@
 // (/out/biz/<id>, counted for the advertiser's monthly report). Clearly labelled as local partners.
 import Image from 'next/image'
 import { categoryLabel, safeWebsite, type Placement } from '@/lib/localPlacements'
+import { venuesToName, type MainVenue } from '@/lib/mainVenues'
 import { distanceLabel, metresBetween } from '@/lib/businessOffers'
 
 interface VenuePoint { name: string; lat: number | null; lng: number | null }
 
-export default function BeforeTheShow({ businesses, city, eventId, venue, wide = false }: { businesses: Placement[]; city: string; eventId: string; venue: VenuePoint; wide?: boolean }) {
+export default function BeforeTheShow({ businesses, city, eventId, venue, otherVenues = [], wide = false }: { businesses: Placement[]; city: string; eventId: string; venue: VenuePoint; otherVenues?: MainVenue[]; wide?: boolean }) {
   if (!businesses.length) return null
   return (
     <section aria-labelledby="before-the-show-heading" className="overflow-hidden rounded-2xl border-2 border-rose-500 bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950 p-5 shadow-lg ring-4 ring-rose-100 sm:p-6">
@@ -25,6 +26,10 @@ export default function BeforeTheShow({ businesses, city, eventId, venue, wide =
           const booking = safeWebsite(b.booking_url)
           const metres = b.lat != null && b.lng != null && venue.lat != null && venue.lng != null ? metresBetween({ lat: b.lat, lng: b.lng }, { lat: venue.lat, lng: venue.lng }) : null
           const distance = distanceLabel(metres)
+          // Also near: the other main venues within walking reach (this show's venue is named first, above).
+          const alsoNear = venuesToName(b, otherVenues, 2, venue.name, city)
+            .map(v => { const d = distanceLabel(v.metres); return d ? `${d} to ${v.name}` : null })
+            .filter((x): x is string => Boolean(x))
           return (
             <div key={b.id} className="rounded-xl bg-white p-4 shadow-md sm:p-5">
               <div className="flex items-center gap-4">
@@ -36,7 +41,12 @@ export default function BeforeTheShow({ businesses, city, eventId, venue, wide =
                 <div className="min-w-0">
                   <p className="text-lg font-extrabold leading-tight text-slate-900 sm:text-xl">{b.name}</p>
                   <p className="mt-0.5 text-sm text-slate-500">{categoryLabel(b.category)}</p>
-                  {distance && <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-bold text-rose-700">📍 {distance} from {venue.name}</p>}
+                  {(distance || alsoNear.length > 0) && (
+                    <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                      {distance && <li className="rounded-full bg-rose-600 px-2.5 py-0.5 text-xs font-bold text-white">📍 {distance} to {venue.name}</li>}
+                      {alsoNear.map(a => <li key={a} className="rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-bold text-rose-700">📍 {a}</li>)}
+                    </ul>
+                  )}
                 </div>
               </div>
               {b.offer_text && (

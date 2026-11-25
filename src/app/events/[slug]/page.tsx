@@ -53,6 +53,8 @@ import ShowDatesList from '@/components/ShowDatesList'
 import BeforeTheShow from '@/components/BeforeTheShow'
 import { monetisedOwnLink } from '@/lib/ownLinkAffiliate'
 import { PLACEMENT_COLUMNS, pickNearbyForPage, type Placement } from '@/lib/localPlacements'
+import { fetchMainVenues } from '@/lib/mainVenuesQuery'
+import type { MainVenue } from '@/lib/mainVenues'
 import type { ShowDate } from '@/lib/showDates'
 import { toArtistEventRows, type ArtistEventLink, type ArtistEventRow } from '@/lib/artistEvents'
 import { dropDuplicateEvents } from '@/lib/listedEvents'
@@ -614,11 +616,14 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const { venueEvents, artistEvents } = await getRelatedEvents(event, headliners[0]?.artist?.id ?? null)
   // Featured local partners within walking distance of this venue, nearest first (paid placement; only live listings are readable).
   let placements: Placement[] = []
+  let cityVenues: MainVenue[] = []
   if (venue?.city && event.status !== 'cancelled' && event.status !== 'postponed') {
     try {
       const { data } = await createPublicClient().from('local_businesses').select(PLACEMENT_COLUMNS)
         .ilike('city', venue.city).eq('package', 'featured').limit(500) as unknown as { data: Placement[] | null }
       placements = pickNearbyForPage(data ?? [], { lat: venue.lat ?? null, lng: venue.lng ?? null }, event.id)
+      // The city's main venues, so each partner can also say how far it is from the other big venues nearby.
+      if (placements.length > 0) cityVenues = await fetchMainVenues(createPublicClient(), venue.city)
     } catch (err) {
       console.error('[event] local placements lookup failed', err)
     }
@@ -900,6 +905,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 city={venue.city}
                 eventId={event.id}
                 venue={{ name: venue.name, lat: venue.lat ?? null, lng: venue.lng ?? null }}
+                otherVenues={cityVenues}
                 wide
               />
             )}

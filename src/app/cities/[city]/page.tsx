@@ -57,6 +57,7 @@ import { buildEdition } from '@/lib/cityBrief'
 import { fetchCityStories } from '@/lib/newsStoriesData'
 import CityNewsMosaic from '@/components/CityNewsMosaic'
 import LocalBusinessAds from '@/components/LocalBusinessAds'
+import { fetchMainVenues } from '@/lib/mainVenuesQuery'
 
 // No city page is built at deploy time: each is generated on first request, then
 // cached and refreshed in the background (see `revalidate`). Building all 40 cities
@@ -301,6 +302,8 @@ export default async function CityPage({
   // counted. A per-venue exact count is correct regardless of how many rows
   // the city has or how many duplicate venue rows exist.
   const candidateVenues = venuesResult.data ?? []
+  // Main venues for the local partners' walking-distance labels; only fetched when the city has partners.
+  const cityMainVenues = (localBusinessesResult.data ?? []).length > 0 ? await fetchMainVenues(supabase, cityName) : []
 
   // City hero/card photo — the highest-capacity venue in this city that has
   // a real (Ticketmaster-sourced) image, same images already trusted and
@@ -826,7 +829,7 @@ export default async function CityPage({
         {/* ── LOCAL ADVERTISING (hidden until placements are added) ──
              order-2, after Tonight (same order, earlier in the source) and before This weekend: paid partners are
              seen near the top of the page, not at the bottom (Chris, 25 Nov 2026). */}
-        <div id="local-partners" className="order-2 scroll-mt-28 md:scroll-mt-36"><LocalBusinessAds cityName={cityName} businesses={localBusinesses} venues={(venuesResult.data ?? []).map(v => ({ name: v.name, lat: v.lat, lng: v.lng }))} /></div>
+        <div id="local-partners" className="order-2 scroll-mt-28 md:scroll-mt-36"><LocalBusinessAds cityName={cityName} businesses={localBusinesses} venues={(venuesResult.data ?? []).map(v => ({ name: v.name, lat: v.lat, lng: v.lng }))} mainVenues={cityMainVenues} /></div>
 
       </div>
     </div>
