@@ -23,7 +23,7 @@ function BusinessCard({ business, featured, where }: { business: LocalBusiness; 
   const content = (
     <article className={`group h-full overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${featured ? 'border-rose-500 ring-2 ring-rose-100' : 'border-slate-200'}`}>
       {/* Banner: the business's own photo (migration 139), else our brand gradient (Featured) or grey (Standard). */}
-      <Link href={`/partners/${business.id}`} aria-label={`More about ${business.name}`} className={`relative block ${featured ? 'h-48 bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950' : 'h-32 bg-gradient-to-br from-slate-100 to-slate-200'}`}>
+      <Link href={`/partners/${business.id}`} aria-label={`More about ${business.name}`} className={`relative block ${featured ? 'h-32 bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950' : 'h-24 bg-gradient-to-br from-slate-100 to-slate-200'}`}>
         {business.photo_urls?.[0] && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={business.photo_urls[0]} alt={business.name} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
@@ -34,42 +34,35 @@ function BusinessCard({ business, featured, where }: { business: LocalBusiness; 
           {featured ? 'Featured partner' : 'Local listing'}
         </span>
       </Link>
-      <div className={featured ? 'px-6 pb-6' : 'px-5 pb-5'}>
-        <div className={`flex items-end gap-4 ${business.logo_url ? (featured ? '-mt-14' : '-mt-10') : 'pt-5'}`}>
+      <div className={featured ? 'px-5 pb-5' : 'px-4 pb-4'}>
+        <div className={`flex items-end gap-4 ${business.logo_url ? (featured ? '-mt-10' : '-mt-8') : 'pt-4'}`}>
           {business.logo_url && (
             // The advertiser's own logo on a white tile, overlapping the banner like a profile picture.
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={business.logo_url} alt={`${business.name} logo`} loading="lazy" className={`${featured ? 'h-28 w-28' : 'h-20 w-20'} relative shrink-0 rounded-2xl border-4 border-white bg-white object-contain p-1.5 shadow-lg`} />
+            <img src={business.logo_url} alt={`${business.name} logo`} loading="lazy" className={`${featured ? 'h-20 w-20' : 'h-16 w-16'} relative shrink-0 rounded-2xl border-4 border-white bg-white object-contain p-1 shadow-lg`} />
           )}
           <div className="min-w-0 pb-1">
-            <h3 className="text-xl font-extrabold leading-snug text-slate-900"><Link href={`/partners/${business.id}`} className="hover:text-rose-600">{business.name}</Link></h3>
+            <h3 className="text-lg font-extrabold leading-snug text-slate-900"><Link href={`/partners/${business.id}`} className="hover:text-rose-600">{business.name}</Link></h3>
             <p className="text-xs font-bold uppercase tracking-widest text-slate-400">{category.label}</p>
           </div>
         </div>
         {where && where.length > 0 && (
-          <ul className="mt-3 flex flex-wrap gap-1.5">
+          <ul className="mt-2 flex flex-wrap gap-1">
             {where.map(w => <li key={w} className="rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-bold text-rose-700">📍 {w}</li>)}
           </ul>
         )}
-        {business.description && <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-500">{business.description}</p>}
-        {(business.photo_urls?.length ?? 0) > 1 && (
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {business.photo_urls!.slice(1, 4).map(url => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={url} src={url} alt={business.name} loading="lazy" className="aspect-square w-full rounded-lg object-cover" />
-            ))}
-          </div>
-        )}
+        {/* Three lines on the card; the photo, name and "More about" open the partner page with the full text. */}
+        {business.description && <p className="mt-2 line-clamp-3 text-sm leading-snug text-slate-500">{business.description}</p>}
         {business.offer_text && (
-          <div className="mt-4 rounded-xl border-2 border-dashed border-amber-400 bg-amber-50 px-4 py-3">
+          <div className="mt-3 rounded-xl border-2 border-dashed border-amber-400 bg-amber-50 px-3 py-2">
             <p className="text-[10px] font-extrabold uppercase tracking-widest text-amber-700">🎟️ Show-goer offer</p>
-            <p className="mt-0.5 text-base font-extrabold leading-snug text-amber-950">{business.offer_text}</p>
+            <p className="text-sm font-extrabold leading-snug text-amber-950">{business.offer_text}</p>
           </div>
         )}
         <div className="mt-4 flex flex-wrap gap-2 text-sm font-bold">
           {business.offer_text && (
             <form method="post" action={`/offer/${business.id}`}>
-              <button className="rounded-xl bg-rose-600 px-5 py-3 text-base text-white shadow-sm hover:bg-rose-700">Get your voucher</button>
+              <button className="rounded-xl bg-rose-600 px-4 py-2.5 text-white shadow-sm hover:bg-rose-700">Get your voucher</button>
             </form>
           )}
           {safeWebsite(business.booking_url) && <a href={`/out/biz/${business.id}?k=booking`} target="_blank" rel="sponsored noopener" className="rounded-lg border border-slate-300 px-3 py-2 text-slate-800 hover:border-slate-500">Book a table</a>}
