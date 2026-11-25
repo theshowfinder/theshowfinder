@@ -162,7 +162,7 @@ describe('decideOutbound', () => {
   test('a person goes through our Impact tracking link, with the tag', () => {
     const d = decideOutbound(req(person), dest, 'evt-abc', true)
     assert.ok(d.kind === 'redirect' && d.tracked)
-    assert.ok(d.kind === 'redirect' && d.location.startsWith('https://ticketmaster.evyy.net/c/7328658/1965662/24023?u='))
+    assert.ok(d.kind === 'redirect' && d.location.startsWith('https://ticketmaster.evyy.net/c/8313471/2038758/24023?u='))
     assert.ok(d.kind === 'redirect' && d.location.endsWith('&subId1=evt-abc'))
   })
 

@@ -1,6 +1,6 @@
 // Impact affiliate tracking for Ticketmaster UK links.
-const IMPACT_PARTNER_ID     = '7328658'  // TheShowFinder's Impact media partner ID
-const TICKETMASTER_CAMPAIGN_ID = '1965662'  // Ticketmaster UK campaign ID on Impact
+const IMPACT_PARTNER_ID     = '8313471'  // TheShowFinder's Impact media partner ID (new account, 25 Nov 2026; old account was 7328658)
+const TICKETMASTER_CAMPAIGN_ID = '2038758'  // Ticketmaster UK ad ID on Impact ("Feed Tracking Link"; old account used 1965662)
 const TICKETMASTER_AD_ID    = '24023'    // Ad ID for the Ticketmaster UK campaign
 
 // Wraps a ticketmaster.co.uk destination URL in TheShowFinder's Impact

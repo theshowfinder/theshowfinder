@@ -26,7 +26,7 @@ import {
 describe('getTicketmasterAffiliateLink', () => {
   test('wraps the destination URL in the Impact tracking link with the right IDs', () => {
     const link = getTicketmasterAffiliateLink('https://www.ticketmaster.co.uk/event/123')
-    assert.ok(link.startsWith('https://ticketmaster.evyy.net/c/7328658/1965662/24023?u='))
+    assert.ok(link.startsWith('https://ticketmaster.evyy.net/c/8313471/2038758/24023?u='))
   })
 
   test('URL-encodes the destination so it survives as a single query value', () => {
