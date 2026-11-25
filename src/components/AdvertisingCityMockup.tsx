@@ -183,7 +183,7 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester', heroIma
           <p className="mt-4 text-xs text-slate-400">Featured partners appear first. Each area has at most three Featured and six Standard partners.</p>
         </section>
 
-        <section id="packages" className="scroll-mt-16 rounded-3xl bg-slate-950 p-7 text-white sm:p-10">
+        <section id="packages" className="scroll-mt-28 rounded-3xl bg-slate-950 p-7 text-white sm:p-10">
           <div className="max-w-3xl">
             <p className="text-xs font-extrabold uppercase tracking-widest text-rose-300">For local businesses</p>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">Put your business in front of people planning a night out.</h2>

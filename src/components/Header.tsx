@@ -6,18 +6,24 @@ import { Bars3Icon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/o
 import { NAV_LINKS, PRIMARY_CTA, BUSINESS_LINKS } from '@/lib/headerLinks'
 import SavedLink from '@/components/SavedLink'
 
+// A small picture per business link in the rose bar.
+const BUSINESS_ICONS: Record<string, string> = { '/list-your-event': '📅', '/sell-tickets': '🎟️', '/advertise': '📣' }
+
 export default function Header() {
   const [menuOpen,   setMenuOpen]   = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   return (
     <header className="sticky top-0 z-50 shadow-lg" style={{ backgroundColor: '#1A1A2E' }}>
-      {/* For organisers and businesses (desktop): a slim bar above the main nav */}
-      <div className="hidden md:block border-b border-white/10 bg-black/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-end gap-5 h-8 items-center text-xs font-semibold">
-          <span className="text-white/40">For organisers &amp; businesses:</span>
+      {/* For organisers and businesses, on every screen size: we list events free, sell tickets and take local ads.
+          Rose bar so it reads as a business offer, not small print (Chris, 25 Nov 2026). Scrolls sideways on phones. */}
+      <div className="bg-gradient-to-r from-rose-700 via-rose-600 to-rose-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-2 sm:gap-3 h-10 overflow-x-auto whitespace-nowrap text-xs sm:text-sm font-bold" style={{ scrollbarWidth: 'none' }}>
+          <span className="shrink-0 text-white/85">For organisers &amp; businesses:</span>
           {BUSINESS_LINKS.map(({ label, href }) => (
-            <Link key={label} href={href} className="text-white/75 hover:text-white transition-colors">{label}</Link>
+            <Link key={label} href={href} className="shrink-0 rounded-full bg-white/15 px-3 py-1 text-white ring-1 ring-white/30 hover:bg-white hover:text-rose-700 transition-colors">
+              {BUSINESS_ICONS[href] ?? ''} {label}
+            </Link>
           ))}
         </div>
       </div>

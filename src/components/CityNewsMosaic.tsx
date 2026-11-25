@@ -6,7 +6,7 @@ export default function CityNewsMosaic({ cityName, stories }: { cityName: string
   if (!stories.length) return null
   const [lead, ...rest] = stories.slice(0, 5)
   return (
-    <section id="news" className="scroll-mt-20 order-1" aria-labelledby="city-news-heading">
+    <section id="news" className="scroll-mt-40 order-1" aria-labelledby="city-news-heading">
       <div className="flex items-end justify-between mb-5 sm:mb-6">
         <div>
           <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>Latest event news</p>

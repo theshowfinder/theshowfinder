@@ -458,7 +458,7 @@ export default async function CityPage({
       </div>
 
       {/* ── JUMP CHIPS: one tap to each part of the page (sticky under the site header) ── */}
-      <nav aria-label={`Jump to a part of the ${cityName} page`} className="sticky top-16 md:top-24 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
+      <nav aria-label={`Jump to a part of the ${cityName} page`} className="sticky top-[104px] z-30 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-2 overflow-x-auto py-2.5" style={{ scrollbarWidth: 'none' }}>
           {([
             ['#tonight', 'Tonight', tonightEvents.length > 0],
@@ -494,7 +494,7 @@ export default async function CityPage({
         {/* ── LOCAL ENTERTAINMENT NEWS: image-led when city stories match (after the listings on every screen) ── */}
         <div className="order-8"><CityNewsMosaic cityName={cityName} stories={cityStories} /></div>
         {cityNews.length > 0 && (
-          <section id={cityStories.length > 0 ? 'local-headlines' : 'news'} className="scroll-mt-28 md:scroll-mt-36 order-9">
+          <section id={cityStories.length > 0 ? 'local-headlines' : 'news'} className="scroll-mt-40 order-9">
             <div className="mb-5">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>{cityStories.length > 0 ? 'From the local press' : 'Latest event news'}</p>
               <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900">{cityStories.length > 0 ? `More ${cityName} headlines` : `What's happening in ${cityName}`}</h2>
@@ -556,7 +556,7 @@ export default async function CityPage({
 
         {/* ── TONIGHT (hidden completely when there are no valid events) ── */}
         {tonightEvents.length > 0 && (
-          <section id="tonight" className="scroll-mt-28 md:scroll-mt-36 order-2">
+          <section id="tonight" className="scroll-mt-40 order-2">
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
                 Happening now
@@ -588,7 +588,7 @@ export default async function CityPage({
 
         {/* ── THIS WEEKEND (Friday–Sunday) ── */}
         {weekendEvents.length > 0 && (
-          <section id="this-weekend" className="scroll-mt-28 md:scroll-mt-36 order-3">
+          <section id="this-weekend" className="scroll-mt-40 order-3">
             <div className="flex items-end justify-between mb-7">
               <div>
                 <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>Friday to Sunday</p>
@@ -604,7 +604,7 @@ export default async function CityPage({
 
         {/* ── EVENTS THIS WEEK (ticketed shows + local events, merged) ── */}
         {weekEvents.length > 0 && (
-          <section id="this-week" className="scroll-mt-28 md:scroll-mt-36 order-4">
+          <section id="this-week" className="scroll-mt-40 order-4">
             <div className="flex items-end justify-between mb-7">
               <div>
                 <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
@@ -628,7 +628,7 @@ export default async function CityPage({
 
         {/* ── WHAT'S ON LOCALLY: council / venue / tourist-board listings (hidden when none) ── */}
         {localEvents.length > 0 && (
-          <section id="local" className="scroll-mt-28 md:scroll-mt-36 order-10">
+          <section id="local" className="scroll-mt-40 order-10">
             <div className="mb-7">
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#E8003D' }}>
                 Local listings
@@ -671,7 +671,7 @@ export default async function CityPage({
         {/* ── ON SALE THIS WEEK (omit the whole block when empty so the page
              stays focused and does not present a thin empty section to users
              or crawlers) ── */}
-        {onsaleGroups.length > 0 && <section id="on-sale" className="scroll-mt-28 md:scroll-mt-36 order-5 rounded-3xl bg-slate-950 px-4 py-7 sm:px-8 sm:py-9">
+        {onsaleGroups.length > 0 && <section id="on-sale" className="scroll-mt-40 order-5 rounded-3xl bg-slate-950 px-4 py-7 sm:px-8 sm:py-9">
           <div className="flex items-end justify-between mb-7">
             <div>
               <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#5aa9ff' }}>
@@ -721,7 +721,7 @@ export default async function CityPage({
 
         {/* ── VENUES ── */}
         {cityVenues.length > 0 && (
-          <section id="venues" className="scroll-mt-28 md:scroll-mt-36 order-10">
+          <section id="venues" className="scroll-mt-40 order-10">
             <div className="flex items-end justify-between mb-7">
               <div>
                 <p className="font-bold text-xs uppercase tracking-widest mb-1" style={{ color: '#026CDF' }}>
@@ -829,7 +829,7 @@ export default async function CityPage({
         {/* ── LOCAL ADVERTISING (hidden until placements are added) ──
              order-2, after Tonight (same order, earlier in the source) and before This weekend: paid partners are
              seen near the top of the page, not at the bottom (Chris, 25 Nov 2026). */}
-        <div id="local-partners" className="order-2 scroll-mt-28 md:scroll-mt-36"><LocalBusinessAds cityName={cityName} businesses={localBusinesses} venues={(venuesResult.data ?? []).map(v => ({ name: v.name, lat: v.lat, lng: v.lng }))} mainVenues={cityMainVenues} /></div>
+        <div id="local-partners" className="order-2 scroll-mt-40"><LocalBusinessAds cityName={cityName} businesses={localBusinesses} venues={(venuesResult.data ?? []).map(v => ({ name: v.name, lat: v.lat, lng: v.lng }))} mainVenues={cityMainVenues} /></div>
 
       </div>
     </div>

@@ -38,7 +38,7 @@ export default function NewsletterSignup() {
   }
 
   return (
-    <section id="newsletter" className="w-full px-4 py-8 sm:py-10 scroll-mt-20" style={{ backgroundColor: '#E8003D' }}>
+    <section id="newsletter" className="w-full px-4 py-8 sm:py-10 scroll-mt-28" style={{ backgroundColor: '#E8003D' }}>
       <div className="max-w-6xl mx-auto flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
         <div className="max-w-xl text-center lg:text-left">
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight tracking-tight">
