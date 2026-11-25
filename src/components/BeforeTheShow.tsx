@@ -82,7 +82,10 @@ export default function BeforeTheShow({ businesses, city, eventId, venue, otherV
           )
         })}
       </div>
-      <p className="mt-4 text-xs text-white/60">Local businesses in {city}. <a href={`/advertise?city=${encodeURIComponent(city)}`} className="underline hover:text-white">Feature your business here</a></p>
+      <div className="mt-5 flex flex-col gap-3 rounded-xl border border-white/15 bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-white/85"><span className="font-extrabold text-white">Own a restaurant, bar or hotel near {venue.name}?</span> Put it in front of everyone going to a show here. First month free.</p>
+        <a href={`/advertise/onboard?city=${encodeURIComponent(city)}`} className="shrink-0 rounded-xl bg-white px-4 py-2.5 text-center text-sm font-extrabold text-rose-600 shadow hover:bg-rose-50">Advertise with us →</a>
+      </div>
     </section>
   )
 }

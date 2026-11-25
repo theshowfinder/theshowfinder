@@ -99,9 +99,20 @@ export default function LocalBusinessAds({ cityName, businesses, venues = [], ma
         <h2 id="local-partners-heading" className="text-2xl font-extrabold text-slate-900 sm:text-3xl">Make more of your night in {cityName}</h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">Places to eat, drink, stay and get ready near the action.</p>
       </div>
-      <Link href={`/advertise?city=${encodeURIComponent(cityName)}`} className="shrink-0 text-sm font-bold text-rose-600 hover:underline">
-        Advertise your business <span aria-hidden="true">→</span>
+      <Link href={`/advertise/onboard?city=${encodeURIComponent(cityName)}`} className="shrink-0 rounded-xl bg-rose-600 px-4 py-2.5 text-center text-sm font-extrabold text-white shadow hover:bg-rose-700">
+        📣 Advertise with us <span aria-hidden="true">→</span>
       </Link>
+    </div>
+  )
+
+  // Under the partners: a clear invitation for the next business, straight to the sign-up (Chris, 25 Nov 2026).
+  const cta = (
+    <div className="mt-6 flex flex-col gap-4 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950 p-5 text-white sm:flex-row sm:items-center sm:justify-between sm:p-6">
+      <div>
+        <p className="text-lg font-extrabold">Run a restaurant, bar, café or hotel in {cityName}?</p>
+        <p className="mt-1 text-sm text-white/80">Get in front of people going to shows near you, with your photos, an offer they claim as a voucher, and a monthly report. First month free, cancel any time.</p>
+      </div>
+      <Link href={`/advertise/onboard?city=${encodeURIComponent(cityName)}`} className="shrink-0 rounded-xl bg-white px-5 py-3 text-center text-sm font-extrabold text-rose-600 shadow hover:bg-rose-50">Advertise with us <span aria-hidden="true">→</span></Link>
     </div>
   )
 
@@ -121,6 +132,7 @@ export default function LocalBusinessAds({ cityName, businesses, venues = [], ma
           </div>
         )}
         <p className="mt-4 text-xs text-slate-400">Featured partners appear first. Each area has at most three Featured and six Standard partners.</p>
+        {cta}
       </section>
     )
   }
@@ -157,6 +169,7 @@ export default function LocalBusinessAds({ cityName, businesses, venues = [], ma
         ))}
       </div>
       <p className="mt-4 text-xs text-slate-400">Featured partners rotate daily at the top. Each area has at most three Featured and six Standard partners.</p>
+      {cta}
     </section>
   )
 }

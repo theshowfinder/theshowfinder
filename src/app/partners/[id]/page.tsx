@@ -143,7 +143,11 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
               <p className="text-xs font-bold uppercase tracking-widest text-rose-300">TheShowFinder</p>
               <p className="mt-1 text-lg font-extrabold">See what&apos;s on in {p.city} →</p>
             </Link>
-            <p className="text-xs text-slate-400">{p.name} is a local partner of TheShowFinder. <Link href={`/advertise?city=${encodeURIComponent(p.city)}`} className="underline">Feature your business</Link></p>
+            <div className="rounded-2xl border-2 border-rose-200 bg-white p-5">
+              <p className="font-extrabold text-slate-900">Want your business here too?</p>
+              <p className="mt-1 text-sm text-slate-600">{p.name} is a local partner of TheShowFinder. First month free, cancel any time.</p>
+              <Link href={`/advertise/onboard?city=${encodeURIComponent(p.city)}`} className="mt-3 block rounded-xl bg-rose-600 px-4 py-2.5 text-center text-sm font-extrabold text-white hover:bg-rose-700">Advertise with us →</Link>
+            </div>
           </aside>
         </div>
       </div>
