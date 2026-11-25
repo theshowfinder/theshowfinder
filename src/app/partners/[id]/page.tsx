@@ -51,7 +51,7 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
   if (!p) notFound()
 
   const venues = p.lat != null && p.lng != null ? await fetchMainVenues(createPublicClient(), p.city) : []
-  const near = venuesToName(p, venues, 5, null, p.city)
+  const near = venuesToName(p, venues, 4, null, p.city)
   const booking = safeWebsite(p.booking_url)
   const website = safeWebsite(p.website_url)
   const photos = (p.photo_urls ?? []).slice(0, 5)
@@ -67,28 +67,29 @@ export default async function PartnerPage({ params }: { params: Promise<{ id: st
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
         <div className="absolute inset-x-0 top-0 mx-auto flex max-w-4xl items-center justify-between px-4 pt-4 sm:px-6">
-          <Link href={`/cities/${encodeURIComponent(p.city)}#local-partners`} className="rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-slate-800 hover:bg-white">← Before the show in {p.city}</Link>
-          {p.package === 'featured' && <span className="rounded-full bg-white px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-rose-600 shadow">Featured partner</span>}
+          <Link href={`/cities/${encodeURIComponent(p.city)}#local-partners`} className="whitespace-nowrap rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-slate-800 hover:bg-white">← {p.city}<span className="hidden sm:inline"> partners</span></Link>
+          {p.package === 'featured' && <span className="whitespace-nowrap rounded-full bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-rose-600 shadow sm:text-[11px]">Featured partner</span>}
         </div>
       </div>
 
       <div className="mx-auto max-w-4xl px-4 sm:px-6">
-        <div className="relative -mt-16 flex items-end gap-5 sm:-mt-20">
+        {/* Phones: logo overlaps the banner and the name sits underneath it; wider screens: name beside the logo. */}
+        <div className="relative -mt-16 flex flex-col items-start gap-3 sm:-mt-20 sm:flex-row sm:items-end sm:gap-5">
           {p.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={p.logo_url} alt={`${p.name} logo`} className="h-32 w-32 shrink-0 rounded-3xl border-4 border-white bg-white object-contain p-2 shadow-xl sm:h-40 sm:w-40" />
+            <img src={p.logo_url} alt={`${p.name} logo`} className="h-28 w-28 shrink-0 rounded-3xl border-4 border-white bg-white object-contain p-2 shadow-xl sm:h-40 sm:w-40" />
           ) : (
             <span className="flex h-32 w-32 shrink-0 items-center justify-center rounded-3xl border-4 border-white bg-slate-900 text-5xl font-extrabold text-white shadow-xl sm:h-40 sm:w-40">{p.name.slice(0, 1).toUpperCase()}</span>
           )}
-          <div className="min-w-0 pb-2">
+          <div className="min-w-0 sm:pb-2">
             <p className="text-xs font-bold uppercase tracking-widest text-rose-600">{categoryLabel(p.category)} · {p.city}</p>
-            <h1 className="text-3xl font-extrabold leading-tight text-slate-900 sm:text-4xl">{p.name}</h1>
+            <h1 className="text-2xl font-extrabold leading-tight text-slate-900 sm:text-4xl">{p.name}</h1>
           </div>
         </div>
 
         {near.length > 0 && (
-          <ul className="mt-5 flex flex-wrap gap-2">
-            {near.map(v => { const d = distanceLabel(v.metres); return d ? <li key={v.name} className="rounded-full bg-rose-50 px-3 py-1 text-sm font-bold text-rose-700">📍 {d} to {v.name}</li> : null })}
+          <ul className="mt-4 flex flex-wrap gap-1.5 sm:mt-5 sm:gap-2">
+            {near.map(v => { const d = distanceLabel(v.metres); return d ? <li key={v.name} className="rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-bold text-rose-700 sm:px-3 sm:py-1 sm:text-sm">📍 {d} to {v.name}</li> : null })}
           </ul>
         )}
 

@@ -42,13 +42,13 @@ export default function BeforeTheShow({ businesses, city, eventId, venue, otherV
                 <span className="absolute right-3 top-3 rounded-full bg-white px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-rose-600 shadow">Featured partner</span>
               </Link>
               <div className="relative px-4 pb-4">
-                <div className="-mt-10 flex items-end gap-3">
+                <div className="flex items-start gap-3">
                   {b.logo_url ? (
-                    <Image src={b.logo_url} alt={`${b.name} logo`} width={128} height={128} unoptimized className="h-20 w-20 shrink-0 rounded-2xl border-4 border-white bg-white object-contain p-1 shadow-lg" />
+                    <Image src={b.logo_url} alt={`${b.name} logo`} width={128} height={128} unoptimized className="-mt-10 h-20 w-20 shrink-0 rounded-2xl border-4 border-white bg-white object-contain p-1 shadow-lg" />
                   ) : (
-                    <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border-4 border-white bg-slate-900 text-3xl font-extrabold text-white shadow-lg">{b.name.slice(0, 1).toUpperCase()}</span>
+                    <span className="-mt-10 flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border-4 border-white bg-slate-900 text-3xl font-extrabold text-white shadow-lg">{b.name.slice(0, 1).toUpperCase()}</span>
                   )}
-                  <div className="min-w-0 pb-1">
+                  <div className="min-w-0 pt-2">
                     <Link href={`/partners/${b.id}`} className="block text-lg font-extrabold leading-tight text-slate-900 hover:text-rose-600">{b.name}</Link>
                     <p className="mt-0.5 text-sm font-semibold text-slate-500">{categoryLabel(b.category)}</p>
                   </div>
