@@ -823,8 +823,10 @@ export default async function CityPage({
           </section>
         )}
 
-        {/* ── LOCAL ADVERTISING (hidden until placements are added) ── */}
-        <div className="order-10"><LocalBusinessAds cityName={cityName} businesses={localBusinesses} venues={(venuesResult.data ?? []).map(v => ({ name: v.name, lat: v.lat, lng: v.lng }))} /></div>
+        {/* ── LOCAL ADVERTISING (hidden until placements are added) ──
+             order-2, after Tonight (same order, earlier in the source) and before This weekend: paid partners are
+             seen near the top of the page, not at the bottom (Chris, 25 Nov 2026). */}
+        <div id="local-partners" className="order-2 scroll-mt-28 md:scroll-mt-36"><LocalBusinessAds cityName={cityName} businesses={localBusinesses} venues={(venuesResult.data ?? []).map(v => ({ name: v.name, lat: v.lat, lng: v.lng }))} /></div>
 
       </div>
     </div>
