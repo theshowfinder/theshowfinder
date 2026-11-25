@@ -104,12 +104,16 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester', heroIma
     : BUSINESSES
   const onboard = (pkg: 'featured' | 'standard') => `/advertise/onboard?${new URLSearchParams({ city: cityName, package: pkg, ...(refCode ? { ref: refCode } : {}) }).toString()}`
   return (
-    <main className="min-h-screen bg-[#F5F5F0] text-slate-900">
+    <main className={`min-h-screen bg-[#F5F5F0] text-slate-900 ${preview ? 'pb-20' : ''}`}>
       {preview && (
         <div className="bg-rose-600 text-white">
           <div className="mx-auto max-w-7xl px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm font-bold">
             <span>This is how {preview.name} would appear on TheShowFinder {cityName}.{' Your first month is free, then from £4.95 a month. Cancel any time.'}</span>
-            <a href="#packages" className="rounded-lg bg-white px-3 py-1.5 text-rose-700">{founding ? 'Start your free month ↓' : 'Choose your placement ↓'}</a>
+            {/* Straight to the sign-up form (their details already filled in from the outreach link), not a scroll. */}
+            <span className="flex flex-wrap items-center gap-2">
+              <Link href={onboard('featured')} className="rounded-lg bg-white px-4 py-2 text-rose-700 shadow hover:bg-rose-50">{founding ? `Start ${preview.name}'s free month →` : 'Sign up now →'}</Link>
+              <a href="#packages" className="rounded-lg px-2 py-2 text-white/90 underline hover:text-white">See prices</a>
+            </span>
           </div>
         </div>
       )}
@@ -170,7 +174,7 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester', heroIma
               <h2 id="local-partners-heading" className="text-3xl font-extrabold tracking-tight">Make more of your night in {cityName}</h2>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">Places to eat, drink, stay and get ready near the action.</p>
             </div>
-            <Link href={`/advertise?city=${encodeURIComponent(cityName)}`} className="shrink-0 text-sm font-bold text-rose-600 hover:underline">
+            <Link href={onboard('featured')} className="shrink-0 text-sm font-bold text-rose-600 hover:underline">
               Advertise your business <span aria-hidden="true">→</span>
             </Link>
           </div>
@@ -206,6 +210,17 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester', heroIma
           </div>
         </section>
       </div>
+      {/* Opened from an outreach email: a sign-up bar that stays on screen while they scroll the mock-up (Chris,
+          25 Nov 2026: make signing up as obvious and easy as possible). */}
+      {preview && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-rose-500 bg-slate-950/95 px-4 py-3 backdrop-blur">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+            <p className="hidden text-sm text-white/80 sm:block"><span className="font-extrabold text-white">{preview.name}</span>: first month free, then £9.95 a month. Cancel any time.</p>
+            <p className="text-xs text-white/80 sm:hidden">First month free · cancel any time</p>
+            <Link href={onboard('featured')} className="shrink-0 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-extrabold text-white shadow hover:bg-rose-500">{founding ? 'Start free month →' : 'Sign up →'}</Link>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
