@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { skipReason, londonToUtcIso, isNotAShow, resolveFeedCity, feedCategory, cleanFeedDescription, feedPriceFrom, postcodeFrom, venueBusy, type FeedRow, type KnownEvent } from './feedImportRules.ts'
+import { skipReason, londonToUtcIso, isNotAShow, resolveFeedCity, feedCategory, cleanFeedDescription, feedPriceFrom, postcodeFrom, venueBusy, gigsbergImageIsFor, type FeedRow, type KnownEvent } from './feedImportRules.ts'
 
 const today = '2026-10-20'
 const row = (over: Partial<FeedRow> = {}): FeedRow => ({ id: 1, name: 'Black Stone Cherry', event_date: '2026-11-20', venue: 'Rock City Nottingham', city: 'Nottingham', url: 'https://x/1', ...over })
@@ -197,4 +197,16 @@ describe('venueBusy', () => {
   test('a show at another venue in the same town does not block it', () => {
     assert.equal(venueBusy(row('Rory', 'O2 Academy Brixton', 'London'), [{ title: 'Something Else', date: '2026-12-04', city: 'London', venue: 'Roundhouse' }]), false)
   })
+})
+
+test("a Gigsberg match photo is only given to the team it shows", () => {
+  const spurs = 'https://www.gigsberg.com/files/images/performers/tottenham_hotspur_1766651707.webp'
+  assert.equal(gigsbergImageIsFor(spurs, 'Leeds United'), false)
+  assert.equal(gigsbergImageIsFor(spurs, 'Tottenham Hotspur'), true)
+  assert.equal(gigsbergImageIsFor('https://www.gigsberg.com/files/images/performers/lincoln_city_fc_1783329473.webp', 'Lincoln City FC'), true)
+  assert.equal(gigsbergImageIsFor('https://www.gigsberg.com/files/images/performers/lincoln_city_fc_1783329473.webp', 'Queens Park Rangers'), false)
+  assert.equal(gigsbergImageIsFor('https://www.gigsberg.com/files/images/performers/andre_rieu_1779872648.webp', 'André Rieu'), true)
+  assert.equal(gigsbergImageIsFor('https://www.gigsberg.com/files/images/performers/brentford_1766651434.webp', 'Brentford FC'), true)
+  assert.equal(gigsbergImageIsFor('https://www.gigsberg.com/files/images/performers/theatre____9.jpg', 'The Guilty Feminist'), false)
+  assert.equal(gigsbergImageIsFor(null, 'Leeds United'), false)
 })

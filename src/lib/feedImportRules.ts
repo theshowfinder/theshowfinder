@@ -276,3 +276,20 @@ export function venueBusy(row: FeedRow, sameDay: KnownEvent[]): boolean {
   return sameDay.some(e => normalize(e.city) === city && !isPackageOrClassTitle(e.title)
     && (comparableVenue(e.venue) === venue || overlap(row.venue, e.venue) >= 0.5))
 }
+
+// Comparable key for a name or a Gigsberg photo file name: accents dropped, letters and digits only,
+// a trailing "fc" ignored. "tottenham_hotspur_1766651707.webp" -> "tottenhamhotspur".
+function photoNameKey(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/fc$/, '')
+}
+
+// True when a Gigsberg performer photo (…/performers/<name>_<timestamp>.<ext>) belongs to this performer.
+export function gigsbergImageIsFor(url: string | null, performer: string | null): boolean {
+  if (!url || !performer) return false
+  const m = url.match(/\/performers\/(.+?)_\d+\.[a-z0-9]+$/i)
+  if (!m) return false
+  const img = photoNameKey(m[1])
+  const name = photoNameKey(performer)
+  if (img.length < 3 || name.length < 3) return false
+  return img === name || img.includes(name) || name.includes(img)
+}

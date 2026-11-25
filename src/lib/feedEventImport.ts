@@ -16,7 +16,7 @@ import { fallbackEventImage, inferEventCategory } from '@/lib/eventImages'
 import { LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
 import { CITIES } from '@/lib/cities'
 import { poundsFrom } from '@/lib/stubhubCatalogue'
-import { cleanFeedDescription, comparableVenue, feedCategory, feedPriceFrom, londonToUtcIso, normalize, overlap, postcodeFrom, resolveFeedCity, skipReason, slugify, venueBusy, type FeedRow, type KnownEvent, type SkipReason } from '@/lib/feedImportRules'
+import { cleanFeedDescription, comparableVenue, feedCategory, feedPriceFrom, londonToUtcIso, normalize, overlap, postcodeFrom, resolveFeedCity, skipReason, gigsbergImageIsFor, slugify, venueBusy, type FeedRow, type KnownEvent, type SkipReason } from '@/lib/feedImportRules'
 
 type Mode = 'off' | 'dry' | 'live'
 
@@ -195,7 +195,9 @@ async function createGigsbergEvent(db: Loose, row: GigsbergRow): Promise<string>
   if (error || !event) throw new Error(error?.message ?? 'Could not create event')
   // Picture: our artist's photo, else Gigsberg's performer photo (about 430px wide, fine for cards), else our artwork.
   const feedImage = gigsbergImage(row.image_url)
-  const artistImage = await linkArtist(db, event.id, row.performer1, feedImage)
+  // Gigsberg often files a match under one team's photo ("Leeds United vs Tottenham Hotspur" comes with
+  // Tottenham's), so only give a new artist the feed photo when its file name is that performer's.
+  const artistImage = await linkArtist(db, event.id, row.performer1, gigsbergImageIsFor(feedImage, row.performer1) ? feedImage : null)
   await db.from('events').update({ image_url: artistImage ?? feedImage ?? fallbackEventImage(category, row.name) }).eq('id', event.id)
   await db.from('gigsberg_catalogue_events').update({ matched_event_id: event.id, match_status: 'approved_new', match_reason: 'Imported automatically from the Gigsberg catalogue', match_checked_at: new Date().toISOString(), image_status: artistImage ? 'artist_image' : feedImage ? 'feed_image' : 'branded_fallback' }).eq('id', row.id)
   return event.id as string
