@@ -12,7 +12,8 @@ const PACKAGES = {
 } as const
 
 export default function AdvertiserOnboardingForm({ initialCity = '', initialPackage = 'featured', refCode = '', initialBusinessName = '', initialEmail = '', initialContactName = '', initialCategory = '' }: { initialCity?: string; initialPackage?: PackageKey; refCode?: string; initialBusinessName?: string; initialEmail?: string; initialContactName?: string; initialCategory?: string; founding?: boolean }) {
-  const [step, setStep] = useState(1)
+  // From a personal link the city and placement are known already, so they start at the details (Chris, 26 Nov 2026).
+  const [step, setStep] = useState(refCode && initialCity ? 2 : 1)
   const [city, setCity] = useState(initialCity)
   const [packageKey, setPackageKey] = useState<PackageKey>(initialPackage)
   const [businessName, setBusinessName] = useState(initialBusinessName)
@@ -74,7 +75,7 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
 
   return (
     <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
-      <aside className="rounded-3xl bg-slate-950 p-7 text-white sm:p-9">
+      <aside className={`rounded-3xl bg-slate-950 p-7 text-white sm:p-9 ${refCode ? 'hidden lg:block' : ''}`}>
         <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-rose-300">Advertiser onboarding</p>
         <p className="mt-4 rounded-2xl bg-rose-600 px-4 py-3 text-sm font-extrabold">Your first month is free and there is no card to enter. If it works for you, stay on from {gbp(FOUNDING_PRICES.standard)} a month. Cancel any time.</p>
         <h1 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">Get your business in front of people planning a night out.</h1>
@@ -91,6 +92,15 @@ export default function AdvertiserOnboardingForm({ initialCity = '', initialPack
 
       {/* From a personal outreach link, phones show the form first (details already filled in) and the intro after it. */}
       <section className={`rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-9 ${refCode ? 'order-first lg:order-none' : ''}`}>
+        {refCode && (
+          <div className="mb-7 rounded-2xl bg-rose-600 px-5 py-4 text-white">
+            <p className="text-xl font-extrabold leading-tight sm:text-2xl">{initialBusinessName ? `${initialBusinessName}: start your free month` : 'Start your free month'}</p>
+            <p className="mt-1 text-sm font-bold text-rose-50">Takes about 2 minutes · no card needed · we set it all up for you</p>
+            {step === 2 && city && (
+              <p className="mt-3 text-sm text-rose-50">{PACKAGES[packageKey].label} in {city}. <button type="button" onClick={() => setStep(1)} className="font-extrabold underline">Change</button></p>
+            )}
+          </div>
+        )}
         <div className="mb-8 flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-slate-400">
           {[1, 2, 3].map(number => <span key={number} className={`rounded-full px-3 py-1 ${step === number ? 'bg-slate-950 text-white' : step > number ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100'}`}>{number}</span>)}
         </div>
