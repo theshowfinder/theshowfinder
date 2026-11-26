@@ -26,8 +26,7 @@ export default async function AdvertiserApplicationPage({ params }: { params: Pr
     const { data: urls } = await db.storage.from('advertiser-assets').createSignedUrls(paths, 3600)
     for (const u of urls ?? []) if (u.path && u.signedUrl) signed.set(u.path, u.signedUrl)
   }
-  const paid = ['paid', 'trial'].includes(a.payment_status)
-  const payment = a.payment_status === 'trial' ? 'Free month running (card saved)' : a.payment_status === 'paid' ? 'Paid' : 'Pending: card not added yet (Stripe checkout not finished)'
+  const payment = a.payment_status === 'trial' ? 'Free month running (card saved)' : a.payment_status === 'paid' ? 'Paid' : 'Free month (no card needed); pays only if they choose to stay on'
 
   const rows: [string, React.ReactNode][] = [
     ['Business', a.business_name],
@@ -117,7 +116,7 @@ export default async function AdvertiserApplicationPage({ params }: { params: Pr
           ) : (
             <>
               <form action={approveApplicationAction.bind(null, a.id)}>
-                <button className={`rounded-lg px-4 py-2 font-bold text-white ${paid ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-500 hover:bg-slate-600'}`}>{paid ? 'Approve & publish' : 'Publish (not paid)'}</button>
+                <button className={`rounded-lg px-4 py-2 font-bold text-white bg-green-600 hover:bg-green-700`}>{a.payment_status === 'paid' ? 'Approve & publish' : 'Approve & publish (starts free month)'}</button>
               </form>
               <form action={rejectApplicationAction.bind(null, a.id)}>
                 <button className="font-bold text-slate-500 hover:text-red-600 hover:underline">Reject</button>

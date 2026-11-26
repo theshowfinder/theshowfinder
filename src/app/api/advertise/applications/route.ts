@@ -35,83 +35,6 @@ function priceIdFor(packageKey: PackageKey, billing: BillingKey) {
   return { key, priceId }
 }
 
-async function createCheckoutSession({
-  request,
-  applicationId,
-  packageKey,
-  billing,
-  email,
-  city,
-  priceId,
-  founding,
-  ref,
-}: {
-  request: Request
-  applicationId: string
-  packageKey: PackageKey
-  billing: BillingKey
-  email: string
-  city: string
-  priceId: string
-  founding: boolean
-  ref: string
-}) {
-  const secret = process.env.STRIPE_SECRET_KEY
-  if (!secret) throw new Error('Stripe is not configured on the server.')
-  const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'https://www.theshowfinder.com'
-  const params = new URLSearchParams()
-  params.set('mode', 'subscription')
-  if (founding && !priceId.startsWith('price_')) {
-    // Monthly price (£9.95 Featured / £4.95 Standard), made at checkout so no extra Stripe price has to be set up. A Stripe
-    // price id in STRIPE_FEATURED_FOUNDING_PRICE_ID / STRIPE_STANDARD_FOUNDING_PRICE_ID is used instead when set.
-    params.set('line_items[0][price_data][currency]', 'gbp')
-    params.set('line_items[0][price_data][unit_amount]', String(Math.round(FOUNDING_PRICES[packageKey] * 100)))
-    params.set('line_items[0][price_data][recurring][interval]', 'month')
-    params.set('line_items[0][price_data][product_data][name]', `TheShowFinder ${packageKey === 'featured' ? 'Featured placement' : 'Standard listing'} `)
-  } else {
-    params.set('line_items[0][price]', priceId)
-  }
-  params.set('line_items[0][quantity]', '1')
-  params.set('customer_email', email)
-  params.set('client_reference_id', applicationId)
-  params.set('success_url', `${origin}/advertise/success?session_id={CHECKOUT_SESSION_ID}`)
-  params.set('cancel_url', `${origin}/advertise/onboard?city=${encodeURIComponent(city)}&package=${packageKey}&payment=cancelled${ref ? `&ref=${encodeURIComponent(ref)}` : ''}`)
-  params.set('metadata[application_id]', applicationId)
-  params.set('metadata[package]', packageKey)
-  params.set('metadata[billing]', billing)
-  params.set('metadata[city]', city)
-  params.set('subscription_data[metadata][application_id]', applicationId)
-  params.set('subscription_data[metadata][package]', packageKey)
-  params.set('subscription_data[metadata][billing]', billing)
-  // The term: recorded on the subscription (with when it was agreed) and shown above the Pay button.
-  const agreedAt = new Date().toISOString()
-  const term = founding ? 'monthly, cancel any time' : '12 months'
-  params.set('metadata[term]', term)
-  params.set('metadata[term_agreed_at]', agreedAt)
-  params.set('subscription_data[metadata][term]', term)
-  params.set('subscription_data[metadata][term_agreed_at]', agreedAt)
-  if (founding) {
-    // Founding partner offer: card taken now, nothing charged for FOUNDING_TRIAL_DAYS, then monthly until cancelled.
-    params.set('metadata[offer]', FOUNDING_OFFER_KEY)
-    params.set('subscription_data[metadata][offer]', FOUNDING_OFFER_KEY)
-    params.set('subscription_data[trial_period_days]', String(FOUNDING_TRIAL_DAYS))
-    params.set('payment_method_collection', 'always')
-    params.set('custom_text[submit][message]', `Nothing to pay for your first ${FOUNDING_TRIAL_DAYS} days, then ${gbp(FOUNDING_PRICES[packageKey])} a month, kept at that price for as long as you stay. Cancel any time by emailing hello@theshowfinder.com. theshowfinder.com/terms#advertising`)
-  } else {
-    params.set('custom_text[submit][message]', billing === 'monthly'
-      ? '12-month subscription: 12 monthly payments. Renews for a further 12 months unless cancelled at least 30 days before the end of the term. theshowfinder.com/terms#advertising'
-      : '12-month subscription paid upfront. Renews for a further 12 months unless cancelled at least 30 days before the end of the term. theshowfinder.com/terms#advertising')
-  }
-  const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
-  })
-  const result = await response.json() as { id?: string; url?: string; error?: { message?: string } }
-  if (!response.ok || !result.id || !result.url) throw new Error(result.error?.message || 'Stripe could not create checkout.')
-  return result
-}
-
 export async function POST(request: Request) {
   try {
     const form = await request.formData()
@@ -140,7 +63,7 @@ export async function POST(request: Request) {
     if (packageKey !== 'featured' && packageKey !== 'standard') return NextResponse.json({ error: 'Please choose a valid package.' }, { status: 400 })
     const billing: BillingKey = founding ? 'monthly' : billingAsked
     if (billing !== 'monthly' && billing !== 'yearly') return NextResponse.json({ error: 'Please choose a valid billing option.' }, { status: 400 })
-    if (!termAgreed) return NextResponse.json({ error: founding ? 'Please confirm the monthly subscription to continue.' : 'Please confirm the 12-month subscription to continue.' }, { status: 400 })
+    if (!termAgreed) return NextResponse.json({ error: 'Please tick the box to agree to the advertising terms.' }, { status: 400 })
     if (businessName.length < 2 || contactName.length < 2 || !/^\S+@\S+\.\S+$/.test(email)) {
       return NextResponse.json({ error: 'Please provide a business name, contact name and valid email address.' }, { status: 400 })
     }
@@ -154,8 +77,6 @@ export async function POST(request: Request) {
     const normal = priceIdFor(packageKey, billing)
     const foundingEnv = packageKey === 'featured' ? process.env.STRIPE_FEATURED_FOUNDING_PRICE_ID : process.env.STRIPE_STANDARD_FOUNDING_PRICE_ID
     const priceId = founding ? (foundingEnv || 'founding_inline') : normal.priceId
-    const priceEnvKey = normal.key
-    if (!priceId) return NextResponse.json({ error: `The selected payment option is not configured yet (${priceEnvKey}).` }, { status: 503 })
 
     const db = createAdminClient()
 
@@ -277,13 +198,37 @@ export async function POST(request: Request) {
       const loose = db as any // eslint-disable-line @typescript-eslint/no-explicit-any
       await loose.from('outreach_prospects').update({ status: 'onboarding', updated_at: new Date().toISOString() }).eq('ref_code', ref).not('status', 'eq', 'unsubscribed')
     }
-    const session = await createCheckoutSession({ request, applicationId: application.id, packageKey, billing, email, city, priceId, founding, ref: founding ? ref : '' })
-    await db.from('advertiser_applications').update({
-      stripe_checkout_session_id: session.id,
-      updated_at: new Date().toISOString(),
-    }).eq('id', application.id)
+    // No card to join (Chris, 26 Nov 2026): no Stripe checkout here. The free month starts when Chris approves the
+    // listing; at the end of it the business gets its results and a link to stay on monthly (src/lib/advertiserStayOn.ts).
+    // The business gets a plain "you're in" confirmation now.
+    try {
+      const monthly = gbp(FOUNDING_PRICES[packageKey])
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: email,
+        replyTo: 'hello@theshowfinder.com',
+        subject: `You're in: ${businessName} on TheShowFinder`,
+        text: [
+          `Hi ${contactName.split(' ')[0] || contactName},`,
+          '',
+          `Thanks for signing up ${businessName} to TheShowFinder ${city}. We've got everything we need.`,
+          '',
+          'What happens next:',
+          '- We check your listing and publish it, usually within a day, and email you the links so you can see how it looks.',
+          `- Your first ${FOUNDING_TRIAL_DAYS} days are completely free. There is no card to enter and nothing to pay.`,
+          `- At the end of the month we send you your results (how many people saw your listing, clicked to book and used your offer), and you choose whether to stay on for ${monthly} a month, cancel any time.`,
+          '',
+          'If you want to change anything, just reply to this email.',
+          '',
+          'Chris',
+          'TheShowFinder',
+        ].join('\n'),
+      })
+    } catch (err) {
+      console.error('[advertiser-onboarding] confirmation email failed', err)
+    }
 
-    return NextResponse.json({ ok: true, applicationId: application.id, checkoutUrl: session.url })
+    return NextResponse.json({ ok: true, applicationId: application.id, redirectUrl: '/advertise/success' })
   } catch (error) {
     console.error('[advertiser-onboarding] unexpected error', error)
     return NextResponse.json({ error: error instanceof Error ? error.message : 'We could not submit your application. Please try again.' }, { status: 500 })

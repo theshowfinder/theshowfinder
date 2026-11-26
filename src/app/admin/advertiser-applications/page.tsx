@@ -109,8 +109,8 @@ export default async function AdvertiserApplicationsPage() {
                     ) : (
                       <div className="flex flex-col gap-2">
                         <form action={approveApplicationAction.bind(null, application.id)}>
-                          <button className={`rounded-lg px-3 py-2 font-bold text-white ${['paid', 'trial'].includes(application.payment_status) ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-400 hover:bg-slate-500'}`}>
-                            {['paid', 'trial'].includes(application.payment_status) ? 'Approve & publish' : 'Publish (not paid)'}
+                          <button className={`rounded-lg px-3 py-2 font-bold text-white bg-green-600 hover:bg-green-700`}>
+                            {application.payment_status === 'paid' ? 'Approve & publish' : 'Approve & publish (starts free month)'}
                           </button>
                         </form>
                         <form action={rejectApplicationAction.bind(null, application.id)}>

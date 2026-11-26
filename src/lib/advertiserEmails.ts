@@ -33,8 +33,8 @@ export async function sendAdvertiserWelcome(a: { to: string; contactName: string
     'We will feature you on our social channels and check in with you each month.',
     '',
     a.trial
-      ? `Your first month is free, until ${a.trial.endsOn}. After that it is your founding price of ${a.trial.monthlyPrice} a month, kept for as long as you stay, and you can cancel any time: just reply to this email. Around three weeks in we will send you what your listing has done so far.`
-      : 'Your placement is a 12-month subscription. It renews for a further 12 months unless you cancel at least 30 days before the end of the term: just reply to this email.',
+      ? `Your first month is free, until ${a.trial.endsOn}, and there is no card to enter. Near the end of the month we will send you your results, and you choose whether to stay on for ${a.trial.monthlyPrice} a month, cancel any time.`
+      : 'Your listing is monthly and you can cancel any time: just reply to this email.',
     '',
     `Show customers you're featured: add our badge to your website (it takes a minute): ${SITE}/badge?city=${encodeURIComponent(a.city)}`,
     '',
@@ -83,26 +83,30 @@ export async function sendMonthlyReport(to: string, s: MonthlyStats) {
 }
 
 /**
- * Founding partner offer, about three weeks into the free month: what the listing has done so far, when the free
- * month ends and the price after it. Sent automatically once (cron founding-partners), copied to hello@.
+ * End of the free month (no card to join, Chris 26 Nov 2026): a personal email with what the listing has done, and a
+ * personal link to stay on for the monthly price, cancel any time. Sent once by the daily founding-partners job a few
+ * days before the free month ends, copied to hello@. Leads with the strongest real numbers; never invents any.
  */
-export function trialCheckInText(s: MonthlyStats, t: { contactName: string; endsOn: string; monthlyPrice: string }): string {
+export function stayOnText(s: MonthlyStats, t: { contactName: string; endsOn: string; monthlyPrice: string; stayUrl: string }): string {
   const lines = [
     `Hi ${t.contactName.split(/\s+/)[0] || 'there'},`,
     '',
-    `Here's what ${s.businessName} has had on TheShowFinder in its first three weeks:`,
+    `${s.businessName} has now been on TheShowFinder for almost a month, so here are your results so far:`,
     '',
-    s.featured ? `Shown on: ${s.showPages.toLocaleString('en-GB')} upcoming show pages in ${s.city}, plus the ${s.city} city page` : `Shown on: the local guide on the ${s.city} city page`,
-    `Clicks to your website: ${s.websiteClicks}`,
-    `Clicks to your booking page: ${s.bookingClicks}`,
+    s.featured ? `- Shown on ${s.showPages.toLocaleString('en-GB')} upcoming show pages in ${s.city}, right under the ticket buttons, plus the ${s.city} city page` : `- Listed in the local guide on the ${s.city} city page`,
   ]
-  if (s.hasOffer || s.vouchersClaimed) lines.push(`Vouchers claimed: ${s.vouchersClaimed}`, `Vouchers used in your venue: ${s.vouchersUsed}`)
-  else lines.push('', 'Tip: add an offer (for example "10% off food with your show ticket"). It gives people a reason to pick you, and we count every voucher used. Just reply with the offer and we will add it.')
+  if (s.websiteClicks) lines.push(`- ${s.websiteClicks} visit${s.websiteClicks === 1 ? '' : 's'} to your website from your listing`)
+  if (s.bookingClicks) lines.push(`- ${s.bookingClicks} click${s.bookingClicks === 1 ? '' : 's'} through to book a table`)
+  if (s.vouchersClaimed) lines.push(`- ${s.vouchersClaimed} voucher${s.vouchersClaimed === 1 ? '' : 's'} claimed for your offer${s.vouchersUsed ? `, ${s.vouchersUsed} used in your venue` : ''}`)
   lines.push(
     '',
-    `Your free month ends on ${t.endsOn}. After that it is your founding price of ${t.monthlyPrice} a month and you stay on every show page; there is nothing you need to do. If you would rather stop, just reply before then and you will not be charged.`,
+    `Your free month ends on ${t.endsOn}. If you'd like to stay on, it's ${t.monthlyPrice} a month, month by month, with no contract and you can cancel any time. It takes a minute here:`,
     '',
-    'Clicks are counted from real visitors only (automated traffic is filtered out).',
+    t.stayUrl,
+    '',
+    "If you'd rather not, there's nothing to cancel and nothing will be charged.",
+    '',
+    'Any questions, or anything you would like changed on your listing (photos, offer, wording), just reply to this email.',
     '',
     'Chris',
     'TheShowFinder',
@@ -110,9 +114,10 @@ export function trialCheckInText(s: MonthlyStats, t: { contactName: string; ends
   return lines.join('\n')
 }
 
-export async function sendTrialCheckIn(to: string, s: MonthlyStats, t: { contactName: string; endsOn: string; monthlyPrice: string }) {
-  const text = trialCheckInText(s, t)
-  const html = text.split('\n').map(l => l ? `<p style="margin:0 0 8px">${esc(l)}</p>` : '').join('')
-  const { error } = await resend.emails.send({ from: FROM_EMAIL, to, bcc: COPY_TO, replyTo: COPY_TO, subject: `${s.businessName}: your first three weeks on TheShowFinder`, text, html })
+export async function sendStayOnEmail(to: string, s: MonthlyStats, t: { contactName: string; endsOn: string; monthlyPrice: string; stayUrl: string }) {
+  const text = stayOnText(s, t)
+  const button = `<p style="margin:16px 0"><a href="${esc(t.stayUrl)}" style="display:inline-block;background:#E8003D;color:#fff;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:10px">Stay on for ${esc(t.monthlyPrice)} a month</a></p>`
+  const html = text.split('\n').map(l => l === t.stayUrl ? button : l ? `<p style="margin:0 0 8px">${esc(l)}</p>` : '').join('')
+  const { error } = await resend.emails.send({ from: FROM_EMAIL, to, bcc: COPY_TO, replyTo: COPY_TO, subject: `${s.businessName}: your first month on TheShowFinder`, text, html })
   if (error) throw new Error(typeof error === 'object' && 'message' in error ? String(error.message) : String(error))
 }

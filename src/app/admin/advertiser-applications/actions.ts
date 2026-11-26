@@ -11,7 +11,7 @@ import { listingCategory } from '@/lib/advertiserCategory'
 import { geocodePostcode, newPin } from '@/lib/businessVouchers'
 import { tidyOffer } from '@/lib/businessOffers'
 import { sendAdvertiserWelcome } from '@/lib/advertiserEmails'
-import { gbp, FOUNDING_OFFER_KEY, FOUNDING_PRICES } from '@/lib/advertisingPackages'
+import { gbp, FOUNDING_OFFER_KEY, FOUNDING_PRICES, FOUNDING_TRIAL_DAYS } from '@/lib/advertisingPackages'
 import { buildPartnerDraft } from '@/lib/socialAuto'
 
 const LOGO_BUCKET = 'business-logos'   // public (migration 094); advertiser-assets stays private
@@ -92,20 +92,28 @@ export async function approveApplicationAction(applicationId: string) {
   }, { onConflict: 'business_id' })
   if (accErr) throw new Error(`save contact details: ${accErr.message}`)
 
+  // No card to join (Chris, 26 Nov 2026): approving starts the free month, unless they already pay (or already have a
+  // free month running). The daily founding-partners job then sends their results and the "stay on" link before it ends.
+  const alreadyPaying = app.payment_status === 'paid'
+  const trialEndsAt: string | null = alreadyPaying ? null : (app.trial_ends_at ?? new Date(Date.now() + FOUNDING_TRIAL_DAYS * 86_400_000).toISOString())
+
   // Welcome email: live link, staff PIN and how vouchers work. A failed email never undoes the approval.
   try {
     await sendAdvertiserWelcome({
       to: app.email, contactName: app.contact_name, businessName: app.business_name, city: app.city, featured: app.package === 'featured', offer: listing.offer_text, pin,
       // Founding partner offer still in its free month: say so (and when it ends) instead of the 12-month term.
-      trial: app.offer === FOUNDING_OFFER_KEY && app.payment_status === 'trial' && app.trial_ends_at
-        ? { endsOn: new Date(app.trial_ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'Europe/London' }), monthlyPrice: gbp(FOUNDING_PRICES[app.package === 'featured' ? 'featured' : 'standard']) }
+      trial: trialEndsAt
+        ? { endsOn: new Date(trialEndsAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'Europe/London' }), monthlyPrice: gbp(FOUNDING_PRICES[app.package === 'featured' ? 'featured' : 'standard']) }
         : null,
     })
   } catch (err) {
     console.error('[advertiser-approve] welcome email failed', err)
   }
 
-  await db.from('advertiser_applications').update({ status: 'approved', business_id: businessId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', app.id)
+  await db.from('advertiser_applications').update({
+    status: 'approved', business_id: businessId, approved_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    ...(trialEndsAt ? { payment_status: 'trial', trial_ends_at: trialEndsAt, offer: FOUNDING_OFFER_KEY } : {}),
+  }).eq('id', app.id)
 
   // A "featured partner" Social Pack to tag them in (businesses usually reshare). Draft only; never blocks approval.
   if (businessId) {
