@@ -47,6 +47,30 @@ export async function POST(request: Request) {
   if (!applicationId) return NextResponse.json({ received: true })
 
   const db = createAdminClient()
+  // "Stay on" after the free month (src/app/advertise/stay): the business is now paying monthly. Record it on the
+  // application and the listing's account, and tell Chris. Later invoices and cancellations go through the code below.
+  if (metadata.kind === 'advertiser_stay_on' && (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded')) {
+    const loose = db as any // eslint-disable-line @typescript-eslint/no-explicit-any
+    const customer = typeof object.customer === 'string' ? object.customer : null
+    const subscription = typeof object.subscription === 'string' ? object.subscription : null
+    const { data: app } = await loose.from('advertiser_applications').update({
+      payment_status: 'paid', stripe_customer_id: customer, stripe_subscription_id: subscription, updated_at: new Date().toISOString(),
+    }).eq('id', applicationId).select('business_id, business_name, city, package, email').maybeSingle()
+    if (app?.business_id) {
+      await loose.from('local_business_accounts').update({ stripe_customer_id: customer, stripe_subscription_id: subscription, billing: 'monthly' }).eq('business_id', app.business_id)
+    }
+    if (app) {
+      try {
+        await resend.emails.send({
+          from: FROM_EMAIL, to: 'hello@theshowfinder.com',
+          subject: `Staying on: ${app.business_name} (${app.city}, ${app.package === 'featured' ? 'Featured' : 'Standard'})`,
+          text: `${app.business_name} in ${app.city} has chosen to stay on and is now paying monthly (${gbp(FOUNDING_PRICES[app.package === 'featured' ? 'featured' : 'standard'])}). Contact: ${app.email}.`,
+        })
+      } catch (err) { console.error('[stripe-webhook] stay-on notice failed', err) }
+    }
+    return NextResponse.json({ received: true })
+  }
+
   if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
     // Founding partner offer: card saved, nothing charged yet, free until trial_ends_at (then Stripe bills monthly).
     const founding = metadata.offer === FOUNDING_OFFER_KEY

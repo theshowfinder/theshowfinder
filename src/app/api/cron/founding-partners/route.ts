@@ -2,20 +2,21 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { withJobRun } from '@/lib/jobRuns'
 import { businessMonthStats } from '@/lib/advertiserReports'
-import { sendTrialCheckIn } from '@/lib/advertiserEmails'
+import { sendStayOnEmail } from '@/lib/advertiserEmails'
+import { stayOnPath, stayOnSecret } from '@/lib/advertiserStayOn'
 import { gbp, FOUNDING_OFFER_KEY, FOUNDING_PRICES } from '@/lib/advertisingPackages'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
 
 // Founding partner offer (first month free), daily (vercel.json):
-// 1. About three weeks in (9 days before the free month ends), a business that is live gets one email with what its
-//    listing has done so far, when the free month ends and the price after it.
+// 1. A few days before the free month ends, a live business gets one personal email with its results and a link to
+//    stay on monthly (no card to join, Chris 26 Nov 2026: /advertise/stay, src/lib/advertiserStayOn.ts).
 // 2. A day after a free month has ended, Stripe is asked whether the subscription is now paying ("active" → paid) or
 //    was cancelled, in case the invoice.paid / subscription.deleted webhooks were missed.
 // ?dry=1 lists without sending or changing anything.
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
-const CHECK_IN_DAYS_BEFORE_END = 9
+const CHECK_IN_DAYS_BEFORE_END = 4   // the stay-on email: results + link, a few days before the free month ends (26 Nov 2026)
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'Europe/London' })
 
 async function handleGet(request: Request) {
@@ -40,12 +41,12 @@ async function handleGet(request: Request) {
       const { data: b } = await db.from('local_businesses').select('id, name, city, package, offer_text, status').eq('id', a.business_id).maybeSingle()
       if (b && b.status === 'active') {
         const start = new Date(a.approved_at ?? a.created_at)
-        const stats = await businessMonthStats(b, { start, end: new Date(), label: 'your first three weeks' })
-        const t = { contactName: a.contact_name ?? '', endsOn: day(a.trial_ends_at), monthlyPrice: gbp(FOUNDING_PRICES[a.package === 'featured' ? 'featured' : 'standard']) }
+        const stats = await businessMonthStats(b, { start, end: new Date(), label: 'your first month' })
+        const t = { contactName: a.contact_name ?? '', endsOn: day(a.trial_ends_at), monthlyPrice: gbp(FOUNDING_PRICES[a.package === 'featured' ? 'featured' : 'standard']), stayUrl: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.theshowfinder.com'}${stayOnPath(a.id, stayOnSecret())}` }
         if (dry) checkIns.push(a.business_name)
         else {
           try {
-            await sendTrialCheckIn(a.email, stats, t)
+            await sendStayOnEmail(a.email, stats, t)
             await db.from('advertiser_applications').update({ trial_report_sent_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', a.id)
             checkIns.push(a.business_name)
           } catch (e) { failed.push(`${a.business_name}: ${e instanceof Error ? e.message : String(e)}`) }
