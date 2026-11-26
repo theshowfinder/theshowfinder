@@ -32,7 +32,7 @@ const READ_BUDGET_MS = 200_000
 const UA = 'TheShowFinderBot/1.0 (+https://www.theshowfinder.com/advertise; partners@theshowfinder.com)'
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 
-interface Candidate { key: string; city: string; name: string; tags: Record<string, string>; lat: number; lng: number; website: string; venue: string; metres: number; chain: boolean }
+interface Candidate { key: string; city: string; name: string; tags: Record<string, string>; lat: number | null; lng: number | null; website: string; venue: string | null; metres: number | null; chain: boolean }
 
 const fetchText = (url: string, ms = 8000) => fetchHtml(url, UA, ms)
 const textOf = htmlText
@@ -231,8 +231,12 @@ async function handleGet(request: Request) {
   for (const p of (existing ?? []) as Loose[]) if (p.status === 'approved') queued.set(p.city, (queued.get(p.city) ?? 0) + 1)
   const hostsInBatch = new Set<string>()
   const candidates = backlog.filter(c => { const h = host(c.website); if (hostsInBatch.has(h)) return false; hostsInBatch.add(h); return true })
-  candidates.sort((a, b) => Number(a.chain) - Number(b.chain) || a.metres - b.metres)
-  const batch = spreadAcrossCities(candidates, PER_RUN, queued)
+  // Businesses imported from a spreadsheet (Admin → Outreach, 26 Nov 2026) are read first, then independents before
+  // chains, nearest the venue first.
+  const imported = (c: Candidate) => c.key.startsWith('import:')
+  candidates.sort((a, b) => Number(imported(b)) - Number(imported(a)) || Number(a.chain) - Number(b.chain) || (a.metres ?? 9e9) - (b.metres ?? 9e9))
+  const fromSheet = candidates.filter(imported).slice(0, PER_RUN)
+  const batch = [...fromSheet, ...spreadAcrossCities(candidates.filter(c => !imported(c)), PER_RUN - fromSheet.length, queued)]
   const city = forcedCity ?? 'all'
   if (!batch.length) return NextResponse.json({ success: false, city, note: mapNote ?? 'nothing left to check', reverified }, { status: mapNote ? 503 : 200 })
 
@@ -247,7 +251,8 @@ async function handleGet(request: Request) {
     }
     const html = pages.join('\n')
     const text = textOf(html)
-    const email = pickEmail(extractEmails(html), c.website, c.city, c.tags.email ?? c.tags['contact:email'])
+    const tags = c.tags ?? {}
+    const email = pickEmail(extractEmails(html), c.website, c.city, tags.email ?? tags['contact:email'])
     let result: string
     let row: Loose = null
     if (!home && !email) result = 'fetch_failed'
@@ -265,10 +270,10 @@ async function handleGet(request: Request) {
       // Every independent business with a real business inbox is emailed (Chris, 5 Nov 2026); company_type records how
       // sure we are. Chains and multi-site groups wait for a person (Admin → Outreach): head office decides, not a branch.
       result = group ? 'to_check' : 'approved'
-      const address = [c.tags['addr:housenumber'], c.tags['addr:street'], c.tags['addr:postcode']].filter(Boolean).join(' ') || null
+      const address = [tags['addr:housenumber'], tags['addr:street'], tags['addr:postcode']].filter(Boolean).join(' ') || null
       row = {
-        business_name: c.name, category: categoryFromOsm(c.tags), city: c.city, email, website: c.website, address,
-        near_venue: c.venue, distance_label: walkLabel(c.metres, c.venue), osm_key: c.key,
+        business_name: c.name, category: categoryFromOsm(tags), city: c.city, email, website: c.website, address,
+        near_venue: c.venue || null, distance_label: c.venue && c.metres != null ? walkLabel(c.metres, c.venue) : null, osm_key: imported(c) ? null : c.key,
         company_type: ok || siteStated ? 'ltd' : 'unconfirmed', status: result, company_number: ok?.number ?? numbers[0] ?? null,
         notes: (group ? '[chain/group] ' : '') + (ok
           ? `Companies House: ${ok.name} (${ok.number}), found on their own website`

@@ -5,6 +5,9 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
+import { parseImport, hostOf } from '@/lib/outreachImport'
+import { looksLikeChain } from '@/lib/outreach'
+import { fetchAllPages } from '@/lib/pagedFetch'
 
 async function checkAuth() {
   const store = await cookies()
@@ -78,4 +81,35 @@ export async function resumeOutreachAction() {
   await db().from('outreach_settings').update({ resend_paused_until: null, zoho_paused_until: null, pause_reason: null, updated_at: new Date().toISOString() }).eq('id', 1)
   revalidatePath('/admin/outreach')
   back('Outreach resumed: the next morning runs will send again.')
+}
+
+/** Spreadsheet import (26 Nov 2026): businesses found by hand go into the finder's queue, ahead of the map ones. The
+ *  finder reads each website for the email and runs the usual checks; nothing is emailed straight from the sheet. */
+export async function importBusinessesAction(form: FormData) {
+  await checkAuth()
+  const { rows, skipped } = parseImport(str(form, 'rows'), CITIES.map(c => c.name))
+  if (!rows.length) back(`Nothing to import.${skipped.length ? ` Skipped: ${skipped.slice(0, 5).join('; ')}` : ' Paste rows with Business, Website and City.'}`, false)
+  const [prospects, candidates, scanned] = await Promise.all([
+    fetchAllPages<{ website: string | null }>((from, to) => db().from('outreach_prospects').select('website').order('id').range(from, to)),
+    fetchAllPages<{ website: string }>((from, to) => db().from('outreach_candidates').select('website').order('key').range(from, to)),
+    fetchAllPages<{ website_host: string | null }>((from, to) => db().from('outreach_scanned').select('website_host').order('key').range(from, to)),
+  ])
+  const known = new Set<string>([...prospects.map(p => hostOf(p.website ?? '')), ...candidates.map(c => hostOf(c.website)), ...scanned.map(s => s.website_host ?? '')].filter(Boolean))
+  const amenity = (cat: string | null) => {
+    const c = (cat ?? '').toLowerCase()
+    return /hotel|b&b|guest/.test(c) ? { tourism: 'hotel' } : /pub/.test(c) ? { amenity: 'pub' } : /bar|cocktail|wine/.test(c) ? { amenity: 'bar' } : /caf|coffee|bakery|tea/.test(c) ? { amenity: 'cafe' } : { amenity: 'restaurant' }
+  }
+  const fresh = rows.filter(r => !known.has(hostOf(r.website)))
+  const insert = fresh.map(r => ({
+    key: `import:${hostOf(r.website)}`, city: r.city, name: r.name, website: r.website, lat: null, lng: null, venue: r.venue, metres: null,
+    chain: looksLikeChain({ name: r.name, website: r.website, email: r.email }),
+    tags: { source: 'import', ...amenity(r.category), ...(r.email ? { email: r.email } : {}) },
+  }))
+  for (let i = 0; i < insert.length; i += 200) {
+    const { error } = await db().from('outreach_candidates').upsert(insert.slice(i, i + 200), { onConflict: 'key', ignoreDuplicates: true })
+    if (error) back(`Import failed: ${error.message}`, false)
+  }
+  revalidatePath('/admin/outreach')
+  const dupes = rows.length - fresh.length
+  back(`Imported ${fresh.length} business${fresh.length === 1 ? '' : 'es'} into the finder's queue: they're checked over the next few runs and appear under "Ready to check" or "Approved".${dupes ? ` ${dupes} already known.` : ''}${skipped.length ? ` Skipped ${skipped.length}: ${skipped.slice(0, 4).join('; ')}${skipped.length > 4 ? '…' : ''}` : ''}`)
 }

@@ -5,7 +5,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildOutreachEmail, SENDABLE_COMPANY_TYPES, DAILY_LIMIT, ZOHO_DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
 import PendingButton from '@/components/admin/PendingButton'
-import { addProspectAction, approveSelectedAction, setStatusAction, setCompanyTypeAction, deleteProspectAction, resumeOutreachAction } from './actions'
+import { addProspectAction, importBusinessesAction, approveSelectedAction, setStatusAction, setCompanyTypeAction, deleteProspectAction, resumeOutreachAction } from './actions'
 
 // Outreach: businesses near busy venues, each emailed only after Chris ticks it. The sender (cron outreach-send)
 // sends up to DAILY_LIMIT a weekday, spread through the day, then one follow-up after FOLLOW_UP_AFTER_DAYS days.
@@ -125,6 +125,15 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
             </div>
           </section>
         )}
+
+        <section className={card}>
+          <h2 className="font-extrabold text-slate-900">Import from a spreadsheet</h2>
+          <p className="text-sm text-slate-600 mt-1 mb-3">Copy rows from your sheet and paste them here. Columns: <b>Business, Website, City</b>, then optionally <b>Near venue, Email, Category</b> (a header row is fine). The finder reads each website for the right inbox and runs the usual checks (company, chains, booking desks, email domain) before anything is approved. Imported businesses are checked first, up to 80 a run, every hour on weekdays.</p>
+          <form action={importBusinessesAction} className="space-y-2">
+            <textarea name="rows" rows={6} required className={`${input} font-mono text-xs`} placeholder={'Business\tWebsite\tCity\tNear venue\nFurna\twearefurna.com\tBrighton\tTheatre Royal Brighton'} />
+            <PendingButton pendingLabel="Importing…" className="rounded-lg bg-slate-900 text-white font-bold text-sm px-4 py-2">Import businesses</PendingButton>
+          </form>
+        </section>
 
         <section className={card}>
           <h2 className="font-extrabold text-slate-900 mb-3">Add a business</h2>
