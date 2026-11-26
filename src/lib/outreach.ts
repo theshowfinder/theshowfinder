@@ -4,6 +4,8 @@
 import { foundingOfferOpen, gbp, FOUNDING_PRICES } from './advertisingPackages.ts'
 
 const SITE = 'https://www.theshowfinder.com'
+/** A live partner to point to in outreach, so businesses can see a real listing (Chris, 25 Nov 2026). */
+export const EXAMPLE_PARTNER = { name: 'The Pudding Pantry', city: 'Nottingham', url: `${SITE}/partners/e384ce35-552a-4cdd-b72d-3b32b223a41e` }
 export const OUTREACH_FROM = 'TheShowFinder <partners@theshowfinder.com>'
 export const OUTREACH_REPLY_TO = 'hello@theshowfinder.com'
 // Few, well-chosen emails (Chris, 6 Nov 2026): small independents close to busy venues, not volume.
@@ -136,10 +138,12 @@ export interface OutreachShow { title: string; when: string; venue: string; imag
 // when the first email goes, so a follow-up always replies to the subject that business actually got. Businesses
 // emailed before this (subject_variant null, already sent) keep the old subject on their follow-up.
 // C and D (12 Nov 2026) carry the founding partner offer and are used while it is open; A and B after it ends.
-export type SubjectVariant = 'A' | 'B' | 'C' | 'D'
+// E and F (26 Nov 2026, no card to join) say it's free and needs no card; C and D stay as they were so follow-ups to
+// businesses already emailed with them still reply to the subject they got.
+export type SubjectVariant = 'A' | 'B' | 'C' | 'D' | 'E' | 'F'
 export const subjectVariantFor = (id: string, now: Date = new Date()): SubjectVariant => {
   const even = parseInt(id.replace(/[^0-9a-f]/gi, '').slice(-1) || '0', 16) % 2 === 0
-  return foundingOfferOpen(now) ? (even ? 'C' : 'D') : (even ? 'A' : 'B')
+  return foundingOfferOpen(now) ? (even ? 'E' : 'F') : (even ? 'A' : 'B')
 }
 const realVenue = (p: Pick<Prospect, 'near_venue' | 'city'>) =>
   p.near_venue && p.near_venue.toLowerCase() !== p.city.toLowerCase() ? p.near_venue : null
@@ -176,6 +180,20 @@ export function outreachSubject(p: Prospect, variant: SubjectVariant | 'legacy')
     ]
     return options.find(o => o.length <= 60) ?? options[options.length - 1]
   }
+  if (variant === 'E') {
+    const options = [
+      ...(short ? [`Free listing for ${b} by ${short}, no card needed`, `Free listing by ${short}'s shows, no card needed`, `Free listing by ${short}, no card needed`] : []),
+      `Free listing for ${b} in ${p.city}, no card needed`, `Free ${p.city} listing, no card needed`,
+    ]
+    return options.find(o => o.length <= 60) ?? options[options.length - 1]
+  }
+  if (variant === 'F') {
+    const options = [
+      ...(short ? [`One of 3 spots by ${short}: free, no card needed`, `3 spots by ${short}: free, no card needed`] : []),
+      `One of 3 spots in ${p.city}: free, no card needed`, `3 spots in ${p.city}: free, no card needed`,
+    ]
+    return options.find(o => o.length <= 60) ?? options[options.length - 1]
+  }
   if (variant === 'C') {
     const options = [
       ...(short ? [`Free month for ${b} beside ${short}'s shows`, `A free month beside ${short}'s shows`] : []),
@@ -199,7 +217,7 @@ export function outreachSubject(p: Prospect, variant: SubjectVariant | 'legacy')
 
 /** The subject this prospect gets (first) or got (follow-up "Re:"). */
 function subjectFor(p: Prospect, now?: Date): string {
-  const v = p.subject_variant === 'A' || p.subject_variant === 'B' || p.subject_variant === 'C' || p.subject_variant === 'D' ? p.subject_variant
+  const v = p.subject_variant && ['A', 'B', 'C', 'D', 'E', 'F'].includes(p.subject_variant) ? p.subject_variant as SubjectVariant
     : p.sent_at ? 'legacy' : subjectVariantFor(p.id, now)
   return outreachSubject(p, v)
 }
@@ -305,7 +323,8 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
 
   // The plain version (also what the Zoho mailbox sends) has no preview card, so it says it in words instead.
   const plainIntro = kind === 'follow_up' ? intro : intro.map(l => l.replace(/ (Roughly like this|Here's how it would look):$/, ''))
-  const offerText = `It costs nothing for the first month. After that it's ${gbp(FOUNDING_PRICES.featured)} a month, and you can cancel any time with one email.`
+  const offerText = `It's free to join and there's no card to enter: your first month costs nothing. At the end of it we send you your results, and you only stay on (${gbp(FOUNDING_PRICES.featured)} a month, cancel any time) if it's working for you.`
+  const exampleText = `See one that's live: ${EXAMPLE_PARTNER.name} in ${EXAMPLE_PARTNER.city}, ${EXAMPLE_PARTNER.url}`
   const text = [
     ...plainIntro.flatMap(l => [l, '']),
     ...(show ? [kind === 'offer_update'
@@ -314,7 +333,7 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
       ? `For example, on the page for ${show.title} at ${show.venue} (${show.when}), ${b} would sit right under the ticket buttons.`
       : `Next at ${show.venue}: ${show.title}, ${show.when}`, ''] : []),
     ...outro.flatMap(l => [l, '']),
-    ...(founding ? [offerText, ''] : []),
+    ...(founding ? [offerText, '', exampleText, ''] : []),
     `${button}: ${offerUrl(p)}`,
     '',
     'Chris',
@@ -326,7 +345,7 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
   ].join('\n')
 
   const preheader = founding
-    ? `First month free, then ${gbp(FOUNDING_PRICES.featured)} a month, cancel any time. Here's how ${b} would look beside every show ${venue ? `at ${venue}` : `in ${p.city}`}.`
+    ? `Free to join, no card needed. Here's how ${b} would look beside every show ${venue ? `at ${venue}` : `in ${p.city}`}.`
     : `We feature three local places beside every show ${venue ? `at ${venue}` : `in ${p.city}`}. Here's how ${b} would look.`
   const banner = cityBannerUrl(p.city)
   const buttonHtml = `
@@ -338,13 +357,14 @@ export function buildOutreachEmail(p: Prospect, kind: OutreachKind, opts: { show
 <tr><td style="padding:16px 24px 0" bgcolor="#ffffff">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFF0F4" style="border:2px solid ${BRAND};border-radius:12px">
 <tr><td style="padding:18px 20px;font-family:Arial,Helvetica,sans-serif" bgcolor="#FFF0F4">
-  <p style="margin:0 0 6px;font-size:11px;letter-spacing:1.5px;font-weight:bold;color:${BRAND}">TRY IT FREE</p>
+  <p style="margin:0 0 6px;font-size:11px;letter-spacing:1.5px;font-weight:bold;color:${BRAND}">FREE TO JOIN &middot; NO CARD NEEDED</p>
   <p style="margin:0 0 6px;font-size:26px;line-height:1.15;font-weight:bold;color:${INK}">Your first month <span style="color:${BRAND}">FREE</span></p>
-  <p style="margin:0 0 10px;font-size:16px;color:${INK}">Then just <b>${gbp(FOUNDING_PRICES.featured)} a month</b> for a Featured spot</p>
-  <p style="margin:0 0 14px;font-size:13px;line-height:1.6;color:${INK}">&#10003; Price locked for as long as you stay<br>&#10003; No contract, cancel any time<br>&#10003; Only 3 Featured spots around each venue</p>
+  <p style="margin:0 0 10px;font-size:16px;color:${INK}">Stay on after for <b>${gbp(FOUNDING_PRICES.featured)} a month</b>, only if it's working</p>
+  <p style="margin:0 0 14px;font-size:13px;line-height:1.6;color:${INK}">&#10003; No card details to join<br>&#10003; Your results at the end of the month<br>&#10003; No contract, cancel any time<br>&#10003; Only 3 Featured spots around each venue</p>
   <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="${BRAND}" style="border-radius:8px">
     <a href="${offerUrl(p)}" style="display:inline-block;padding:11px 18px;font-size:14px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:8px;background:${BRAND}">Claim your free month &rarr;</a>
   </td></tr></table>
+  <p style="margin:12px 0 0;font-size:13px;color:${INK}">See one that's live: <a href="${EXAMPLE_PARTNER.url}" style="color:${BRAND};font-weight:bold">${esc(EXAMPLE_PARTNER.name)}, ${esc(EXAMPLE_PARTNER.city)} &rarr;</a></p>
 </td></tr>
 </table>
 </td></tr>` : ''

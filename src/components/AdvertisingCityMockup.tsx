@@ -108,7 +108,7 @@ export default function AdvertisingCityMockup({ cityName = 'Manchester', heroIma
       {preview && (
         <div className="bg-rose-600 text-white">
           <div className="mx-auto max-w-7xl px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-sm font-bold">
-            <span>This is how {preview.name} would appear on TheShowFinder {cityName}.{' Your first month is free, then from £4.95 a month. Cancel any time.'}</span>
+            <span>This is how {preview.name} would appear on TheShowFinder {cityName}.{' Free to join, no card needed. Stay on after the first month from £4.95 a month, only if it works for you.'}</span>
             {/* Straight to the sign-up form (their details already filled in from the outreach link), not a scroll. */}
             <span className="flex flex-wrap items-center gap-2">
               <Link href={onboard('featured')} className="rounded-lg bg-white px-4 py-2 text-rose-700 shadow hover:bg-rose-50">{founding ? `Start ${preview.name}'s free month →` : 'Sign up now →'}</Link>
