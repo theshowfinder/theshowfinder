@@ -19,9 +19,10 @@ export function decodeCfEmail(hex: string): string {
 export function extractEmails(html: string): string[] {
   const found = new Set<string>()
   for (const m of html.matchAll(/data-cfemail="([0-9a-f]+)"/gi)) found.add(decodeCfEmail(m[1]).toLowerCase())
-  for (const m of html.matchAll(/mailto:([^"'?\s>]+)/gi)) found.add(decodeURIComponent(m[1]).toLowerCase())
-  for (const m of html.matchAll(/[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/gi)) found.add(m[0].toLowerCase())
-  return [...found].filter(e => /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(e) && !/\.(png|jpe?g|gif|webp|svg|css|js)$/.test(e)
+  // 26 Nov 2026: "%20admin@…" (a mailto with an encoded space) was emailed and bounced: decode, trim, and never allow % in an address.
+  for (const m of html.matchAll(/mailto:([^"'?\s>]+)/gi)) { try { found.add(decodeURIComponent(m[1]).trim().toLowerCase()) } catch { /* bad encoding */ } }
+  for (const m of html.replace(/%[0-9a-f]{2}/gi, ' ').matchAll(/[a-z0-9._+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/gi)) found.add(m[0].toLowerCase())
+  return [...found].filter(e => /^[a-z0-9._+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(e) && !/\.(png|jpe?g|gif|webp|svg|css|js)$/.test(e)
     && !/(sentry|wixpress|example\.|domain\.|email\.com$|yourdomain|godaddy|squarespace|shopify)/.test(e))
 }
 

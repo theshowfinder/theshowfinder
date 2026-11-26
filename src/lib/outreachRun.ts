@@ -16,6 +16,7 @@ import { mailboxChannel, warmupLimit, type Mailbox } from '@/lib/outreachMailbox
 import { loadOutreachShow } from '@/lib/outreachShow'
 import { foundingOfferOpen } from '@/lib/advertisingPackages'
 import { advertEmailProblem } from '@/lib/outreachFind'
+import { addressLooksDeliverable } from '@/lib/mailDomain'
 
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 // A mailbox channel is 'mbx:<address>' (outreachMailboxes.ts, 26 Nov 2026).
@@ -102,6 +103,15 @@ export async function runOutreachSend(channelOrMailbox: 'resend' | 'zoho' | Mail
     // Safety stop: several failures in one run (rejected addresses, a sending problem) and the rest wait for a person.
     if (failed.length >= 3) break
     if (!canEmail(p)) continue
+    // Never send to an address that would bounce (no mail server, or the mailbox doesn't exist): bounces pause
+    // outreach and harm the sender's reputation, so it is set aside instead.
+    if (kind === 'first' && p.email) {
+      const check = await addressLooksDeliverable(p.email)
+      if (!check.ok) {
+        if (!dry) await db.from('outreach_prospects').update({ status: 'bounced', last_error: `${check.reason} (checked before sending)`, updated_at: new Date().toISOString() }).eq('id', p.id).eq('status', 'approved')
+        continue
+      }
+    }
     if (dry) { budget--; sent.push(`${kind}: ${p.business_name} <${p.email}>`); continue }
     // Claim a new business for this channel first, so the other sender cannot take it at the same time.
     if (kind === 'first') {

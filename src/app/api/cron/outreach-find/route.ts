@@ -9,6 +9,7 @@ import {
   categoryFromOsm, walkLabel, metresBetween, usefulLinks,
 } from '@/lib/outreachFind'
 import { fetchHtml, htmlText, verifyCompany } from '@/lib/siteContact'
+import { domainTakesMail } from '@/lib/mailDomain'
 
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
@@ -253,6 +254,7 @@ async function handleGet(request: Request) {
     else if (!email) result = 'no_email'
     else if (seenEmails.has(email)) result = 'duplicate'
     else if (advertEmailProblem(email)) result = 'wrong_inbox'   // booking desk, big chain or institution: not worth a pitch
+    else if (!(await domainTakesMail(email))) result = 'no_mail_server'   // the address's domain has no mail server: it would bounce
     else {
       const group = c.chain || looksLikeChain({ name: c.name, website: c.website, email }) || looksMultiSite(textOf(home ?? ''), c.city)
       const numbers = extractCompanyNumbers(text), names = extractCompanyNames(text)

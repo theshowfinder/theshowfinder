@@ -58,3 +58,8 @@ test('advertising never goes to booking desks, chains or institutions', () => {
   assert.equal(advertEmailProblem('hello@burgerboi.co.uk'), null)
   assert.equal(advertEmailProblem('hello@thehostel.co.uk'), null)
 })
+
+test('emails: an encoded space before a mailto address is dropped, not kept as "%20…" (26 Nov 2026)', () => {
+  const emails = extractEmails('<a href="mailto:%20admin@squashliverpool.co.uk">%20admin@squashliverpool.co.uk</a>')
+  assert.deepEqual(emails, ['admin@squashliverpool.co.uk'])
+})
