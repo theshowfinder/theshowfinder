@@ -193,7 +193,7 @@
     },
     {
       "path": "/api/cron/outreach-find",
-      "schedule": "35 6,8,10,12,14,16 * * 1-5"
+      "schedule": "35 6-18 * * 1-5"
     },
     {
       "path": "/api/cron/outreach-send-zoho",

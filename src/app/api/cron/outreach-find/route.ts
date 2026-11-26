@@ -21,8 +21,13 @@ export const dynamic = 'force-dynamic'
 // House must confirm an ACTIVE company before a business is approved for email (UK PECR: we only cold-email
 // companies); anything we cannot confirm is parked as "to check" for a person. Places already looked at are recorded
 // in outreach_scanned and never fetched again. ?dry=1 reports without writing. ?city=Leeds picks the city.
-const PER_RUN = 40          // websites read per run (about 4 pages each, a few seconds per site)
-const CONCURRENCY = 6
+// 26 Nov 2026: 40 sites a run, six runs a day, gave ~110 approved businesses a day; Chris wants ~2,000 a week. Runs
+// took ~165s of the 300s allowed, mostly waiting on slow sites in fixed groups of six. Now a pool of 10 readers (a
+// slow site no longer holds up the other nine), up to 80 sites a run, and no new site is started after READ_BUDGET_MS
+// so a run always finishes inside maxDuration; sites not reached stay in the backlog for the next run.
+const PER_RUN = 80          // websites read per run at most (about 4 pages each, a few seconds per site)
+const CONCURRENCY = 10
+const READ_BUDGET_MS = 200_000
 const UA = 'TheShowFinderBot/1.0 (+https://www.theshowfinder.com/advertise; partners@theshowfinder.com)'
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -276,12 +281,16 @@ async function handleGet(request: Request) {
     if (row) await db.from('outreach_prospects').insert(row)
     await db.from('outreach_scanned').upsert({ key: c.key, city: c.city, website_host: host(c.website), result, checked_at: new Date().toISOString() })
   }
-  for (let i = 0; i < batch.length; i += CONCURRENCY) await Promise.all(batch.slice(i, i + CONCURRENCY).map(work))
+  const started = Date.now()
+  let next = 0
+  await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
+    while (next < batch.length && Date.now() - started < READ_BUDGET_MS) await work(batch[next++])
+  }))
 
   const tally = results.reduce<Record<string, number>>((t, r) => ({ ...t, [r.result]: (t[r.result] ?? 0) + 1 }), {})
   return NextResponse.json({
     success: true, dry, city, mapped, mapNote, found, backlog: candidates.length, cities: [...new Set(batch.map(b => b.city))],
-    checked: batch.length, tally, reverified, companiesHouse: hasKey, results: dry ? results : undefined,
+    checked: next, queuedForRun: batch.length, tally, reverified, companiesHouse: hasKey, results: dry ? results : undefined,
   })
 }
 
