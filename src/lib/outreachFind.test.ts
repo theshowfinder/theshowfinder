@@ -63,3 +63,10 @@ test('emails: an encoded space before a mailto address is dropped, not kept as "
   const emails = extractEmails('<a href="mailto:%20admin@squashliverpool.co.uk">%20admin@squashliverpool.co.uk</a>')
   assert.deepEqual(emails, ['admin@squashliverpool.co.uk'])
 })
+
+test("emails: an OpenStreetMap address on another business's domain is not used (26 Nov 2026)", () => {
+  assert.equal(pickEmail([], 'http://brunelraj.co.uk/', 'Bristol', 'sue@suefosterjewellery.co.uk'), null)
+  assert.equal(pickEmail([], 'https://www.spiceroutecardiff.com', 'Cardiff', 'info@spiceroute.com'), null)
+  assert.equal(pickEmail([], 'https://www.thegarnet.co.uk/', 'Norwich', 'info@thegarnet.co.uk'), 'info@thegarnet.co.uk')
+  assert.equal(pickEmail(['people@cherryreds.com', 'news@cherryreds.com'], 'https://www.cherryreds.com/', 'Birmingham'), null)
+})

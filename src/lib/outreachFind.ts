@@ -3,9 +3,10 @@
 
 // Anywhere in the name: "thgdpr@", "dataprotection@", "group-privacy@" are legal inboxes, never for a sales email.
 const BAD_ANYWHERE = /gdpr|privacy|data\.?protection|dpo\b|unsubscribe|no-?reply|donotreply|recruit|careers/i
-const BAD_LOCAL = /^(no-?reply|donotreply|privacy|dpo|gdpr|data|careers?|jobs?|recruit\w*|press|media|pr|accounts?|invoices?|finance|payroll|hr|legal|complaints|webmaster|admin|support|abuse|sales?|marketing|newsletter|unsubscribe|test|example|name|email|your|user|shop|store|feedback|vouchers?|gifts?|giftcards?|orders?|deliver\w*)$/i
+const BAD_LOCAL = /^(no-?reply|donotreply|privacy|dpo|gdpr|data|careers?|jobs?|recruit\w*|press|media|pr|accounts?|invoices?|finance|payroll|hr|legal|complaints|webmaster|admin|support|abuse|sales?|marketing|newsletter|unsubscribe|test|example|name|email|your|user|shop|store|feedback|vouchers?|gifts?|giftcards?|orders?|deliver\w*|people|news|membersupport|members|faqs?|website|web|it|tech)$/i
 // Place names that, in a chain's inbox ("yorkbookings@"), mean another branch.
 const PLACES = ['aberdeen', 'ancoats', 'bath', 'belfast', 'birmingham', 'blackpool', 'bournemouth', 'bradford', 'brighton', 'bristol', 'brixton', 'cambridge', 'camden', 'canarywharf', 'cardiff', 'chester', 'clapham', 'covent', 'coventry', 'derby', 'dublin', 'edinburgh', 'exeter', 'glasgow', 'harrogate', 'hull', 'ipswich', 'islington', 'kingscross', 'leeds', 'leicester', 'liverpool', 'london', 'manchester', 'middlesbrough', 'miltonkeynes', 'newcastle', 'northernquarter', 'norwich', 'nottingham', 'oxford', 'plymouth', 'portsmouth', 'reading', 'scarborough', 'sheffield', 'shoreditch', 'soho', 'southampton', 'spinningfields', 'stokeontrent', 'sunderland', 'swansea', 'wolverhampton', 'york']
+const FREE_MAIL = /^(gmail|googlemail|hotmail|outlook|live|yahoo|icloud|me|aol|btinternet|btconnect|talktalk|sky|virginmedia|ntlworld)\.(com|co\.uk|net)$/
 const GOOD_LOCAL = ['info', 'hello', 'enquiries', 'enquiry', 'bookings', 'booking', 'reservations', 'events', 'contact', 'manager', 'managers', 'office', 'reception']
 
 /** Cloudflare hides emails as data-cfemail="hex"; this turns them back into addresses. */
@@ -39,7 +40,12 @@ export function pickEmail(emails: string[], website: string, city: string, osmEm
   const ok = [...new Set([...(osmEmail ? [osmEmail.toLowerCase().trim()] : []), ...emails])].filter(e => {
     const [local, domain] = e.split('@')
     if (!local || !domain || BAD_LOCAL.test(local) || BAD_ANYWHERE.test(local)) return false
-    return (osmEmail && e === osmEmail.toLowerCase().trim()) || (site && (domain === site || domain.endsWith('.' + site) || site.endsWith(domain)))
+    const ownDomain = Boolean(site && (domain === site || domain.endsWith('.' + site) || site.endsWith(domain)))
+    // 26 Nov 2026: the OpenStreetMap address used to be taken on trust whatever its domain, and was often stale or
+    // another business's (Brunel Raj's was a jewellery shop's). Now it must be on the business's own web domain, or a
+    // personal mailbox (gmail etc.) that a small business owner put on the map themselves.
+    if (osmEmail && e === osmEmail.toLowerCase().trim()) return ownDomain || FREE_MAIL.test(domain)
+    return ownDomain
   })
   if (ok.length === 0) return null
   // A chain lists every branch: keep this city's addresses if there are any, and never another city's.
