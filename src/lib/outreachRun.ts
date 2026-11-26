@@ -11,18 +11,19 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPages } from '@/lib/pagedFetch'
 import { LISTED_EVENTS_VIEW, LIVE_EVENT_STATUSES } from '@/lib/listedEvents'
 import { canEmail, subjectVariantFor, looksLikeChain, spreadAcrossCities, DAILY_LIMIT, ZOHO_DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, OFFER_UPDATES_PER_DAY, type OutreachKind, type Prospect } from '@/lib/outreach'
-import { sendOutreachEmail, sendOutreachEmailZoho, zohoConfigured, type SendResult } from '@/lib/outreachSend'
+import { sendOutreachEmail, sendOutreachEmailZoho, sendOutreachEmailMailbox, zohoConfigured, type SendResult } from '@/lib/outreachSend'
+import { mailboxChannel, warmupLimit, type Mailbox } from '@/lib/outreachMailboxes'
 import { loadOutreachShow } from '@/lib/outreachShow'
 import { foundingOfferOpen } from '@/lib/advertisingPackages'
 import { advertEmailProblem } from '@/lib/outreachFind'
 
 type Loose = any // eslint-disable-line @typescript-eslint/no-explicit-any
-export type Channel = 'resend' | 'zoho'
+// A mailbox channel is 'mbx:<address>' (outreachMailboxes.ts, 26 Nov 2026).
+export type Channel = 'resend' | 'zoho' | `mbx:${string}`
 const COLS = 'id, business_name, category, city, near_venue, distance_label, contact_name, email, company_type, status, ref_code, unsubscribe_token, sent_at, subject_variant, sent_via, created_at'
-const LIMIT: Record<Channel, number> = { resend: DAILY_LIMIT, zoho: ZOHO_DAILY_LIMIT }
 
 /** Rows sent by this channel (older rows have no sent_via: they all went by Resend). */
-const byChannel = (q: Loose, channel: Channel) => channel === 'resend' ? q.or('sent_via.is.null,sent_via.eq.resend') : q.eq('sent_via', 'zoho')
+const byChannel = (q: Loose, channel: Channel) => channel === 'resend' ? q.or('sent_via.is.null,sent_via.eq.resend') : q.eq('sent_via', channel)
 
 /** Shows in the next 60 days at each of these venues. */
 async function venueShows(db: Loose, venues: string[]): Promise<Map<string, number>> {
@@ -37,13 +38,21 @@ async function venueShows(db: Loose, venues: string[]): Promise<Map<string, numb
   return out
 }
 
-export async function runOutreachSend(channel: Channel, perRun: number, opts: { dry?: boolean } = {}) {
+export async function runOutreachSend(channelOrMailbox: 'resend' | 'zoho' | Mailbox, perRun: number, opts: { dry?: boolean } = {}) {
   const dry = Boolean(opts.dry)
   const db = createAdminClient() as Loose
   const sent: string[] = [], failed: string[] = []
+  const mailbox = typeof channelOrMailbox === 'object' ? channelOrMailbox : null
+  const channel: Channel = mailbox ? mailboxChannel(mailbox) as Channel : channelOrMailbox as Channel
+  const dailyLimit = mailbox ? warmupLimit(mailbox) : channel === 'resend' ? DAILY_LIMIT : ZOHO_DAILY_LIMIT
+  if (mailbox) {
+    if (dailyLimit <= 0) return { success: true, channel, dry, sent, failed, note: `starts ${mailbox.start}` }
+    const { data: pause } = await db.from('outreach_mailbox_pauses').select('paused_until, reason').eq('mailbox', channel).maybeSingle()
+    if (pause && Date.parse(pause.paused_until) > Date.now()) return { success: true, channel, dry, sent, failed, note: `paused until ${pause.paused_until}: ${pause.reason ?? ''}` }
+  }
 
   const { data: settings } = await db.from('outreach_settings').select('resend_paused_until, zoho_paused_until, pause_reason').eq('id', 1).maybeSingle()
-  const pausedUntil = settings?.[`${channel}_paused_until`]
+  const pausedUntil = mailbox ? null : settings?.[`${channel}_paused_until`]
   if (pausedUntil && Date.parse(pausedUntil) > Date.now()) return { success: true, channel, dry, sent, failed, note: `paused until ${pausedUntil}: ${settings?.pause_reason ?? ''}` }
   if (channel === 'zoho' && !zohoConfigured()) return { success: true, channel, dry, sent, failed, note: 'Zoho not set up yet (ZOHO_SMTP_USER / ZOHO_SMTP_PASS in Vercel)' }
 
@@ -58,7 +67,7 @@ export async function runOutreachSend(channel: Channel, perRun: number, opts: { 
     byChannel(db.from('outreach_prospects').select('id', { count: 'exact', head: true }).gte('followed_up_at', dayStart.toISOString()), channel),
     byChannel(db.from('outreach_prospects').select('id', { count: 'exact', head: true }).gte('offer_sent_at', dayStart.toISOString()), channel),
   ])
-  let budget = Math.min(perRun, LIMIT[channel] - (firstToday ?? 0) - (followToday ?? 0) - (offerToday ?? 0))
+  let budget = Math.min(perRun, dailyLimit - (firstToday ?? 0) - (followToday ?? 0) - (offerToday ?? 0))
   if (budget <= 0) return { success: true, channel, dry, sent, failed, note: 'daily limit reached' }
 
   const followBefore = new Date(Date.now() - FOLLOW_UP_AFTER_DAYS * 86_400_000).toISOString()
@@ -104,7 +113,7 @@ export async function runOutreachSend(channel: Channel, perRun: number, opts: { 
     const variant = kind === 'first' ? subjectVariantFor(p.id) : null
     const show = await loadOutreachShow(db, p)
     const prospect = variant ? { ...p, subject_variant: variant } : p
-    const r: SendResult = channel === 'zoho' ? await sendOutreachEmailZoho(prospect, kind, show) : await sendOutreachEmail(prospect, kind, show)
+    const r: SendResult = mailbox ? await sendOutreachEmailMailbox(mailbox, prospect, kind, show) : channel === 'zoho' ? await sendOutreachEmailZoho(prospect, kind, show) : await sendOutreachEmail(prospect, kind, show)
     const now = new Date().toISOString()
     if (r.ok) {
       sent.push(`${kind}: ${p.business_name}`)
@@ -120,9 +129,13 @@ export async function runOutreachSend(channel: Channel, perRun: number, opts: { 
         await db.from('outreach_settings').update({ zoho_paused_until: new Date(Date.now() + 20 * 3_600_000).toISOString(), pause_reason: `Zoho refused a send: ${r.error.slice(0, 200)}`, updated_at: now }).eq('id', 1)
         break
       }
+      if (mailbox && r.fatal) {
+        await db.from('outreach_mailbox_pauses').upsert({ mailbox: channel, paused_until: new Date(Date.now() + 20 * 3_600_000).toISOString(), reason: `refused a send: ${r.error.slice(0, 200)}`, updated_at: now })
+        break
+      }
     }
     // Zoho: a short gap between emails, so they go out one by one like a person's.
-    if (channel === 'zoho') await new Promise(res => setTimeout(res, 8000))
+    if (channel !== 'resend' && !dry) await new Promise(res => setTimeout(res, 8000))
   }
   return { success: failed.length === 0, channel, dry, sent, failed }
 }

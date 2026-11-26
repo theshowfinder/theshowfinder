@@ -3,6 +3,7 @@
 // personal email: one at a time, a few each quarter hour), so outreach can grow without putting everything on Resend.
 import nodemailer from 'nodemailer'
 import { resend } from '@/lib/resend'
+import type { Mailbox } from '@/lib/outreachMailboxes'
 import { buildOutreachEmail, canEmail, unsubscribeUrl, OUTREACH_FROM, OUTREACH_REPLY_TO, type OutreachKind, type OutreachShow, type Prospect } from '@/lib/outreach'
 
 export type SendResult = { ok: true; id?: string } | { ok: false; error: string; fatal?: boolean }
@@ -74,6 +75,30 @@ export async function zohoSendPlain(m: { to: string; subject: string; text: stri
   const user = process.env.ZOHO_SMTP_USER!
   try {
     const info = await zoho().sendMail({ from: process.env.ZOHO_FROM || `Chris at TheShowFinder <${user}>`, to: m.to, replyTo: process.env.ZOHO_FROM || user, subject: m.subject, text: m.text, headers: m.headers })
+    return { ok: true, id: info.messageId }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    const fatal = !/recipient|mailbox unavailable|user unknown|no such user|550 5\.1\.1/i.test(msg)
+    return { ok: false, error: msg.slice(0, 300), fatal }
+  }
+}
+
+// Extra outreach mailboxes on their own domains (outreachMailboxes.ts): the same plain personal email as Zoho.
+const mailboxTransports = new Map<string, nodemailer.Transporter>()
+function mailboxTransport(m: Mailbox) {
+  let t = mailboxTransports.get(m.user)
+  if (!t) {
+    t = nodemailer.createTransport({ host: m.host, port: m.port, secure: m.port === 465, auth: { user: m.user, pass: m.pass } })
+    mailboxTransports.set(m.user, t)
+  }
+  return t
+}
+
+export async function sendOutreachEmailMailbox(m: Mailbox, p: Prospect, kind: OutreachKind, show?: OutreachShow): Promise<SendResult> {
+  if (!canEmail(p)) return { ok: false, error: 'not allowed to email this business (company type or status)' }
+  const { subject, text } = buildOutreachEmail(p, kind, { show })
+  try {
+    const info = await mailboxTransport(m).sendMail({ from: m.from, to: p.email, replyTo: m.replyTo, subject, text, headers: unsubscribeHeaders(p) })
     return { ok: true, id: info.messageId }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

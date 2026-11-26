@@ -82,7 +82,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
                       <p className="text-xs text-slate-500">{[r.distance_label ?? (r.near_venue ? `near ${r.near_venue}` : null), r.address].filter(Boolean).join(' · ')}</p>
                       <p className={`text-xs font-semibold mt-1 ${ok ? 'text-emerald-700' : 'text-amber-700'}`}>
                         {r.company_type === 'ltd' ? `Limited company${r.company_number ? ` (${r.company_number})` : ''}` : r.company_type === 'consented' ? 'Said yes to hearing from us' : `Company type: ${r.company_type.replace('_', ' ')} (not confirmed)`}
-                        {' · '}{label(r.status)}{r.sent_at ? ` · sent ${day(r.sent_at)}${r.sent_via === 'zoho' ? ' (Zoho)' : ''}` : ''}{r.followed_up_at ? ` · followed up ${day(r.followed_up_at)}` : ''}{r.clicked_at ? ' · clicked' : ''}
+                        {' · '}{label(r.status)}{r.sent_at ? ` · sent ${day(r.sent_at)}${r.sent_via === 'zoho' ? ' (Zoho)' : r.sent_via?.startsWith('mbx:') ? ` (${r.sent_via.slice(4)})` : ''}` : ''}{r.followed_up_at ? ` · followed up ${day(r.followed_up_at)}` : ''}{r.clicked_at ? ' · clicked' : ''}
                       </p>
                       {r.last_error && <p className="text-xs text-red-700 mt-1">Last send failed: {r.last_error}</p>}
                       {r.notes && <p className="text-xs text-slate-500 mt-1">{r.notes}</p>}

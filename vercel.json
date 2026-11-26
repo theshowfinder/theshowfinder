@@ -196,6 +196,10 @@
       "schedule": "35 6-18 * * 1-5"
     },
     {
+      "path": "/api/cron/outreach-send-mailboxes",
+      "schedule": "*/15 7-17 * * 1-5"
+    },
+    {
       "path": "/api/cron/outreach-send-zoho",
       "schedule": "*/15 6-10 * * 1-5"
     },
