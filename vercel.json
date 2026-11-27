@@ -197,7 +197,7 @@
     },
     {
       "path": "/api/cron/outreach-send-mailboxes",
-      "schedule": "*/15 7-17 * * 1-5"
+      "schedule": "*/15 7-17 * * *"
     },
     {
       "path": "/api/cron/outreach-send-zoho",

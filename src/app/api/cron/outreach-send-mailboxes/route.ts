@@ -7,7 +7,7 @@ export const maxDuration = 120
 export const dynamic = 'force-dynamic'
 
 // Advertiser outreach from the extra mailboxes on their own domains (26 Nov 2026; see outreachMailboxes.ts). vercel.json
-// runs this every 15 minutes 07:00-17:45 UTC on weekdays; a run sends at most one email per mailbox, only 08:00-17:59
+// runs this every 15 minutes 07:00-17:45 UTC every day, weekends included (Chris, 27 Nov 2026); a run sends at most one email per mailbox, only 08:00-17:59
 // UK time, so each mailbox's emails are spread through the working day like a person's. Each mailbox keeps to its
 // warm-up limit for the day, and one the provider refuses is paused for the rest of the day (outreach_mailbox_pauses).
 // Until OUTREACH_MAILBOXES is set in Vercel this does nothing. ?dry=1 lists only; ?anytime=1 ignores the hours.
