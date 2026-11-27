@@ -15,7 +15,7 @@ type Row = Prospect & { website: string | null; address: string | null; company_
 const STATUSES: Array<[string, string]> = [
   ['to_check', 'Ready to check'], ['approved', 'Approved, waiting to send'], ['sent', 'Sent'], ['followed_up', 'Followed up'],
   ['replied', 'Replied'], ['interested', 'Interested'], ['onboarding', 'Onboarding'], ['won', 'Won (paid)'],
-  ['no_response', 'No response'], ['not_interested', 'Not a fit'], ['unsubscribed', 'Unsubscribed'], ['bounced', 'Bounced'],
+  ['no_response', 'No response'], ['not_interested', 'Not a fit'], ['rejected', 'Removed in review'], ['unsubscribed', 'Unsubscribed'], ['bounced', 'Bounced'],
 ]
 /** Channels the automatic brake has paused right now. */
 function pausedChannels(b: { resend_paused_until?: string | null; zoho_paused_until?: string | null } | null): string[] {
@@ -48,7 +48,7 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
     <div className="min-h-screen bg-slate-50">
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-5">
         <div>
-          <h1 className="text-xl font-extrabold text-slate-900">Outreach</h1>
+          <h1 className="text-xl font-extrabold text-slate-900">Outreach <Link href="/admin/outreach/review" className="ml-2 align-middle rounded-full bg-rose-600 px-3 py-1 text-xs font-bold text-white">Quick review →</Link></h1>
           <p className="text-sm text-slate-600">Nothing is emailed until you tick it. Up to {DAILY_LIMIT} visual emails a weekday from partners@ (Resend) and {ZOHO_DAILY_LIMIT} plain ones from your Zoho mailbox, 07:00–11:00 UK, busiest venues first; one follow-up after {FOLLOW_UP_AFTER_DAYS} days, then &ldquo;No response&rdquo; after {NO_RESPONSE_AFTER_DAYS}; replies go to hello@. The link opens the city mock-up with their name in it and a pre-filled sign-up. Only limited companies can be ticked (UK rules: sole traders and partnerships need consent first). {clicks} business{clicks === 1 ? '' : 'es'} clicked through so far.</p>
         </div>
         {paused.length > 0 && (

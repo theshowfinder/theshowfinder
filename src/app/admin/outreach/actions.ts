@@ -19,6 +19,14 @@ const db = () => createAdminClient() as Loose
 const back = (msg: string, ok = true, status = '') =>
   redirect(`/admin/outreach?${new URLSearchParams({ msg, ok: ok ? '1' : '0', ...(status ? { status } : {}) }).toString()}`)
 const str = (f: FormData, k: string) => String(f.get(k) ?? '').trim()
+/** Back to the page the form came from (the quick review page passes its own address), else the Outreach page. */
+const backFrom = (f: FormData, msg: string, ok = true) => {
+  const to = String(f.get('back') ?? '')
+  if (!to.startsWith('/admin/outreach/review')) back(msg, ok)
+  const u = new URL(to, 'https://x')
+  u.searchParams.set('msg', msg); u.searchParams.set('ok', ok ? '1' : '0')
+  redirect(u.pathname + u.search)
+}
 
 const COMPANY_TYPES = ['ltd', 'sole_trader', 'partnership', 'unknown', 'consented']
 
@@ -42,12 +50,12 @@ export async function addProspectAction(form: FormData) {
 export async function approveSelectedAction(form: FormData) {
   await checkAuth()
   const ids = form.getAll('id').map(String).filter(Boolean)
-  if (!ids.length) back('Tick at least one business first.', false)
+  if (!ids.length) backFrom(form, 'Tick at least one business first.', false)
   const { data } = await db().from('outreach_prospects').update({ status: 'approved', updated_at: new Date().toISOString() })
     .in('id', ids).eq('status', 'to_check').in('company_type', ['ltd', 'consented']).select('id')
   revalidatePath('/admin/outreach')
   const n = data?.length ?? 0
-  back(`${n} approved for sending.${n < ids.length ? ` ${ids.length - n} skipped (not a limited company, or already handled).` : ''}`, n > 0)
+  backFrom(form, `${n} approved for sending.${n < ids.length ? ` ${ids.length - n} skipped (not a limited company, or already handled).` : ''}`, n > 0)
 }
 
 export async function setStatusAction(id: string, status: string) {
@@ -144,4 +152,17 @@ export async function testMailboxesAction() {
   back(bad.length
     ? `Mailbox test: ${results.length - bad.length} of ${results.length} worked. Failed: ${bad.map(b => `${b.user} (${b.error})`).join('; ')}`
     : `Mailbox test: all ${results.length} sent a test email to hello@theshowfinder.com (${results.map(r => r.user).join(', ')}).`, bad.length === 0)
+}
+
+/** Quick review: ticked businesses that haven't been emailed yet are taken out ("rejected": never emailed, kept as a
+ *  record). Anything already emailed is left alone. */
+export async function removeSelectedAction(form: FormData) {
+  await checkAuth()
+  const ids = form.getAll('id').map(String).filter(Boolean)
+  if (!ids.length) backFrom(form, 'Tick at least one business first.', false)
+  const { data } = await db().from('outreach_prospects').update({ status: 'rejected', updated_at: new Date().toISOString() })
+    .in('id', ids).in('status', ['approved', 'to_check']).is('sent_via', null).select('id')
+  revalidatePath('/admin/outreach')
+  const n = data?.length ?? 0
+  backFrom(form, `${n} removed: they won't be emailed.${n < ids.length ? ` ${ids.length - n} skipped (already being emailed).` : ''}`, n > 0)
 }
