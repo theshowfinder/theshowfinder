@@ -106,3 +106,20 @@ export async function sendOutreachEmailMailbox(m: Mailbox, p: Prospect, kind: Ou
     return { ok: false, error: msg.slice(0, 300), fatal }
   }
 }
+
+/** Admin check (27 Nov 2026): signs in to each outreach mailbox and sends one test email to `to`, so a wrong app
+ *  password or blocked SMTP shows up before the warm-up start date, not on the first real send. */
+export async function testOutreachMailboxes(mailboxes: Mailbox[], to: string): Promise<Array<{ user: string; ok: boolean; error?: string }>> {
+  const out: Array<{ user: string; ok: boolean; error?: string }> = []
+  for (const m of mailboxes) {
+    try {
+      const t = mailboxTransport(m)
+      await t.verify()
+      await t.sendMail({ from: m.from, to, replyTo: m.replyTo, subject: `Mailbox test: ${m.user}`, text: `This is a test from ${m.user}, sent from Admin > Outreach. If you can read this, the mailbox is ready for outreach from ${m.start}.` })
+      out.push({ user: m.user, ok: true })
+    } catch (e) {
+      out.push({ user: m.user, ok: false, error: (e instanceof Error ? e.message : String(e)).slice(0, 160) })
+    }
+  }
+  return out
+}

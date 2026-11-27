@@ -5,7 +5,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildOutreachEmail, SENDABLE_COMPANY_TYPES, DAILY_LIMIT, ZOHO_DAILY_LIMIT, FOLLOW_UP_AFTER_DAYS, NO_RESPONSE_AFTER_DAYS, type Prospect } from '@/lib/outreach'
 import PendingButton from '@/components/admin/PendingButton'
-import { addProspectAction, importBusinessesAction, approveSelectedAction, setStatusAction, setCompanyTypeAction, deleteProspectAction, resumeOutreachAction } from './actions'
+import { addProspectAction, importBusinessesAction, testMailboxesAction, approveSelectedAction, setStatusAction, setCompanyTypeAction, deleteProspectAction, resumeOutreachAction } from './actions'
 
 // Outreach: businesses near busy venues, each emailed only after Chris ticks it. The sender (cron outreach-send)
 // sends up to DAILY_LIMIT a weekday, spread through the day, then one follow-up after FOLLOW_UP_AFTER_DAYS days.
@@ -58,6 +58,11 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
           </form>
         )}
         {sp.msg && <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${sp.ok === '1' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>{sp.msg}</div>}
+
+        <form action={testMailboxesAction} className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+          <PendingButton pendingLabel="Testing…" className="rounded-lg border border-slate-300 bg-white font-bold text-xs px-3 py-1.5">Test outreach mailboxes</PendingButton>
+          <span>Sends one test email from each extra mailbox (OUTREACH_MAILBOXES) to hello@theshowfinder.com.</span>
+        </form>
 
         <section className={card}>
           <h2 className="font-extrabold text-slate-900">Import from a spreadsheet</h2>

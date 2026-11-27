@@ -130,3 +130,17 @@ export async function importBusinessesAction(form: FormData) {
   const dupes = rows.length - fresh.length
   back(`Imported ${fresh.length} business${fresh.length === 1 ? '' : 'es'} into the finder's queue: they're checked over the next few runs and appear under "Ready to check" or "Approved".${dupes ? ` ${dupes} already known.` : ''}${skipped.length ? ` Skipped ${skipped.length}: ${skipped.slice(0, 4).join('; ')}${skipped.length > 4 ? '…' : ''}` : ''}`)
 }
+
+/** Sends one test email from each outreach mailbox (OUTREACH_MAILBOXES) to hello@theshowfinder.com. */
+export async function testMailboxesAction() {
+  await checkAuth()
+  const { outreachMailboxes } = await import('@/lib/outreachMailboxes')
+  const { testOutreachMailboxes } = await import('@/lib/outreachSend')
+  const boxes = outreachMailboxes()
+  if (!boxes.length) back('No outreach mailboxes set up yet: add OUTREACH_MAILBOXES in Vercel and redeploy.', false)
+  const results = await testOutreachMailboxes(boxes, 'hello@theshowfinder.com')
+  const bad = results.filter(r => !r.ok)
+  back(bad.length
+    ? `Mailbox test: ${results.length - bad.length} of ${results.length} worked. Failed: ${bad.map(b => `${b.user} (${b.error})`).join('; ')}`
+    : `Mailbox test: all ${results.length} sent a test email to hello@theshowfinder.com (${results.map(r => r.user).join(', ')}).`, bad.length === 0)
+}
