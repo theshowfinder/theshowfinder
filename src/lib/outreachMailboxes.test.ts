@@ -32,3 +32,15 @@ test('mailboxes: warm up over four weeks', () => {
   assert.equal(warmupLimit(m, new Date('2027-01-10T12:00:00Z')), 40)
   assert.equal(warmupLimit({ start: '2026-12-01', max: 8 }, new Date('2026-12-20T12:00:00Z')), 8)
 })
+
+test('mailboxes: the setting problems are explained without showing passwords', async () => {
+  const { mailboxSettingProblems } = await import('./outreachMailboxes.ts')
+  assert.match(mailboxSettingProblems(undefined)[0], /empty or missing/)
+  assert.match(mailboxSettingProblems('[{“user”:1}]')[0], /curly quotes/)
+  const bad = mailboxSettingProblems('[{"user":"a@b.co","pass":"SECRET1 SECRET2","host":"smtppro.zoho.com","start":"2026-12-04"},')
+  assert.match(bad[0], /isn't valid JSON/)
+  assert.doesNotMatch(bad.join(' '), /SECRET/)
+  const p = mailboxSettingProblems('[{"user":"a@b.co","pass":"abc def","host":"","start":"soon"}]')
+  assert.equal(p.length, 3)
+  assert.doesNotMatch(p.join(' '), /abc def/)
+})

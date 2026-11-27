@@ -47,3 +47,23 @@ export function warmupLimit(m: Pick<Mailbox, 'start' | 'max'>, now = new Date())
 }
 
 export const outreachMailboxes = () => parseMailboxes(process.env.OUTREACH_MAILBOXES)
+
+/** Why OUTREACH_MAILBOXES gives no usable mailbox, in plain words and without ever showing a password. */
+export function mailboxSettingProblems(raw: string | undefined): string[] {
+  if (!raw?.trim()) return ['OUTREACH_MAILBOXES is empty or missing in this deployment (add it for Production, then redeploy)']
+  if (/[\u201c\u201d\u2018\u2019]/.test(raw)) return ['it contains curly quotes (\u201c \u201d): retype them as straight quotes (")']
+  let list: unknown
+  // Only the character position is reported: the parser's own message can quote part of the text, passwords included.
+  try { list = JSON.parse(raw) } catch (e) { const at = (e instanceof Error ? e.message : '').match(/position (\d+)/)?.[1]; return [`it isn't valid JSON${at ? ` (the problem is around character ${at} of ${raw.length})` : ''}: check every quote, comma and bracket`] }
+  if (!Array.isArray(list)) return ['it must start with [ and end with ]']
+  const out: string[] = []
+  list.forEach((x: Record<string, unknown>, i) => {
+    const n = `mailbox ${i + 1}${typeof x?.user === 'string' ? ` (${x.user})` : ''}`
+    if (typeof x?.user !== 'string' || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.user.trim())) out.push(`${n}: "user" must be the full email address`)
+    if (typeof x?.pass !== 'string' || !x.pass) out.push(`${n}: "pass" is missing`)
+    else if (/\s/.test(x.pass)) out.push(`${n}: "pass" has spaces in it (paste the app password without spaces)`)
+    if (typeof x?.host !== 'string' || !x.host.trim()) out.push(`${n}: "host" is missing (smtppro.zoho.com)`)
+    if (typeof x?.start !== 'string' || Number.isNaN(Date.parse(x.start))) out.push(`${n}: "start" must be a date like 2026-12-04`)
+  })
+  return out
+}

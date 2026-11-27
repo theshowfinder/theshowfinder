@@ -134,10 +134,11 @@ export async function importBusinessesAction(form: FormData) {
 /** Sends one test email from each outreach mailbox (OUTREACH_MAILBOXES) to hello@theshowfinder.com. */
 export async function testMailboxesAction() {
   await checkAuth()
-  const { outreachMailboxes } = await import('@/lib/outreachMailboxes')
+  const { outreachMailboxes, mailboxSettingProblems } = await import('@/lib/outreachMailboxes')
   const { testOutreachMailboxes } = await import('@/lib/outreachSend')
   const boxes = outreachMailboxes()
-  if (!boxes.length) back('No outreach mailboxes set up yet: add OUTREACH_MAILBOXES in Vercel and redeploy.', false)
+  const problems = mailboxSettingProblems(process.env.OUTREACH_MAILBOXES)
+  if (!boxes.length) back(`The OUTREACH_MAILBOXES setting can't be used yet: ${problems.join('; ') || 'no valid mailbox in it'}.`, false)
   const results = await testOutreachMailboxes(boxes, 'hello@theshowfinder.com')
   const bad = results.filter(r => !r.ok)
   back(bad.length
