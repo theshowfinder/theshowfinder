@@ -59,6 +59,20 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
         )}
         {sp.msg && <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${sp.ok === '1' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>{sp.msg}</div>}
 
+        <section className={card}>
+          <h2 className="font-extrabold text-slate-900">Import from a spreadsheet</h2>
+          <p className="text-sm text-slate-600 mt-1 mb-3">Upload the whole spreadsheet (any tab layout: the tab with the business list is found automatically), or paste rows. Columns: <b>Business, Website, City</b>, then optionally <b>Near venue, Email, Category</b> (a header row is fine). The finder reads each website for the right inbox and runs the usual checks (company, chains, booking desks, email domain) before anything is approved. Imported businesses are checked first, up to 80 a run, every hour on weekdays.</p>
+          <form action={importBusinessesAction} className="space-y-2">
+            <label className="block text-sm font-bold text-slate-700">Upload the spreadsheet (.xlsx or .csv)
+              <input type="file" name="file" accept=".xlsx,.csv,.tsv,.txt" className="mt-1 block w-full text-sm text-slate-600" />
+            </label>
+            <p className="text-xs text-slate-500">or paste rows:</p>
+            <textarea name="rows" rows={4} className={`${input} font-mono text-xs`} placeholder={'Business\tWebsite\tCity\tNear venue\nFurna\twearefurna.com\tBrighton\tTheatre Royal Brighton'} />
+            <PendingButton pendingLabel="Importing…" className="rounded-lg bg-slate-900 text-white font-bold text-sm px-4 py-2">Import businesses</PendingButton>
+          </form>
+        </section>
+
+
         <nav className="flex gap-2 overflow-x-auto pb-1">
           {STATUSES.map(([k, l]) => (
             <Link key={k} href={`/admin/outreach?status=${k}`} className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border ${k === status ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200'}`}>{l} · {counts.get(k) ?? 0}</Link>
@@ -125,19 +139,6 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
             </div>
           </section>
         )}
-
-        <section className={card}>
-          <h2 className="font-extrabold text-slate-900">Import from a spreadsheet</h2>
-          <p className="text-sm text-slate-600 mt-1 mb-3">Upload the whole spreadsheet (any tab layout: the tab with the business list is found automatically), or paste rows. Columns: <b>Business, Website, City</b>, then optionally <b>Near venue, Email, Category</b> (a header row is fine). The finder reads each website for the right inbox and runs the usual checks (company, chains, booking desks, email domain) before anything is approved. Imported businesses are checked first, up to 80 a run, every hour on weekdays.</p>
-          <form action={importBusinessesAction} className="space-y-2">
-            <label className="block text-sm font-bold text-slate-700">Upload the spreadsheet (.xlsx or .csv)
-              <input type="file" name="file" accept=".xlsx,.csv,.tsv,.txt" className="mt-1 block w-full text-sm text-slate-600" />
-            </label>
-            <p className="text-xs text-slate-500">or paste rows:</p>
-            <textarea name="rows" rows={4} className={`${input} font-mono text-xs`} placeholder={'Business\tWebsite\tCity\tNear venue\nFurna\twearefurna.com\tBrighton\tTheatre Royal Brighton'} />
-            <PendingButton pendingLabel="Importing…" className="rounded-lg bg-slate-900 text-white font-bold text-sm px-4 py-2">Import businesses</PendingButton>
-          </form>
-        </section>
 
         <section className={card}>
           <h2 className="font-extrabold text-slate-900 mb-3">Add a business</h2>
