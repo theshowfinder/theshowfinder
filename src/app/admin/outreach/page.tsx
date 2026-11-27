@@ -128,9 +128,13 @@ export default async function OutreachPage({ searchParams }: { searchParams: Pro
 
         <section className={card}>
           <h2 className="font-extrabold text-slate-900">Import from a spreadsheet</h2>
-          <p className="text-sm text-slate-600 mt-1 mb-3">Copy rows from your sheet and paste them here. Columns: <b>Business, Website, City</b>, then optionally <b>Near venue, Email, Category</b> (a header row is fine). The finder reads each website for the right inbox and runs the usual checks (company, chains, booking desks, email domain) before anything is approved. Imported businesses are checked first, up to 80 a run, every hour on weekdays.</p>
+          <p className="text-sm text-slate-600 mt-1 mb-3">Upload the whole spreadsheet (any tab layout: the tab with the business list is found automatically), or paste rows. Columns: <b>Business, Website, City</b>, then optionally <b>Near venue, Email, Category</b> (a header row is fine). The finder reads each website for the right inbox and runs the usual checks (company, chains, booking desks, email domain) before anything is approved. Imported businesses are checked first, up to 80 a run, every hour on weekdays.</p>
           <form action={importBusinessesAction} className="space-y-2">
-            <textarea name="rows" rows={6} required className={`${input} font-mono text-xs`} placeholder={'Business\tWebsite\tCity\tNear venue\nFurna\twearefurna.com\tBrighton\tTheatre Royal Brighton'} />
+            <label className="block text-sm font-bold text-slate-700">Upload the spreadsheet (.xlsx or .csv)
+              <input type="file" name="file" accept=".xlsx,.csv,.tsv,.txt" className="mt-1 block w-full text-sm text-slate-600" />
+            </label>
+            <p className="text-xs text-slate-500">or paste rows:</p>
+            <textarea name="rows" rows={4} className={`${input} font-mono text-xs`} placeholder={'Business\tWebsite\tCity\tNear venue\nFurna\twearefurna.com\tBrighton\tTheatre Royal Brighton'} />
             <PendingButton pendingLabel="Importing…" className="rounded-lg bg-slate-900 text-white font-bold text-sm px-4 py-2">Import businesses</PendingButton>
           </form>
         </section>

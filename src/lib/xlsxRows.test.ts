@@ -1,0 +1,10 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { xlsxRows } from './xlsxRows.ts'
+
+// A minimal .xlsx (made with Python's zipfile): header row, then a row with its cells out of order and a gap.
+const FILE = 'UEsDBBQAAAAIABkWe13HHBc8CgAAAAgAAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbLMJqSxILda3AwBQSwMEFAAAAAgAGRZ7XTyLbvZLAAAAXwAAAA8AAAB4bC93b3JrYm9vay54bWyzKc8vyk7Kz89WqMjNySu2KrJVqlCysynOSE0tKYbSCnmJuam2Sj6piSnFSgpgIc8UWyVDJYUiq0wgo8gzxVBJ385GH6ZLH2aoHQBQSwMEFAAAAAgAGRZ7XVSI23tHAAAAYQAAABoAAAB4bC9fcmVscy93b3JrYm9vay54bWwucmVsc7MJSs1JLMnMzyvOyCwotrNB5ip4ptgqFXmmGCophFQWpNoqlRcDWYlF6aklQHZ+UXZxRmpqSbE+mDLUq8jNUdK3s9FHNREAUEsDBBQAAAAIABkWe11Aip23UwAAAJsAAAAUAAAAeGwvc2hhcmVkU3RyaW5ncy54bWyzKS4usbMpzrSzKbFzKi3OzEstLrbRBwrpg8Qg4uGpScWZJanows6ZJZXoYk6JRQpqibkF1gruRZk5OejSSYlFesn5eqXZ6BI+qakpSPbqg1wFAFBLAwQUAAAACAAZFntdJrd2lWsAAAAPAQAAGAAAAHhsL3dvcmtzaGVldHMvc2hlZXQxLnhtbLMpzy/KLs5ITS2xswFTLokliXY2RfnlCkW2SoZKdjbJIIajoZJCia1SMZBfZmdgo19mZ6OfDJVzQpYzRJVzRpYzgsvpA82HW2IEt8QISbExmkHIcqZoDkCWM0GVczWCiKLbrY/kWX1EGAAAUEsBAhQDFAAAAAgAGRZ7XcccFzwKAAAACAAAABMAAAAAAAAAAAAAAIABAAAAAFtDb250ZW50X1R5cGVzXS54bWxQSwECFAMUAAAACAAZFntdPItu9ksAAABfAAAADwAAAAAAAAAAAAAAgAE7AAAAeGwvd29ya2Jvb2sueG1sUEsBAhQDFAAAAAgAGRZ7XVSI23tHAAAAYQAAABoAAAAAAAAAAAAAAIABswAAAHhsL19yZWxzL3dvcmtib29rLnhtbC5yZWxzUEsBAhQDFAAAAAgAGRZ7XUCKnbdTAAAAmwAAABQAAAAAAAAAAAAAAIABMgEAAHhsL3NoYXJlZFN0cmluZ3MueG1sUEsBAhQDFAAAAAgAGRZ7XSa3dpVrAAAADwEAABgAAAAAAAAAAAAAAIABtwEAAHhsL3dvcmtzaGVldHMvc2hlZXQxLnhtbFBLBQYAAAAABQAFAE4BAABYAgAAAAA='
+
+test('xlsx: reads the first sheet, shared strings, cell positions and gaps', () => {
+  assert.deepEqual(xlsxRows(Buffer.from(FILE, 'base64')), [['Business', 'Website', 'City'], ['Bar & Grill', 'bar.co.uk', 'Leeds', '', '42']])
+})

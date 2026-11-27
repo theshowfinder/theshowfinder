@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CITIES } from '@/lib/cities'
 import { parseImport, hostOf } from '@/lib/outreachImport'
+import { xlsxSheets } from '@/lib/xlsxRows'
 import { looksLikeChain } from '@/lib/outreach'
 import { fetchAllPages } from '@/lib/pagedFetch'
 
@@ -87,7 +88,23 @@ export async function resumeOutreachAction() {
  *  finder reads each website for the email and runs the usual checks; nothing is emailed straight from the sheet. */
 export async function importBusinessesAction(form: FormData) {
   await checkAuth()
-  const { rows, skipped } = parseImport(str(form, 'rows'), CITIES.map(c => c.name))
+  // A whole spreadsheet file (.xlsx or .csv), or rows pasted from one. For a workbook, the tab with the most usable
+  // rows is used (so a "Read Me" tab in front doesn't matter).
+  const cityNames = CITIES.map(c => c.name)
+  const file = form.get('file')
+  let parsed = parseImport(str(form, 'rows'), cityNames)
+  if (file instanceof File && file.size > 0) {
+    const buf = Buffer.from(await file.arrayBuffer())
+    if (/\.xlsx$/i.test(file.name)) {
+      let sheets: ReturnType<typeof xlsxSheets> = []
+      try { sheets = xlsxSheets(buf) } catch { back('That file could not be read as an Excel (.xlsx) file. Try saving it as .xlsx or .csv again.', false) }
+      parsed = sheets.map(sh => parseImport(sh.rows.map(r => r.map(c => c.replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n'), cityNames))
+        .sort((a, b) => b.rows.length - a.rows.length)[0] ?? parsed
+    } else if (/\.(csv|tsv|txt)$/i.test(file.name)) {
+      parsed = parseImport(buf.toString('utf8').replace(/^\uFEFF/, ''), cityNames)
+    } else back('Please upload an .xlsx or .csv file (Excel and Google Sheets can both save these).', false)
+  }
+  const { rows, skipped } = parsed
   if (!rows.length) back(`Nothing to import.${skipped.length ? ` Skipped: ${skipped.slice(0, 5).join('; ')}` : ' Paste rows with Business, Website and City.'}`, false)
   const [prospects, candidates, scanned] = await Promise.all([
     fetchAllPages<{ website: string | null }>((from, to) => db().from('outreach_prospects').select('website').order('id').range(from, to)),
